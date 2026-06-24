@@ -1,0 +1,17 @@
+[history]
+enabled = true
+ignorePatterns = [
+    "node_modules/**",
+    ".git/**",
+    "target/**",
+    "dist/**",
+    "build/**",
+    "*.log",
+    "*.lock",
+    ".ccpanes/**",
+]
+maxVersionsPerFile = 50
+maxAgeDays = 30
+maxFileSize = 5242880
+maxTotalSize = 524288000
+minSaveIntervalSecs = 300

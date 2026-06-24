@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>公司项目管理平台原型</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">P</div>
+          <div>
+            <div class="brand-name">ProjectOS</div>
+            <div class="brand-subtitle">项目管理平台</div>
+          </div>
+        </div>
+
+        <nav class="nav" aria-label="主导航">
+          <button class="nav-item active" data-view="dashboard">
+            <span class="nav-icon">⌂</span>
+            <span>个人工作台</span>
+          </button>
+          <button class="nav-item" data-view="projects">
+            <span class="nav-icon">□</span>
+            <span>项目集</span>
+          </button>
+          <button class="nav-item" data-view="products">
+            <span class="nav-icon">◇</span>
+            <span>产品集</span>
+          </button>
+          <button class="nav-item" data-view="flow">
+            <span class="nav-icon">↳</span>
+            <span>开发流程</span>
+          </button>
+          <button class="nav-item" data-view="requirements">
+            <span class="nav-icon">≡</span>
+            <span>需求管理</span>
+          </button>
+          <button class="nav-item" data-view="testing">
+            <span class="nav-icon">✓</span>
+            <span>测试管理</span>
+          </button>
+          <button class="nav-item" data-view="docs">
+            <span class="nav-icon">◫</span>
+            <span>文档中心</span>
+          </button>
+          <button class="nav-item" data-view="org">
+            <span class="nav-icon">◎</span>
+            <span>组织管理</span>
+          </button>
+          <button class="nav-item" data-view="ai">
+            <span class="nav-icon">✦</span>
+            <span>AI 分析</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="small-label">当前空间</div>
+          <div class="workspace-name">研发管理中心</div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="search-box">
+            <span>⌕</span>
+            <input id="globalSearch" type="search" placeholder="搜索项目、需求、任务、文档或人员" />
+          </div>
+          <div class="top-actions">
+            <button class="icon-button" title="新建">＋</button>
+            <button class="icon-button" title="通知">○</button>
+            <button class="primary-button" id="openAiButton">AI 分析</button>
+          </div>
+        </header>
+
+        <section class="content" id="viewRoot"></section>
+      </main>
+
+      <aside class="ai-panel" id="aiPanel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">AI 上下文</div>
+            <div class="panel-subtitle" id="aiSubtitle">个人工作台分析</div>
+          </div>
+          <button class="icon-button compact" id="collapseAiButton" title="收起">×</button>
+        </div>
+
+        <div class="ai-card">
+          <div class="ai-card-title">摘要</div>
+          <p id="aiSummary">今日 12 个任务中 5 个已完成，2 个逾期，1 个阻塞。建议优先处理接口联调阻塞和测试环境缺陷。</p>
+        </div>
+
+        <div class="ai-card">
+          <div class="ai-card-title">风险</div>
+          <ul class="plain-list" id="aiRisks">
+            <li>支付模块需求缺少验收证据。</li>
+            <li>客户交付项目 A 测试阻塞超过 1 天。</li>
+            <li>日报中提到的接口变更尚未关联需求。</li>
+          </ul>
+        </div>
+
+        <div class="ai-card">
+          <div class="ai-card-title">建议动作</div>
+          <div class="suggestion">
+            <span>生成需求完成度报告</span>
+            <button class="text-button">确认</button>
+          </div>
+          <div class="suggestion">
+            <span>为阻塞任务创建风险项</span>
+            <button class="text-button">确认</button>
+          </div>
+        </div>
+
+        <div class="ai-card">
+          <div class="ai-card-title">证据引用</div>
+          <div class="evidence">日报 2026-06-23 · 第 3 段</div>
+          <div class="evidence">需求 REQ-204 · 验收标准</div>
+          <div class="evidence">测试报告 TR-118 · 阻塞缺陷</div>
+        </div>
+      </aside>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
