@@ -7,10 +7,34 @@ import type { ApiResponse } from '../types';
 const BASE_URL = '';
 
 // ---------------------------------------------------------------------------
-// Token management (module-level, NOT localStorage)
+// Token management
+//
+// The token lives in a module-level variable for fast access on every request,
+// and is mirrored to sessionStorage so a page refresh keeps the user signed in.
+// We use sessionStorage (not localStorage) so the session is scoped to the tab
+// and cleared when it closes.
 // ---------------------------------------------------------------------------
 
-let token: string | null = null;
+const TOKEN_STORAGE_KEY = 'pm.token';
+
+let token: string | null = readToken();
+
+function readToken(): string | null {
+  try {
+    return sessionStorage.getItem(TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeToken(value: string | null): void {
+  try {
+    if (value) sessionStorage.setItem(TOKEN_STORAGE_KEY, value);
+    else sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+  } catch {
+    /* storage may be unavailable (private mode) — degrade gracefully */
+  }
+}
 
 export function getToken(): string | null {
   return token;
@@ -18,6 +42,7 @@ export function getToken(): string | null {
 
 export function setToken(value: string | null): void {
   token = value;
+  writeToken(value);
 }
 
 // ---------------------------------------------------------------------------
@@ -44,7 +69,7 @@ async function request<T>(
   method: string,
   path: string,
   body?: unknown,
-  options?: { headers?: Record<string, string> },
+  options?: { headers?: Record<string, string>; timeoutMs?: number },
 ): Promise<T> {
   const url = `${BASE_URL}${path}`;
 
@@ -61,7 +86,7 @@ async function request<T>(
   }
 
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 15000);
+  const timeout = window.setTimeout(() => controller.abort(), options?.timeoutMs ?? 15000);
 
   const init: RequestInit = {
     method,
@@ -81,10 +106,10 @@ async function request<T>(
   } catch (networkError) {
     window.clearTimeout(timeout);
     if (networkError instanceof DOMException && networkError.name === 'AbortError') {
-      throw new ApiError('Request timed out', 0);
+      throw new ApiError('请求超时', 0);
     }
     throw new ApiError(
-      networkError instanceof Error ? networkError.message : 'Network error',
+      networkError instanceof Error ? networkError.message : '网络错误',
       0,
     );
   } finally {
@@ -93,9 +118,9 @@ async function request<T>(
 
   // Auto-redirect on 401
   if (response.status === 401) {
-    token = null;
+    setToken(null);
     window.location.hash = '#/login';
-    throw new ApiError('Unauthorized - session expired', 401);
+    throw new ApiError('未授权 - 登录已过期', 401);
   }
 
   // Parse response body
@@ -111,7 +136,7 @@ async function request<T>(
     const message =
       typeof data === 'object' && data !== null && 'message' in data
         ? String((data as Record<string, unknown>).message)
-        : `Request failed with status ${response.status}`;
+        : `请求失败，状态码 ${response.status}`;
     throw new ApiError(message, response.status, data);
   }
 
@@ -122,19 +147,23 @@ async function request<T>(
 // Public HTTP methods
 // ---------------------------------------------------------------------------
 
-export function get<T>(path: string, options?: { headers?: Record<string, string> }): Promise<T> {
+export function get<T>(path: string, options?: { headers?: Record<string, string>; timeoutMs?: number }): Promise<T> {
   return request<T>('GET', path, undefined, options);
 }
 
-export function post<T>(path: string, body?: unknown, options?: { headers?: Record<string, string> }): Promise<T> {
+export function post<T>(path: string, body?: unknown, options?: { headers?: Record<string, string>; timeoutMs?: number }): Promise<T> {
   return request<T>('POST', path, body, options);
 }
 
-export function patch<T>(path: string, body?: unknown, options?: { headers?: Record<string, string> }): Promise<T> {
+export function patch<T>(path: string, body?: unknown, options?: { headers?: Record<string, string>; timeoutMs?: number }): Promise<T> {
   return request<T>('PATCH', path, body, options);
 }
 
-export function del<T>(path: string, options?: { headers?: Record<string, string> }): Promise<T> {
+export function put<T>(path: string, body?: unknown, options?: { headers?: Record<string, string>; timeoutMs?: number }): Promise<T> {
+  return request<T>('PUT', path, body, options);
+}
+
+export function del<T>(path: string, options?: { headers?: Record<string, string>; timeoutMs?: number }): Promise<T> {
   return request<T>('DELETE', path, undefined, options);
 }
 

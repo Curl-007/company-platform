@@ -1,15 +1,18 @@
 import React, { useState, FormEvent } from 'react';
+import { Check } from 'lucide-react';
 import { login } from '../services/auth';
 import type { SessionUser } from '../types';
 
-// ---------------------------------------------------------------------------
-// Login: email + password authentication form
-// ---------------------------------------------------------------------------
-
 interface LoginProps {
-  /** Callback when login succeeds */
   onLoginSuccess: (user: SessionUser) => void;
 }
+
+const HIGHLIGHTS = [
+  '项目、需求、任务、测试全流程闭环',
+  '看板拖拽与迭代燃尽图可视化',
+  'AI 文档分析与工作日志智能解读',
+  '操作审计与动态追踪',
+];
 
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [email, setEmail] = useState('admin@example.com');
@@ -20,7 +23,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!email.trim() || !password.trim()) {
-      setError('Please enter both email and password.');
+      setError('请输入邮箱和密码。');
       return;
     }
 
@@ -31,11 +34,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       const user = await login(email.trim(), password);
       onLoginSuccess(user);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Login failed. Please check your credentials.',
-      );
+      setError(err instanceof Error ? err.message : '登录失败，请检查账号和密码。');
     } finally {
       setLoading(false);
     }
@@ -43,62 +42,67 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
   return (
     <div className="login-screen">
-      <div className="login-card">
-        <div className="login-card-brand">
-          <div className="sidebar-brand-logo">P</div>
-          <div className="login-card-title">项目管理平台</div>
-          <div className="login-card-subtitle">
-            AI 驱动的企业项目管理平台
-          </div>
-        </div>
+      <div className="login-brand-panel">
+        <div className="login-brand-logo-lg">P</div>
+        <h1 className="login-brand-title">项目管理平台</h1>
+        <p className="login-brand-subtitle">AI 驱动的企业级项目协作工作台</p>
+        <ul className="login-brand-highlights">
+          {HIGHLIGHTS.map((item) => (
+            <li key={item}>
+              <Check size={16} />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label" htmlFor="login-email">
-              邮箱
-            </label>
-            <input
-              id="login-email"
-              className="form-input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@company.com"
-              autoComplete="email"
-              autoFocus
-            />
+      <div className="login-form-panel">
+        <div className="login-card">
+          <div className="login-card-header">
+            <h2 className="login-card-title">欢迎回来</h2>
+            <p className="login-card-subtitle">登录后进入工作台</p>
           </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="login-password">
-              密码
-            </label>
-            <input
-              id="login-password"
-              className="form-input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="请输入密码"
-              autoComplete="current-password"
-            />
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label className="form-label" htmlFor="login-email">邮箱</label>
+              <input
+                id="login-email"
+                className="form-input"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@company.com"
+                autoComplete="email"
+                autoFocus
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="login-password">密码</label>
+              <input
+                id="login-password"
+                className="form-input"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="请输入密码"
+                autoComplete="current-password"
+              />
+            </div>
+
+            {error && <div className="form-error">{error}</div>}
+
+            <button className="btn btn-primary btn-lg" type="submit" disabled={loading}>
+              {loading ? '登录中...' : '登录'}
+            </button>
+          </form>
+
+          <div className="login-card-hint">
+            <strong>演示账号</strong> · 管理员 `admin@example.com / Admin@123`
+            <br />
+            项目经理 `pm@example.com / Pm@12345`
           </div>
-
-          {error && <div className="form-error">{error}</div>}
-
-          <button
-            className="btn btn-primary btn-lg"
-            type="submit"
-            disabled={loading}
-          >
-            {loading ? '登录中…' : '登录'}
-          </button>
-        </form>
-
-        <div className="login-card-hint">
-          <strong>演示账号</strong> · 管理员 admin@example.com / Admin@123
-          <br />
-          项目经理 pm@example.com / Pm@12345
         </div>
       </div>
     </div>

@@ -17,4 +17,17 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split large vendor libs into their own chunks so the app code and
+        // recharts load in parallel and can be cached independently.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('recharts')) return 'recharts';
+          return 'vendor';
+        },
+      },
+    },
+  },
 });

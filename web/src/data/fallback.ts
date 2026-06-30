@@ -8,7 +8,7 @@ import type { DashboardData } from '../types';
 
 export const fallbackDashboard: DashboardData = {
   metrics: {
-    tasks: { total: 0, todo: 0, in_progress: 0, in_review: 0, done: 0, blocked: 0 },
+    tasks: { total: 0, todo: 0, in_progress: 0, code_review: 0, done: 0, blocked: 0 },
     projectHealthAverage: 0,
     requirementCompletionAverage: 0,
     testPassRate: 0,
@@ -19,9 +19,9 @@ export const fallbackDashboard: DashboardData = {
   riskyProjects: [],
   requirementProgress: [],
   ai: {
-    title: 'AI summary unavailable',
-    summary: 'The platform API could not be reached. Showing an empty workspace until the connection is restored.',
+    title: 'AI 摘要暂不可用',
+    summary: '无法连接到平台 API。恢复连接后将正常显示工作区。',
     risks: [],
-    recommendations: ['Confirm the API service is running on http://localhost:4010.'],
+    recommendations: ['请确认 API 服务正在 http://localhost:4010 上运行。'],
   },
 };

@@ -16,6 +16,32 @@ export interface SessionUser {
   email: string;
   role: string;
   permissions?: string[];
+  capabilities?: UserCapabilities;
+  phone?: string;
+  position?: string;
+  department?: string;
+  bio?: string;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  permissions?: string[];
+  capabilities?: UserCapabilities;
+  status?: string;
+  phone?: string;
+  position?: string;
+  department?: string;
+  bio?: string;
+}
+
+export interface UserCapabilities {
+  pages: PageKey[];
+  operations: string[];
+  permissions: string[];
+  role: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -23,14 +49,14 @@ export interface SessionUser {
 // ---------------------------------------------------------------------------
 
 export interface ApiResponse<T> {
-  success: boolean;
   data: T;
   meta?: Record<string, unknown>;
 }
 
 export interface ApiErrorBody {
-  success: false;
-  error: { code: string; message: string };
+  errorCode: string;
+  message: string;
+  traceId: string;
 }
 
 export interface Paginated<T> {
@@ -53,6 +79,8 @@ export interface Milestone {
 export interface Project {
   id: string;
   name: string;
+  code?: string | null;
+  description?: string | null;
   status: string;
   healthScore: number;
   owner: string;
@@ -62,6 +90,9 @@ export interface Project {
   progress: number;
   riskCount: number;
   milestones: Milestone[];
+  startDate?: string | null;
+  endDate?: string | null;
+  sourcePath?: string | null;
   updatedAt: string;
 }
 
@@ -79,7 +110,11 @@ export interface Requirement {
   projectId: string;
   productId?: string | null;
   portfolioId?: string | null;
+  parentId?: string | null;
   owner: string;
+  assignee?: string | null;
+  assigneeRole?: string | null;
+  assignmentStatus?: string;
   completion: number;
   linkedTasks: string[];
   acceptanceCriteria: string[];
@@ -88,6 +123,7 @@ export interface Requirement {
 export interface Task {
   id: string;
   title: string;
+  description?: string | null;
   status: string;
   statusText: string;
   projectId: string;
@@ -103,6 +139,10 @@ export interface Task {
   sortOrder: number;
   estimatedHours: number;
   actualHours: number;
+  remainingHours?: number;
+  assigneeRole?: string | null;
+  sourceType?: string | null;
+  sourceId?: string | null;
 }
 
 export interface Sprint {
@@ -121,13 +161,205 @@ export interface KanbanColumn {
   tasks: Task[];
 }
 
+// ---------------------------------------------------------------------------
+// Burndown (GET /api/sprints/:id/burndown)
+// ---------------------------------------------------------------------------
+
+export interface BurndownIdealPoint {
+  date: string;
+  ideal: number;
+}
+
+export interface BurndownActualPoint {
+  date: string;
+  remaining: number;
+}
+
+export interface BurndownData {
+  sprintId: string;
+  startDate: string;
+  endDate: string;
+  totalEstimate: number;
+  ideal: BurndownIdealPoint[];
+  actual: BurndownActualPoint[];
+  taskCount: number;
+}
+
+// ---------------------------------------------------------------------------
+// Project flow (GET /api/projects/:id/flow)
+// ---------------------------------------------------------------------------
+
+export type GateState = 'done' | 'passed' | 'in_progress' | 'blocked' | 'pending';
+
+export interface GateCheck {
+  name: string;
+  passed: boolean;
+  detail?: string;
+}
+
+export interface FlowGate {
+  stage: string;
+  label: string;
+  state: GateState;
+  checks: GateCheck[];
+}
+
+export interface DefectFunnelData {
+  new: number;
+  confirmed: number;
+  in_fix: number;
+  resolved: number;
+  closed: number;
+  total: number;
+}
+
+export interface FlowHours {
+  estimated: number;
+  consumed: number;
+  remaining: number;
+}
+
+export interface ProjectFlow {
+  projectId: string;
+  projectName: string;
+  status: string;
+  healthScore: number;
+  gates: FlowGate[];
+  defectFunnel: DefectFunnelData;
+  hours: FlowHours;
+  counts: { requirements: number; tasks: number; defects: number; testCases: number };
+}
+
+// Cross-project flow overview (GET /api/flow/overview)
+export interface FlowOverviewItem {
+  projectId: string;
+  projectName: string;
+  status: string;
+  healthScore: number;
+  currentStage: string;
+  gates: { stage: string; state: GateState }[];
+}
+
+// ---------------------------------------------------------------------------
+// Build (构建)
+// ---------------------------------------------------------------------------
+
+export interface Build {
+  id: string;
+  projectId: string;
+  name: string;
+  version?: string | null;
+  buildDate?: string | null;
+  status: string;
+  linkedStories: string[];
+  linkedBugs: string[];
+  scmHash?: string | null;
+  creator?: string | null;
+  notes?: string | null;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Release (发布)
+// ---------------------------------------------------------------------------
+
+export interface Release {
+  id: string;
+  productId?: string | null;
+  name: string;
+  version?: string | null;
+  releaseDate?: string | null;
+  buildId?: string | null;
+  releaseType: string;
+  linkedStories: string[];
+  linkedBugs: string[];
+  releaseNotes?: string | null;
+  creator?: string | null;
+  status: string;
+  createdAt: string;
+}
+
+export interface DeliveryGateLine {
+  id: string;
+  label: string;
+  passed: boolean;
+  state: 'passed' | 'blocked';
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface DeliveryGateResult {
+  kind: 'build' | 'release';
+  id: string;
+  targetStatus: string;
+  ready: boolean;
+  score: number;
+  summary: string;
+  gates: DeliveryGateLine[];
+}
+
+export interface ReleaseApproval {
+  id: string;
+  releaseId: string;
+  decision: 'approve' | 'reject';
+  comment: string;
+  approverId?: string | null;
+  approverName: string;
+  createdAt: string;
+}
+
+export interface RollbackRecord {
+  id: string;
+  releaseId: string;
+  reason: string;
+  impact: string;
+  plan: string;
+  operatorId?: string | null;
+  operatorName: string;
+  createdAt: string;
+}
+
+export interface DeliveryAuditTrailItem {
+  id: string;
+  action: string;
+  actorName: string;
+  resourceType: string;
+  resourceId: string;
+  createdAt: string;
+}
+
+export interface ReleaseReport {
+  release: Release;
+  build?: Build | null;
+  gate: DeliveryGateResult;
+  requirements: Requirement[];
+  defects: Defect[];
+  approvals: ReleaseApproval[];
+  rollbacks: RollbackRecord[];
+  auditTrail: DeliveryAuditTrailItem[];
+  metrics: {
+    requirementCount: number;
+    defectCount: number;
+    openDefectCount: number;
+    approvalCount: number;
+    rollbackCount: number;
+    auditCount: number;
+    readyScore: number;
+  };
+  summary: string;
+  recommendations: string[];
+}
+
 export interface Document {
   id: string;
   title: string;
   type: string;
+  category?: string;
   version: string;
   aiStatus: string;
   owner: string;
+  ownerRole?: string | null;
+  projectId?: string | null;
   updatedAt: string;
   linkedRequirements: string[];
   risks: string[];
@@ -141,24 +373,67 @@ export interface Document {
 export interface Defect {
   id: string;
   title: string;
+  description?: string | null;
   severity: string;
   status: string;
   projectId: string;
   requirementId?: string | null;
   assignee?: string | null;
+  assigneeRole?: string | null;
+  foundInBuild?: string | null;
+  affectedVersion?: string | null;
+  reporter?: string | null;
 }
 
 export interface TestCase {
   id: string;
   name: string;
+  description?: string | null;
+  steps?: string[];
+  expectedResult?: string | null;
   requirementId?: string | null;
   projectId: string;
   status: string;
   owner: string;
+  assigneeRole?: string | null;
   totalCases: number;
   passedCases: number;
   failedCases: number;
   blockedCases: number;
+}
+
+export interface TestStep {
+  stepNumber: number;
+  action: string;
+  expectedResult: string;
+}
+
+export interface SourceItem {
+  name: string;
+  path: string;
+  type: 'file' | 'dir';
+}
+
+export interface SourceFile {
+  path?: string;
+  content: string;
+  language: string;
+  truncated: boolean;
+  lineCount: number;
+}
+
+export interface FileTreeNode {
+  name: string;
+  path: string;
+  type: 'file' | 'dir';
+  children?: FileTreeNode[];
+  expanded?: boolean;
+}
+
+export interface TestRunInput {
+  testCaseId: string;
+  result: 'passed' | 'failed' | 'blocked';
+  notes?: string;
 }
 
 export interface Program {
@@ -196,7 +471,19 @@ export interface Product {
   owner: string;
   version: string;
   stage: string;
+  description?: string;
+  imageUrl?: string | null;
+  imageUrls?: string[];
+  systemName?: string;
+  systemVersion?: string;
+  applicationVersion?: string;
   modules: ProductModule[];
+  hardwareInfo?: Record<string, unknown>;
+  systemInfo?: Record<string, unknown>;
+  applicationInfo?: Record<string, unknown>;
+  hardwareMetrics?: ProductMetric[];
+  systemMetrics?: ProductMetric[];
+  appMetrics?: ProductMetric[];
   roadmap: RoadmapItem[];
 }
 
@@ -207,30 +494,11 @@ export interface ProductModule {
   [key: string]: unknown;
 }
 
-// ---------------------------------------------------------------------------
-// Organization (GET /api/org)
-// ---------------------------------------------------------------------------
-
-export interface Department {
-  id: string;
-  name: string;
-  lead: string;
-  members: number;
-  load: number;
-  responsibilities: string[];
-}
-
-export interface Person {
-  id: string;
-  name: string;
-  role: string;
-  departmentId: string;
-  activeProjects: number;
-}
-
-export interface Organization {
-  departments: Department[];
-  people: Person[];
+export interface ProductMetric {
+  label: string;
+  value: string;
+  unit?: string;
+  status?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -243,6 +511,119 @@ export interface AiSummary {
   risks: string[];
   recommendations: string[];
   scope?: string;
+  aiProvider?: AiProviderConfig;
+  generatedBy?: string;
+  modelUsed?: string;
+}
+
+export interface AiProviderConfig {
+  id?: string | null;
+  name?: string;
+  provider: string;
+  baseUrl: string;
+  baseUrlHost: string;
+  model: string;
+  wireApi: 'chat_completions' | 'responses';
+  disableResponseStorage: boolean;
+  enabled: boolean;
+  configured: boolean;
+  apiKeyMasked: string;
+  apiKeySource: 'database' | 'environment' | 'none';
+  updatedAt?: string | null;
+  health?: AiProviderHealth;
+  activeId?: string | null;
+  providers?: AiProviderListItem[];
+}
+
+export interface AiProviderHealth {
+  status: 'healthy' | 'degraded' | 'unavailable' | 'unconfigured' | 'unknown' | 'disabled';
+  lastAttemptAt?: string | null;
+  lastSuccessAt?: string | null;
+  lastFailureAt?: string | null;
+  lastLatencyMs?: number | null;
+  lastWireApi?: 'chat_completions' | 'responses' | string | null;
+  lastErrorMessage?: string;
+  lastErrorCode?: string;
+  consecutiveFailures?: number;
+}
+
+export interface UpdateAiProviderInput {
+  id?: string;
+  name?: string;
+  provider: string;
+  baseUrl: string;
+  model: string;
+  wireApi: 'chat_completions' | 'responses';
+  disableResponseStorage: boolean;
+  enabled?: boolean;
+  apiKey?: string;
+  clearApiKey?: boolean;
+  createNew?: boolean;
+  activate?: boolean;
+}
+
+export interface AiProviderListItem {
+  id: string;
+  name: string;
+  provider: string;
+  baseUrl: string;
+  baseUrlHost: string;
+  model: string;
+  wireApi: 'chat_completions' | 'responses';
+  disableResponseStorage: boolean;
+  enabled: boolean;
+  configured: boolean;
+  apiKeyMasked: string;
+  apiKeySource: 'database' | 'environment' | 'none';
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface AiProviderTestResult {
+  ok: boolean;
+  latencyMs: number;
+  sample: string;
+  provider: AiProviderConfig;
+}
+
+export interface AiChatAttachment {
+  name: string;
+  mimeType: string;
+  size: number;
+  kind?: 'image' | 'document';
+  contentText?: string;
+  contentBase64?: string;
+}
+
+export interface AiChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+  attachments?: AiChatAttachment[];
+  modelUsed?: string;
+  generatedBy?: string;
+  fallback?: boolean;
+  provider?: AiProviderConfig;
+}
+
+export interface AiChatInput {
+  messages: Array<Pick<AiChatMessage, 'role' | 'content'>>;
+  attachments?: AiChatAttachment[];
+  scope?: string;
+  currentPage?: string;
+}
+
+export interface AiJobRequirementDraft {
+  title: string;
+  description?: string;
+  priority?: 'high' | 'medium' | 'low';
+  acceptanceCriteria?: string[];
+}
+
+export interface ConfirmAiJobInput {
+  projectId?: string;
+  requirement?: AiJobRequirementDraft;
 }
 
 export interface AiEvidence {
@@ -260,6 +641,14 @@ export interface AiJob {
   result: Record<string, unknown>;
   evidence: AiEvidence[];
   writtenRequirementId?: string | null;
+  errorMessage?: string | null;
+  retryCount?: number;
+  startedAt?: string | null;
+  failedAt?: string | null;
+  rejectedAt?: string | null;
+  rejectedReason?: string | null;
+  createdAt?: string;
+  confirmedAt?: string | null;
 }
 
 export interface WorkLogAnalysis {
@@ -274,6 +663,7 @@ export interface WorkLogAnalysis {
   progressChange: { from: number | null; to: number | null; delta: number | null };
   confidence: string;
   suggestedActions: string[];
+  modelUsed?: string;
 }
 
 export interface CompletionScore {
@@ -281,8 +671,30 @@ export interface CompletionScore {
   score: number;
   taskScore: number;
   testScore: number;
+  logScore: number;
   declaredCompletion: number;
+  hardRules?: string[];
   recommendation?: string;
+  modelUsed?: string;
+}
+
+export interface AiBusinessAdvice {
+  title: string;
+  summary: string;
+  risks: string[];
+  suggestions: string[];
+  nextActions: string[];
+  missingInfo: string[];
+  modelUsed?: string;
+  generatedBy?: string;
+  fallback?: boolean;
+}
+
+export interface AiBusinessAdviceInput {
+  targetType: 'requirement' | 'project' | 'test_case' | 'defect' | 'build' | 'release' | 'document';
+  targetId: string;
+  question?: string;
+  draft?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
@@ -312,6 +724,8 @@ export interface DashboardData {
   riskyProjects: Project[];
   requirementProgress: RequirementProgress[];
   ai: AiSummary;
+  myDefects?: Defect[];
+  myBuilds?: Build[];
 }
 
 // ---------------------------------------------------------------------------
@@ -320,6 +734,7 @@ export interface DashboardData {
 
 export interface AuditLogRecord {
   id: string;
+  actorId?: string | null;
   actorName: string;
   action: string;
   resourceType: string;
@@ -333,12 +748,142 @@ export interface AuditLogRecord {
 // Work logs
 // ---------------------------------------------------------------------------
 
+export interface WorkLog {
+  id: string;
+  author: string;
+  role?: string;
+  projectId?: string | null;
+  project: string;
+  content: string;
+  blockers: string;
+  nextPlan: string;
+  analysis: WorkLogAnalysis;
+  logDate?: string;
+  sourceDocumentId?: string | null;
+  fileName?: string | null;
+  fileType?: string | null;
+  weekKey?: string;
+  weeklySummary?: string;
+  createdAt: string;
+}
+
 export interface WorkLogPayload {
   author?: string;
+  projectId?: string;
   project?: string;
   content: string;
   blockers?: string;
   nextPlan?: string;
+  logDate?: string;
+  sourceDocumentId?: string;
+  fileName?: string;
+  fileType?: string;
+  contentBase64?: string;
+}
+
+export interface WeeklyWorkSummary {
+  author: string;
+  weekKey: string;
+  count: number;
+  summary: {
+    summary: string;
+    completedItems: string[];
+    blockers: string[];
+    nextPlans: string[];
+    linkedRequirements: Array<{ id: string; title: string }>;
+  };
+  markdown: string;
+}
+
+export interface TeamWorkSummaryMember {
+  author: string;
+  role: string;
+  count: number;
+  summary: {
+    summary: string;
+    completedItems: string[];
+    blockers: string[];
+    nextPlans: string[];
+    linkedRequirements: Array<{ id: string; title: string }>;
+  };
+  markdown: string;
+}
+
+export interface TeamWorkSummary {
+  project: string;
+  weekKey: string;
+  submittedCount: number;
+  missingCount: number;
+  members: TeamWorkSummaryMember[];
+  missingMembers: Array<{ name: string; role: string }>;
+  overall: {
+    summary: string;
+    completedItems: string[];
+    blockers: string[];
+    nextPlans: string[];
+    linkedRequirements: Array<{ id: string; title: string }>;
+  };
+}
+
+export interface ProjectMember {
+  id: string;
+  projectId: string;
+  userName: string;
+  role: string;
+  source: string;
+  createdAt: string;
+}
+
+export interface TeamMemberProject {
+  id: string;
+  name: string;
+  role: string;
+  status: string;
+  progress: number;
+}
+
+export interface TeamMemberTaskSummary {
+  id: string;
+  title: string;
+  status: string;
+  projectId: string;
+  progress: number;
+  dueDate?: string | null;
+}
+
+export interface TeamMemberLogSummary {
+  id: string;
+  projectId?: string | null;
+  project: string;
+  content: string;
+  blockers: string;
+  logDate?: string | null;
+  createdAt: string;
+}
+
+export interface TeamMemberStats {
+  totalTasks: number;
+  activeTasks: number;
+  doneTasks: number;
+  blockedTasks: number;
+  requirements: number;
+  openDefects: number;
+  workLogs: number;
+  blockers: number;
+  estimatedHours: number;
+  actualHours: number;
+  remainingHours: number;
+}
+
+export interface TeamMemberOverview extends User {
+  department: string;
+  presence: 'online' | 'away' | 'offline';
+  skills: string[];
+  stats: TeamMemberStats;
+  projects: TeamMemberProject[];
+  recentTasks: TeamMemberTaskSummary[];
+  recentLogs: TeamMemberLogSummary[];
+  lastActiveAt?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -349,12 +894,18 @@ export type PageKey =
   | 'dashboard'
   | 'projects'
   | 'products'
+  | 'team'
+  | 'teamlogs'
   | 'requirements'
   | 'testing'
   | 'documents'
-  | 'organization'
   | 'ai'
   | 'reports'
   | 'flow'
+  | 'dynamic'
+  | 'delivery'
+  | 'builds'
+  | 'releases'
+  | 'mywork'
   | 'settings'
   | 'login';

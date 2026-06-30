@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react';
-import { fetchDocuments, uploadDocument } from '../services/resources';
+import { useMemo, useRef, useState } from 'react';
+import { fetchDocuments, fetchProjects, uploadDocument, updateDocument, deleteDocument, analyzeDocument } from '../services/resources';
+import { getSessionUser } from '../services/auth';
 import { useAsync } from '../hooks/useAsync';
 import { ApiError } from '../services/api';
 import PageHeader from '../components/common/PageHeader';
@@ -8,24 +9,47 @@ import PageState from '../components/common/PageState';
 import Overlay from '../components/common/Overlay';
 import DataTable, { type DataTableColumn } from '../components/common/DataTable';
 import StatusBadge from '../components/common/StatusBadge';
-import type { Document } from '../types';
+import BusinessAdvicePanel from '../components/common/BusinessAdvicePanel';
+import { useToast } from '../components/common/Toast';
+import { useConfirm } from '../components/common/ConfirmDialog';
+import { DOC_TYPE_LABELS, DOC_AI_STATUS_LABELS, labelOf } from '../constants/enums';
+import { canOperate } from '../constants/roles';
+import type { Document, Project } from '../types';
 
 const DOC_TYPES = [
-  { key: '', label: '全部' },
+  { key: '', label: '全部类型' },
   { key: 'requirement', label: '需求文档' },
   { key: 'design', label: '设计文档' },
   { key: 'test', label: '测试文档' },
   { key: 'bid', label: '招标文件' },
+  { key: 'report', label: '报告' },
 ];
 
-const DOC_UPLOAD_TYPES = [
-  { key: 'requirement', label: '需求文档' },
-  { key: 'design', label: '设计文档' },
-  { key: 'test', label: '测试文档' },
-  { key: 'bid', label: '招标文件' },
+const DOC_CATEGORIES = [
+  { key: '', label: '全部分类' },
+  { key: 'project', label: '项目文档' },
+  { key: 'general', label: '通用文档' },
+  { key: 'announcement', label: '公司公告' },
 ];
 
-const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB — keeps base64 payload reasonable
+const ROLE_DOC_OPTIONS = [
+  { key: 'pm', label: '项目经理文档' },
+  { key: 'pdm', label: '产品经理文档' },
+  { key: 'dev', label: '开发文档' },
+  { key: 'qa', label: '测试文档' },
+];
+
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+
+function shouldAutoAnalyzeDocuments() {
+  try {
+    const raw = localStorage.getItem('settings:ai:prefs');
+    const prefs = raw ? JSON.parse(raw) : null;
+    return Boolean(prefs?.autoAnalyze);
+  } catch {
+    return false;
+  }
+}
 
 function aiStatusVariant(status: string): 'success' | 'warning' | 'info' | 'neutral' {
   const lower = status.toLowerCase();
@@ -35,52 +59,29 @@ function aiStatusVariant(status: string): 'success' | 'warning' | 'info' | 'neut
   return 'neutral';
 }
 
-const docColumns: DataTableColumn<Document>[] = [
-  {
-    key: 'title',
-    title: '文档标题',
-    sorter: (a, b) => a.title.localeCompare(b.title),
-    render: (doc) => <span className="font-medium">{doc.title}</span>,
-  },
-  {
-    key: 'type',
-    title: '类型',
-    render: (doc) => <StatusBadge label={doc.type} status={doc.type} />,
-  },
-  {
-    key: 'version',
-    title: '版本',
-    align: 'center',
-    render: (doc) => <span className="text-mono">{doc.version}</span>,
-  },
-  {
-    key: 'aiStatus',
-    title: 'AI 分析状态',
-    render: (doc) => (
-      <StatusBadge
-        label={doc.aiStatus || '未分析'}
-        variant={aiStatusVariant(doc.aiStatus)}
-      />
-    ),
-  },
-  {
-    key: 'owner',
-    title: '负责人',
-    render: (doc) => doc.owner || '—',
-  },
-  {
-    key: 'updatedAt',
-    title: '更新时间',
-    sorter: (a, b) => a.updatedAt.localeCompare(b.updatedAt),
-    render: (doc) => <span className="text-secondary text-mono">{doc.updatedAt}</span>,
-  },
-];
+function categoryLabel(category?: string | null) {
+  if (category === 'general') return '通用文档';
+  if (category === 'announcement') return '公司公告';
+  return '项目文档';
+}
 
-// ---------------------------------------------------------------------------
-// Detail drawer
-// ---------------------------------------------------------------------------
+function roleLabel(role?: string | null) {
+  return ROLE_DOC_OPTIONS.find((item) => item.key === role)?.label ?? '未设置';
+}
 
-function DocumentDetail({ doc, onClose }: { doc: Document; onClose: () => void }) {
+function DocumentDetail({
+  doc,
+  projectMap,
+  canUseAi,
+  onClose,
+}: {
+  doc: Document;
+  projectMap: Map<string, string>;
+  canUseAi: boolean;
+  onClose: () => void;
+}) {
+  const projectName = doc.projectId ? (projectMap.get(doc.projectId) ?? doc.projectId) : '无';
+
   return (
     <>
       <div className="detail-drawer-scrim" onClick={onClose} />
@@ -97,84 +98,218 @@ function DocumentDetail({ doc, onClose }: { doc: Document; onClose: () => void }
               <button className="btn btn-text btn-sm" onClick={onClose}>关闭</button>
             </div>
           </div>
-        <div className="panel-body">
-          <div className="metric-grid" style={{ marginBottom: 16 }}>
-            <div className="metric-card">
-              <div className="metric-card-label">类型</div>
-              <div className="metric-card-value">{doc.type}</div>
+          <div className="panel-body">
+            <div className="metric-grid" style={{ marginBottom: 16 }}>
+              <div className="metric-card">
+                <div className="metric-card-label">类型</div>
+                <div className="metric-card-value">{labelOf(DOC_TYPE_LABELS, doc.type)}</div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-card-label">分类</div>
+                <div className="metric-card-value">{categoryLabel(doc.category)}</div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-card-label">负责角色</div>
+                <div className="metric-card-value">{roleLabel(doc.ownerRole)}</div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-card-label">AI 状态</div>
+                <div className="metric-card-value">{labelOf(DOC_AI_STATUS_LABELS, doc.aiStatus) || '未分析'}</div>
+              </div>
             </div>
-            <div className="metric-card">
-              <div className="metric-card-label">版本</div>
-              <div className="metric-card-value">{doc.version}</div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-card-label">负责人</div>
-              <div className="metric-card-value">{doc.owner || '—'}</div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-card-label">AI 状态</div>
-              <div className="metric-card-value">{doc.aiStatus || '未分析'}</div>
-            </div>
-          </div>
 
-          <div style={{ marginBottom: 16 }}>
-            <div className="section-title">文件信息</div>
-            <div className="body-text" style={{ marginTop: 4 }}>
-              文件大小: {doc.fileSize ? `${(doc.fileSize / 1024).toFixed(1)} KB` : '—'}
-            </div>
-            <div className="body-text">文件类型: {doc.fileType || '—'}</div>
-            <div className="body-text">更新时间: {doc.updatedAt}</div>
-          </div>
-
-          {doc.linkedRequirements && doc.linkedRequirements.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <div className="section-title">关联需求</div>
-              <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
-                {doc.linkedRequirements.map((req, index) => (
-                  <li key={index} className="body-text" style={{ marginBottom: 4 }}>{req}</li>
-                ))}
-              </ul>
+              <div className="section-title">归属信息</div>
+              <div className="body-text" style={{ marginTop: 4 }}>负责人：{doc.owner || '未填写'}</div>
+              <div className="body-text">归属项目：{projectName}</div>
+              <div className="body-text">更新时间：{doc.updatedAt}</div>
             </div>
-          )}
 
-          {doc.risks && doc.risks.length > 0 && (
+            {canUseAi ? (
+              <BusinessAdvicePanel
+                targetType="document"
+                targetId={doc.id}
+                title="AI 文档分析"
+                description="基于后端文档正文、项目归属、关联需求、风险项和分析 Job 生成。"
+                buttonText="AI 总结文档"
+                question="请总结这份文档对需求、任务、测试、交付的影响，并给出下一步动作。"
+                draft={() => ({
+                  title: doc.title,
+                  type: doc.type,
+                  category: doc.category,
+                  owner: doc.owner,
+                  projectName,
+                  linkedRequirements: doc.linkedRequirements,
+                })}
+              />
+            ) : null}
+
             <div style={{ marginBottom: 16 }}>
-              <div className="section-title">风险项</div>
-              <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
-                {doc.risks.map((risk, index) => (
-                  <li key={index} className="body-text" style={{ marginBottom: 4 }}>{risk}</li>
-                ))}
-              </ul>
+              <div className="section-title">文件信息</div>
+              <div className="body-text" style={{ marginTop: 4 }}>
+                文件大小：{doc.fileSize ? `${(doc.fileSize / 1024).toFixed(1)} KB` : '未知'}
+              </div>
+              <div className="body-text">文件类型：{doc.fileType || '未知'}</div>
             </div>
-          )}
 
-          {doc.content && (
-            <div>
-              <div className="section-title">文档内容</div>
-              <div className="body-text" style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{doc.content}</div>
-            </div>
-          )}
+            {doc.linkedRequirements?.length ? (
+              <div style={{ marginBottom: 16 }}>
+                <div className="section-title">关联需求</div>
+                <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+                  {doc.linkedRequirements.map((requirement, index) => (
+                    <li key={index} className="body-text" style={{ marginBottom: 4 }}>{requirement}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {doc.risks?.length ? (
+              <div style={{ marginBottom: 16 }}>
+                <div className="section-title">风险项</div>
+                <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+                  {doc.risks.map((risk, index) => (
+                    <li key={index} className="body-text" style={{ marginBottom: 4 }}>{risk}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {doc.content ? (
+              <div>
+                <div className="section-title">文档内容</div>
+                <div className="body-text" style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{doc.content}</div>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
-    </div>
     </>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
+function EditDocumentForm({
+  document: doc,
+  projects,
+  onClose,
+  onSaved,
+}: {
+  document: Document;
+  projects: Project[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState(doc.title);
+  const [type, setType] = useState(doc.type);
+  const [category, setCategory] = useState(doc.category ?? 'project');
+  const [owner, setOwner] = useState(doc.owner);
+  const [ownerRole, setOwnerRole] = useState(doc.ownerRole ?? 'pm');
+  const [projectId, setProjectId] = useState(doc.projectId ?? '');
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    setFormError(null);
+    if (!title.trim()) return setFormError('标题不能为空。');
+    if (!owner.trim()) return setFormError('负责人不能为空。');
+    if (category === 'project' && !projectId) return setFormError('项目文档必须选择归属项目。');
+
+    setSubmitting(true);
+    try {
+      await updateDocument(doc.id, {
+        title: title.trim(),
+        type,
+        category,
+        owner: owner.trim(),
+        ownerRole,
+        projectId: category === 'project' ? projectId : null,
+      });
+      onSaved();
+    } catch (err: unknown) {
+      setFormError(err instanceof ApiError ? err.message : '保存失败');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <Panel title="编辑文档" subtitle={doc.id}>
+        {formError && <div className="form-error" style={{ marginBottom: 8 }}>{formError}</div>}
+        <div className="form-group">
+          <label className="form-label">标题</label>
+          <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} />
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">类型</label>
+            <select className="form-select" value={type} onChange={(e) => setType(e.target.value)}>
+              {DOC_TYPES.filter((item) => item.key).map((item) => (
+                <option key={item.key} value={item.key}>{item.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">分类</label>
+            <select className="form-select" value={category} onChange={(e) => setCategory(e.target.value)}>
+              {DOC_CATEGORIES.filter((item) => item.key).map((item) => (
+                <option key={item.key} value={item.key}>{item.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">负责角色</label>
+            <select className="form-select" value={ownerRole} onChange={(e) => setOwnerRole(e.target.value)}>
+              {ROLE_DOC_OPTIONS.map((item) => (
+                <option key={item.key} value={item.key}>{item.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">负责人</label>
+            <input className="form-input" value={owner} onChange={(e) => setOwner(e.target.value)} />
+          </div>
+        </div>
+        {category === 'project' && (
+          <div className="form-group">
+            <label className="form-label">归属项目</label>
+            <select className="form-select" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+              <option value="">请选择项目</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>{project.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>取消</button>
+          <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={submitting}>
+            {submitting ? '保存中...' : '保存'}
+          </button>
+        </div>
+      </Panel>
+    </Overlay>
+  );
+}
 
 function UploadDocumentForm({
+  projects,
+  defaultRole,
   onClose,
   onUploaded,
 }: {
+  projects: Project[];
+  defaultRole: string;
   onClose: () => void;
-  onUploaded: () => void;
+  onUploaded: (doc: Document) => void;
 }) {
   const [title, setTitle] = useState('');
   const [type, setType] = useState('requirement');
+  const [category, setCategory] = useState('project');
   const [owner, setOwner] = useState('');
+  const [ownerRole, setOwnerRole] = useState(defaultRole);
+  const [projectId, setProjectId] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -184,8 +319,9 @@ function UploadDocumentForm({
     setFormError(null);
     if (!title.trim()) return setFormError('请输入文档标题。');
     if (!owner.trim()) return setFormError('请输入负责人。');
+    if (category === 'project' && !projectId) return setFormError('项目文档必须选择归属项目。');
     if (!file) return setFormError('请选择要上传的文件。');
-    if (file.size > MAX_UPLOAD_BYTES) return setFormError('文件过大，单个文件限制 5MB 以内。');
+    if (file.size > MAX_UPLOAD_BYTES) return setFormError('文件过大，请控制在 20MB 以内。');
 
     setSubmitting(true);
     try {
@@ -195,18 +331,23 @@ function UploadDocumentForm({
         reader.onerror = () => reject(new Error('读取文件失败'));
         reader.readAsDataURL(file);
       });
-      await uploadDocument({
+
+      const uploaded = await uploadDocument({
         title: title.trim(),
         type,
+        category,
         owner: owner.trim(),
+        ownerRole,
+        projectId: category === 'project' ? projectId : undefined,
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type || 'application/octet-stream',
         contentBase64,
       });
-      onUploaded();
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      onUploaded(uploaded);
     } catch (err: unknown) {
-      setFormError(err instanceof ApiError ? err.message : '上传失败，请重试。');
+      setFormError(err instanceof ApiError ? err.message : '上传失败，请稍后重试。');
     } finally {
       setSubmitting(false);
     }
@@ -214,37 +355,73 @@ function UploadDocumentForm({
 
   return (
     <Overlay onClose={onClose}>
-      <Panel title="上传文档" subtitle="选择文件并填写信息后提交">
+      <Panel title="上传文档" subtitle="按项目、分类和责任角色整理文档">
         {formError && <div className="form-error" style={{ marginBottom: 8 }}>{formError}</div>}
         <div className="form-group">
           <label className="form-label">标题</label>
-          <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="文档标题" />
+          <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例如：一期需求说明书" />
         </div>
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">类型</label>
             <select className="form-select" value={type} onChange={(e) => setType(e.target.value)}>
-              {DOC_UPLOAD_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+              {DOC_TYPES.filter((item) => item.key).map((item) => (
+                <option key={item.key} value={item.key}>{item.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">分类</label>
+            <select className="form-select" value={category} onChange={(e) => setCategory(e.target.value)}>
+              {DOC_CATEGORIES.filter((item) => item.key).map((item) => (
+                <option key={item.key} value={item.key}>{item.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">负责角色</label>
+            <select className="form-select" value={ownerRole} onChange={(e) => setOwnerRole(e.target.value)}>
+              {ROLE_DOC_OPTIONS.map((item) => (
+                <option key={item.key} value={item.key}>{item.label}</option>
+              ))}
             </select>
           </div>
           <div className="form-group">
             <label className="form-label">负责人</label>
-            <input className="form-input" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="负责人姓名" />
+            <input className="form-input" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="填写文档负责人" />
           </div>
         </div>
+        {category === 'project' && (
+          <div className="form-group">
+            <label className="form-label">归属项目</label>
+            <select className="form-select" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+              <option value="">请选择项目</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>{project.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="form-group">
-          <label className="form-label">文件（≤ 5MB）</label>
+          <label className="form-label">文件（不超过 20MB）</label>
           <input
             ref={fileInputRef}
             type="file"
             className="form-input"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
+          {file ? (
+            <div className="form-help-text">当前文件：{file.name}，{(file.size / 1024 / 1024).toFixed(2)} MB</div>
+          ) : (
+            <div className="form-help-text">支持常见文档格式；TXT/Markdown/JSON/CSV/XML/PDF 会尽量抽取正文，正文预览截取前 20000 字符。</div>
+          )}
         </div>
         <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end' }}>
           <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>取消</button>
           <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? '上传中…' : '上传'}
+            {submitting ? '上传中...' : '上传'}
           </button>
         </div>
       </Panel>
@@ -253,17 +430,148 @@ function UploadDocumentForm({
 }
 
 function DocumentsPage() {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const sessionUser = getSessionUser();
+  const canManageDocuments = canOperate(sessionUser, 'documents:manage');
   const [typeFilter, setTypeFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [projectFilter, setProjectFilter] = useState('');
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
+  const [editing, setEditing] = useState<Document | null>(null);
   const [uploading, setUploading] = useState(false);
-  const { data, loading, error, reload } = useAsync<Document[]>(() => fetchDocuments(typeFilter || undefined), [typeFilter]);
+  const { data: projectsData } = useAsync<Project[]>(fetchProjects, []);
+  const { data, loading, error, reload } = useAsync<Document[]>(
+    () => fetchDocuments({
+      type: typeFilter || undefined,
+      category: categoryFilter || undefined,
+      projectId: projectFilter || undefined,
+    }),
+    [typeFilter, categoryFilter, projectFilter],
+  );
 
+  const projects = projectsData ?? [];
   const documents = data ?? [];
+  const projectMap = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
+
+  async function handleDelete(doc: Document) {
+    if (!canManageDocuments) {
+      toast.error('当前账号无权删除文档。');
+      return;
+    }
+    const confirmed = await confirm({
+      title: `删除文档“${doc.title}”？`,
+      description: '删除后该文档及其分析记录入口将从文档中心移除。',
+      confirmText: '删除文档',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+    try {
+      await deleteDocument(doc.id);
+      toast.success(`已删除文档“${doc.title}”`);
+      reload();
+    } catch (err: unknown) {
+      toast.error(err instanceof ApiError ? err.message : '删除失败');
+    }
+  }
+
+  async function handleUploaded(doc: Document) {
+    setUploading(false);
+    reload();
+    toast.success(`已上传文档“${doc.title}”`);
+
+    if (!shouldAutoAnalyzeDocuments()) return;
+    if (!canOperate(sessionUser, 'ai:analyze')) {
+      toast.info('已开启自动分析，但当前账号没有 AI 分析权限。');
+      return;
+    }
+
+    try {
+      const job = await analyzeDocument({
+        documentId: doc.id,
+        type: doc.type,
+        projectId: doc.projectId || undefined,
+      });
+      toast.success(`已自动创建 AI 分析任务：${job.jobId}`);
+      reload();
+    } catch (err: unknown) {
+      toast.error(err instanceof ApiError ? err.message : '文档已上传，但自动 AI 分析启动失败');
+    }
+  }
+
+  const columns: DataTableColumn<Document>[] = [
+    {
+      key: 'title',
+      title: '文档标题',
+      render: (doc) => <span className="font-medium">{doc.title}</span>,
+    },
+    {
+      key: 'type',
+      title: '类型',
+      render: (doc) => <StatusBadge label={labelOf(DOC_TYPE_LABELS, doc.type)} status={doc.type} />,
+    },
+    {
+      key: 'category',
+      title: '分类',
+      render: (doc) => <span>{categoryLabel(doc.category)}</span>,
+    },
+    {
+      key: 'project',
+      title: '项目',
+      render: (doc) => doc.projectId ? (projectMap.get(doc.projectId) ?? doc.projectId) : '无',
+    },
+    {
+      key: 'ownerRole',
+      title: '责任角色',
+      render: (doc) => <span>{roleLabel(doc.ownerRole)}</span>,
+    },
+    {
+      key: 'aiStatus',
+      title: 'AI 状态',
+      render: (doc) => (
+        <StatusBadge
+          label={labelOf(DOC_AI_STATUS_LABELS, doc.aiStatus) || '未分析'}
+          variant={aiStatusVariant(doc.aiStatus)}
+        />
+      ),
+    },
+    {
+      key: 'owner',
+      title: '负责人',
+      render: (doc) => doc.owner || '未填写',
+    },
+    {
+      key: 'updatedAt',
+      title: '更新时间',
+      render: (doc) => <span className="text-secondary text-mono">{doc.updatedAt}</span>,
+    },
+    {
+      key: 'actions',
+      title: '操作',
+      width: 120,
+      render: (doc) => (
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          {canManageDocuments ? (
+            <>
+              <button className="btn btn-text btn-xs" onClick={() => setEditing(doc)}>编辑</button>
+              <button
+                className="btn btn-text btn-xs"
+                style={{ color: 'var(--color-red, #dc2626)' }}
+                onClick={() => handleDelete(doc)}
+              >
+                删除
+              </button>
+            </>
+          ) : <span className="text-secondary">只读</span>}
+        </div>
+      ),
+    },
+  ];
 
   if (loading || error) {
     return (
       <div>
-        <PageHeader title="文档中心" description="管理项目需求文档、设计文档、测试文档及 AI 分析状态。" />
+        <PageHeader title="文档中心" description="按项目、文档分类和责任角色统一整理文档。" />
         <PageState loading={loading} error={error} onRetry={reload} />
       </div>
     );
@@ -273,47 +581,70 @@ function DocumentsPage() {
     <div>
       <PageHeader
         title="文档中心"
-        description="管理项目需求文档、设计文档、测试文档及 AI 分析状态。"
-        actions={
+        description="项目经理、产品经理、开发和测试各自维护对应项目与职责范围内的文档。"
+        actions={canManageDocuments ? (
           <button className="btn btn-primary btn-sm" onClick={() => setUploading(true)}>上传文档</button>
-        }
+        ) : undefined}
       />
 
       <Panel
         title="文档列表"
         subtitle={`共 ${documents.length} 份文档`}
         toolbar={
-          <div className="flex items-center gap-1">
-            {DOC_TYPES.map((item) => (
-              <button
-                key={item.key}
-                className={`btn btn-sm ${typeFilter === item.key ? 'btn-primary' : 'btn-text'}`}
-                onClick={() => setTypeFilter(item.key)}
-              >
-                {item.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-1" style={{ flexWrap: 'wrap' }}>
+            <select className="form-select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={{ minWidth: 132 }}>
+              {DOC_TYPES.map((item) => (
+                <option key={item.key} value={item.key}>{item.label}</option>
+              ))}
+            </select>
+            <select className="form-select" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} style={{ minWidth: 132 }}>
+              {DOC_CATEGORIES.map((item) => (
+                <option key={item.key} value={item.key}>{item.label}</option>
+              ))}
+            </select>
+            <select className="form-select" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} style={{ minWidth: 160 }}>
+              <option value="">全部项目</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>{project.name}</option>
+              ))}
+            </select>
           </div>
         }
       >
         <DataTable
-          columns={docColumns}
+          columns={columns}
           data={documents}
           rowKey="id"
           onRowClick={(doc) => setSelectedDoc(doc)}
-          emptyText={typeFilter ? '当前筛选条件下暂无文档。' : '暂无文档。'}
+          emptyText="当前筛选条件下暂无文档。"
         />
       </Panel>
 
       {selectedDoc && (
-        <DocumentDetail doc={selectedDoc} onClose={() => setSelectedDoc(null)} />
+        <DocumentDetail
+          doc={selectedDoc}
+          projectMap={projectMap}
+          canUseAi={canOperate(sessionUser, 'ai:analyze')}
+          onClose={() => setSelectedDoc(null)}
+        />
       )}
 
-      {uploading && (
+      {uploading && canManageDocuments && (
         <UploadDocumentForm
+          projects={projects}
+          defaultRole={sessionUser?.role ?? 'pm'}
           onClose={() => setUploading(false)}
-          onUploaded={() => {
-            setUploading(false);
+          onUploaded={handleUploaded}
+        />
+      )}
+
+      {editing && canManageDocuments && (
+        <EditDocumentForm
+          document={editing}
+          projects={projects}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
             reload();
           }}
         />

@@ -1,7 +1,13 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { ToastProvider } from './components/common/Toast';
+import { ConfirmProvider } from './components/common/ConfirmDialog';
+import { applyWorkTheme, readWorkThemeSettings } from './theme/workTheme';
 import './styles/global.css';
+import './styles/glass-skin.css';
+
+applyWorkTheme(readWorkThemeSettings());
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -10,6 +16,10 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <App />
+    <ToastProvider>
+      <ConfirmProvider>
+        <App />
+      </ConfirmProvider>
+    </ToastProvider>
   </StrictMode>,
 );

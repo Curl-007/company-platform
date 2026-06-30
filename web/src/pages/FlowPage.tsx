@@ -1,174 +1,124 @@
-import { Check } from 'lucide-react';
+import { useState } from 'react';
+import { fetchFlowOverview, fetchProjectFlow } from '../services/resources';
+import { useAsync } from '../hooks/useAsync';
 import PageHeader from '../components/common/PageHeader';
 import Panel from '../components/common/Panel';
-import StatusBadge from '../components/common/StatusBadge';
-import DataTable, { type DataTableColumn } from '../components/common/DataTable';
+import PageState from '../components/common/PageState';
+import FlowPipeline from '../components/common/FlowPipeline';
+import DefectFunnel from '../components/common/DefectFunnel';
+import type { FlowOverviewItem, ProjectFlow, GateState } from '../types';
 
-// ---------------------------------------------------------------------------
-// Flow stages
-// ---------------------------------------------------------------------------
+const STAGE_LABELS: Record<string, string> = {
+  initiation: '立项',
+  requirement: '需求',
+  design: '设计',
+  development: '开发',
+  testing: '测试',
+  acceptance: '验收',
+  release: '发布',
+};
 
-const FLOW_STAGES = [
-  '立项', '需求', '设计', '开发', '联调', '测试', '验收', '发布', '运维', '复盘',
-];
+const STATE_DOT: Record<GateState, string> = {
+  done: 'var(--color-success, #16a34a)',
+  passed: 'var(--color-success, #16a34a)',
+  in_progress: 'var(--color-info, #2563eb)',
+  blocked: 'var(--color-risk, #dc2626)',
+  pending: 'var(--color-border, #cbd5e1)',
+};
 
-// ---------------------------------------------------------------------------
-// Process gates (static data — could be replaced with API later)
-// ---------------------------------------------------------------------------
+const STAGE_ORDER = ['initiation', 'requirement', 'design', 'development', 'testing', 'acceptance', 'release'];
 
-interface ProcessGate {
-  node: string;
-  input: string;
-  output: string;
-  approver: string;
-  status: string;
-}
+function FlowPage() {
+  const { data: overview, loading, error, reload } = useAsync<FlowOverviewItem[]>(fetchFlowOverview, []);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-const GATES: ProcessGate[] = [
-  { node: '立项', input: '商业论证 / 可行性报告', output: '立项批准书', approver: 'PMO', status: 'completed' },
-  { node: '需求', input: '立项批准书', output: '需求规格说明书 (SRS)', approver: '产品经理', status: 'completed' },
-  { node: '设计', input: 'SRS', output: '设计文档 / 原型', approver: '技术负责人', status: 'completed' },
-  { node: '开发', input: '设计文档', output: '可运行代码', approver: '技术负责人', status: 'in_progress' },
-  { node: '联调', input: '各模块代码', output: '联调报告', approver: '开发团队', status: 'pending' },
-  { node: '测试', input: '联调通过版本', output: '测试报告', approver: 'QA 负责人', status: 'pending' },
-  { node: '验收', input: '测试报告', output: '验收报告', approver: '客户 / PM', status: 'pending' },
-  { node: '发布', input: '验收通过', output: '发布记录', approver: '运维负责人', status: 'pending' },
-  { node: '运维', input: '发布版本', output: '运维日志', approver: '运维团队', status: 'pending' },
-  { node: '复盘', input: '运维数据', output: '复盘报告', approver: '全员', status: 'pending' },
-];
-
-const gateColumns: DataTableColumn<ProcessGate>[] = [
-  {
-    key: 'node',
-    title: '节点',
-    render: (g) => <span className="font-medium">{g.node}</span>,
-  },
-  {
-    key: 'input',
-    title: '输入',
-    render: (g) => g.input,
-  },
-  {
-    key: 'output',
-    title: '输出',
-    render: (g) => g.output,
-  },
-  {
-    key: 'approver',
-    title: '审批人',
-    render: (g) => g.approver || '—',
-  },
-  {
-    key: 'status',
-    title: '状态',
-    render: (g) => <StatusBadge label={g.status} status={g.status} />,
-  },
-];
-
-// ---------------------------------------------------------------------------
-// Sprint info (static placeholder — could be replaced with API later)
-// ---------------------------------------------------------------------------
-
-interface SprintInfo {
-  name: string;
-  goal: string;
-  status: string;
-  startDate: string;
-  endDate: string;
-}
-
-const SPRINTS: SprintInfo[] = [
-  { name: 'Sprint 1', goal: '核心模块开发', status: 'completed', startDate: '2025-01-06', endDate: '2025-01-19' },
-  { name: 'Sprint 2', goal: '集成联调', status: 'in_progress', startDate: '2025-01-20', endDate: '2025-02-02' },
-  { name: 'Sprint 3', goal: '测试与修复', status: 'pending', startDate: '2025-02-03', endDate: '2025-02-16' },
-];
-
-const sprintColumns: DataTableColumn<SprintInfo>[] = [
-  {
-    key: 'name',
-    title: '迭代',
-    render: (s) => <span className="font-medium">{s.name}</span>,
-  },
-  {
-    key: 'goal',
-    title: '目标',
-    render: (s) => s.goal,
-  },
-  {
-    key: 'status',
-    title: '状态',
-    render: (s) => <StatusBadge label={s.status} status={s.status} />,
-  },
-  {
-    key: 'startDate',
-    title: '开始',
-    render: (s) => <span className="text-mono">{s.startDate}</span>,
-  },
-  {
-    key: 'endDate',
-    title: '结束',
-    render: (s) => <span className="text-mono">{s.endDate}</span>,
-  },
-];
-
-// ---------------------------------------------------------------------------
-// Flow strip visualization
-// ---------------------------------------------------------------------------
-
-function FlowStrip() {
-  const currentStageIndex = 3; // "开发" is in_progress
+  if (loading || error || !overview) {
+    return (
+      <div>
+        <PageHeader title="研发流程" description="查看跨项目阶段门禁和交付流转概览。" />
+        <PageState loading={loading} error={error} isEmpty={!loading && !error && !overview} onRetry={reload} />
+      </div>
+    );
+  }
 
   return (
-    <div className="flow-stepper">
-      {FLOW_STAGES.map((stage, index) => {
-        const state = index < currentStageIndex ? 'done' : index === currentStageIndex ? 'current' : 'pending';
-        return (
-          <div key={stage} className={`flow-step flow-step-${state}`}>
-            <div className="flow-step-node">
-              {state === 'done' ? <Check size={14} strokeWidth={3} /> : index + 1}
-            </div>
-            <span className="flow-step-label">{stage}</span>
-            {index < FLOW_STAGES.length - 1 && (
-              <div className={`flow-step-connector ${index < currentStageIndex ? 'filled' : ''}`} />
-            )}
+    <div>
+      <PageHeader
+        title="研发流程"
+        description={`跨项目阶段门禁总览 · 共 ${overview.length} 个项目`}
+        actions={<button className="btn btn-secondary btn-sm" onClick={reload}>刷新</button>}
+      />
+
+      <div className="flow-legend-bar">
+        <span className="flow-legend-item"><span className="flow-legend-dot" style={{ background: STATE_DOT.passed }} />已通过</span>
+        <span className="flow-legend-item"><span className="flow-legend-dot" style={{ background: STATE_DOT.in_progress }} />进行中</span>
+        <span className="flow-legend-item"><span className="flow-legend-dot" style={{ background: STATE_DOT.blocked }} />阻塞</span>
+        <span className="flow-legend-item"><span className="flow-legend-dot" style={{ background: STATE_DOT.pending }} />未开始</span>
+      </div>
+
+      <Panel title="项目阶段矩阵" subtitle="点击项目行可展开查看详细流程" className="mt-12">
+        <div className="flow-matrix">
+          <div className="flow-matrix-row flow-matrix-header">
+            <div className="flow-matrix-cell flow-matrix-project">项目</div>
+            {STAGE_ORDER.map((stage) => (
+              <div key={stage} className="flow-matrix-cell flow-matrix-stage-head">{STAGE_LABELS[stage]}</div>
+            ))}
+            <div className="flow-matrix-cell flow-matrix-health">健康度</div>
           </div>
-        );
-      })}
+
+          {overview.map((item) => {
+            const isOpen = selectedId === item.projectId;
+            return (
+              <div key={item.projectId}>
+                <div
+                  className={`flow-matrix-row ${isOpen ? 'flow-matrix-row-active' : ''}`}
+                  onClick={() => setSelectedId(isOpen ? null : item.projectId)}
+                >
+                  <div className="flow-matrix-cell flow-matrix-project font-medium">{item.projectName}</div>
+                  {STAGE_ORDER.map((stage) => {
+                    const gate = item.gates.find((entry) => entry.stage === stage);
+                    return (
+                      <div key={stage} className="flow-matrix-cell flow-matrix-stage">
+                        <span className="flow-matrix-dot" style={{ background: gate ? STATE_DOT[gate.state] : STATE_DOT.pending }} title={gate ? gate.state : ''} />
+                      </div>
+                    );
+                  })}
+                  <div className="flow-matrix-cell flow-matrix-health text-mono">{item.healthScore}</div>
+                </div>
+                {isOpen && <ProjectFlowDetail projectId={item.projectId} />}
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
+function ProjectFlowDetail({ projectId }: { projectId: string }) {
+  const { data, loading, error } = useAsync<ProjectFlow>(() => fetchProjectFlow(projectId), [projectId]);
+  if (loading) return <div className="flow-detail"><p className="text-secondary">正在加载流程详情...</p></div>;
+  if (error || !data) return <div className="flow-detail"><p className="form-error">{error ?? '加载失败'}</p></div>;
 
-function FlowPage() {
   return (
-    <div>
-      <PageHeader title="研发流程" description="端到端研发流程可视化，包含流程节点、门禁与迭代信息。" />
-
-      <Panel title="研发流程" subtitle="立项 → 需求 → 设计 → 开发 → 联调 → 测试 → 验收 → 发布 → 运维 → 复盘">
-        <FlowStrip />
-      </Panel>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 20, marginTop: 20, alignItems: 'start' }}>
-        <Panel title="流程门禁" subtitle="各节点的输入、输出与审批要求">
-          <DataTable
-            columns={gateColumns}
-            data={GATES}
-            rowKey="node"
-            emptyText="暂无流程门禁数据。"
-          />
-        </Panel>
-
-        <Panel title="迭代计划" subtitle="当前项目迭代安排">
-          <DataTable
-            columns={sprintColumns}
-            data={SPRINTS}
-            rowKey="name"
-            emptyText="暂无迭代安排。"
-          />
-        </Panel>
+    <div className="flow-detail">
+      <FlowPipeline gates={data.gates} />
+      <div className="grid-2 mt-12">
+        <div>
+          <div className="section-title">缺陷闭环</div>
+          <DefectFunnel data={data.defectFunnel} />
+        </div>
+        <div>
+          <div className="section-title">工时与规模</div>
+          <div className="metric-grid" style={{ marginTop: 8 }}>
+            <div className="metric-card"><div className="metric-card-label">预估</div><div className="metric-card-value">{data.hours.estimated}h</div></div>
+            <div className="metric-card"><div className="metric-card-label">已消耗</div><div className="metric-card-value">{data.hours.consumed}h</div></div>
+            <div className="metric-card"><div className="metric-card-label">剩余</div><div className="metric-card-value">{data.hours.remaining}h</div></div>
+          </div>
+          <p className="text-secondary" style={{ fontSize: 13, marginTop: 8 }}>
+            需求 {data.counts.requirements} · 任务 {data.counts.tasks} · 缺陷 {data.counts.defects} · 用例 {data.counts.testCases}
+          </p>
+        </div>
       </div>
     </div>
   );

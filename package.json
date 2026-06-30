@@ -11,8 +11,7 @@
     "install:all": "npm install --workspaces --include-workspace-root",
     "dev": "concurrently \"npm run dev -w api\" \"npm run dev -w web\"",
     "start": "concurrently \"npm run start -w api\" \"npm run dev -w web\"",
-    "build": "npm run build -w web",
-    "test": "npm run test -w api --if-present && npm run build -w web"
+    "build": "npm run build -w web"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

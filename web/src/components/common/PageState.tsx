@@ -1,11 +1,5 @@
 import React from 'react';
 
-// ---------------------------------------------------------------------------
-// PageState: consistent loading / error / empty rendering for data pages.
-// Wrap page content so every page handles the three non-success states the
-// same way. Returns null when there is content to show.
-// ---------------------------------------------------------------------------
-
 interface PageStateProps {
   loading: boolean;
   error: string | null;
@@ -19,8 +13,8 @@ const PageState: React.FC<PageStateProps> = ({
   loading,
   error,
   isEmpty = false,
-  emptyTitle = 'Nothing here yet',
-  emptyDescription = 'There is no data to display for this view.',
+  emptyTitle = '暂无数据',
+  emptyDescription = '当前视图还没有可展示的数据。',
   onRetry,
 }) => {
   if (loading) {
@@ -29,7 +23,7 @@ const PageState: React.FC<PageStateProps> = ({
         <div className="panel-body">
           <div className="data-table-loading">
             <div className="spinner" />
-            <div style={{ marginTop: 8 }}>Loading…</div>
+            <div style={{ marginTop: 8 }}>加载中...</div>
           </div>
         </div>
       </div>
@@ -41,11 +35,11 @@ const PageState: React.FC<PageStateProps> = ({
       <div className="panel">
         <div className="panel-body">
           <div className="empty-state">
-            <div className="empty-state-title">Could not load data</div>
+            <div className="empty-state-title">数据加载失败</div>
             <p className="empty-state-desc">{error}</p>
             {onRetry && (
               <button className="btn btn-secondary btn-sm" onClick={onRetry} style={{ marginTop: 12 }}>
-                Retry
+                重试
               </button>
             )}
           </div>

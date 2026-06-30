@@ -1,46 +1,26 @@
 import React, { useState, useMemo, useCallback } from 'react';
 
-// ---------------------------------------------------------------------------
-// DataTable: reusable table with column definitions, sorting, and states
-// ---------------------------------------------------------------------------
-
 export interface DataTableColumn<T> {
-  /** Unique column key */
   key: string;
-  /** Column header text */
   title: string;
-  /** How to extract the cell value from a row */
   render?: (row: T, index: number) => React.ReactNode;
-  /** Sort comparator. Return negative/zero/positive like Array.sort */
   sorter?: (a: T, b: T) => number;
-  /** Column width hint (CSS value) */
   width?: string | number;
-  /** Text alignment */
   align?: 'left' | 'center' | 'right';
 }
 
 export type SortDirection = 'asc' | 'desc';
 
 interface DataTableProps<T> {
-  /** Column definitions */
   columns: DataTableColumn<T>[];
-  /** Row data */
   data: T[];
-  /** Unique key extractor for each row */
   rowKey: string | ((row: T) => string);
-  /** Row click handler */
   onRowClick?: (row: T) => void;
-  /** Show loading spinner */
   loading?: boolean;
-  /** Custom empty state message */
   emptyText?: string;
-  /** Custom empty state component */
   emptyContent?: React.ReactNode;
-  /** Additional CSS class for the wrapper */
   className?: string;
-  /** Default sort column key */
   defaultSortKey?: string;
-  /** Default sort direction */
   defaultSortDirection?: SortDirection;
 }
 
@@ -50,7 +30,7 @@ function DataTable<T>({
   rowKey,
   onRowClick,
   loading = false,
-  emptyText = 'No data available',
+  emptyText = '暂无数据',
   emptyContent,
   className = '',
   defaultSortKey,
@@ -91,13 +71,12 @@ function DataTable<T>({
     [rowKey],
   );
 
-  // Loading state
   if (loading) {
     return (
       <div className={`data-table-wrapper ${className}`}>
         <div className="data-table-loading">
           <div className="spinner" />
-          <div style={{ marginTop: 8 }}>Loading...</div>
+          <div style={{ marginTop: 8 }}>加载中...</div>
         </div>
       </div>
     );
@@ -137,9 +116,7 @@ function DataTable<T>({
           {sortedData.length === 0 ? (
             <tr>
               <td colSpan={columns.length}>
-                {emptyContent ?? (
-                  <div className="data-table-empty">{emptyText}</div>
-                )}
+                {emptyContent ?? <div className="data-table-empty">{emptyText}</div>}
               </td>
             </tr>
           ) : (

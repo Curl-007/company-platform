@@ -18,7 +18,7 @@ function PageHeader({ title, description, actions }: PageHeaderProps) {
         <h1 className="page-title">{title}</h1>
         {description && <p>{description}</p>}
       </div>
-      {actions && <div className="topbar-actions">{actions}</div>}
+      {actions && <div className="page-header-actions">{actions}</div>}
     </div>
   );
 }

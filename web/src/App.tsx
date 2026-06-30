@@ -1,78 +1,30 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import Layout from './components/Layout';
 import Login from './components/Login';
-import DashboardPage from './pages/DashboardPage';
-import ProjectsPage from './pages/ProjectsPage';
-import ProductsPage from './pages/ProductsPage';
-import RequirementsPage from './pages/RequirementsPage';
-import TestingPage from './pages/TestingPage';
-import DocumentsPage from './pages/DocumentsPage';
-import OrganizationPage from './pages/OrganizationPage';
-import AiPage from './pages/AiPage';
-import ReportsPage from './pages/ReportsPage';
-import FlowPage from './pages/FlowPage';
-import SettingsPage from './pages/SettingsPage';
-import { getSessionUser, setSessionUser, logout as doLogout } from './services/auth';
+import { getMe, getSessionUser, setSessionUser, logout as doLogout } from './services/auth';
 import { getToken } from './services/api';
+import { canAccessPageForUser } from './constants/roles';
+import { trackPageView } from './services/resources';
 import type { PageKey, SessionUser } from './types';
-
-// ---------------------------------------------------------------------------
-// Hash-based routing helpers
-// ---------------------------------------------------------------------------
+import { KNOWN_PAGES, PAGE_COMPONENTS } from './app/pageRegistry';
 
 function getHashPage(): PageKey {
-  const hash = window.location.hash.replace(/^#\/?/, '');
-  const known: PageKey[] = [
-    'dashboard',
-    'projects',
-    'products',
-    'requirements',
-    'testing',
-    'documents',
-    'organization',
-    'ai',
-    'reports',
-    'flow',
-    'settings',
-    'login',
-  ];
-  if (!hash || hash === '') return 'dashboard';
-  if (known.includes(hash as PageKey)) return hash as PageKey;
+  const rawHash = window.location.hash.replace(/^#\/?/, '');
+  const hash = rawHash.split('?')[0] ?? '';
+  if (!hash) return 'dashboard';
+  if (KNOWN_PAGES.includes(hash as PageKey)) return hash as PageKey;
   return 'dashboard';
 }
 
-function setHashPage(page: PageKey): void {
-  window.location.hash = `#/${page}`;
+function setHashPage(page: PageKey, params: Record<string, string> = {}): void {
+  const query = new URLSearchParams(params).toString();
+  window.location.hash = `#/${page}${query ? `?${query}` : ''}`;
 }
-
-// ---------------------------------------------------------------------------
-// Page registry
-// ---------------------------------------------------------------------------
-
-const pageComponents: Record<PageKey, React.FC> = {
-  dashboard: DashboardPage,
-  projects: ProjectsPage,
-  products: ProductsPage,
-  requirements: RequirementsPage,
-  testing: TestingPage,
-  documents: DocumentsPage,
-  organization: OrganizationPage,
-  ai: AiPage,
-  reports: ReportsPage,
-  flow: FlowPage,
-  settings: SettingsPage,
-  login: () => null, // handled separately
-};
-
-// ---------------------------------------------------------------------------
-// App
-// ---------------------------------------------------------------------------
 
 function App() {
   const [user, setUser] = useState<SessionUser | null>(() => getSessionUser());
   const [currentPage, setCurrentPage] = useState<PageKey>(() => getHashPage());
 
-  // Listen for hash changes (back/forward navigation)
   useEffect(() => {
     function handleHashChange() {
       const page = getHashPage();
@@ -80,6 +32,14 @@ function App() {
         setUser(null);
         return;
       }
+
+      const sessionUser = getSessionUser();
+      if (sessionUser && !canAccessPageForUser(sessionUser, page)) {
+        setHashPage('dashboard');
+        setCurrentPage('dashboard');
+        return;
+      }
+
       setCurrentPage(page);
     }
 
@@ -87,13 +47,30 @@ function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // If user is set but hash is #/login, redirect to dashboard
   useEffect(() => {
     if (user && getHashPage() === 'login') {
       setHashPage('dashboard');
       setCurrentPage('dashboard');
     }
   }, [user]);
+
+  useEffect(() => {
+    if (!user || !getToken()) return;
+    getMe()
+      .then((freshUser) => {
+        setUser(freshUser);
+        if (!canAccessPageForUser(freshUser, getHashPage())) {
+          setHashPage('dashboard');
+          setCurrentPage('dashboard');
+        }
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!user || !getToken() || currentPage === 'login') return;
+    trackPageView(currentPage, currentPage).catch(() => undefined);
+  }, [currentPage, user]);
 
   const handleLoginSuccess = useCallback((loggedInUser: SessionUser) => {
     setSessionUser(loggedInUser);
@@ -107,27 +84,38 @@ function App() {
     setUser(null);
   }, []);
 
-  const handleNavigate = useCallback((page: PageKey) => {
-    setHashPage(page);
-    setCurrentPage(page);
+  const handleUserUpdate = useCallback((updatedUser: SessionUser) => {
+    setSessionUser(updatedUser);
+    setUser(updatedUser);
   }, []);
 
-  // Not authenticated -- show login
+  const handleNavigate = useCallback((page: PageKey, focusId?: string) => {
+    if (user && !canAccessPageForUser(user, page)) {
+      setHashPage('dashboard');
+      setCurrentPage('dashboard');
+      return;
+    }
+    setHashPage(page, focusId ? { focus: focusId } : {});
+    setCurrentPage(page);
+  }, [user]);
+
   if (!user || !getToken()) {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // Authenticated -- render layout with current page
-  const PageComponent = pageComponents[currentPage] ?? pageComponents.dashboard;
+  const PageComponent = PAGE_COMPONENTS[currentPage] ?? PAGE_COMPONENTS.dashboard;
 
   return (
     <Layout
       currentPage={currentPage}
       onNavigate={handleNavigate}
       user={user}
+      onUserUpdate={handleUserUpdate}
       onLogout={handleLogout}
     >
-      <PageComponent />
+      <Suspense fallback={<div className="page-suspense-fallback">加载中...</div>}>
+        <PageComponent user={user} />
+      </Suspense>
     </Layout>
   );
 }

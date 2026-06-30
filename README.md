@@ -1,17 +1,14 @@
-# AI 驱动项目管理平台
+# 公司项目管理平台
 
-这是一个公司项目管理平台全栈项目，包含设计文档、前端 Web、后端 API。
-
-平台按三阶段交付：阶段一为可上线的核心闭环 MVP，阶段二补 AI 文档闭环与协作，阶段三承接完整企业级愿景。范围与术语以 `docs/00-数据字典与术语统一.md` 为唯一真源，路线图见 `docs/README.md`。
+这是一个可交付使用的全栈项目管理平台，包含前端 Web 应用和后端 API 服务。
 
 ## 目录
 
-- `docs/`：总体设计、PRD、AI 方案、数据模型、UI 方案、全栈蓝图与数据字典。
-- `web/`：React + TypeScript 前端应用。
-- `api/`：Node.js 后端 API 服务。
-- `prototype/`：**已归档的早期静态原型**，功能已由 `web/` 取代，仅作历史参考，不参与构建。
+- `web/`：React + TypeScript 前端应用
+- `api/`：Node.js + SQLite 后端 API 服务
+- `docs/`：设计文档与实施说明
 
-## 运行
+## 启动
 
 安装依赖：
 
@@ -27,13 +24,23 @@ npm run dev
 
 默认地址：
 
-- 前端：`http://localhost:5173`
-- 后端：`http://localhost:4010`
+- 前端：http://localhost:5173
+- 后端：http://localhost:4010
 
-## 验证
+## 构建
 
 ```bash
 npm run build
-npm run test
 ```
 
+## 初始账号
+
+本地开发环境会自动创建基础角色账号，业务数据为空：
+
+- 管理员：`admin@example.com` / `Admin@123`
+- 项目经理：`pm@example.com` / `Pm@12345`
+- 产品经理：`pdm@example.com` / `Pdm@12345`
+- 开发：`dev@example.com` / `Dev@12345`
+- 测试：`qa@example.com` / `Qa@12345`
+
+生产部署时建议通过环境变量设置 `SEED_*_PASSWORD`，并配置 `JWT_SECRET`。

@@ -14,7 +14,7 @@ interface FilterBarProps {
   /** Right-aligned actions (primary buttons) */
   trailing?: ReactNode;
   /** Optional label shown before the controls */
-  label?: string;
+  label?: ReactNode;
 }
 
 function FilterBar({ children, trailing, label }: FilterBarProps) {

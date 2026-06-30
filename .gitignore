@@ -12,3 +12,10 @@ api/state.json
 api/uploads/
 api/app.db*
 api/storage/
+
+# Local workspace/tooling state
+.agents/
+.ccpanes/
+.claude/
+.codex/
+.omo/
