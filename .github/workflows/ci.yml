@@ -1,0 +1,60 @@
+name: Quality Gate
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Backend integration and unit tests
+        run: npm run test -w api
+
+      - name: Initialize disposable migration verification database
+        run: DATABASE_FILE="$RUNNER_TEMP/project-management.db" node -e "require('./api/db').initDb()"
+
+      - name: Database integrity preflight
+        run: DATABASE_FILE="$RUNNER_TEMP/project-management.db" npm run preflight:database -w api -- --json
+
+      - name: Verify project-objective migration checksum and backfill
+        run: DATABASE_FILE="$RUNNER_TEMP/project-management.db" npm run verify:project-objective-migration -w api
+
+      - name: Export SQLite data for PostgreSQL rehearsal
+        run: DATABASE_FILE="$RUNNER_TEMP/project-management.db" npm run export:postgres -w api -- --out "$RUNNER_TEMP/postgres-export"
+
+      - name: Verify PostgreSQL export manifest
+        run: npm run verify:postgres-export -w api -- --dir "$RUNNER_TEMP/postgres-export" --json
+
+      - name: Build PostgreSQL reconciliation fixture
+        run: node api/scripts/create-postgres-target-report-fixture.js --dir "$RUNNER_TEMP/postgres-export" --out "$RUNNER_TEMP/postgres-target-report.json"
+
+      - name: Reconcile PostgreSQL import target report
+        run: npm run reconcile:postgres-import -w api -- --dir "$RUNNER_TEMP/postgres-export" --target-report "$RUNNER_TEMP/postgres-target-report.json" --json
+
+      - name: Frontend type check
+        run: npm run typecheck -w web
+
+      - name: Frontend production build
+        run: npm run build -w web
+
+      - name: Reject whitespace errors
+        run: git diff --check HEAD^ HEAD || test "$(git rev-list --count HEAD)" -eq 1
