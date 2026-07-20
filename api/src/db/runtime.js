@@ -3,9 +3,15 @@
  *
  * Repositories currently rely on a synchronous statement API. SQLite remains
  * the only executable runtime until the repositories are moved to the
- * asynchronous PostgreSQL contract. Keeping selection here prevents an
- * environment variable from silently pointing a SQLite process at a
+ * asynchronous PostgreSQL contract (W2 Wave 5). Keeping selection here prevents
+ * an environment variable from silently pointing a SQLite process at a
  * PostgreSQL URL and corrupting the intended migration procedure.
+ *
+ * Wave 1 provides createPgPool / createPostgresRuntime in ./postgres.js for
+ * scripts and future wiring; createDatabaseRuntime still fails closed for
+ * postgres until the async access layer is complete.
+ *
+ * @see docs/w2-postgres-plan.md
  */
 function resolveDatabaseDialect(env = process.env) {
   const value = String(env.DATABASE_DIALECT || "sqlite").trim().toLowerCase();
@@ -31,12 +37,10 @@ function createDatabaseRuntime({ env = process.env, DatabaseSync, databaseFile }
   const dialect = resolveDatabaseDialect(env);
   if (dialect === "sqlite") return createSqliteRuntime({ DatabaseSync, databaseFile });
 
-  // PostgreSQL migration is intentionally fail-closed for now. The export,
-  // preflight and runbook are available, but production repositories are
-  // still synchronous. Starting with this setting before the async adapter
-  // and dual-environment verification exist would be unsafe.
+  // PostgreSQL remains fail-closed at the process runtime boundary until Wave 5.
+  // Pool helpers live in ./postgres.js for import scripts and progressive wiring.
   throw new Error(
-    "DATABASE_DIALECT=postgres is not enabled yet: complete the asynchronous PostgreSQL repository adapter and dual-environment validation before switching runtime databases.",
+    "DATABASE_DIALECT=postgres is not enabled yet: complete the asynchronous PostgreSQL access layer (docs/w2-postgres-plan.md Wave 5) and dual-environment validation before switching runtime databases.",
   );
 }
 
