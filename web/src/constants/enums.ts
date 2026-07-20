@@ -1,71 +1,88 @@
-export const PROJECT_STATUSES = [
-  'planning',
-  'active',
-  'on_hold',
-  'done',
-  'archived',
-] as const;
+import {
+  AI_JOB_STATUSES as GENERATED_AI_JOB_STATUSES,
+  BUILD_STATUSES as GENERATED_BUILD_STATUSES,
+  DEFECT_SEVERITIES as GENERATED_DEFECT_SEVERITIES,
+  DEFECT_STATUSES as GENERATED_DEFECT_STATUSES,
+  DOCUMENT_CATEGORIES as GENERATED_DOCUMENT_CATEGORIES,
+  DOCUMENT_TYPES as GENERATED_DOCUMENT_TYPES,
+  PROJECT_STATUSES as GENERATED_PROJECT_STATUSES,
+  RELEASE_APPROVAL_DECISIONS as GENERATED_RELEASE_APPROVAL_DECISIONS,
+  RELEASE_STATUSES as GENERATED_RELEASE_STATUSES,
+  RELEASE_TYPES as GENERATED_RELEASE_TYPES,
+  REQUIREMENT_PRIORITIES as GENERATED_REQUIREMENT_PRIORITIES,
+  REQUIREMENT_STATUSES as GENERATED_REQUIREMENT_STATUSES,
+  SERVER_ENUMS,
+  SPRINT_STATUSES as GENERATED_SPRINT_STATUSES,
+  TASK_STATUSES as GENERATED_TASK_STATUSES,
+  TASK_TYPES as GENERATED_TASK_TYPES,
+  TEST_CASE_STATUSES as GENERATED_TEST_CASE_STATUSES,
+  TEST_RUN_RESULTS as GENERATED_TEST_RUN_RESULTS,
+  USER_ROLES as GENERATED_USER_ROLES,
+  USER_STATUSES as GENERATED_USER_STATUSES,
+  WORK_ITEM_ROLES as GENERATED_WORK_ITEM_ROLES,
+} from './serverEnums.generated';
+
+export { SERVER_ENUMS };
+
+export const PROJECT_STATUSES = GENERATED_PROJECT_STATUSES;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
-export const REQUIREMENT_STATUSES = [
-  'draft',
-  'reviewing',
-  'approved',
-  'in_dev',
-  'testing',
-  'accepted',
-  'closed',
-  'cancelled',
-] as const;
+export const REQUIREMENT_STATUSES = GENERATED_REQUIREMENT_STATUSES;
 export type RequirementStatus = (typeof REQUIREMENT_STATUSES)[number];
 
-export const REQUIREMENT_PRIORITIES = ['high', 'medium', 'low'] as const;
+export const REQUIREMENT_PRIORITIES = GENERATED_REQUIREMENT_PRIORITIES;
 export type RequirementPriority = (typeof REQUIREMENT_PRIORITIES)[number];
 
-export const TASK_STATUSES = [
-  'todo',
-  'in_progress',
-  'blocked',
-  'code_review',
-  'testing',
-  'acceptance',
-  'done',
-  'cancelled',
-] as const;
+export const TASK_STATUSES = GENERATED_TASK_STATUSES;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
-export const TASK_TYPES = [
-  'epic',
-  'story',
-  'task',
-  'bug',
-  'milestone',
-  'work_package',
-] as const;
+export const TASK_TYPES = GENERATED_TASK_TYPES;
 export type TaskType = (typeof TASK_TYPES)[number];
 
-export const SPRINT_STATUSES = ['planned', 'active', 'closed'] as const;
+export const SPRINT_STATUSES = GENERATED_SPRINT_STATUSES;
 export type SprintStatus = (typeof SPRINT_STATUSES)[number];
 
-export const TEST_CASE_STATUSES = ['draft', 'active', 'passed', 'failed', 'blocked'] as const;
+export const TEST_CASE_STATUSES = GENERATED_TEST_CASE_STATUSES;
 export type TestCaseStatus = (typeof TEST_CASE_STATUSES)[number];
 
-export const TEST_RUN_RESULTS = ['passed', 'failed', 'blocked'] as const;
+export const TEST_RUN_RESULTS = GENERATED_TEST_RUN_RESULTS;
 export type TestRunResult = (typeof TEST_RUN_RESULTS)[number];
 
-export const DEFECT_STATUSES = [
-  'new',
-  'confirmed',
-  'in_fix',
-  'resolved',
-  'verified',
-  'closed',
-  'rejected',
-] as const;
+export const DEFECT_STATUSES = GENERATED_DEFECT_STATUSES;
 export type DefectStatus = (typeof DEFECT_STATUSES)[number];
 
-export const DEFECT_SEVERITIES = ['low', 'medium', 'high', 'critical'] as const;
+export const DEFECT_SEVERITIES = GENERATED_DEFECT_SEVERITIES;
 export type DefectSeverity = (typeof DEFECT_SEVERITIES)[number];
+
+export const BUILD_STATUSES = GENERATED_BUILD_STATUSES;
+export type BuildStatus = (typeof BUILD_STATUSES)[number];
+
+export const RELEASE_STATUSES = GENERATED_RELEASE_STATUSES;
+export type ReleaseStatus = (typeof RELEASE_STATUSES)[number];
+
+export const RELEASE_TYPES = GENERATED_RELEASE_TYPES;
+export type ReleaseType = (typeof RELEASE_TYPES)[number];
+
+export const RELEASE_APPROVAL_DECISIONS = GENERATED_RELEASE_APPROVAL_DECISIONS;
+export type ReleaseApprovalDecision = (typeof RELEASE_APPROVAL_DECISIONS)[number];
+
+export const DOCUMENT_CATEGORIES = GENERATED_DOCUMENT_CATEGORIES;
+export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
+
+export const DOCUMENT_TYPES = GENERATED_DOCUMENT_TYPES;
+export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+
+export const USER_ROLES = GENERATED_USER_ROLES;
+export type UserRole = (typeof USER_ROLES)[number];
+
+export const USER_STATUSES = GENERATED_USER_STATUSES;
+export type UserStatus = (typeof USER_STATUSES)[number];
+
+export const WORK_ITEM_ROLES = GENERATED_WORK_ITEM_ROLES;
+export type WorkItemRole = (typeof WORK_ITEM_ROLES)[number];
+
+export const AI_JOB_STATUSES = GENERATED_AI_JOB_STATUSES;
+export type AiJobStatus = (typeof AI_JOB_STATUSES)[number];
 
 export const HEALTH_THRESHOLD_OK = 75;
 export const HEALTH_THRESHOLD_WARN = 50;

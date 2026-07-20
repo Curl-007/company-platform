@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bell } from 'lucide-react';
-import { fetchAuditLogs } from '../../services/resources';
+import { fetchAuditLogs } from '../../features/audit/api';
 import { RESOURCE_TYPE_LABELS, AUDIT_ACTION_LABELS, labelOf } from '../../constants/enums';
 import type { AuditLogRecord } from '../../types';
 

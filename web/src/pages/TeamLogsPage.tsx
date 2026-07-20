@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Download, RefreshCw, RotateCcw } from 'lucide-react';
-import { fetchProjects, fetchTeamWeeklySummary, fetchTeamWorkLogs } from '../services/resources';
+import { fetchProjects } from '../features/projects/api';
+import { fetchTeamWeeklySummary, fetchTeamWorkLogs } from '../features/workLogs/api';
 import { useAsync } from '../hooks/useAsync';
 import PageHeader from '../components/common/PageHeader';
 import Panel from '../components/common/Panel';

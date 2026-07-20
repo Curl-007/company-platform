@@ -6,9 +6,7 @@ import {
   deleteDefect,
   deleteTestCase,
   fetchDefects,
-  fetchProjects,
   fetchTestCases,
-  sendAiChat,
   updateDefect,
   updateDefectStatus,
   updateTestCase,
@@ -17,7 +15,9 @@ import {
   type DefectFilters,
   type UpdateDefectInput,
   type UpdateTestCaseInput,
-} from '../services/resources';
+} from '../features/testing/api';
+import { sendAiChat } from '../features/ai/api';
+import { fetchProjects } from '../features/projects/api';
 import { useAsync } from '../hooks/useAsync';
 import { ApiError } from '../services/api';
 import { getSessionUser } from '../services/auth';

@@ -10,7 +10,8 @@ import {
   ShieldAlert,
   Target,
 } from 'lucide-react';
-import { fetchDashboard, sendAiChat } from '../services/resources';
+import { fetchDashboard } from '../features/dashboard/api';
+import { sendAiChat } from '../features/ai/api';
 import { ApiError } from '../services/api';
 import { getSessionUser } from '../services/auth';
 import { useAsync } from '../hooks/useAsync';

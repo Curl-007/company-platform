@@ -7,7 +7,7 @@ import {
   updateAiProviderStatus,
   updateAiProviderConfig,
   testAiProviderConfig,
-} from '../services/resources';
+} from '../features/ai/api';
 import { ApiError } from '../services/api';
 import type { AiProviderConfig, AiProviderHealth, UpdateAiProviderInput } from '../types';
 import { useAsync } from '../hooks/useAsync';

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Bot, FileText, Image as ImageIcon, Paperclip, Send, X } from 'lucide-react';
-import { sendAiChat } from '../../services/resources';
+import { sendAiChat } from '../../features/ai/api';
 import type { AiChatAttachment, AiChatMessage, PageKey } from '../../types';
 
 interface AiSidebarProps {

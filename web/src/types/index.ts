@@ -20,6 +20,7 @@ export interface SessionUser {
   phone?: string;
   position?: string;
   department?: string;
+  departmentId?: string | null;
   bio?: string;
 }
 
@@ -34,6 +35,7 @@ export interface User {
   phone?: string;
   position?: string;
   department?: string;
+  departmentId?: string | null;
   bio?: string;
 }
 
@@ -42,6 +44,18 @@ export interface UserCapabilities {
   operations: string[];
   permissions: string[];
   role: string;
+}
+
+export interface OrganizationUnit {
+  id: string;
+  name: string;
+  parentId?: string | null;
+  managerUserId?: string | null;
+  responsibilities: string;
+  status: 'active' | 'archived' | string;
+  memberCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -57,6 +71,35 @@ export interface ApiErrorBody {
   errorCode: string;
   message: string;
   traceId: string;
+  details?: Record<string, unknown>;
+}
+
+export interface StatusHistoryEntry {
+  id: string;
+  resourceType: 'project' | 'requirement' | 'task' | 'sprint' | string;
+  resourceId: string;
+  projectId?: string | null;
+  fromStatus?: string | null;
+  toStatus: string;
+  reason: string;
+  actorId?: string | null;
+  actorName: string;
+  createdAt: string;
+}
+
+export interface TimeEntry {
+  id: string;
+  userId: string;
+  projectId: string;
+  projectName: string;
+  taskId?: string | null;
+  workDate: string;
+  hours: number;
+  category: 'delivery' | 'support' | 'meeting' | 'training' | 'other' | string;
+  workNature: 'planned' | 'unplanned' | 'unspecified' | string;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Paginated<T> {
@@ -79,6 +122,7 @@ export interface Milestone {
 export interface Project {
   id: string;
   name: string;
+  objective?: string | null;
   code?: string | null;
   description?: string | null;
   status: string;
@@ -93,12 +137,43 @@ export interface Project {
   startDate?: string | null;
   endDate?: string | null;
   sourcePath?: string | null;
+  version: number;
   updatedAt: string;
 }
 
 export interface ProjectDetail extends Project {
   tasks: Task[];
   sprints: Sprint[];
+}
+
+export interface ProjectRisk {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
+  severity: 'low' | 'medium' | 'high' | 'critical' | string;
+  status: 'open' | 'monitoring' | 'mitigated' | 'closed' | string;
+  ownerId?: string | null;
+  ownerName: string;
+  mitigationPlan: string;
+  dueDate?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  closedAt?: string | null;
+}
+
+export interface ProjectDecision {
+  id: string;
+  projectId: string;
+  title: string;
+  context: string;
+  decision: string;
+  ownerId?: string | null;
+  ownerName: string;
+  status: 'proposed' | 'approved' | 'rejected' | 'superseded' | string;
+  decidedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Requirement {
@@ -118,6 +193,7 @@ export interface Requirement {
   completion: number;
   linkedTasks: string[];
   acceptanceCriteria: string[];
+  version: number;
 }
 
 export interface Task {
@@ -140,6 +216,7 @@ export interface Task {
   estimatedHours: number;
   actualHours: number;
   remainingHours?: number;
+  version: number;
   assigneeRole?: string | null;
   sourceType?: string | null;
   sourceId?: string | null;
@@ -153,6 +230,32 @@ export interface Sprint {
   status: string;
   startDate: string;
   endDate: string;
+}
+
+export interface SprintCommitment {
+  id: string;
+  sprintId: string;
+  projectId: string;
+  taskIds: string[];
+  taskCount: number;
+  estimatedHours: number;
+  remainingHours: number;
+  committedBy?: string | null;
+  committedByName: string;
+  committedAt: string;
+}
+
+export interface SprintScopeChange {
+  id: string;
+  sprintId: string;
+  projectId: string;
+  taskId?: string | null;
+  changeType: 'add' | 'remove' | 'reestimate' | string;
+  impactHours: number;
+  reason: string;
+  actorId?: string | null;
+  actorName: string;
+  createdAt: string;
 }
 
 export interface KanbanColumn {
@@ -240,6 +343,41 @@ export interface FlowOverviewItem {
   gates: { stage: string; state: GateState }[];
 }
 
+// Read-only workflow template catalog (GET /api/flow/templates)
+export interface WorkflowStage {
+  id: string;
+  label: string;
+  description: string;
+  evidence: string[];
+  exitCriteria: string[];
+}
+
+export interface WorkflowResourceFlow {
+  resource: 'project' | 'requirement' | 'task' | 'sprint' | 'aiJob';
+  label: string;
+  statuses: string[];
+  transitions: Record<string, string[]>;
+}
+
+export interface WorkflowTemplate {
+  id: string;
+  name: string;
+  version: string;
+  scope: 'project';
+  mode: 'fixed';
+  description: string;
+  processModes: string[];
+  stages: WorkflowStage[];
+  resources: WorkflowResourceFlow[];
+  guardrails: string[];
+}
+
+export interface WorkflowTemplateCatalog {
+  version: string;
+  source: string;
+  templates: WorkflowTemplate[];
+}
+
 // ---------------------------------------------------------------------------
 // Build (构建)
 // ---------------------------------------------------------------------------
@@ -275,6 +413,7 @@ export interface Release {
   linkedBugs: string[];
   releaseNotes?: string | null;
   creator?: string | null;
+  creatorId?: string | null;
   status: string;
   createdAt: string;
 }
@@ -368,6 +507,7 @@ export interface Document {
   fileType: string;
   storedFile?: string | null;
   content?: string;
+  collabRevision?: number;
 }
 
 export interface Defect {
@@ -439,6 +579,7 @@ export interface TestRunInput {
 export interface Program {
   id: string;
   name: string;
+  objective: string;
   owner: string;
   status: string;
   healthScore: number;
@@ -448,9 +589,25 @@ export interface Program {
   updatedAt: string;
 }
 
+export interface StrategicGoal {
+  id: string;
+  name: string;
+  objective: string;
+  owner: string;
+  status: 'draft' | 'active' | 'on_hold' | 'achieved' | 'closed' | string;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  successMetrics: string[];
+  programIds: string[];
+  portfolioIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Portfolio {
   id: string;
   name: string;
+  objective: string;
   owner: string;
   status: string;
   productIds: string[];
@@ -514,6 +671,24 @@ export interface AiSummary {
   aiProvider?: AiProviderConfig;
   generatedBy?: string;
   modelUsed?: string;
+  modelRoutes?: AiSummaryModelRoute[];
+}
+
+export interface AiSummaryModelRoute {
+  scene: string;
+  modelStrategy: string;
+  status: 'active' | 'degraded' | 'unavailable' | 'disabled' | 'unconfigured';
+  humanReview: string;
+  audit: string;
+  provider?: string;
+  activeProviderId?: string | null;
+  configuredProviderCount?: number;
+  providerCount?: number;
+  healthStatus?: string;
+  lastCheckedAt?: string | null;
+  lastSuccessAt?: string | null;
+  lastFailureAt?: string | null;
+  lastErrorCode?: string;
 }
 
 export interface AiProviderConfig {
@@ -751,6 +926,7 @@ export interface AuditLogRecord {
 export interface WorkLog {
   id: string;
   author: string;
+  authorId?: string | null;
   role?: string;
   projectId?: string | null;
   project: string;
@@ -768,7 +944,6 @@ export interface WorkLog {
 }
 
 export interface WorkLogPayload {
-  author?: string;
   projectId?: string;
   project?: string;
   content: string;
@@ -828,6 +1003,7 @@ export interface TeamWorkSummary {
 export interface ProjectMember {
   id: string;
   projectId: string;
+  userId?: string | null;
   userName: string;
   role: string;
   source: string;
@@ -887,6 +1063,116 @@ export interface TeamMemberOverview extends User {
 }
 
 // ---------------------------------------------------------------------------
+// Capacity planning
+// ---------------------------------------------------------------------------
+
+export interface CapacityPlan {
+  id: string;
+  userId: string;
+  periodStart: string;
+  periodEnd: string;
+  workingDays: number;
+  manualWorkingDays: number;
+  useCalendar: boolean;
+  calendarWorkingDays?: number | null;
+  dailyHours: number;
+  meetingHours: number;
+  trainingHours: number;
+  supportHours: number;
+  otherCommitmentHours: number;
+  theoreticalHours: number;
+  unavailableHours: number;
+  effectiveHours: number;
+  notes: string;
+  updatedBy?: string | null;
+  updatedAt: string;
+}
+
+export interface WorkCalendarException {
+  id: string;
+  calendarId: string;
+  date: string;
+  isWorkingDay: boolean;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkCalendar {
+  id: string;
+  name: string;
+  timezone: string;
+  workingWeekdays: number[];
+  isDefault: boolean;
+  workingDays: number;
+  exceptions: WorkCalendarException[];
+}
+
+export interface ProjectAllocation {
+  id: string;
+  projectId: string;
+  projectName: string;
+  userId: string;
+  periodStart: string;
+  periodEnd: string;
+  allocationPercent: number;
+  plannedHours: number;
+  configuredPlannedHours?: number | null;
+  notes: string;
+  overloadReason?: string;
+  approvalStatus?: 'approved' | 'pending' | string;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  updatedBy?: string | null;
+  updatedAt: string;
+}
+
+export interface CapacityRisk {
+  code: 'unconfigured' | 'underallocated' | 'balanced' | 'attention' | 'overloaded';
+  label: string;
+}
+
+export interface CapacityMemberOverview {
+  userId: string;
+  userName: string;
+  role: string;
+  plan: CapacityPlan | null;
+  allocations: ProjectAllocation[];
+  effectiveHours: number;
+  plannedHours: number;
+  actualHours: number;
+  unplannedActualHours: number;
+  classifiedActualHours: number;
+  unplannedRatio: number | null;
+  currentWipCount: number;
+  projectFragmentationCount: number;
+  fragmentationRisk: boolean;
+  allocationPercent: number;
+  loadRatio: number | null;
+  risk: CapacityRisk;
+}
+
+export interface CapacityOverview {
+  period: { periodStart: string; periodEnd: string };
+  thresholds: { balancedMin: number; attentionMin: number; overloadedAbove: number };
+  calendar: WorkCalendar;
+  summary: {
+    memberCount: number;
+    configuredCount: number;
+    overloadedCount: number;
+    attentionCount: number;
+    pendingOverrideCount: number;
+    highFragmentationCount: number;
+    totalEffectiveHours: number;
+    totalPlannedHours: number;
+    totalActualHours: number;
+    totalUnplannedActualHours: number;
+    totalClassifiedActualHours: number;
+  };
+  members: CapacityMemberOverview[];
+}
+
+// ---------------------------------------------------------------------------
 // Navigation
 // ---------------------------------------------------------------------------
 
@@ -896,6 +1182,7 @@ export type PageKey =
   | 'products'
   | 'team'
   | 'teamlogs'
+  | 'capacity'
   | 'requirements'
   | 'testing'
   | 'documents'

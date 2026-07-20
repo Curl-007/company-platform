@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "generate:enums": "node scripts/generate-enums.cjs",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "test": "npm run typecheck",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },
@@ -12,6 +15,7 @@
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-router-dom": "^7.18.1",
     "recharts": "^2.15.4"
   },
   "devDependencies": {

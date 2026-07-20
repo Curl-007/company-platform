@@ -21,12 +21,12 @@ export const ROLE_OPTIONS: { value: Role; label: string }[] = [
 const ROLE_PAGES: Record<Role, PageKey[]> = {
   admin: [
     'dashboard', 'projects', 'mywork', 'team', 'teamlogs', 'requirements', 'testing', 'builds',
-    'releases', 'delivery', 'flow', 'documents', 'reports', 'dynamic', 'ai', 'products',
+    'releases', 'delivery', 'flow', 'documents', 'reports', 'dynamic', 'ai', 'products', 'capacity',
     'settings',
   ],
   pm: [
     'dashboard', 'projects', 'mywork', 'team', 'teamlogs', 'requirements', 'testing', 'builds',
-    'releases', 'delivery', 'flow', 'documents', 'reports', 'dynamic', 'ai', 'products',
+    'releases', 'delivery', 'flow', 'documents', 'reports', 'dynamic', 'ai', 'products', 'capacity',
   ],
   pdm: [
     'dashboard', 'projects', 'mywork', 'products', 'requirements', 'documents', 'dynamic',
@@ -53,10 +53,15 @@ export function canAccessPageForUser(user: SessionUser | null | undefined, page:
   if (!user) return false;
   if (page === 'login') return true;
   const pages = user.capabilities?.pages;
-  if (Array.isArray(pages) && pages.length > 0) {
+  // Prefer server capabilities when present (including empty = no pages).
+  // Only fall back to static ROLE_PAGES when capabilities were never loaded.
+  if (Array.isArray(pages)) {
     if (pages.includes(page)) return true;
     if (page === 'delivery') return pages.includes('builds') || pages.includes('releases');
     return false;
+  }
+  if (typeof console !== 'undefined' && console.warn) {
+    console.warn('[roles] user.capabilities.pages missing; falling back to ROLE_PAGES for', user.role, page);
   }
   return canAccessPage(user.role, page);
 }
@@ -78,7 +83,7 @@ export function canOperate(user: SessionUser | null | undefined, operation: stri
     return hasPermission(user, 'admin:*');
   }
   if (operation.startsWith('projects:') || operation === 'projectMembers:manage') {
-    return hasPermission(user, 'project:*') || hasPermission(user, 'project:update');
+    return hasPermission(user, 'project:*');
   }
   if (operation === 'products:manage') return hasPermission(user, 'product:*');
   if (operation === 'requirements:manage') return hasPermission(user, 'requirement:*');

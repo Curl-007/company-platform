@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, FileText, Image as ImageIcon, Paperclip, RefreshCw, Send, X } from 'lucide-react';
-import { confirmAiJob, fetchAiJob, fetchAiSummary, rejectAiJob, retryAiJob, sendAiChat } from '../services/resources';
+import { confirmAiJob, fetchAiJob, fetchAiSummary, rejectAiJob, retryAiJob, sendAiChat } from '../features/ai/api';
 import { useAsync } from '../hooks/useAsync';
 import { ApiError } from '../services/api';
 import PageHeader from '../components/common/PageHeader';
@@ -195,6 +195,29 @@ function AiPage() {
   const [reviewDraft, setReviewDraft] = useState<JobReviewDraft | null>(null);
   const [jobLoading, setJobLoading] = useState(false);
   const [jobAction, setJobAction] = useState<string | null>(null);
+
+  useEffect(() => {
+    const jobId = selectedJob?.jobId;
+    if (!jobId || !['queued', 'running', 'retried'].includes(selectedJob.status)) return;
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const latest = await fetchAiJob(jobId);
+        if (cancelled) return;
+        setSelectedJob((current) => current?.jobId === jobId ? latest : current);
+        if (latest.status === 'awaiting_review') {
+          setReviewDraft(buildReviewDraft(latest));
+          reload();
+        }
+      } catch {
+        // Keep the current status visible; the user can refresh manually.
+      }
+    }, 1200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [reload, selectedJob?.jobId, selectedJob?.status]);
 
   const providerStatus = useMemo(() => {
     const provider = data?.aiProvider;

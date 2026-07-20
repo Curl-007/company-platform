@@ -6,6 +6,7 @@ import {
   ClipboardList,
   FileText,
   FolderKanban,
+  Gauge,
   GitBranch,
   LayoutDashboard,
   Package,
@@ -22,6 +23,7 @@ const ProjectsPage = lazy(() => import('../pages/ProjectsPage'));
 const ProductsPage = lazy(() => import('../pages/ProductsPage'));
 const TeamPage = lazy(() => import('../pages/TeamPage'));
 const TeamLogsPage = lazy(() => import('../pages/TeamLogsPage'));
+const CapacityPage = lazy(() => import('../pages/CapacityPage'));
 const RequirementsPage = lazy(() => import('../pages/RequirementsPage'));
 const TestingPage = lazy(() => import('../pages/TestingPage'));
 const DocumentsPage = lazy(() => import('../pages/DocumentsPage'));
@@ -53,6 +55,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: 'mywork', label: '我的工作', icon: UserCheck, phase: 1 },
       { key: 'team', label: '团队管理', icon: Users, phase: 1 },
       { key: 'teamlogs', label: '团队日报', icon: ClipboardList, phase: 1 },
+      { key: 'capacity', label: '团队容量', icon: Gauge, phase: 1 },
       { key: 'dynamic', label: '动态中心', icon: Activity, phase: 1 },
     ],
   },
@@ -98,6 +101,7 @@ export const PAGE_COMPONENTS: Record<PageKey, React.FC<{ user?: SessionUser | nu
   products: ProductsPage,
   team: TeamPage,
   teamlogs: TeamLogsPage,
+  capacity: CapacityPage,
   requirements: RequirementsPage,
   testing: TestingPage,
   documents: DocumentsPage,

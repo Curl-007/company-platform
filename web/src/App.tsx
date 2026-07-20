@@ -1,71 +1,91 @@
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import { HashRouter, useLocation, useNavigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Login from './components/Login';
 import { getMe, getSessionUser, setSessionUser, logout as doLogout } from './services/auth';
-import { getToken } from './services/api';
+import { ApiError, getToken } from './services/api';
 import { canAccessPageForUser } from './constants/roles';
-import { trackPageView } from './services/resources';
+import { trackPageView } from './features/audit/api';
+import { useToast } from './components/common/Toast';
 import type { PageKey, SessionUser } from './types';
 import { KNOWN_PAGES, PAGE_COMPONENTS } from './app/pageRegistry';
 
-function getHashPage(): PageKey {
-  const rawHash = window.location.hash.replace(/^#\/?/, '');
-  const hash = rawHash.split('?')[0] ?? '';
-  if (!hash) return 'dashboard';
-  if (KNOWN_PAGES.includes(hash as PageKey)) return hash as PageKey;
+function getRoutePage(pathname: string): PageKey {
+  const page = pathname.replace(/^\/+/, '').split('/')[0] ?? '';
+  if (!page) return 'dashboard';
+  if (KNOWN_PAGES.includes(page as PageKey)) return page as PageKey;
   return 'dashboard';
 }
 
-function setHashPage(page: PageKey, params: Record<string, string> = {}): void {
-  const query = new URLSearchParams(params).toString();
-  window.location.hash = `#/${page}${query ? `?${query}` : ''}`;
+function isSessionInvalidError(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false;
+  if (error.status === 401) return true;
+  const body = error.body;
+  const errorCode =
+    typeof body === 'object' && body !== null && 'errorCode' in body
+      ? String((body as { errorCode?: unknown }).errorCode || '')
+      : '';
+  if (errorCode === 'ACCOUNT_DISABLED') return true;
+  if (error.status === 403 && /禁用|disabled/i.test(error.message || errorCode)) return true;
+  return false;
 }
 
-function App() {
+function AppContent() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const toast = useToast();
   const [user, setUser] = useState<SessionUser | null>(() => getSessionUser());
-  const [currentPage, setCurrentPage] = useState<PageKey>(() => getHashPage());
+  const [currentPage, setCurrentPage] = useState<PageKey>(() => getRoutePage(location.pathname));
+
+  const navigateToPage = useCallback((page: PageKey, params: Record<string, string> = {}, replace = false): void => {
+  const query = new URLSearchParams(params).toString();
+    navigate({ pathname: `/${page}`, search: query ? `?${query}` : '' }, { replace });
+  }, [navigate]);
 
   useEffect(() => {
-    function handleHashChange() {
-      const page = getHashPage();
-      if (page === 'login') {
-        setUser(null);
-        return;
-      }
-
-      const sessionUser = getSessionUser();
-      if (sessionUser && !canAccessPageForUser(sessionUser, page)) {
-        setHashPage('dashboard');
-        setCurrentPage('dashboard');
-        return;
-      }
-
-      setCurrentPage(page);
+    const page = getRoutePage(location.pathname);
+    if (page === 'login') {
+      setUser(null);
+      return;
     }
 
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
+    const sessionUser = getSessionUser();
+    if (sessionUser && !canAccessPageForUser(sessionUser, page)) {
+      navigateToPage('dashboard', {}, true);
+      setCurrentPage('dashboard');
+      return;
+    }
+
+    setCurrentPage(page);
+  }, [location.pathname, navigateToPage]);
 
   useEffect(() => {
-    if (user && getHashPage() === 'login') {
-      setHashPage('dashboard');
+    if (user && getRoutePage(location.pathname) === 'login') {
+      navigateToPage('dashboard', {}, true);
       setCurrentPage('dashboard');
     }
-  }, [user]);
+  }, [location.pathname, navigateToPage, user]);
 
   useEffect(() => {
     if (!user || !getToken()) return;
     getMe()
       .then((freshUser) => {
         setUser(freshUser);
-        if (!canAccessPageForUser(freshUser, getHashPage())) {
-          setHashPage('dashboard');
+        if (!canAccessPageForUser(freshUser, getRoutePage(location.pathname))) {
+          navigateToPage('dashboard', {}, true);
           setCurrentPage('dashboard');
         }
       })
-      .catch(() => undefined);
-  }, []);
+      .catch((error: unknown) => {
+        if (isSessionInvalidError(error)) {
+          doLogout();
+          setUser(null);
+          return;
+        }
+        toast.info('无法刷新会话，已保留本地登录状态。请检查网络后重试。');
+      });
+    // Intentionally depends on route changes, not `user`, to avoid re-fetch loops after setUser.
+  }, [location.pathname, navigateToPage, toast]);
 
   useEffect(() => {
     if (!user || !getToken() || currentPage === 'login') return;
@@ -75,9 +95,9 @@ function App() {
   const handleLoginSuccess = useCallback((loggedInUser: SessionUser) => {
     setSessionUser(loggedInUser);
     setUser(loggedInUser);
-    setHashPage('dashboard');
+    navigateToPage('dashboard', {}, true);
     setCurrentPage('dashboard');
-  }, []);
+  }, [navigateToPage]);
 
   const handleLogout = useCallback(() => {
     doLogout();
@@ -91,13 +111,13 @@ function App() {
 
   const handleNavigate = useCallback((page: PageKey, focusId?: string) => {
     if (user && !canAccessPageForUser(user, page)) {
-      setHashPage('dashboard');
+      navigateToPage('dashboard', {}, true);
       setCurrentPage('dashboard');
       return;
     }
-    setHashPage(page, focusId ? { focus: focusId } : {});
+    navigateToPage(page, focusId ? { focus: focusId } : {});
     setCurrentPage(page);
-  }, [user]);
+  }, [navigateToPage, user]);
 
   if (!user || !getToken()) {
     return <Login onLoginSuccess={handleLoginSuccess} />;
@@ -118,6 +138,10 @@ function App() {
       </Suspense>
     </Layout>
   );
+}
+
+function App() {
+  return <HashRouter><AppContent /></HashRouter>;
 }
 
 export default App;

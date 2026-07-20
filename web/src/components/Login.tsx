@@ -14,9 +14,12 @@ const HIGHLIGHTS = [
   '操作审计与动态追踪',
 ];
 
+const isDev = Boolean(import.meta.env.DEV);
+
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
-  const [email, setEmail] = useState('admin@example.com');
-  const [password, setPassword] = useState('Admin@123');
+  // Prefill demo credentials only in local development builds.
+  const [email, setEmail] = useState(isDev ? 'admin@example.com' : '');
+  const [password, setPassword] = useState(isDev ? 'Admin@123' : '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 

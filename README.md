@@ -43,4 +43,4 @@ npm run build
 - 开发：`dev@example.com` / `Dev@12345`
 - 测试：`qa@example.com` / `Qa@12345`
 
-生产部署时建议通过环境变量设置 `SEED_*_PASSWORD`，并配置 `JWT_SECRET`。
+生产部署时建议通过环境变量设置 `SEED_*_PASSWORD`，并配置 `JWT_SECRET`。若需在管理端持久化 AI 供应商 API Key，还必须单独配置 `AI_CONFIG_ENCRYPTION_KEY`（≥16 字符，且不得与 `JWT_SECRET` 相同）。

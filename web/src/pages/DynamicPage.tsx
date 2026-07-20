@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Activity, AlertTriangle, Clock3, ExternalLink, Eye, Radar, RefreshCw, Search, SlidersHorizontal } from 'lucide-react';
-import { fetchAuditLogs, type AuditLogFilters } from '../services/resources';
+import { fetchAuditLogs, type AuditLogFilters } from '../features/audit/api';
 import { useAsync } from '../hooks/useAsync';
 import PageHeader from '../components/common/PageHeader';
 import Panel from '../components/common/Panel';

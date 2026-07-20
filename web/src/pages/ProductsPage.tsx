@@ -1,13 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   createProduct,
+  createPortfolio,
+  createProgram,
+  createStrategicGoal,
   deleteProduct,
+  deletePortfolio,
+  deleteProgram,
+  deleteStrategicGoal,
   fetchPortfolios,
   fetchProducts,
   fetchPrograms,
+  fetchStrategicGoals,
   updateProduct,
+  updatePortfolio,
+  updateProgram,
+  updateStrategicGoal,
   type CreateProductInput,
-} from '../services/resources';
+  type StrategyInput,
+  type StrategicGoalInput,
+} from '../features/products/api';
+import { fetchProjects } from '../features/projects/api';
 import { getSessionUser } from '../services/auth';
 import { useAsync } from '../hooks/useAsync';
 import { ApiError } from '../services/api';
@@ -26,9 +39,9 @@ import {
   ROADMAP_STATUS_LABELS,
   labelOf,
 } from '../constants/enums';
-import type { Portfolio, Product, ProductMetric, ProductModule, Program, RoadmapItem } from '../types';
+import type { Portfolio, Product, ProductMetric, ProductModule, Program, Project, RoadmapItem, StrategicGoal } from '../types';
 
-type Tab = 'products' | 'programs' | 'portfolios';
+type Tab = 'products' | 'programs' | 'portfolios' | 'goals';
 type DetailItem = { key: string; value: string };
 
 const EMPTY_DETAIL: DetailItem = { key: '', value: '' };
@@ -187,11 +200,15 @@ function ProductsPage() {
         <button className={`nav-tab ${tab === 'portfolios' ? 'active' : ''}`} onClick={() => setTab('portfolios')}>
           组合
         </button>
+        <button className={`nav-tab ${tab === 'goals' ? 'active' : ''}`} onClick={() => setTab('goals')}>
+          公司目标
+        </button>
       </div>
 
       {tab === 'products' ? <ProductsTab /> : null}
       {tab === 'programs' ? <ProgramsTab /> : null}
       {tab === 'portfolios' ? <PortfoliosTab /> : null}
+      {tab === 'goals' ? <StrategicGoalsTab /> : null}
     </div>
   );
 }
@@ -1038,9 +1055,189 @@ function ManagementListItem({
   );
 }
 
+type StrategyKind = 'program' | 'portfolio';
+type StrategyRecord = Program | Portfolio;
+
+const GOAL_STATUS_LABELS: Record<string, string> = {
+  draft: '草稿', active: '推进中', on_hold: '暂停', achieved: '已达成', closed: '已关闭',
+};
+
+function StrategicGoalForm({
+  initial,
+  onClose,
+  onSubmit,
+}: {
+  initial?: StrategicGoal | null;
+  onClose: () => void;
+  onSubmit: (input: StrategicGoalInput) => Promise<void>;
+}) {
+  const [name, setName] = useState(initial?.name ?? '');
+  const [owner, setOwner] = useState(initial?.owner ?? getSessionUser()?.name ?? '');
+  const [objective, setObjective] = useState(initial?.objective ?? '');
+  const [status, setStatus] = useState(initial?.status ?? 'draft');
+  const [periodStart, setPeriodStart] = useState(initial?.periodStart ?? '');
+  const [periodEnd, setPeriodEnd] = useState(initial?.periodEnd ?? '');
+  const [metrics, setMetrics] = useState(initial?.successMetrics.join('\n') ?? '');
+  const [programIds, setProgramIds] = useState(initial?.programIds ?? []);
+  const [portfolioIds, setPortfolioIds] = useState(initial?.portfolioIds ?? []);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const programs = useAsync<Program[]>(fetchPrograms, []).data ?? [];
+  const portfolios = useAsync<Portfolio[]>(fetchPortfolios, []).data ?? [];
+  const toggle = (id: string, current: string[], setter: (next: string[]) => void) => setter(current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+
+  async function submit() {
+    if (!name.trim() || !owner.trim() || !objective.trim()) {
+      setError('请完整填写目标名称、负责人和目标说明。');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onSubmit({ name: name.trim(), owner: owner.trim(), objective: objective.trim(), status, periodStart: periodStart || undefined, periodEnd: periodEnd || undefined, successMetrics: metrics.split('\n').map((item) => item.trim()).filter(Boolean), programIds, portfolioIds });
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : '保存公司目标失败。');
+      setSubmitting(false);
+    }
+  }
+
+  return <Overlay onClose={onClose}>
+    <Panel title={initial ? '编辑公司目标' : '新建公司目标'} subtitle="公司目标用于战略对齐和项目组合治理，不用于个人绩效评价。">
+      {error ? <div className="form-error" style={{ marginBottom: 8 }}>{error}</div> : null}
+      <div className="form-row"><div className="form-group"><label className="form-label">目标名称</label><input className="form-input" value={name} onChange={(event) => setName(event.target.value)} /></div><div className="form-group"><label className="form-label">负责人</label><input className="form-input" value={owner} onChange={(event) => setOwner(event.target.value)} /></div></div>
+      <div className="form-row"><div className="form-group"><label className="form-label">状态</label><select className="form-select" value={status} disabled={!initial} onChange={(event) => setStatus(event.target.value)}>{Object.entries(GOAL_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div><div className="form-group"><label className="form-label">周期</label><div className="form-row"><input className="form-input" type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} /><input className="form-input" type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} /></div></div></div>
+      <div className="form-group"><label className="form-label">目标说明</label><textarea className="form-textarea" rows={3} value={objective} onChange={(event) => setObjective(event.target.value)} /></div>
+      <div className="form-group"><label className="form-label">成功标准（每行一项）</label><textarea className="form-textarea" rows={3} value={metrics} onChange={(event) => setMetrics(event.target.value)} /></div>
+      <div className="form-group"><label className="form-label">关联项目集</label><div className="management-chip-list">{programs.map((item) => <label className="tag" key={item.id}><input type="checkbox" checked={programIds.includes(item.id)} onChange={() => toggle(item.id, programIds, setProgramIds)} /> {item.name}</label>) || <span className="text-secondary">暂无项目集。</span>}</div></div>
+      <div className="form-group"><label className="form-label">关联产品组合</label><div className="management-chip-list">{portfolios.map((item) => <label className="tag" key={item.id}><input type="checkbox" checked={portfolioIds.includes(item.id)} onChange={() => toggle(item.id, portfolioIds, setPortfolioIds)} /> {item.name}</label>) || <span className="text-secondary">暂无产品组合。</span>}</div></div>
+      <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end' }}><button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>取消</button><button className="btn btn-primary btn-sm" onClick={submit} disabled={submitting}>{submitting ? '保存中…' : '保存'}</button></div>
+    </Panel>
+  </Overlay>;
+}
+
+function StrategicGoalsTab() {
+  const { data, loading, error, reload } = useAsync<StrategicGoal[]>(fetchStrategicGoals, []);
+  const canManageGoals = canOperate(getSessionUser(), 'users:create');
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<StrategicGoal | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const goals = data ?? [];
+  async function remove(goal: StrategicGoal) {
+    if (!await confirm({ title: `删除公司目标“${goal.name}”？`, description: '删除后不会删除关联的项目集或产品组合。', confirmText: '删除目标', tone: 'danger' })) return;
+    setDeletingId(goal.id);
+    try { await deleteStrategicGoal(goal.id); toast.success('公司目标已删除。'); reload(); } catch (reason) { toast.error(reason instanceof ApiError ? reason.message : '删除失败。'); } finally { setDeletingId(null); }
+  }
+  if (loading || error || !data) return <PageState loading={loading} error={error} isEmpty={!loading && !error && !data} onRetry={reload} />;
+  return <>
+    <Panel title="公司目标 / OKR" subtitle="将公司级目标与项目集、产品组合关联，形成战略到交付的可追溯链路。" toolbar={canManageGoals ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建公司目标</button> : undefined}>
+      {goals.length ? <div className="management-list">{goals.map((goal) => <div className="management-list-item" key={goal.id}><span className="management-list-main"><strong>{goal.name}</strong><small>{goal.objective}</small><small>项目集 {goal.programIds.length} · 产品组合 {goal.portfolioIds.length} · 成功标准 {goal.successMetrics.length}</small></span><span className="management-list-side"><StatusBadge status={goal.status} label={GOAL_STATUS_LABELS[goal.status] ?? goal.status} showDot={false} />{canManageGoals ? <span className="flex gap-2"><button className="btn btn-text btn-sm" onClick={() => setEditing(goal)}>编辑</button><button className="btn btn-text btn-sm" disabled={deletingId === goal.id} onClick={() => remove(goal)}>删除</button></span> : null}</span></div>)}</div> : <PageState loading={false} error={null} isEmpty emptyTitle="暂无公司目标" emptyDescription="先建立目标，再关联需要共同推进的项目集或产品组合。" />}
+    </Panel>
+    {creating && canManageGoals ? <StrategicGoalForm onClose={() => setCreating(false)} onSubmit={async (input) => { await createStrategicGoal(input); toast.success('公司目标已创建。'); setCreating(false); reload(); }} /> : null}
+    {editing && canManageGoals ? <StrategicGoalForm initial={editing} onClose={() => setEditing(null)} onSubmit={async (input) => { await updateStrategicGoal(editing.id, input); toast.success('公司目标已更新。'); setEditing(null); reload(); }} /> : null}
+  </>;
+}
+
+function strategyStatusOptions(kind: StrategyKind) {
+  return kind === 'program'
+    ? Object.keys(PROJECT_STATUS_LABELS)
+    : Object.keys(ROADMAP_STATUS_LABELS);
+}
+
+function StrategyForm({
+  kind,
+  initial,
+  onClose,
+  onSubmit,
+}: {
+  kind: StrategyKind;
+  initial?: StrategyRecord | null;
+  onClose: () => void;
+  onSubmit: (input: StrategyInput) => Promise<void>;
+}) {
+  const [name, setName] = useState(initial?.name ?? '');
+  const [owner, setOwner] = useState(initial?.owner ?? getSessionUser()?.name ?? '');
+  const [objective, setObjective] = useState(initial?.objective ?? '');
+  const [status, setStatus] = useState(initial?.status ?? (kind === 'program' ? 'planning' : 'planned'));
+  const [linkedIds, setLinkedIds] = useState<string[]>(kind === 'program'
+    ? ((initial as Program | undefined)?.projectIds ?? [])
+    : ((initial as Portfolio | undefined)?.productIds ?? []));
+  const [risksText, setRisksText] = useState((initial as Program | undefined)?.risks?.join('\n') ?? '');
+  const [roadmapText, setRoadmapText] = useState(((initial as Portfolio | undefined)?.roadmap ?? [])
+    .map((item) => [item.title ?? '', item.version ?? '', item.quarter ?? '', item.status ?? 'planned'].join(' | ')).join('\n'));
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const projectOptions = useAsync<Project[]>(fetchProjects, []);
+  const productOptions = useAsync<Product[]>(fetchProducts, []);
+  const links = kind === 'program' ? (projectOptions.data ?? []) : (productOptions.data ?? []);
+
+  function toggleLink(id: string) {
+    setLinkedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  }
+
+  async function submit() {
+    if (!name.trim() || !owner.trim() || !objective.trim()) {
+      setFormError('请完整填写名称、负责人和目标。');
+      return;
+    }
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      const roadmap = roadmapText.split('\n').map((line) => line.split('|').map((item) => item.trim()))
+        .filter((parts) => parts.some(Boolean))
+        .map(([title, version, quarter, itemStatus]) => ({ title, version, quarter, status: itemStatus || 'planned' }));
+      await onSubmit({
+        name: name.trim(), owner: owner.trim(), objective: objective.trim(), status, risks: risksText.split('\n').map((item) => item.trim()).filter(Boolean),
+        ...(kind === 'program' ? { projectIds: linkedIds } : { productIds: linkedIds, roadmap }),
+      });
+    } catch (error) {
+      setFormError(error instanceof ApiError ? error.message : '保存失败，请稍后重试。');
+      setSubmitting(false);
+    }
+  }
+
+  const linkLabel = kind === 'program' ? '关联项目' : '关联产品';
+  const title = `${initial ? '编辑' : '新建'}${kind === 'program' ? '项目集' : '产品组合'}`;
+  return (
+    <Overlay onClose={onClose}>
+      <Panel title={title} subtitle="目标用于对齐交付方向；项目集和产品组合只汇总项目/产品层数据，不用于个人绩效评价。">
+        {formError ? <div className="form-error" style={{ marginBottom: 8 }}>{formError}</div> : null}
+        <div className="form-row">
+          <div className="form-group"><label className="form-label">名称</label><input className="form-input" value={name} onChange={(event) => setName(event.target.value)} /></div>
+          <div className="form-group"><label className="form-label">负责人</label><input className="form-input" value={owner} onChange={(event) => setOwner(event.target.value)} /></div>
+        </div>
+        <div className="form-row">
+          <div className="form-group"><label className="form-label">状态</label><select className="form-select" value={status} onChange={(event) => setStatus(event.target.value)}>{strategyStatusOptions(kind).map((item) => <option key={item} value={item}>{kind === 'program' ? labelOf(PROJECT_STATUS_LABELS, item) : labelOf(ROADMAP_STATUS_LABELS, item)}</option>)}</select></div>
+        </div>
+        <div className="form-group"><label className="form-label">目标</label><textarea className="form-textarea" rows={3} value={objective} onChange={(event) => setObjective(event.target.value)} placeholder="描述要达成的业务或交付结果" /></div>
+        <div className="form-group">
+          <label className="form-label">{linkLabel}</label>
+          <div className="management-chip-list" style={{ maxHeight: 180, overflow: 'auto' }}>
+            {links.map((item) => <label key={item.id} className="tag" style={{ cursor: 'pointer' }}><input type="checkbox" checked={linkedIds.includes(item.id)} onChange={() => toggleLink(item.id)} style={{ marginRight: 5 }} />{item.name}</label>)}
+            {!links.length ? <span className="text-secondary">暂无可关联对象。</span> : null}
+          </div>
+        </div>
+        {kind === 'program' ? <div className="form-group"><label className="form-label">项目集风险提示（每行一项，可选）</label><textarea className="form-textarea" rows={3} value={risksText} onChange={(event) => setRisksText(event.target.value)} /></div> : null}
+        {kind === 'portfolio' ? <div className="form-group"><label className="form-label">组合路线图（每行：标题 | 版本 | 季度 | 状态）</label><textarea className="form-textarea" rows={4} value={roadmapText} onChange={(event) => setRoadmapText(event.target.value)} placeholder="客户自助服务 | 2.0 | 2026 Q3 | development" /></div> : null}
+        <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>取消</button>
+          <button className="btn btn-primary btn-sm" onClick={submit} disabled={submitting}>{submitting ? '保存中…' : '保存'}</button>
+        </div>
+      </Panel>
+    </Overlay>
+  );
+}
+
 function ProgramsTab() {
   const { data, loading, error, reload } = useAsync<Program[]>(fetchPrograms, []);
+  const toast = useToast();
+  const confirm = useConfirm();
+  const canManagePrograms = canOperate(getSessionUser(), 'projects:manage');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Program | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const programs = data ?? [];
   const selected = programs.find((item) => item.id === selectedId) ?? programs[0] ?? null;
   const totalProjects = programs.reduce((sum, item) => sum + item.projectIds.length, 0);
@@ -1056,25 +1253,46 @@ function ProgramsTab() {
     if (!selectedId || !programs.some((item) => item.id === selectedId)) setSelectedId(programs[0].id);
   }, [programs, selectedId]);
 
+  async function handleDelete(program: Program) {
+    const approved = await confirm({ title: `删除项目集“${program.name}”？`, description: '仅当已解除所有项目关联时才能删除。', confirmText: '删除项目集', tone: 'danger' });
+    if (!approved) return;
+    setDeletingId(program.id);
+    try {
+      await deleteProgram(program.id);
+      toast.success('项目集已删除。');
+      reload();
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : '删除失败。');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   if (loading || error || !data) {
     return <PageState loading={loading} error={error} isEmpty={!loading && !error && !data} onRetry={reload} />;
   }
 
   if (!programs.length) {
     return (
-      <ManagementEmptyState
-        title="还没有形成项目集"
-        description="项目集用于把多个项目按交付目标、负责人或阶段聚合起来，看整体进度、健康度和跨项目风险。"
-        steps={['先在项目管理中建立项目', '为项目维护负责人、状态、进度和风险', '系统会自动聚合成项目集视图']}
-      />
+      <>
+        {canManagePrograms ? <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建项目集</button></div> : null}
+        <ManagementEmptyState
+          title="还没有项目集"
+          description="项目集用于按共同目标管理多个项目的交付状态、进度和风险。"
+          steps={['新建项目集并定义目标', '选择需要关联的项目', '在项目集视图跟踪整体交付风险']}
+        />
+        {creating ? <StrategyForm kind="program" onClose={() => setCreating(false)} onSubmit={async (input) => { await createProgram(input); toast.success('项目集已创建。'); setCreating(false); reload(); }} /> : null}
+      </>
     );
   }
 
   return (
+    <>
     <div className="management-workbench">
       <Panel
         title="项目集工作台"
         subtitle="按交付目标聚合多个项目，集中查看跨项目进度、健康度、风险和项目清单。"
+        toolbar={canManagePrograms ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建项目集</button> : undefined}
       >
         <ManagementSummaryStrip
           items={[
@@ -1112,6 +1330,7 @@ function ProgramsTab() {
                   <span className="tag">{selected.id}</span>
                 </div>
                 <h2>{selected.name}</h2>
+                <p><strong>目标：</strong>{selected.objective || '尚未定义目标。'}</p>
                 <p>负责人 {selected.owner}，当前聚合 {selected.projectIds.length} 个项目。用于看项目群是否按共同目标推进。</p>
               </div>
               <div className="management-score-grid">
@@ -1133,6 +1352,7 @@ function ProgramsTab() {
               <span>项目集推进</span>
               <div><i style={{ width: `${Math.min(100, Math.max(0, selected.progress))}%` }} /></div>
             </div>
+            {canManagePrograms ? <div className="product-hero-actions"><button className="btn btn-secondary btn-sm" onClick={() => setEditing(selected)}>编辑项目集</button><button className="btn btn-danger btn-sm" onClick={() => handleDelete(selected)} disabled={deletingId === selected.id}>{deletingId === selected.id ? '删除中…' : '删除项目集'}</button></div> : null}
             <div className="management-detail-grid">
               <div className="product-section">
                 <div className="product-section-head">
@@ -1165,12 +1385,21 @@ function ProgramsTab() {
         ) : null}
       </div>
     </div>
+    {creating && canManagePrograms ? <StrategyForm kind="program" onClose={() => setCreating(false)} onSubmit={async (input) => { await createProgram(input); toast.success('项目集已创建。'); setCreating(false); reload(); }} /> : null}
+    {editing && canManagePrograms ? <StrategyForm kind="program" initial={editing} onClose={() => setEditing(null)} onSubmit={async (input) => { await updateProgram(editing.id, input); toast.success('项目集已更新。'); setEditing(null); reload(); }} /> : null}
+    </>
   );
 }
 
 function PortfoliosTab() {
   const { data, loading, error, reload } = useAsync<Portfolio[]>(fetchPortfolios, []);
+  const toast = useToast();
+  const confirm = useConfirm();
+  const canManagePortfolios = canOperate(getSessionUser(), 'products:manage');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Portfolio | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const portfolios = data ?? [];
   const selected = portfolios.find((item) => item.id === selectedId) ?? portfolios[0] ?? null;
   const totalProducts = portfolios.reduce((sum, item) => sum + item.productIds.length, 0);
@@ -1185,25 +1414,46 @@ function PortfoliosTab() {
     if (!selectedId || !portfolios.some((item) => item.id === selectedId)) setSelectedId(portfolios[0].id);
   }, [portfolios, selectedId]);
 
+  async function handleDelete(portfolio: Portfolio) {
+    const approved = await confirm({ title: `删除产品组合“${portfolio.name}”？`, description: '仅当已解除该组合下的需求关联时才能删除。', confirmText: '删除产品组合', tone: 'danger' });
+    if (!approved) return;
+    setDeletingId(portfolio.id);
+    try {
+      await deletePortfolio(portfolio.id);
+      toast.success('产品组合已删除。');
+      reload();
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : '删除失败。');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   if (loading || error || !data) {
     return <PageState loading={loading} error={error} isEmpty={!loading && !error && !data} onRetry={reload} />;
   }
 
   if (!portfolios.length) {
     return (
-      <ManagementEmptyState
-        title="还没有形成产品组合"
-        description="组合用于把多个产品按业务线、客户场景或交付包聚合，统一管理组合状态、产品范围和路线图节奏。"
-        steps={['先在产品页维护产品档案', '补充产品阶段、负责人和路线图', '系统会自动聚合组合视图']}
-      />
+      <>
+        {canManagePortfolios ? <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建产品组合</button></div> : null}
+        <ManagementEmptyState
+          title="还没有产品组合"
+          description="产品组合用于按业务目标统一管理产品范围和路线图。"
+          steps={['新建产品组合并定义目标', '选择需要关联的产品', '维护组合路线图']}
+        />
+        {creating ? <StrategyForm kind="portfolio" onClose={() => setCreating(false)} onSubmit={async (input) => { await createPortfolio(input); toast.success('产品组合已创建。'); setCreating(false); reload(); }} /> : null}
+      </>
     );
   }
 
   return (
+    <>
     <div className="management-workbench">
       <Panel
         title="产品组合工作台"
         subtitle="把多个产品组织成业务组合，统一查看产品范围、组合状态和路线图节奏。"
+        toolbar={canManagePortfolios ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建产品组合</button> : undefined}
       >
         <ManagementSummaryStrip
           items={[
@@ -1241,6 +1491,7 @@ function PortfoliosTab() {
                   <span className="tag">{selected.id}</span>
                 </div>
                 <h2>{selected.name}</h2>
+                <p><strong>目标：</strong>{selected.objective || '尚未定义目标。'}</p>
                 <p>负责人 {selected.owner}，组合内包含 {selected.productIds.length} 个产品，用于按业务线或交付包统一规划。</p>
               </div>
               <div className="management-score-grid">
@@ -1295,10 +1546,14 @@ function PortfoliosTab() {
                 )}
               </div>
             </div>
+            {canManagePortfolios ? <div className="product-hero-actions"><button className="btn btn-secondary btn-sm" onClick={() => setEditing(selected)}>编辑产品组合</button><button className="btn btn-danger btn-sm" onClick={() => handleDelete(selected)} disabled={deletingId === selected.id}>{deletingId === selected.id ? '删除中…' : '删除产品组合'}</button></div> : null}
           </Panel>
         ) : null}
       </div>
     </div>
+    {creating && canManagePortfolios ? <StrategyForm kind="portfolio" onClose={() => setCreating(false)} onSubmit={async (input) => { await createPortfolio(input); toast.success('产品组合已创建。'); setCreating(false); reload(); }} /> : null}
+    {editing && canManagePortfolios ? <StrategyForm kind="portfolio" initial={editing} onClose={() => setEditing(null)} onSubmit={async (input) => { await updatePortfolio(editing.id, input); toast.success('产品组合已更新。'); setEditing(null); reload(); }} /> : null}
+    </>
   );
 }
 

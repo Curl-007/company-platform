@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { fetchAiBusinessAdvice } from '../../services/resources';
+import { fetchAiBusinessAdvice } from '../../features/ai/api';
 import { ApiError } from '../../services/api';
 import type { AiBusinessAdvice, AiBusinessAdviceInput } from '../../types';
 

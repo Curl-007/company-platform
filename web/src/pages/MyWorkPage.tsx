@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createWorkLog, fetchPersonalDashboard, fetchProjects, fetchWeeklyWorkSummary, type CreateRequirementInput } from '../services/resources';
+import { fetchPersonalDashboard } from '../features/dashboard/api';
+import { fetchMyCapacity } from '../features/capacity/api';
+import { deleteTimeEntry, fetchTimeEntries } from '../features/timeEntries/api';
+import { fetchTaskStatusHistory } from '../features/workflow/api';
+import { fetchWeeklyWorkSummary } from '../features/workLogs/api';
 import { useAsync } from '../hooks/useAsync';
 import PageHeader from '../components/common/PageHeader';
 import Panel from '../components/common/Panel';
 import PageState from '../components/common/PageState';
-import Overlay from '../components/common/Overlay';
 import StatusBadge from '../components/common/StatusBadge';
 import ProgressBar from '../components/common/ProgressBar';
 import { useToast } from '../components/common/Toast';
+import { useConfirm } from '../components/common/ConfirmDialog';
 import {
   DEFECT_SEVERITY_LABELS,
   DEFECT_STATUS_LABELS,
@@ -17,7 +21,9 @@ import {
   labelOf,
 } from '../constants/enums';
 import { ApiError } from '../services/api';
-import type { DashboardData, Project, SessionUser, WeeklyWorkSummary } from '../types';
+import type { DashboardData, SessionUser, TimeEntry, WeeklyWorkSummary } from '../types';
+import TimeEntryForm from '../features/timeEntries/components/TimeEntryForm';
+import DailyLogForm from '../features/workLogs/components/DailyLogForm';
 
 type Tab = 'tasks' | 'bugs' | 'requirements' | 'logs';
 type TaskFilter = 'all' | 'requirement' | 'test_case' | 'defect';
@@ -27,12 +33,9 @@ const STORAGE_KEYS = {
   filter: 'mywork-task-filter',
 };
 
-function today() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function MyWorkPage({ user }: { user?: SessionUser | null }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [tab, setTab] = useState<Tab>(() => {
     const saved = window.localStorage.getItem(STORAGE_KEYS.tab);
     return saved === 'bugs' || saved === 'requirements' || saved === 'logs' ? saved : 'tasks';
@@ -43,8 +46,29 @@ function MyWorkPage({ user }: { user?: SessionUser | null }) {
   });
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showLogForm, setShowLogForm] = useState(false);
+  const [showTimeEntryForm, setShowTimeEntryForm] = useState(false);
+  const [editingTimeEntry, setEditingTimeEntry] = useState<TimeEntry | null>(null);
   const { data, loading, error, reload } = useAsync<DashboardData>(fetchPersonalDashboard, []);
   const weeklySummaryAsync = useAsync<WeeklyWorkSummary>(() => fetchWeeklyWorkSummary(), []);
+  const personalCapacityAsync = useAsync(() => fetchMyCapacity(), []);
+  const timeEntriesAsync = useAsync<TimeEntry[]>(() => fetchTimeEntries(), []);
+
+  async function removeTimeEntry(entry: TimeEntry) {
+    const confirmed = await confirm({
+      title: '删除实际工时记录？',
+      description: `${entry.workDate} 的 ${entry.hours} 小时记录将被删除，并重新计算个人容量。`,
+      confirmText: '删除记录',
+      tone: 'warning',
+    });
+    if (!confirmed) return;
+    try {
+      await deleteTimeEntry(entry.id);
+      await Promise.all([timeEntriesAsync.reload(), personalCapacityAsync.reload()]);
+      toast.success('实际工时记录已删除，个人容量已更新');
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : '删除工时记录失败');
+    }
+  }
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEYS.tab, tab);
@@ -66,6 +90,10 @@ function MyWorkPage({ user }: { user?: SessionUser | null }) {
 
   const visibleTasks = taskGroups[taskFilter];
   const selectedTask = visibleTasks.find((item) => item.id === selectedTaskId) ?? visibleTasks[0] ?? null;
+  const taskHistoryAsync = useAsync(
+    () => selectedTask ? fetchTaskStatusHistory(selectedTask.id) : Promise.resolve([]),
+    [selectedTask?.id],
+  );
 
   useEffect(() => {
     if (visibleTasks.length === 0) {
@@ -115,6 +143,45 @@ function MyWorkPage({ user }: { user?: SessionUser | null }) {
           </div>
         ))}
       </div>
+
+      <Panel title="我的本期容量" subtitle="用于协调任务安排，不作为个人绩效评分。" style={{ marginBottom: 16 }}>
+        {personalCapacityAsync.loading ? (
+          <div className="body-text">正在加载本期容量…</div>
+        ) : personalCapacityAsync.error ? (
+          <div className="form-error">容量信息加载失败，请稍后刷新页面重试。</div>
+        ) : personalCapacityAsync.data ? (
+          <div className="detail-grid">
+            <div className="detail-field">
+              <span className="detail-label">有效可投入工时</span>
+              <span className="detail-value">{personalCapacityAsync.data.effectiveHours} 小时</span>
+            </div>
+            <div className="detail-field">
+              <span className="detail-label">已计划工时</span>
+              <span className="detail-value">{personalCapacityAsync.data.plannedHours} 小时</span>
+            </div>
+            <div className="detail-field">
+              <span className="detail-label">已记录实际工时</span>
+              <span className="detail-value">{personalCapacityAsync.data.actualHours} 小时</span>
+            </div>
+            <div className="detail-field">
+              <span className="detail-label">临时工作</span>
+              <span className="detail-value">{personalCapacityAsync.data.unplannedActualHours} 小时{personalCapacityAsync.data.unplannedRatio === null ? '（待分类）' : `（${Math.round(personalCapacityAsync.data.unplannedRatio * 100)}%）`}</span>
+            </div>
+            <div className="detail-field">
+              <span className="detail-label">负荷比例</span>
+              <span className="detail-value">
+                {personalCapacityAsync.data.loadRatio === null ? '待配置' : `${Math.round(personalCapacityAsync.data.loadRatio * 100)}%`}
+              </span>
+            </div>
+            <div className="detail-field">
+              <span className="detail-label">安排提示</span>
+              <span className="detail-value">{personalCapacityAsync.data.risk.label}</span>
+            </div>
+          </div>
+        ) : (
+          <div className="body-text">本期尚未配置容量计划，请与项目经理确认可投入时间和任务安排。</div>
+        )}
+      </Panel>
 
       <div className="tab-bar" style={{ marginBottom: 16 }}>
         <button className={`tab-item ${tab === 'tasks' ? 'active' : ''}`} onClick={() => setTab('tasks')}>我的任务</button>
@@ -187,6 +254,27 @@ function MyWorkPage({ user }: { user?: SessionUser | null }) {
                     <div className="detail-value">{selectedTask.description}</div>
                   </div>
                 ) : null}
+                <div className="detail-field" style={{ marginTop: 16 }}>
+                  <span className="detail-label">状态流转</span>
+                  {taskHistoryAsync.loading ? (
+                    <div className="body-text">正在加载状态历史…</div>
+                  ) : taskHistoryAsync.error ? (
+                    <div className="form-error">状态历史加载失败，请稍后重试。</div>
+                  ) : taskHistoryAsync.data?.length ? (
+                    <div style={{ display: 'grid', gap: 6, marginTop: 6 }}>
+                      {taskHistoryAsync.data.slice(0, 6).map((entry) => (
+                        <div key={entry.id} className="text-secondary" style={{ fontSize: 13 }}>
+                          {entry.fromStatus ? `${labelOf(TASK_STATUS_LABELS, entry.fromStatus)} → ` : ''}
+                          {labelOf(TASK_STATUS_LABELS, entry.toStatus)}
+                          {entry.actorName ? ` · ${entry.actorName}` : ''}
+                          {entry.reason ? ` · ${entry.reason}` : ''}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="body-text">暂无状态流转记录。</div>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="empty-state-desc">请选择左侧任务查看详情。</div>
@@ -283,6 +371,32 @@ function MyWorkPage({ user }: { user?: SessionUser | null }) {
               <div className="body-text">本周还没有日报记录。</div>
             )}
           </Panel>
+          <Panel
+            title="实际工时"
+            subtitle="用于核对计划与实际投入，不用于个人绩效评分。"
+            toolbar={<button className="btn btn-secondary btn-sm" onClick={() => setShowTimeEntryForm(true)}>记录工时</button>}
+          >
+            {timeEntriesAsync.loading ? (
+              <div className="body-text">正在加载工时记录…</div>
+            ) : timeEntriesAsync.error ? (
+              <div className="form-error">工时记录加载失败，请稍后重试。</div>
+            ) : timeEntriesAsync.data?.length ? (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {timeEntriesAsync.data.slice(0, 6).map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between" style={{ gap: 8 }}>
+                    <span>{entry.workDate} · {entry.projectName} · {entry.category}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-secondary">{entry.hours}h · {entry.workNature === 'unplanned' ? '临时工作' : entry.workNature === 'planned' ? '计划内' : '待分类'}</span>
+                      <button className="btn btn-text btn-sm" onClick={() => { setEditingTimeEntry(entry); setShowTimeEntryForm(true); }}>编辑</button>
+                      <button className="btn btn-text btn-sm" onClick={() => void removeTimeEntry(entry)}>删除</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="body-text">本周期尚无实际工时记录。</div>
+            )}
+          </Panel>
         </div>
       ) : null}
 
@@ -296,105 +410,20 @@ function MyWorkPage({ user }: { user?: SessionUser | null }) {
           }}
         />
       ) : null}
+      {showTimeEntryForm ? (
+        <TimeEntryForm
+          entry={editingTimeEntry ?? undefined}
+          onClose={() => { setShowTimeEntryForm(false); setEditingTimeEntry(null); }}
+          onSaved={async () => {
+            const isEditing = Boolean(editingTimeEntry);
+            setShowTimeEntryForm(false);
+            setEditingTimeEntry(null);
+            await Promise.all([timeEntriesAsync.reload(), personalCapacityAsync.reload()]);
+            toast.success(isEditing ? '实际工时已更新' : '实际工时已记录');
+          }}
+        />
+      ) : null}
     </div>
-  );
-}
-
-function DailyLogForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => Promise<void> }) {
-  const [projectId, setProjectId] = useState('');
-  const [content, setContent] = useState('');
-  const [blockers, setBlockers] = useState('');
-  const [nextPlan, setNextPlan] = useState('');
-  const [logDate, setLogDate] = useState(today());
-  const [file, setFile] = useState<File | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const { data: projects } = useAsync<Project[]>(fetchProjects, []);
-  const selectedProject = useMemo(
-    () => (projects ?? []).find((item) => item.id === projectId) ?? null,
-    [projectId, projects],
-  );
-
-  async function handleSubmit() {
-    setFormError(null);
-    if (!content.trim() && !file) {
-      setFormError('请填写日报正文，或上传日报文件。');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      let contentBase64: string | undefined;
-      if (file) {
-        contentBase64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result ?? ''));
-          reader.onerror = () => reject(new Error('读取文件失败'));
-          reader.readAsDataURL(file);
-        });
-      }
-
-      await createWorkLog({
-        projectId: projectId || undefined,
-        project: selectedProject?.name || '',
-        content: content.trim(),
-        blockers: blockers.trim(),
-        nextPlan: nextPlan.trim(),
-        logDate,
-        fileName: file?.name,
-        fileType: file?.type || file?.name.split('.').pop() || '',
-        contentBase64,
-      });
-      await onSaved();
-    } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : '提交失败');
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <Overlay onClose={onClose}>
-      <Panel title="上传每日日报" subtitle="支持手填内容，也支持导入 .md / .txt / .doc / .docx 文件。">
-        {formError ? <div className="form-error" style={{ marginBottom: 8 }}>{formError}</div> : null}
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">日期</label>
-            <input className="form-input" type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">所属项目</label>
-            <select className="form-select" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-              <option value="">未绑定项目</option>
-              {(projects ?? []).map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div className="form-group">
-          <label className="form-label">日报正文</label>
-          <textarea className="form-textarea" rows={6} value={content} onChange={(e) => setContent(e.target.value)} placeholder="建议写今日完成、提交、验证、联调情况。" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">阻塞项</label>
-          <textarea className="form-textarea" rows={3} value={blockers} onChange={(e) => setBlockers(e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">明日计划</label>
-          <textarea className="form-textarea" rows={3} value={nextPlan} onChange={(e) => setNextPlan(e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">日报文件</label>
-          <input className="form-input" type="file" accept=".md,.txt,.doc,.docx,text/plain" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        </div>
-        <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end' }}>
-          <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>取消</button>
-          <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? '提交中...' : '提交日报'}
-          </button>
-        </div>
-      </Panel>
-    </Overlay>
   );
 }
 

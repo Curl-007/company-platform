@@ -29,10 +29,19 @@ const cache = new Map<string, CacheEntry<unknown>>();
 const FRESH_MS = 20_000;
 
 function cacheKey(loader: () => Promise<unknown>, deps: unknown[]): string {
-  // Use the loader function's name + deps as the cache key so that different
-  // resources (e.g. fetchDashboard vs fetchProjects, both with deps []) don't
-  // collide on the same cache slot.
-  const name = loader.name || (loader.toString().match(/=>\s*(\w+)/)?.[1] ?? 'anon');
+  // Prefer a stable function name; for anonymous loaders include a short body
+  // fingerprint so two different () => fetchX() closures don't collide.
+  const named = loader.name && loader.name !== 'anonymous' ? loader.name : '';
+  let bodyHint = '';
+  if (!named) {
+    try {
+      const src = loader.toString().replace(/\s+/g, ' ').slice(0, 120);
+      bodyHint = `anon:${src}`;
+    } catch {
+      bodyHint = 'anon';
+    }
+  }
+  const name = named || bodyHint;
   try { return name + ':' + JSON.stringify(deps); } catch { return name + ':' + deps.length; }
 }
 
@@ -108,4 +117,29 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): Asy
 /** Invalidate every cached entry (e.g. on logout). */
 export function clearAsyncCache(): void {
   cache.clear();
+}
+
+/**
+ * Invalidate selected cache entries.
+ * - string: case-insensitive substring match against the cache key
+ * - RegExp: tested against the cache key
+ * - function: predicate over the cache key
+ */
+export function invalidateAsyncCache(
+  match: string | RegExp | ((key: string) => boolean),
+): number {
+  let removed = 0;
+  for (const key of [...cache.keys()]) {
+    const hit =
+      typeof match === 'function'
+        ? match(key)
+        : match instanceof RegExp
+          ? match.test(key)
+          : key.toLowerCase().includes(String(match).toLowerCase());
+    if (hit) {
+      cache.delete(key);
+      removed += 1;
+    }
+  }
+  return removed;
 }

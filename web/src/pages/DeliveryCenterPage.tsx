@@ -22,18 +22,18 @@ import {
   deleteRelease,
   fetchBuilds,
   fetchDeliveryGates,
-  fetchDefects,
-  fetchProducts,
-  fetchProjects,
-  fetchReleases,
   fetchReleaseApprovals,
   fetchReleaseReport,
-  fetchRequirements,
+  fetchReleases,
   fetchRollbackRecords,
-  sendAiChat,
   updateBuildStatus,
   updateReleaseStatus,
-} from '../services/resources';
+} from '../features/delivery/api';
+import DeliveryAiPanel from '../features/delivery/components/DeliveryAiPanel';
+import { fetchProjects } from '../features/projects/api';
+import { fetchRequirements } from '../features/requirements/api';
+import { fetchProducts } from '../features/products/api';
+import { fetchDefects } from '../features/testing/api';
 import { ApiError } from '../services/api';
 import { getSessionUser } from '../services/auth';
 import { useAsync } from '../hooks/useAsync';
@@ -225,80 +225,6 @@ function buildDeliveryAiPrompt(
     '未完成需求：',
     requirementLines.length ? requirementLines.join('\n') : '暂无未完成需求',
   ].join('\n');
-}
-
-function DeliveryAiPanel({
-  records,
-  gates,
-  requirements,
-  defects,
-  loading,
-  error,
-}: {
-  records: DeliveryRecord[];
-  gates: DeliveryGateResult[];
-  requirements: Requirement[];
-  defects: Defect[];
-  loading: boolean;
-  error: unknown;
-}) {
-  const [aiAdvice, setAiAdvice] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-  const blockedGates = gates.filter((item) => !item.ready).length;
-  const candidates = records.filter((item) => item.kind === 'build' && item.status === 'released').length;
-  const openDefects = defects.filter((item) => item.status !== 'closed').length;
-
-  async function handleAnalyze() {
-    setAiError(null);
-    setAiLoading(true);
-    try {
-      const reply = await sendAiChat({
-        messages: [
-          {
-            role: 'user',
-            content: buildDeliveryAiPrompt(records, gates, requirements, defects),
-          },
-        ],
-        scope: 'delivery-readiness-advice',
-        currentPage: 'delivery',
-      });
-      setAiAdvice(reply.content);
-    } catch (err: unknown) {
-      setAiError(err instanceof ApiError ? err.message : 'AI 交付分析生成失败，请检查模型配置或稍后重试。');
-    } finally {
-      setAiLoading(false);
-    }
-  }
-
-  return (
-    <section className="delivery-ai-panel">
-      <div className="delivery-ai-main">
-        <div>
-          <div className="section-title">AI 交付参谋</div>
-          <div className="body-text">基于构建、发布、质量门禁、未完成需求和缺陷闭环生成发布准备度建议。</div>
-        </div>
-        <div className="delivery-ai-stats">
-          <span>候选 {candidates}</span>
-          <span>门禁阻断 {blockedGates}</span>
-          <span>未关闭缺陷 {openDefects}</span>
-        </div>
-      </div>
-      <div className="delivery-ai-actions">
-        <button className="btn btn-primary btn-sm" onClick={handleAnalyze} disabled={loading || aiLoading || Boolean(error)}>
-          {aiLoading ? 'AI 分析中...' : aiAdvice ? '重新分析交付' : 'AI 交付建议'}
-        </button>
-      </div>
-      {error ? <div className="form-error">交付数据加载失败，暂时无法生成 AI 建议。</div> : null}
-      {(aiAdvice || aiLoading || aiError) ? (
-        <div className="delivery-ai-result">
-          {aiLoading ? <div className="body-text">AI 正在分析发布准备度、门禁阻断和缺陷闭环，请稍候...</div> : null}
-          {aiError ? <div className="form-error">{aiError}</div> : null}
-          {aiAdvice ? <div className="delivery-ai-content">{aiAdvice}</div> : null}
-        </div>
-      ) : null}
-    </section>
-  );
 }
 
 function DeliveryCenterPage() {
@@ -495,10 +421,10 @@ function DeliveryCenterPage() {
 
       {canUseAi ? (
         <DeliveryAiPanel
-          records={records}
-          gates={gateResults}
-          requirements={requirements}
-          defects={defects}
+          prompt={buildDeliveryAiPrompt(records, gateResults, requirements, defects)}
+          candidateCount={records.filter((item) => item.kind === 'build' && item.status === 'released').length}
+          blockedGateCount={gateResults.filter((item) => !item.ready).length}
+          openDefectCount={defects.filter((item) => item.status !== 'closed').length}
           loading={loading}
           error={error}
         />
@@ -847,6 +773,7 @@ function DeliveryDetail({
       reportState.reload();
       onChanged();
       toast.success(decision === 'approve' ? '发布审批已通过' : '发布审批已驳回');
+
     } catch (err: unknown) {
       const message = err instanceof ApiError ? err.message : '审批提交失败';
       setGovernanceError(message);
