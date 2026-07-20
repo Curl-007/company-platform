@@ -78,7 +78,7 @@ npm run start -w api
 
 - 使用 PostgreSQL 作为事务主库；后端 Repository 保持 REST 契约不变。
 - 以 `schema_migrations` 记录版本，使用正式 migration，而不是继续在启动路径累积 `try ALTER TABLE`。
-- 在目标库补齐主外键、唯一约束、检查约束及项目/状态/时间维度索引；导入前处理 SQLite 中已存在的逻辑孤儿数据。
+- 目标库以 `postgres-baseline.sql` 为准：保持**无 SQL FK**（逻辑引用由 preflight / deferred 校验）；可补唯一约束与项目/状态/时间维度索引；导入前处理 SQLite 中已存在的逻辑孤儿数据。
 - 文档对象先保留原 `storage_key`，对象存储迁移独立进行，不能混入关系库切换窗口。
 - AI Worker、Redis 和 RAG 只在 PostgreSQL 数据校验和 API 回归稳定后引入。
 - Canonical DDL：`api/src/db/schema/postgres-baseline.sql`（无 SQL FK；JSON 列保持 TEXT；含 `leave_records`）。
