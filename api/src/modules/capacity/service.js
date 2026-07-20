@@ -137,13 +137,13 @@ function workloadRisk(effectiveHours, plannedHours, thresholds = DEFAULT_WORKLOA
 }
 
 function createCapacityService({ repository }) {
-  function defaultCalendar() {
-    return repository.defaultCalendar();
+  async function defaultCalendar() {
+    return await repository.defaultCalendar();
   }
 
-  function resolveCalendar(period) {
-    const calendar = defaultCalendar();
-    const exceptions = calendar ? repository.listCalendarExceptions({ calendarId: calendar.id, ...period }) : [];
+  async function resolveCalendar(period) {
+    const calendar = await defaultCalendar();
+    const exceptions = calendar ? await repository.listCalendarExceptions({ calendarId: calendar.id, ...period }) : [];
     return { calendar, ...calendarContext(period, calendar, exceptions) };
   }
 
@@ -160,14 +160,14 @@ function createCapacityService({ repository }) {
     };
   }
 
-  function buildOverview(period, userId, thresholds = DEFAULT_WORKLOAD_THRESHOLDS) {
-    const users = repository.listActiveUsers(userId);
-    const plans = repository.listPlans(period);
-    const allocations = repository.listAllocations(period);
-    const timeEntries = repository.listTimeEntries(period);
-    const inProgressTasks = repository.listInProgressTasks();
-    const calendar = resolveCalendar(period);
-    const projects = new Map(repository.listProjects().map((project) => [project.id, project]));
+  async function buildOverview(period, userId, thresholds = DEFAULT_WORKLOAD_THRESHOLDS) {
+    const users = await repository.listActiveUsers(userId);
+    const plans = await repository.listPlans(period);
+    const allocations = await repository.listAllocations(period);
+    const timeEntries = await repository.listTimeEntries(period);
+    const inProgressTasks = await repository.listInProgressTasks();
+    const calendar = await resolveCalendar(period);
+    const projects = new Map((await repository.listProjects()).map((project) => [project.id, project]));
 
     const members = users.map((user) => {
       const plan = mapPlan(plans.find((item) => item.user_id === user.id), calendar.workingDays);

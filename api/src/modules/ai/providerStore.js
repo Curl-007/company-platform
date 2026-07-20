@@ -63,20 +63,20 @@ function createAiProviderStore({
     };
   }
 
-  function readActiveConfig() {
-    const setting = row("SELECT value, updated_at FROM app_settings WHERE key = @key", { key: "ai_provider" });
+  async function readActiveConfig() {
+    const setting = await row("SELECT value, updated_at FROM app_settings WHERE key = @key", { key: "ai_provider" });
     return hydrateSecret({ ...parse(setting?.value, {}), updatedAt: setting?.updated_at || null });
   }
 
-  function writeActiveConfig(config) {
-    run(
+  async function writeActiveConfig(config) {
+    await run(
       "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (@key, @value, @updatedAt)",
       { key: "ai_provider", value: json(serializeSecret(config)), updatedAt: now() },
     );
   }
 
-  function readList() {
-    const setting = row("SELECT value, updated_at FROM app_settings WHERE key = @key", { key: "ai_providers" });
+  async function readList() {
+    const setting = await row("SELECT value, updated_at FROM app_settings WHERE key = @key", { key: "ai_providers" });
     const stored = parse(setting?.value, {});
     const storedItems = Array.isArray(stored.providers) ? stored.providers : Array.isArray(stored.items) ? stored.items : [];
     if (setting && storedItems.length === 0) {
@@ -88,7 +88,7 @@ function createAiProviderStore({
       return { activeId, providers, updatedAt: setting?.updated_at || null };
     }
 
-    const legacy = readActiveConfig();
+    const legacy = await readActiveConfig();
     const hasLegacy = Boolean(legacy.provider || legacy.baseUrl || legacy.model || legacy.apiKey);
     if (hasLegacy) {
       const migrated = normalizeEntry({
@@ -110,8 +110,8 @@ function createAiProviderStore({
     return { activeId: defaultProvider.id, providers: [defaultProvider], updatedAt: null };
   }
 
-  function writeList(config) {
-    run(
+  async function writeList(config) {
+    await run(
       "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (@key, @value, @updatedAt)",
       {
         key: "ai_providers",
@@ -124,8 +124,8 @@ function createAiProviderStore({
     );
   }
 
-  function readHealth() {
-    const setting = row("SELECT value FROM app_settings WHERE key = @key", { key: "ai_provider_health" });
+  async function readHealth() {
+    const setting = await row("SELECT value FROM app_settings WHERE key = @key", { key: "ai_provider_health" });
     const stored = parse(setting?.value, {});
     return {
       lastAttemptAt: stored.lastAttemptAt || null,
@@ -148,18 +148,26 @@ function createAiProviderStore({
     lastErrorMessage: "",
     lastErrorCode: "",
     consecutiveFailures: 0,
-    ...readHealth(),
+    _loaded: false,
   };
 
-  function writeHealth() {
-    run(
+  async function ensureHealth() {
+    if (health._loaded) return health;
+    Object.assign(health, await readHealth());
+    health._loaded = true;
+    return health;
+  }
+
+  async function writeHealth() {
+    const { _loaded, ...payload } = health;
+    await run(
       "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (@key, @value, @updatedAt)",
-      { key: "ai_provider_health", value: json(health), updatedAt: now() },
+      { key: "ai_provider_health", value: json(payload), updatedAt: now() },
     );
   }
 
-  function resolveConfig() {
-    const storedList = readList();
+  async function resolveConfig() {
+    const storedList = await readList();
     if (storedList.providers.length === 0) {
       return {
         id: null,
@@ -222,7 +230,8 @@ function createAiProviderStore({
     };
   }
 
-  function publicHealth(configured = true, enabled = true) {
+  async function publicHealth(configured = true, enabled = true) {
+    await ensureHealth();
     if (!enabled) {
       return {
         status: "disabled",
@@ -264,14 +273,17 @@ function createAiProviderStore({
           ? "healthy"
           : "unknown";
 
-    return { status, ...health };
+    const { _loaded, ...healthFields } = health;
+    return { status, ...healthFields };
   }
 
-  function publicConfig(config = resolveConfig()) {
+  async function publicConfig(config) {
+    const resolved = config || await resolveConfig();
     let baseUrlHost = "";
-    try { baseUrlHost = new URL(config.baseUrl).host; } catch { baseUrlHost = ""; }
-    const configured = Boolean(config.enabled && config.apiKey && config.baseUrl && config.model);
-    const storedList = readList();
+    try { baseUrlHost = new URL(resolved.baseUrl).host; } catch { baseUrlHost = ""; }
+    const configured = Boolean(resolved.enabled && resolved.apiKey && resolved.baseUrl && resolved.model);
+    const storedList = await readList();
+    config = resolved;
     return {
       id: config.id,
       name: config.name,
@@ -286,13 +298,13 @@ function createAiProviderStore({
       apiKeyMasked: maskSecret(config.apiKey),
       apiKeySource: config.apiKeySource,
       updatedAt: config.updatedAt,
-      health: publicHealth(configured, Boolean(config.enabled)),
+      health: await publicHealth(configured, Boolean(config.enabled)),
       activeId: storedList.activeId,
       providers: storedList.providers.map(publicListItem),
     };
   }
 
-  function resetHealth() {
+  async function resetHealth() {
     Object.assign(health, {
       lastAttemptAt: null,
       lastSuccessAt: null,
@@ -303,7 +315,7 @@ function createAiProviderStore({
       lastErrorCode: "",
       consecutiveFailures: 0,
     });
-    writeHealth();
+    await writeHealth();
   }
 
   function sanitizeError(error) {
@@ -321,16 +333,18 @@ function createAiProviderStore({
     return match ? match[1] : "";
   }
 
-  function recordSuccess({ wireApi, latencyMs }) {
+  async function recordSuccess({ wireApi, latencyMs }) {
+    await ensureHealth();
     health.lastAttemptAt = now();
     health.lastSuccessAt = health.lastAttemptAt;
     health.lastLatencyMs = latencyMs;
     health.lastWireApi = wireApi;
     health.consecutiveFailures = 0;
-    writeHealth();
+    await writeHealth();
   }
 
-  function recordFailure(error, { wireApi, latencyMs }) {
+  async function recordFailure(error, { wireApi, latencyMs }) {
+    await ensureHealth();
     health.lastAttemptAt = now();
     health.lastFailureAt = health.lastAttemptAt;
     health.lastLatencyMs = latencyMs;
@@ -338,24 +352,24 @@ function createAiProviderStore({
     health.lastErrorMessage = sanitizeError(error);
     health.lastErrorCode = errorCode(error);
     health.consecutiveFailures += 1;
-    writeHealth();
+    await writeHealth();
   }
 
-  function migrateSecrets() {
-    const listSetting = row("SELECT value FROM app_settings WHERE key = @key", { key: "ai_providers" });
+  async function migrateSecrets() {
+    const listSetting = await row("SELECT value FROM app_settings WHERE key = @key", { key: "ai_providers" });
     const list = parse(listSetting?.value, {});
     const items = Array.isArray(list.providers) ? list.providers : Array.isArray(list.items) ? list.items : [];
     if (items.some((item) => item?.apiKey && !item?.apiKeyEncrypted)) {
-      writeList({
+      await writeList({
         activeId: list.activeId || items[0]?.id || null,
         providers: items.map((item) => normalizeEntry(hydrateSecret(item))),
       });
     }
 
-    const legacySetting = row("SELECT value FROM app_settings WHERE key = @key", { key: "ai_provider" });
+    const legacySetting = await row("SELECT value FROM app_settings WHERE key = @key", { key: "ai_provider" });
     const legacy = parse(legacySetting?.value, {});
     if (legacy?.apiKey && !legacy?.apiKeyEncrypted) {
-      writeActiveConfig(hydrateSecret(legacy));
+      await writeActiveConfig(hydrateSecret(legacy));
     }
   }
 

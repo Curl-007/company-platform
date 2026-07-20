@@ -12,9 +12,9 @@ function createSocket() {
   };
 }
 
-test("document collaboration update requires a base revision", () => {
+test("document collaboration update requires a base revision", async () => {
   const socket = createSocket();
-  const result = handleCollaborationUpdate({
+  const result = await handleCollaborationUpdate({
     socket,
     rooms: new Map(),
     documentId: "DOC-001",
@@ -31,9 +31,9 @@ test("document collaboration update requires a base revision", () => {
   assert.equal(socket.sent[0].code, "COLLAB_REVISION_REQUIRED");
 });
 
-test("document collaboration update reports conflict without overwriting newer content", () => {
+test("document collaboration update reports conflict without overwriting newer content", async () => {
   const socket = createSocket();
-  const result = handleCollaborationUpdate({
+  const result = await handleCollaborationUpdate({
     socket,
     rooms: new Map([["DOC-001", new Set([socket])]]),
     documentId: "DOC-001",
@@ -54,11 +54,11 @@ test("document collaboration update reports conflict without overwriting newer c
   assert.deepEqual(socket.sent[0], { type: "conflict", documentId: "DOC-001", content: "latest", revision: 2 });
 });
 
-test("document collaboration update writes audit evidence and broadcasts to peers", () => {
+test("document collaboration update writes audit evidence and broadcasts to peers", async () => {
   const socket = createSocket();
   const peer = createSocket();
   const audits = [];
-  const result = handleCollaborationUpdate({
+  const result = await handleCollaborationUpdate({
     socket,
     rooms: new Map([["DOC-001", new Set([socket, peer])]]),
     documentId: "DOC-001",

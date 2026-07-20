@@ -45,14 +45,14 @@ function createAiChatService({
       .slice(0, 6);
   }
 
-  function buildContext() {
-    const projects = rows("SELECT * FROM projects WHERE deleted_at IS NULL ORDER BY id").map(mapProject);
-    const requirements = rows("SELECT * FROM requirements WHERE deleted_at IS NULL ORDER BY id").map(mapRequirement);
-    const tasks = rows("SELECT * FROM tasks ORDER BY id").map(mapTask);
-    const defects = rows("SELECT * FROM defects ORDER BY id").map(mapDefect);
-    const documents = rows("SELECT * FROM documents ORDER BY updated_at DESC LIMIT 12").map(mapDocument);
-    const builds = rows("SELECT * FROM builds ORDER BY build_date DESC LIMIT 10").map(mapBuild);
-    const releases = rows("SELECT * FROM releases ORDER BY release_date DESC LIMIT 10").map(mapRelease);
+  async function buildContext() {
+    const projects = (await rows("SELECT * FROM projects WHERE deleted_at IS NULL ORDER BY id")).map(mapProject);
+    const requirements = (await rows("SELECT * FROM requirements WHERE deleted_at IS NULL ORDER BY id")).map(mapRequirement);
+    const tasks = (await rows("SELECT * FROM tasks ORDER BY id")).map(mapTask);
+    const defects = (await rows("SELECT * FROM defects ORDER BY id")).map(mapDefect);
+    const documents = (await rows("SELECT * FROM documents ORDER BY updated_at DESC LIMIT 12")).map(mapDocument);
+    const builds = (await rows("SELECT * FROM builds ORDER BY build_date DESC LIMIT 10")).map(mapBuild);
+    const releases = (await rows("SELECT * FROM releases ORDER BY release_date DESC LIMIT 10")).map(mapRelease);
     const activeProjects = projects.filter((item) => !["done", "archived"].includes(item.status));
     const riskyProjects = projects.filter((item) => item.riskCount > 0 || item.healthScore < 70);
     const openDefects = defects.filter((item) => !["closed", "rejected", "verified"].includes(item.status));
@@ -119,8 +119,8 @@ function createAiChatService({
     };
   }
 
-  function buildPrompt({ messages, attachments, scope, currentPage }) {
-    const context = buildContext();
+  async function buildPrompt({ messages, attachments, scope, currentPage }) {
+    const context = await buildContext();
     const attachmentSummaries = attachments.map((item, index) => ({
       index: index + 1,
       name: item.name,
@@ -147,9 +147,9 @@ function createAiChatService({
     ].join("\n");
   }
 
-  function localReply({ messages, attachments }) {
+  async function localReply({ messages, attachments }) {
     const latest = messages[messages.length - 1]?.content || "";
-    const context = buildContext();
+    const context = await buildContext();
     const attachmentLine = attachments.length
       ? `我已收到 ${attachments.length} 个附件：${attachments.map((item) => item.name).join("、")}。`
       : "当前没有附件。";
@@ -161,9 +161,9 @@ function createAiChatService({
     ].join("\n\n");
   }
 
-  function localReplyV2({ messages, attachments }) {
+  async function localReplyV2({ messages, attachments }) {
     const latest = messages[messages.length - 1]?.content || "";
-    const context = buildContext();
+    const context = await buildContext();
     const documentAttachments = attachments.filter((item) => item.kind === "document");
     const imageAttachments = attachments.filter((item) => item.kind === "image");
     const documentNotes = documentAttachments

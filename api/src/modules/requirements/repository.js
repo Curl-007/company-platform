@@ -1,5 +1,5 @@
 function createRequirementsRepository({ insert, row, rows, run }) {
-  function listRequirements({ keyword, status, priority, projectId } = {}) {
+  async function listRequirements({ keyword, status, priority, projectId } = {}) {
     let sql = "SELECT * FROM requirements WHERE deleted_at IS NULL";
     const params = {};
     if (keyword) {
@@ -21,17 +21,19 @@ function createRequirementsRepository({ insert, row, rows, run }) {
     return rows(`${sql} ORDER BY id DESC`, params);
   }
 
-  function requirementDependencies(id) {
-    return Object.fromEntries(
-      [
-        ["children", "SELECT COUNT(*) AS count FROM requirements WHERE parent_id = @id AND deleted_at IS NULL"],
-        ["tasks", "SELECT COUNT(*) AS count FROM tasks WHERE requirement_id = @id"],
-        ["testCases", "SELECT COUNT(*) AS count FROM test_cases WHERE requirement_id = @id"],
-        ["defects", "SELECT COUNT(*) AS count FROM defects WHERE requirement_id = @id"],
-      ]
-        .map(([resource, sql]) => [resource, Number(row(sql, { id })?.count || 0)])
-        .filter(([, count]) => count > 0),
-    );
+  async function requirementDependencies(id) {
+    const dependencies = [
+      ["children", "SELECT COUNT(*) AS count FROM requirements WHERE parent_id = @id AND deleted_at IS NULL"],
+      ["tasks", "SELECT COUNT(*) AS count FROM tasks WHERE requirement_id = @id"],
+      ["testCases", "SELECT COUNT(*) AS count FROM test_cases WHERE requirement_id = @id"],
+      ["defects", "SELECT COUNT(*) AS count FROM defects WHERE requirement_id = @id"],
+    ];
+    const entries = [];
+    for (const [resource, sql] of dependencies) {
+      const count = Number((await row(sql, { id }))?.count || 0);
+      if (count > 0) entries.push([resource, count]);
+    }
+    return Object.fromEntries(entries);
   }
 
   return {

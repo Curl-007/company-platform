@@ -25,18 +25,18 @@ function createAuditRouter({
 }) {
   const router = express.Router();
 
-  router.get("/audit-logs", requirePermission("audit:read"), (req, res) => {
-    const allItems = repository.listAuditLogs(req.query)
+  router.get("/audit-logs", requirePermission("audit:read"), async (req, res) => {
+    const allItems = (await repository.listAuditLogs(req.query))
       .map((item) => mapAuditLog(item, parse));
     const data = paginatedResponse(allItems, req.query);
     res.json(ok(data));
   });
 
-  router.post("/activity/page-view", (req, res) => {
+  router.post("/activity/page-view", async (req, res) => {
     const page = String(req.body?.page ?? "").trim();
     const pageTitle = String(req.body?.pageTitle ?? page).trim();
     if (!page) return fail(res, 400, "VALIDATION_FAILED", "Page is required.");
-    audit(req.user, "page.view", "page", page, null, { page, pageTitle }, req.ip);
+    await audit(req.user, "page.view", "page", page, null, { page, pageTitle }, req.ip);
     res.status(201).json(ok({ page, pageTitle }));
   });
 

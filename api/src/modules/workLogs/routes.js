@@ -53,19 +53,19 @@ function createWorkLogsRouter({
   const router = express.Router();
   const mapLog = (item) => mapWorkLog(item, { parse, weekKeyOf });
 
-  router.get("/work-logs", (req, res) => {
-    const allItems = repository.listForAuthor({ authorId: req.user.id, author: req.user.name }).map(mapLog);
+  router.get("/work-logs", async (req, res) => {
+    const allItems = (await repository.listForAuthor({ authorId: req.user.id, author: req.user.name })).map(mapLog);
     const data = paginatedResponse(allItems, req.query);
     res.json(ok(data));
   });
 
-  router.get("/work-logs/team", (req, res) => {
+  router.get("/work-logs/team", async (req, res) => {
     if (!canViewTeamLogs(req.user)) return fail(res, 403, "PERMISSION_DENIED", "只有项目经理和管理员可以查看团队日报。");
     const roleFilter = req.query.role ? normalizeRole(req.query.role) : "";
     const authorFilter = String(req.query.author || "").trim();
     const projectFilter = resolveWorkLogProjectFilter(req.query);
     const dateFilter = req.query.date ? isoDateOnly(req.query.date) : "";
-    let allItems = repository.listTeam().map(mapLog);
+    let allItems = (await repository.listTeam()).map(mapLog);
     if (roleFilter) allItems = allItems.filter((item) => normalizeRole(item.role) === roleFilter);
     if (authorFilter) allItems = allItems.filter((item) => item.author === authorFilter);
     allItems = allItems.filter((item) => workLogMatchesProject(item, projectFilter));
@@ -92,23 +92,23 @@ function createWorkLogsRouter({
       const requestedProjectId = String(req.body?.projectId || "").trim();
       const requestedProjectName = String(req.body?.project || "").trim();
       const matchedProject = requestedProjectId
-        ? repository.findProjectById(requestedProjectId)
+        ? await repository.findProjectById(requestedProjectId)
         : requestedProjectName
-          ? repository.findProjectByName(requestedProjectName)
+          ? await repository.findProjectByName(requestedProjectName)
           : null;
       if (requestedProjectId && !matchedProject) return fail(res, 400, "VALIDATION_FAILED", "projectId does not match a known project.");
-      if (matchedProject && !canWriteProject(req.user, matchedProject.id)) {
+      if (matchedProject && !(await canWriteProject(req.user, matchedProject.id))) {
         return fail(res, 403, "PROJECT_ARCHIVED_OR_ACCESS_DENIED", "Cannot create a work log for an archived or inaccessible project.");
       }
       const logDate = isoDateOnly(req.body?.logDate);
       const weekKey = weekKeyOf(logDate);
-      const idempotency = beginIdempotentRequest(req, res, "work-log.create");
+      const idempotency = await beginIdempotentRequest(req, res, "work-log.create");
       if (!idempotency) return;
       try {
         const analysis = await analyzeWorkLog({ ...req.body, content });
-        const response = transaction(() => {
-          const id = nextId("LOG", "work_logs");
-          repository.create({
+        const response = await transaction(async () => {
+          const id = await nextId("LOG", "work_logs");
+          await repository.create({
             id,
             author: req.user.name,
             author_id: req.user.id,
@@ -127,15 +127,15 @@ function createWorkLogsRouter({
             weekly_summary: "",
             created_at: now(),
           });
-          const after = repository.findById(id);
+          const after = await repository.findById(id);
           const created = ok({ id, analysis, content, logDate, weekKey, projectId: matchedProject?.id || null });
-          audit(req.user, "work_log.create", "work_log", id, null, after, req.ip);
-          idempotency.commit(201, created);
+          await audit(req.user, "work_log.create", "work_log", id, null, after, req.ip);
+          await idempotency.commit(201, created);
           return created;
         });
         res.status(201).json(response);
       } catch (error) {
-        idempotency.abort();
+        await idempotency.abort();
         throw error;
       }
     } catch (error) {
@@ -159,15 +159,15 @@ function createWorkLogsRouter({
     }
   });
 
-  router.get("/work-logs/weekly-summary", (req, res) => {
+  router.get("/work-logs/weekly-summary", async (req, res) => {
     const role = normalizeRole(req.user?.role);
     const canReadAll = ["admin", "pm"].includes(role);
     const requestedAuthor = String(req.query.author || "").trim();
     const author = canReadAll ? requestedAuthor || req.user?.name : req.user?.name;
     const weekKey = weekKeyOf(req.query.week || now());
     const logs = canReadAll
-      ? repository.listWeeklyForAuthor({ author, weekKey })
-      : repository.listWeeklyForUser({ authorId: req.user.id, author, weekKey });
+      ? await repository.listWeeklyForAuthor({ author, weekKey })
+      : await repository.listWeeklyForUser({ authorId: req.user.id, author, weekKey });
     const summary = buildWeeklySummary(logs);
     const markdown = [
       `# ${author} 周报`,
@@ -190,19 +190,19 @@ function createWorkLogsRouter({
     res.json(ok({ author, weekKey, count: logs.length, summary, markdown }));
   });
 
-  router.get("/work-logs/team-weekly-summary", (req, res) => {
+  router.get("/work-logs/team-weekly-summary", async (req, res) => {
     if (!canViewTeamLogs(req.user)) return fail(res, 403, "PERMISSION_DENIED", "只有项目经理和管理员可以查看团队周报。");
     const projectFilter = resolveWorkLogProjectFilter(req.query);
     const project = projectFilter.name;
     const weekKey = weekKeyOf(req.query.week || now());
     const roleFilter = req.query.role ? normalizeRole(req.query.role) : "";
-    let logs = repository.listByWeek(weekKey);
+    let logs = await repository.listByWeek(weekKey);
     logs = logs
       .map((item) => ({ ...item, projectId: item.project_id || null, project: item.project || "" }))
       .filter((item) => workLogMatchesProject(item, projectFilter));
     if (roleFilter) logs = logs.filter((item) => normalizeRole(item.role || "dev") === roleFilter);
 
-    const projectUsers = collectProjectMembers(projectFilter);
+    const projectUsers = await collectProjectMembers(projectFilter);
     const submitted = new Set(logs.map((item) => `${item.author}::${normalizeRole(item.role || "dev")}`));
     const missingMembers = projectUsers
       .filter((user) => !roleFilter || normalizeRole(user.role) === roleFilter)

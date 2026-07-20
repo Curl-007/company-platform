@@ -44,10 +44,25 @@ test("INSERT OR IGNORE becomes ON CONFLICT DO NOTHING", () => {
 
 test("INSERT OR REPLACE with id column becomes ON CONFLICT DO UPDATE", () => {
   const sql = translateSqliteToPostgres(
-    "INSERT OR REPLACE INTO app_settings (id, value) VALUES (@id, @value)",
+    "INSERT OR REPLACE INTO projects (id, value) VALUES (@id, @value)",
+  );
+  assert.match(sql, /INSERT INTO projects/i);
+  assert.match(sql, /ON CONFLICT \(id\) DO UPDATE SET value = EXCLUDED\.value/i);
+});
+
+test("INSERT OR REPLACE into app_settings conflicts on key primary key", () => {
+  const sql = translateSqliteToPostgres(
+    "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (@key, @value, @updatedAt)",
   );
   assert.match(sql, /INSERT INTO app_settings/i);
-  assert.match(sql, /ON CONFLICT \(id\) DO UPDATE SET value = EXCLUDED\.value/i);
+  assert.match(sql, /ON CONFLICT \(key\) DO UPDATE SET value = EXCLUDED\.value, updated_at = EXCLUDED\.updated_at/i);
+  assert.doesNotMatch(sql, /ON CONFLICT \(id\)/i);
+});
+
+test("COLLATE NOCASE in ORDER BY becomes lower()", () => {
+  const sql = translateSqliteToPostgres("SELECT * FROM users ORDER BY name COLLATE NOCASE");
+  assert.match(sql, /ORDER BY lower\(name\)/i);
+  assert.doesNotMatch(sql, /COLLATE\s+NOCASE/i);
 });
 
 test("PRAGMA lines are stripped for postgres", () => {
@@ -75,4 +90,8 @@ test("buildUpsertSql emits dialect-specific insert forms", () => {
   assert.match(postgres.sql, /INSERT INTO items/);
   assert.match(postgres.sql, /\$1/);
   assert.match(postgres.sql, /ON CONFLICT \(id\) DO UPDATE SET name = EXCLUDED\.name/);
+
+  const settings = buildUpsertSql("app_settings", ["key", "value"], { dialect: "postgres" });
+  assert.equal(settings.conflictTarget, "key");
+  assert.match(settings.sql, /ON CONFLICT \(key\) DO UPDATE SET value = EXCLUDED\.value/);
 });

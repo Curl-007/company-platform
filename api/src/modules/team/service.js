@@ -30,16 +30,16 @@ function createTeamService({
     return "offline";
   }
 
-  function buildTeamMembers() {
-    const users = rows("SELECT * FROM users ORDER BY created_at DESC");
-    const projects = rows("SELECT * FROM projects WHERE deleted_at IS NULL").map(mapProject);
+  async function buildTeamMembers() {
+    const users = await rows("SELECT * FROM users ORDER BY created_at DESC");
+    const projects = (await rows("SELECT * FROM projects WHERE deleted_at IS NULL")).map(mapProject);
     const activeProjectIds = new Set(projects.map((project) => project.id));
-    const tasks = rows("SELECT * FROM tasks").map(mapTask).filter((task) => activeProjectIds.has(task.projectId));
-    const projectMembers = rows("SELECT * FROM project_members");
-    const requirements = rows("SELECT * FROM requirements WHERE deleted_at IS NULL").map(mapRequirement).filter((requirement) => activeProjectIds.has(requirement.projectId));
-    const defects = rows("SELECT * FROM defects").map(mapDefect);
-    const workLogs = rows("SELECT * FROM work_logs ORDER BY log_date DESC, created_at DESC");
-    const auditRows = rows("SELECT actor_id, actor_name, created_at FROM audit_logs ORDER BY created_at DESC LIMIT 500");
+    const tasks = (await rows("SELECT * FROM tasks")).map(mapTask).filter((task) => activeProjectIds.has(task.projectId));
+    const projectMembers = await rows("SELECT * FROM project_members");
+    const requirements = (await rows("SELECT * FROM requirements WHERE deleted_at IS NULL")).map(mapRequirement).filter((requirement) => activeProjectIds.has(requirement.projectId));
+    const defects = (await rows("SELECT * FROM defects")).map(mapDefect);
+    const workLogs = await rows("SELECT * FROM work_logs ORDER BY log_date DESC, created_at DESC");
+    const auditRows = await rows("SELECT actor_id, actor_name, created_at FROM audit_logs ORDER BY created_at DESC LIMIT 500");
     const activeTaskStatuses = new Set(["todo", "in_progress", "blocked", "code_review", "testing", "acceptance"]);
     const closedDefectStatuses = new Set(["closed", "rejected"]);
 

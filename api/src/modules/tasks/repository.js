@@ -1,5 +1,5 @@
 function createTasksRepository({ insert, row, rows, run }) {
-  function listTasks({ keyword, status, projectId, assignee } = {}) {
+  async function listTasks({ keyword, status, projectId, assignee } = {}) {
     let sql = "SELECT * FROM tasks WHERE 1=1";
     const params = {};
     if (keyword) {
@@ -18,7 +18,7 @@ function createTasksRepository({ insert, row, rows, run }) {
       sql += " AND owner = @assignee";
       params.assignee = assignee;
     }
-    return rows(`${sql} ORDER BY sort_order`, params);
+    return await rows(`${sql} ORDER BY sort_order`, params);
   }
 
   return {
@@ -50,7 +50,7 @@ function createTasksRepository({ insert, row, rows, run }) {
     ),
     listSprints: (projectId) => rows("SELECT * FROM sprints WHERE project_id = @projectId", { projectId }),
     listTasks,
-    taskCountForSprint: (sprintId) => Number(row("SELECT COUNT(*) AS count FROM tasks WHERE sprint_id = @id", { id: sprintId })?.count || 0),
+    taskCountForSprint: async (sprintId) => Number((await row("SELECT COUNT(*) AS count FROM tasks WHERE sprint_id = @id", { id: sprintId }))?.count || 0),
     updateSprintEndDate: (id, endDate) => run("UPDATE sprints SET end_date = @date WHERE id = @id", { id, date: endDate }),
     updateSprintGoal: (id, goal) => run("UPDATE sprints SET goal = @goal WHERE id = @id", { id, goal }),
     updateSprintName: (id, name) => run("UPDATE sprints SET name = @name WHERE id = @id", { id, name }),

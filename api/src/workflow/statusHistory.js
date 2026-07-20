@@ -14,10 +14,10 @@ function mapStatusHistory(item) {
 }
 
 function createStatusHistory({ insert, nextId, now, rows }) {
-  function record({ resourceType, resourceId, projectId = null, fromStatus = null, toStatus, reason = "", actor }) {
+  async function record({ resourceType, resourceId, projectId = null, fromStatus = null, toStatus, reason = "", actor }) {
     if (!resourceType || !resourceId || !toStatus || fromStatus === toStatus) return null;
     const history = {
-      id: nextId("STH", "status_histories"),
+      id: await nextId("STH", "status_histories"),
       resource_type: resourceType,
       resource_id: resourceId,
       project_id: projectId,
@@ -28,17 +28,18 @@ function createStatusHistory({ insert, nextId, now, rows }) {
       actor_name: actor?.name || "",
       created_at: now(),
     };
-    insert("status_histories", history);
+    await insert("status_histories", history);
     return mapStatusHistory(history);
   }
 
-  function list(resourceType, resourceId) {
-    return rows(
+  async function list(resourceType, resourceId) {
+    const items = await rows(
       `SELECT * FROM status_histories
        WHERE resource_type = @resourceType AND resource_id = @resourceId
        ORDER BY created_at DESC, id DESC`,
       { resourceType, resourceId },
-    ).map(mapStatusHistory);
+    );
+    return items.map(mapStatusHistory);
   }
 
   return { list, record };

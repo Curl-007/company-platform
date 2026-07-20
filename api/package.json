@@ -12,6 +12,8 @@
     "repair:project-objective-migration": "node scripts/repair-project-objective-migration.js --acknowledge",
     "export:postgres": "node scripts/export-sqlite-for-postgres.js",
     "verify:postgres-export": "node scripts/verify-postgres-export.js",
+    "apply:postgres-schema": "node scripts/apply-postgres-schema.js",
+    "import:postgres": "node scripts/import-ndjson-to-postgres.js",
     "reconcile:postgres-import": "node scripts/reconcile-postgres-import.js",
     "generate:postgres-target-report": "node scripts/generate-postgres-target-report.js"
   },

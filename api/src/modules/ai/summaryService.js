@@ -3,10 +3,10 @@ function compactText(value, max = 180) {
   return text.length > max ? `${text.slice(0, max)}...` : text;
 }
 
-function collectAiBusinessSnapshot({ rows }, scope = "dashboard") {
+async function collectAiBusinessSnapshot({ rows }, scope = "dashboard") {
   return {
     scope,
-    projects: rows("SELECT id, name, status, health_score, progress, risk_count, owner FROM projects WHERE deleted_at IS NULL ORDER BY risk_count DESC, health_score ASC LIMIT 12")
+    projects: (await rows("SELECT id, name, status, health_score, progress, risk_count, owner FROM projects WHERE deleted_at IS NULL ORDER BY risk_count DESC, health_score ASC LIMIT 12"))
       .map((item) => ({
         id: item.id,
         name: item.name,
@@ -16,7 +16,7 @@ function collectAiBusinessSnapshot({ rows }, scope = "dashboard") {
         riskCount: item.risk_count,
         owner: item.owner,
       })),
-    requirements: rows("SELECT id, title, status, priority, completion, project_id, owner, assignee FROM requirements WHERE deleted_at IS NULL AND (priority = 'high' OR completion < 80) ORDER BY priority ASC, completion ASC LIMIT 25")
+    requirements: (await rows("SELECT id, title, status, priority, completion, project_id, owner, assignee FROM requirements WHERE deleted_at IS NULL AND (priority = 'high' OR completion < 80) ORDER BY priority ASC, completion ASC LIMIT 25"))
       .map((item) => ({
         id: item.id,
         title: item.title,
@@ -27,7 +27,7 @@ function collectAiBusinessSnapshot({ rows }, scope = "dashboard") {
         owner: item.owner,
         assignee: item.assignee,
       })),
-    tasks: rows("SELECT id, title, status, project_id, requirement_id, owner, progress, blocker, due_date FROM tasks WHERE status NOT IN ('done', 'cancelled') ORDER BY CASE WHEN blocker IS NULL OR blocker = '' THEN 1 ELSE 0 END, due_date ASC LIMIT 25")
+    tasks: (await rows("SELECT id, title, status, project_id, requirement_id, owner, progress, blocker, due_date FROM tasks WHERE status NOT IN ('done', 'cancelled') ORDER BY CASE WHEN blocker IS NULL OR blocker = '' THEN 1 ELSE 0 END, due_date ASC LIMIT 25"))
       .map((item) => ({
         id: item.id,
         title: item.title,
@@ -39,7 +39,7 @@ function collectAiBusinessSnapshot({ rows }, scope = "dashboard") {
         blocker: item.blocker,
         dueDate: item.due_date,
       })),
-    defects: rows("SELECT id, title, severity, status, project_id, requirement_id, assignee FROM defects WHERE status NOT IN ('closed', 'verified', 'rejected') ORDER BY severity DESC, id LIMIT 25")
+    defects: (await rows("SELECT id, title, severity, status, project_id, requirement_id, assignee FROM defects WHERE status NOT IN ('closed', 'verified', 'rejected') ORDER BY severity DESC, id LIMIT 25"))
       .map((item) => ({
         id: item.id,
         title: item.title,
@@ -49,7 +49,7 @@ function collectAiBusinessSnapshot({ rows }, scope = "dashboard") {
         requirementId: item.requirement_id,
         assignee: item.assignee,
       })),
-    workLogs: rows("SELECT author, project, content, blockers, next_plan, created_at FROM work_logs ORDER BY created_at DESC LIMIT 10")
+    workLogs: (await rows("SELECT author, project, content, blockers, next_plan, created_at FROM work_logs ORDER BY created_at DESC LIMIT 10"))
       .map((item) => ({
         author: item.author,
         project: item.project,
@@ -58,7 +58,7 @@ function collectAiBusinessSnapshot({ rows }, scope = "dashboard") {
         nextPlan: compactText(item.next_plan),
         createdAt: item.created_at,
       })),
-    aiJobs: rows("SELECT job_id, scene, status, progress, current_step, error_message, created_at FROM ai_jobs ORDER BY created_at DESC LIMIT 10")
+    aiJobs: (await rows("SELECT job_id, scene, status, progress, current_step, error_message, created_at FROM ai_jobs ORDER BY created_at DESC LIMIT 10"))
       .map((item) => ({
         jobId: item.job_id,
         scene: item.scene,
@@ -68,7 +68,7 @@ function collectAiBusinessSnapshot({ rows }, scope = "dashboard") {
         errorMessage: item.error_message,
         createdAt: item.created_at,
       })),
-    builds: rows("SELECT id, name, version, status, project_id, build_date, notes FROM builds ORDER BY created_at DESC LIMIT 10")
+    builds: (await rows("SELECT id, name, version, status, project_id, build_date, notes FROM builds ORDER BY created_at DESC LIMIT 10"))
       .map((item) => ({
         id: item.id,
         name: item.name,
@@ -78,7 +78,7 @@ function collectAiBusinessSnapshot({ rows }, scope = "dashboard") {
         buildDate: item.build_date,
         notes: compactText(item.notes),
       })),
-    releases: rows("SELECT id, name, version, status, product_id, release_date, release_notes FROM releases ORDER BY created_at DESC LIMIT 10")
+    releases: (await rows("SELECT id, name, version, status, product_id, release_date, release_notes FROM releases ORDER BY created_at DESC LIMIT 10"))
       .map((item) => ({
         id: item.id,
         name: item.name,
@@ -160,13 +160,16 @@ function buildAiSummarySignals(snapshot) {
 
 function createAiSummaryService({ callModel, extractJsonPayload, getModelName, rows, setTimeoutImpl = setTimeout }) {
   const cache = new Map();
-  const modelName = () => (typeof getModelName === "function" ? getModelName() : "local-rule-engine");
+  async function modelName() {
+    if (typeof getModelName !== "function") return "local-rule-engine";
+    return await getModelName() || "local-rule-engine";
+  }
 
   async function createSummary(scope, metrics, options = {}) {
     const cacheKey = `${scope || "dashboard"}:${options.cacheKey || "global"}`;
     const cached = cache.get(cacheKey);
     if (cached && Date.now() - cached.createdAt < 90 * 1000) return cached.value;
-    const snapshot = options.snapshot || collectAiBusinessSnapshot({ rows }, scope);
+    const snapshot = options.snapshot || await collectAiBusinessSnapshot({ rows }, scope);
     const fallback = buildLocalAiSummary(scope, metrics, snapshot);
     const signals = buildAiSummarySignals(snapshot);
     const prompt = [
@@ -184,8 +187,9 @@ function createAiSummaryService({ callModel, extractJsonPayload, getModelName, r
     const resolveValue = async () => {
       const modelText = await callModel(prompt, modelOptions).catch(() => null);
       const parsed = extractJsonPayload(modelText);
+      const usedModel = await modelName();
       return parsed
-        ? normalizeAiSummaryPayload({ ...parsed, modelUsed: modelName() }, fallback, modelName())
+        ? normalizeAiSummaryPayload({ ...parsed, modelUsed: usedModel }, fallback, usedModel)
         : fallback;
     };
     if (options.backgroundRefresh) {

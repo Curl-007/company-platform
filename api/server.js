@@ -220,7 +220,10 @@ const aiProviderStore = createAiProviderStore({
 });
 // Convert legacy plaintext API keys on startup before any configuration write
 // can copy them forward. New writes always use apiKeyEncrypted.
-aiProviderStore.migrateSecrets();
+// Fire-and-forget is intentional for module bootstrap; failures are logged.
+aiProviderStore.migrateSecrets().catch((error) => {
+  console.warn("AI provider secret migration failed:", error.message);
+});
 const projectAccess = createProjectAccess({ row });
 const projectRepository = createProjectsRepository({ insert, row, rows, run });
 const deliveryRepository = createDeliveryRepository({ insert, row, rows, run });
@@ -262,7 +265,7 @@ const aiModelClient = createAiModelClient({
 });
 const documentAnalysisService = createDocumentAnalysisService({
   callModel: callRealModel,
-  getModelName: () => aiProviderStore.resolveConfig().model,
+  getModelName: async () => (await aiProviderStore.resolveConfig()).model,
 });
 const documentAnalysisRunner = createDocumentAnalysisRunner({
   repository: aiJobsRepository,
@@ -296,7 +299,7 @@ const aiProviderAdminService = createAiProviderAdminService({
 const aiSummaryService = createAiSummaryService({
   callModel: callRealModel,
   extractJsonPayload,
-  getModelName: () => aiProviderStore.resolveConfig().model,
+  getModelName: async () => (await aiProviderStore.resolveConfig()).model,
   rows,
 });
 const dashboardService = createDashboardService({
@@ -367,8 +370,8 @@ const aiAdviceService = createAiAdviceService({
   callModel: callRealModel,
   compactText,
   extractJsonPayload,
-  getModelName: () => aiProviderStore.resolveConfig().model,
-  getProviderName: () => aiProviderStore.resolveConfig().provider,
+  getModelName: async () => (await aiProviderStore.resolveConfig()).model,
+  getProviderName: async () => (await aiProviderStore.resolveConfig()).provider,
   mapRequirement,
   row,
   rows,
@@ -379,7 +382,7 @@ const projectFlowService = createProjectFlowService({ row, rows });
 const workLogHelpers = createWorkLogHelpers({ normalizeRole, parse, row, rows });
 const workLogAnalysisService = createWorkLogAnalysisService({
   callModel: callRealModel,
-  getModelName: () => aiProviderStore.resolveConfig().model,
+  getModelName: async () => (await aiProviderStore.resolveConfig()).model,
   row,
   rows,
 });

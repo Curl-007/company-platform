@@ -5,7 +5,7 @@ const {
   isTimedOutAiJob,
 } = require("../src/modules/ai/timeoutMonitor");
 
-test("AI job timeout monitor fails stale running jobs and writes audit evidence", () => {
+test("AI job timeout monitor fails stale running jobs and writes audit evidence", async () => {
   const staleJob = {
     job_id: "JOB-STALE",
     status: "running",
@@ -40,7 +40,7 @@ test("AI job timeout monitor fails stale running jobs and writes audit evidence"
     timeoutMs: 300000,
   }), false);
 
-  const count = failTimedOutAiJobs({
+  const count = await failTimedOutAiJobs({
     repository,
     audit: (...args) => audits.push(args),
     now: () => "2026-07-15T10:05:00.000Z",

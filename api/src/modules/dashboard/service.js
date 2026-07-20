@@ -1,3 +1,4 @@
+const { filterAsync, mapAsync, forEachAsync } = require("../../lib/asyncIter");
 function createDashboardService({
   createAiSummary,
   mapBuild,
@@ -12,24 +13,23 @@ function createDashboardService({
 }) {
   async function build(scope = {}) {
     const { owner, user } = scope;
-    const projects = repository.listProjects()
-      .map(mapProject)
-      .filter((project) => projectAccess.canAccessProject(user, project.id));
+    const allProjects = (await repository.listProjects()).map(mapProject);
+    const projects = await filterAsync(allProjects, async (project) => await projectAccess.canAccessProject(user, project.id));
     const accessibleProjectIds = new Set(projects.map((project) => project.id));
-    const tasks = repository.listTasksByOwner(owner)
+    const tasks = (await repository.listTasksByOwner(owner))
       .map(mapTask)
       .filter((task) => accessibleProjectIds.has(task.projectId));
-    const requirements = repository.listRequirementsByOwner(owner)
+    const requirements = (await repository.listRequirementsByOwner(owner))
       .map(mapRequirement)
       .filter((requirement) => accessibleProjectIds.has(requirement.projectId));
-    const tests = repository.listTestCases().filter((testCase) => accessibleProjectIds.has(testCase.project_id));
-    const documents = visibleDocumentsForUser(user, repository.listDocuments().map(mapDocument))
+    const tests = (await repository.listTestCases()).filter((testCase) => accessibleProjectIds.has(testCase.project_id));
+    const documents = visibleDocumentsForUser(user, (await repository.listDocuments()).map(mapDocument))
       .filter((document) => !document.projectId || accessibleProjectIds.has(document.projectId));
     const myDefects = owner
-      ? repository.listDefectsByAssignee(owner).map(mapDefect).filter((defect) => accessibleProjectIds.has(defect.projectId))
+      ? (await repository.listDefectsByAssignee(owner)).map(mapDefect).filter((defect) => accessibleProjectIds.has(defect.projectId))
       : [];
     const myBuilds = owner
-      ? repository.listBuildsByCreator(owner).map(mapBuild).filter((build) => accessibleProjectIds.has(build.projectId))
+      ? (await repository.listBuildsByCreator(owner)).map(mapBuild).filter((build) => accessibleProjectIds.has(build.projectId))
       : [];
 
     const taskCounts = tasks.reduce((counts, task) => {
@@ -61,17 +61,17 @@ function createDashboardService({
       metrics,
       focusTasks: tasks,
       riskyProjects,
-      requirementProgress: requirements.map((requirement) => ({
+      requirementProgress: await mapAsync(requirements, async (requirement) => ({
         id: requirement.id,
         title: requirement.title,
         completion: requirement.completion,
         projectId: requirement.projectId,
-        projectName: repository.findProjectName(requirement.projectId),
+        projectName: await repository.findProjectName(requirement.projectId),
       })),
       ai: await createAiSummary("dashboard", {
         ...metrics,
-        totalJobs: repository.countAiJobs(),
-        logAnalysis: repository.countWorkLogs(),
+        totalJobs: await repository.countAiJobs(),
+        logAnalysis: await repository.countWorkLogs(),
       }, { cacheKey: owner || user?.role || "dashboard", backgroundRefresh: true, timeoutMs: 14000 }),
     };
     if (owner) {

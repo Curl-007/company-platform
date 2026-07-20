@@ -3,13 +3,13 @@ function createTimeEntriesRepository({ insert, row, rows, run }) {
     findProject: (id) => row("SELECT id, name FROM projects WHERE id = @id AND deleted_at IS NULL", { id }),
     findTask: (id) => row("SELECT id, project_id FROM tasks WHERE id = @id", { id }),
     listProjects: () => rows("SELECT id, name FROM projects WHERE deleted_at IS NULL"),
-    listForUser: ({ userId, periodStart, periodEnd, projectId }) => {
+    listForUser: async ({ userId, periodStart, periodEnd, projectId }) => {
       let sql = "SELECT * FROM time_entries WHERE user_id = @userId";
       const params = { userId };
       if (periodStart) { sql += " AND work_date >= @periodStart"; params.periodStart = periodStart; }
       if (periodEnd) { sql += " AND work_date <= @periodEnd"; params.periodEnd = periodEnd; }
       if (projectId) { sql += " AND project_id = @projectId"; params.projectId = projectId; }
-      return rows(`${sql} ORDER BY work_date DESC, created_at DESC`, params);
+      return await rows(`${sql} ORDER BY work_date DESC, created_at DESC`, params);
     },
     findOwned: ({ id, userId }) => row(
       "SELECT * FROM time_entries WHERE id = @id AND user_id = @userId",

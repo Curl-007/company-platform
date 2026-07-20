@@ -26,7 +26,7 @@ test("project service builds creation defaults and preserves absent update field
   assert.deepEqual(JSON.parse(updated.milestones), [{ name: "上线", status: "planned", date: "2026-08-01" }]);
 });
 
-test("project activation readiness requires allocated, approved, capacity-backed staffing", () => {
+test("project activation readiness requires allocated, approved, capacity-backed staffing", async () => {
   const project = {
     id: "PRJ-001",
     objective: "Deliver the approved scope",
@@ -47,10 +47,10 @@ test("project activation readiness requires allocated, approved, capacity-backed
     unownedHighRiskCount: 0,
     allocations,
   });
-  const readiness = (allocations) => projectActivationReadiness(project, { activationEvidence: () => evidence(allocations) }, parse);
+  const readiness = async (allocations) => projectActivationReadiness(project, { activationEvidence: async () => evidence(allocations) }, parse);
 
-  assert.equal(readiness([{ approval_status: "approved", capacity_plan_id: "CAP-001" }]).ok, true);
-  assert.deepEqual(readiness([]).missing, ["capacityAllocations"]);
-  assert.ok(readiness([{ approval_status: "pending", capacity_plan_id: "CAP-001" }]).missing.includes("capacityApprovals"));
-  assert.ok(readiness([{ approval_status: "approved", capacity_plan_id: null }]).missing.includes("capacityPlans"));
+  assert.equal((await readiness([{ approval_status: "approved", capacity_plan_id: "CAP-001" }])).ok, true);
+  assert.deepEqual((await readiness([])).missing, ["capacityAllocations"]);
+  assert.ok((await readiness([{ approval_status: "pending", capacity_plan_id: "CAP-001" }])).missing.includes("capacityApprovals"));
+  assert.ok((await readiness([{ approval_status: "approved", capacity_plan_id: null }])).missing.includes("capacityPlans"));
 });

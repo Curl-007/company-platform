@@ -1,5 +1,5 @@
 function createProjectsRepository({ insert, row, rows, run }) {
-  function listProjects({ keyword, status } = {}) {
+  async function listProjects({ keyword, status } = {}) {
     let sql = "SELECT * FROM projects WHERE deleted_at IS NULL";
     const params = {};
     if (keyword) {
@@ -13,7 +13,7 @@ function createProjectsRepository({ insert, row, rows, run }) {
     return rows(`${sql} ORDER BY updated_at DESC`, params);
   }
 
-  function projectDependencies(projectId) {
+  async function projectDependencies(projectId) {
     const dependencies = [
       ["members", "SELECT COUNT(*) AS count FROM project_members WHERE project_id = @projectId"],
       ["requirements", "SELECT COUNT(*) AS count FROM requirements WHERE project_id = @projectId AND deleted_at IS NULL"],
@@ -28,11 +28,36 @@ function createProjectsRepository({ insert, row, rows, run }) {
       ["decisions", "SELECT COUNT(*) AS count FROM project_decisions WHERE project_id = @projectId"],
       ["workLogs", "SELECT COUNT(*) AS count FROM work_logs WHERE project_id = @projectId"],
     ];
-    return Object.fromEntries(
-      dependencies
-        .map(([resource, sql]) => [resource, Number(row(sql, { projectId })?.count || 0)])
-        .filter(([, count]) => count > 0),
+    const entries = [];
+    for (const [resource, sql] of dependencies) {
+      const count = Number((await row(sql, { projectId }))?.count || 0);
+      if (count > 0) entries.push([resource, count]);
+    }
+    return Object.fromEntries(entries);
+  }
+
+  async function activationEvidence({ projectId, projectStart, projectEnd }) {
+    const memberCount = Number((await row("SELECT COUNT(*) AS count FROM project_members WHERE project_id = @projectId", { projectId }))?.count || 0);
+    const sprintCount = Number((await row("SELECT COUNT(*) AS count FROM sprints WHERE project_id = @projectId", { projectId }))?.count || 0);
+    const unownedHighRiskCount = Number((await row(
+      `SELECT COUNT(*) AS count FROM project_risks
+         WHERE project_id = @projectId AND severity IN ('high', 'critical') AND status != 'closed'
+           AND (owner_id IS NULL OR owner_id = '')`,
+      { projectId },
+    ))?.count || 0);
+    const allocations = await rows(
+      `SELECT allocation.id, allocation.approval_status, plan.id AS capacity_plan_id
+         FROM project_allocations AS allocation
+         LEFT JOIN capacity_plans AS plan
+           ON plan.user_id = allocation.user_id
+          AND plan.period_start = allocation.period_start
+          AND plan.period_end = allocation.period_end
+         WHERE allocation.project_id = @projectId
+           AND allocation.period_start <= @projectEnd
+           AND allocation.period_end >= @projectStart`,
+      { projectId, projectStart, projectEnd },
     );
+    return { memberCount, sprintCount, unownedHighRiskCount, allocations };
   }
 
   return {
@@ -54,29 +79,7 @@ function createProjectsRepository({ insert, row, rows, run }) {
     listProjectMembers: (projectId) => rows("SELECT * FROM project_members WHERE project_id = @projectId ORDER BY created_at DESC", { projectId }),
     listProjectSprints: (projectId) => rows("SELECT * FROM sprints WHERE project_id = @projectId", { projectId }),
     listProjectTasks: (projectId) => rows("SELECT * FROM tasks WHERE project_id = @id ORDER BY sort_order", { id: projectId }),
-    activationEvidence: ({ projectId, projectStart, projectEnd }) => {
-      const memberCount = Number(row("SELECT COUNT(*) AS count FROM project_members WHERE project_id = @projectId", { projectId })?.count || 0);
-      const sprintCount = Number(row("SELECT COUNT(*) AS count FROM sprints WHERE project_id = @projectId", { projectId })?.count || 0);
-      const unownedHighRiskCount = Number(row(
-        `SELECT COUNT(*) AS count FROM project_risks
-         WHERE project_id = @projectId AND severity IN ('high', 'critical') AND status != 'closed'
-           AND (owner_id IS NULL OR owner_id = '')`,
-        { projectId },
-      )?.count || 0);
-      const allocations = rows(
-        `SELECT allocation.id, allocation.approval_status, plan.id AS capacity_plan_id
-         FROM project_allocations AS allocation
-         LEFT JOIN capacity_plans AS plan
-           ON plan.user_id = allocation.user_id
-          AND plan.period_start = allocation.period_start
-          AND plan.period_end = allocation.period_end
-         WHERE allocation.project_id = @projectId
-           AND allocation.period_start <= @projectEnd
-           AND allocation.period_end >= @projectStart`,
-        { projectId, projectStart, projectEnd },
-      );
-      return { memberCount, sprintCount, unownedHighRiskCount, allocations };
-    },
+    activationEvidence,
     listProjectFlowSummaries: () => rows("SELECT id, name, status, health_score FROM projects WHERE deleted_at IS NULL ORDER BY name"),
     listProjects,
     projectDependencies,

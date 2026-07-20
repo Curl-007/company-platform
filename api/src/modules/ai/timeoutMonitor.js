@@ -27,7 +27,7 @@ function buildTimedOutAiJobPatch({ now }) {
   };
 }
 
-function failTimedOutAiJobs({
+async function failTimedOutAiJobs({
   repository,
   audit,
   now,
@@ -41,13 +41,13 @@ function failTimedOutAiJobs({
   if (!timeout || !repository?.listTimedOutRunningJobs || !repository?.transition) return 0;
   const reference = toDate(referenceNow) || new Date();
   const cutoffIso = new Date(reference.getTime() - timeout).toISOString();
-  const jobs = repository.listTimedOutRunningJobs(cutoffIso);
+  const jobs = await repository.listTimedOutRunningJobs(cutoffIso);
   let failed = 0;
   for (const job of jobs) {
     if (!isTimedOutAiJob(job, { referenceNow: reference, timeoutMs: timeout })) continue;
     try {
       const patch = buildTimedOutAiJobPatch({ now });
-      const after = repository.transition(job, "failed", patch);
+      const after = await repository.transition(job, "failed", patch);
       audit?.(actor, "ai.job_timeout", "ai_job", job.job_id, job, {
         status: after.status,
         timeoutMs: timeout,

@@ -37,15 +37,15 @@ function createWorkLogHelpers({ normalizeRole, parse, row, rows }) {
     return role === "admin" || role === "pm";
   }
 
-  function resolveWorkLogProjectFilter(query) {
+  async function resolveWorkLogProjectFilter(query) {
     const projectId = String(query.projectId || "").trim();
     const projectName = String(query.project || "").trim();
     if (projectId) {
-      const project = row("SELECT id, name FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectId });
+      const project = await row("SELECT id, name FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectId });
       return { id: projectId, name: project?.name || projectName };
     }
     if (projectName) {
-      const project = row("SELECT id, name FROM projects WHERE name = @name AND deleted_at IS NULL", { name: projectName });
+      const project = await row("SELECT id, name FROM projects WHERE name = @name AND deleted_at IS NULL", { name: projectName });
       return { id: project?.id || "", name: projectName };
     }
     return { id: "", name: "" };
@@ -92,40 +92,40 @@ function createWorkLogHelpers({ normalizeRole, parse, row, rows }) {
     };
   }
 
-  function collectProjectMembers(projectFilter) {
+  async function collectProjectMembers(projectFilter) {
     const members = new Map();
     if (!projectFilter?.id && !projectFilter?.name) return [];
     const project = projectFilter.id
-      ? row("SELECT * FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectFilter.id })
-      : row("SELECT * FROM projects WHERE name = @name AND deleted_at IS NULL", { name: projectFilter.name });
+      ? await row("SELECT * FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectFilter.id })
+      : await row("SELECT * FROM projects WHERE name = @name AND deleted_at IS NULL", { name: projectFilter.name });
     if (!project) return [];
 
-    rows("SELECT * FROM project_members WHERE project_id = @projectId", { projectId: project.id }).forEach((item) => {
+    (await rows("SELECT * FROM project_members WHERE project_id = @projectId", { projectId: project.id })).forEach((item) => {
       members.set(`${item.user_name}::${normalizeRole(item.role)}`, { name: item.user_name, role: normalizeRole(item.role) });
     });
 
     if (project.owner) {
-      const pmUser = row("SELECT * FROM users WHERE name = @name AND status = 'active'", { name: project.owner });
+      const pmUser = await row("SELECT * FROM users WHERE name = @name AND status = 'active'", { name: project.owner });
       if (pmUser) members.set(`${pmUser.name}::${normalizeRole(pmUser.role)}`, { name: pmUser.name, role: normalizeRole(pmUser.role) });
     }
 
-    rows("SELECT * FROM requirements WHERE project_id = @projectId AND deleted_at IS NULL", { projectId: project.id }).forEach((item) => {
+    (await rows("SELECT * FROM requirements WHERE project_id = @projectId AND deleted_at IS NULL", { projectId: project.id })).forEach((item) => {
       if (item.assignee && item.assignee_role) {
         members.set(`${item.assignee}::${normalizeRole(item.assignee_role)}`, { name: item.assignee, role: normalizeRole(item.assignee_role) });
       }
     });
 
-    rows("SELECT * FROM tasks WHERE project_id = @projectId", { projectId: project.id }).forEach((item) => {
+    (await rows("SELECT * FROM tasks WHERE project_id = @projectId", { projectId: project.id })).forEach((item) => {
       if (item.owner && item.assignee_role) {
         members.set(`${item.owner}::${normalizeRole(item.assignee_role)}`, { name: item.owner, role: normalizeRole(item.assignee_role) });
       }
     });
 
-    rows("SELECT * FROM test_cases WHERE project_id = @projectId", { projectId: project.id }).forEach((item) => {
+    (await rows("SELECT * FROM test_cases WHERE project_id = @projectId", { projectId: project.id })).forEach((item) => {
       if (item.owner) members.set(`${item.owner}::qa`, { name: item.owner, role: "qa" });
     });
 
-    rows("SELECT * FROM defects WHERE project_id = @projectId", { projectId: project.id }).forEach((item) => {
+    (await rows("SELECT * FROM defects WHERE project_id = @projectId", { projectId: project.id })).forEach((item) => {
       if (item.assignee && item.assignee_role) {
         members.set(`${item.assignee}::${normalizeRole(item.assignee_role)}`, { name: item.assignee, role: normalizeRole(item.assignee_role) });
       }

@@ -80,7 +80,7 @@ function createDocumentAnalysisService({ callModel, getModelName = () => null } 
     if (modelText) {
       const parsed = extractDocumentAnalysisJson(modelText);
       if (parsed?.summary || parsed?.requirements) {
-        return { ...parsed, modelUsed: getModelName() || "configured-model" };
+        return { ...parsed, modelUsed: (await getModelName()) || "configured-model" };
       }
     }
     return buildRuleBasedDocumentAnalysis(document);

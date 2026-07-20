@@ -1,4 +1,5 @@
 const express = require("express");
+const { filterAsync, mapAsync, forEachAsync } = require("../../lib/asyncIter");
 const { canTransition } = require("../../workflow/stateMachine");
 const { buildSprintCreate, buildTaskCreate, buildTaskUpdate, dependencyIdsFor, normalizeDependencyIds } = require("./service");
 
@@ -13,8 +14,8 @@ function expectedTaskVersion(req, res, task, fail) {
   return version;
 }
 
-function taskVersionConflict(res, task, expectedVersion, repository, fail) {
-  const current = repository.findTaskVersion(task.id);
+async function taskVersionConflict(res, task, expectedVersion, repository, fail) {
+  const current = await repository.findTaskVersion(task.id);
   return fail(res, 409, "VERSION_CONFLICT", "Task was changed by another user. Refresh and retry your update.", {
     expectedVersion,
     currentVersion: Number(current?.version) || null,
@@ -92,45 +93,47 @@ function createTasksRouter({
     return reason;
   }
 
-  function sprintActivationReadiness(sprint, candidate = {}) {
+  async function sprintActivationReadiness(sprint, candidate = {}) {
     const missing = [];
     const startDate = candidate.startDate !== undefined ? candidate.startDate : sprint.start_date;
     const endDate = candidate.endDate !== undefined ? candidate.endDate : sprint.end_date;
     if (!startDate || !endDate) missing.push("sprintDates");
     if (startDate && endDate && String(endDate) < String(startDate)) missing.push("validDateRange");
-    const taskCount = repository.taskCountForSprint(sprint.id);
+    const taskCount = await repository.taskCountForSprint(sprint.id);
     if (taskCount === 0) missing.push("committedTasks");
     return { ok: missing.length === 0, missing, taskCount };
   }
 
-  function dependencyPathExists(taskId, targetId, visited = new Set()) {
+  async function dependencyPathExists(taskId, targetId, visited = new Set()) {
     if (taskId === targetId) return true;
     if (visited.has(taskId)) return false;
     visited.add(taskId);
-    const task = repository.findTaskDependencyIds(taskId);
-    return dependencyIdsFor(task).some((dependencyId) => dependencyPathExists(dependencyId, targetId, visited));
+    const task = await repository.findTaskDependencyIds(taskId);
+    for (const dependencyId of dependencyIdsFor(task)) {
+      if (await dependencyPathExists(dependencyId, targetId, visited)) return true;
+    }
+    return false;
   }
 
-  function validateTaskDependencies({ taskId, projectId, dependencyIds }) {
+  async function validateTaskDependencies({ taskId, projectId, dependencyIds }) {
     const normalized = normalizeDependencyIds(dependencyIds);
     for (const dependencyId of normalized) {
       if (dependencyId === taskId) return { ok: false, message: "A task cannot depend on itself." };
-      const dependency = repository.findTaskDependency(dependencyId);
+      const dependency = await repository.findTaskDependency(dependencyId);
       if (!dependency) return { ok: false, message: `Dependency task ${dependencyId} was not found.` };
       if (dependency.project_id !== projectId) return { ok: false, message: "Dependencies must belong to the same project." };
-      if (dependencyPathExists(dependencyId, taskId)) return { ok: false, message: "Task dependency would create a cycle." };
+      if (await dependencyPathExists(dependencyId, taskId)) return { ok: false, message: "Task dependency would create a cycle." };
     }
     return { ok: true, dependencyIds: normalized };
   }
 
-  function unresolvedDependencies(task) {
-    return dependencyIdsFor(task)
-      .map((id) => repository.findTaskStatus(id))
-      .filter((dependency) => !dependency || !closedTaskStatuses.has(dependency.status));
+  async function unresolvedDependencies(task) {
+    const deps = await mapAsync(dependencyIdsFor(task), async (id) => await repository.findTaskStatus(id));
+    return deps.filter((dependency) => !dependency || !closedTaskStatuses.has(dependency.status));
   }
 
-  function ensureTaskCanComplete(res, task) {
-    const unresolved = unresolvedDependencies(task);
+  async function ensureTaskCanComplete(res, task) {
+    const unresolved = await unresolvedDependencies(task);
     if (!unresolved.length) return true;
     fail(res, 409, "TASK_DEPENDENCIES_UNRESOLVED", "Task dependencies must be completed or cancelled before completion.", {
       dependencyIds: unresolved.map((dependency) => dependency?.id).filter(Boolean),
@@ -138,14 +141,14 @@ function createTasksRouter({
     return false;
   }
 
-  router.get("/projects/:projectId/sprints", (req, res) => {
-    if (!canAccessProject(req.user, req.params.projectId)) return fail(res, 403, "PERMISSION_DENIED", "无权访问该项目迭代。");
-    const allItems = repository.listSprints(req.params.projectId).map(mapSprint);
+  router.get("/projects/:projectId/sprints", async (req, res) => {
+    if (!(await canAccessProject(req.user, req.params.projectId))) return fail(res, 403, "PERMISSION_DENIED", "无权访问该项目迭代。");
+    const allItems = (await repository.listSprints(req.params.projectId)).map(mapSprint);
     const data = paginatedResponse(allItems, req.query);
     res.json(ok(data));
   });
 
-  router.post("/projects/:projectId/sprints", requirePermission("project:*"), (req, res) => {
+  router.post("/projects/:projectId/sprints", requirePermission("project:*"), async (req, res) => {
     const { name, goal, status, startDate, endDate } = req.body || {};
     if (!name || !String(name).trim()) {
       return fail(res, 400, "VALIDATION_FAILED", "Sprint name is required and cannot be empty.");
@@ -153,25 +156,25 @@ function createTasksRouter({
     if (status !== undefined && status !== "planned") {
       return fail(res, 400, "VALIDATION_FAILED", "New sprints must start in planned status.");
     }
-    const idempotency = beginIdempotentRequest(req, res, "sprint.create");
+    const idempotency = await beginIdempotentRequest(req, res, "sprint.create");
     if (!idempotency) return;
     try {
-      const project = repository.findProject(req.params.projectId);
+      const project = await repository.findProject(req.params.projectId);
       if (!project) {
-        idempotency.abort();
+        await idempotency.abort();
         return fail(res, 404, "RESOURCE_NOT_FOUND", "Project not found.");
       }
-      if (!canManageProject(req.user, project.id)) {
-        idempotency.abort();
+      if (!(await canManageProject(req.user, project.id))) {
+        await idempotency.abort();
         return fail(res, 403, "PERMISSION_DENIED", "无权创建该项目迭代。");
       }
-      const response = transaction(() => {
+      const response = await transaction(async () => {
         const sprint = buildSprintCreate(
           { name, goal, status, startDate, endDate },
-          { id: nextId("SPR", "sprints"), projectId: req.params.projectId },
+          { id: await nextId("SPR", "sprints"), projectId: req.params.projectId },
         );
-        repository.createSprint(sprint);
-        statusHistory.record({
+        await repository.createSprint(sprint);
+        await statusHistory.record({
           resourceType: "sprint",
           resourceId: sprint.id,
           projectId: sprint.project_id,
@@ -179,118 +182,118 @@ function createTasksRouter({
           reason: "迭代创建",
           actor: req.user,
         });
-        const created = ok(mapSprint(repository.findSprint(sprint.id)));
-        audit(req.user, "sprint.create", "sprint", sprint.id, null, created.data, req.ip);
-        idempotency.commit(201, created);
+        const created = ok(mapSprint(await repository.findSprint(sprint.id)));
+        await audit(req.user, "sprint.create", "sprint", sprint.id, null, created.data, req.ip);
+        await idempotency.commit(201, created);
         return created;
       });
       res.status(201).json(response);
     } catch (error) {
-      idempotency.abort();
+      await idempotency.abort();
       throw error;
     }
   });
 
-  router.get("/tasks", (req, res) => {
-    const allItems = repository.listTasks(req.query)
-      .filter((task) => canAccessProject(req.user, task.project_id))
-      .map(mapTask);
+  router.get("/tasks", async (req, res) => {
+    const __src_tasks = await repository.listTasks(req.query);
+    const __mid_tasks = await filterAsync(__src_tasks, async (task) => await canAccessProject(req.user, task.project_id));
+    const allItems = __mid_tasks.map(mapTask);
     const data = paginatedResponse(allItems, req.query);
     res.json(ok(data));
   });
 
-  router.get("/projects/:projectId/tasks", (req, res) => {
-    const project = repository.findProjectId(req.params.projectId);
+  router.get("/projects/:projectId/tasks", async (req, res) => {
+    const project = await repository.findProjectId(req.params.projectId);
     if (!project) return fail(res, 404, "RESOURCE_NOT_FOUND", "Project not found.");
-    if (!canAccessProject(req.user, project.id)) return fail(res, 403, "PERMISSION_DENIED", "无权访问该项目任务。");
-    const allItems = repository.listTasks({ ...req.query, projectId: project.id }).map(mapTask);
+    if (!(await canAccessProject(req.user, project.id))) return fail(res, 403, "PERMISSION_DENIED", "无权访问该项目任务。");
+    const allItems = (await repository.listTasks({ ...req.query, projectId: project.id })).map(mapTask);
     const data = paginatedResponse(allItems, req.query);
     res.json(ok(data));
   });
 
-  router.get("/projects/:id/wbs", (req, res) => {
-    if (!canAccessProject(req.user, req.params.id)) return fail(res, 403, "PERMISSION_DENIED", "无权访问该项目 WBS。");
-    res.json(ok(repository.listProjectTasksByWbs(req.params.id).map(mapTask)));
+  router.get("/projects/:id/wbs", async (req, res) => {
+    if (!(await canAccessProject(req.user, req.params.id))) return fail(res, 403, "PERMISSION_DENIED", "无权访问该项目 WBS。");
+    res.json(ok((await repository.listProjectTasksByWbs(req.params.id)).map(mapTask)));
   });
 
-  router.get("/projects/:id/kanban", (req, res) => {
-    if (!canAccessProject(req.user, req.params.id)) return fail(res, 403, "PERMISSION_DENIED", "无权访问该项目看板。");
-    const tasks = repository.listProjectTasks(req.params.id).map(mapTask);
+  router.get("/projects/:id/kanban", async (req, res) => {
+    if (!(await canAccessProject(req.user, req.params.id))) return fail(res, 403, "PERMISSION_DENIED", "无权访问该项目看板。");
+    const tasks = (await repository.listProjectTasks(req.params.id)).map(mapTask);
     res.json(ok(KANBAN_COLUMNS.map((id) => ({ id, title: id.replace("_", " "), tasks: tasks.filter((task) => task.kanbanColumn === id) }))));
   });
 
-  router.post("/projects/:id/wbs/tasks", requirePermission("project:*"), (req, res) => {
+  router.post("/projects/:id/wbs/tasks", requirePermission("project:*"), async (req, res) => {
     if (!req.body.title || !String(req.body.title).trim()) {
       return fail(res, 400, "VALIDATION_FAILED", "Task title is required and cannot be empty.");
     }
     if (req.body.type !== undefined && req.body.type !== null && req.body.type !== "" && !taskTypes.includes(req.body.type)) {
       return fail(res, 400, "VALIDATION_FAILED", `Task type must be one of: ${taskTypes.join(", ")}`);
     }
-    const idempotency = beginIdempotentRequest(req, res, "task.create");
+    const idempotency = await beginIdempotentRequest(req, res, "task.create");
     if (!idempotency) return;
     try {
-      const project = repository.findProjectId(req.params.id);
+      const project = await repository.findProjectId(req.params.id);
       if (!project) {
-        idempotency.abort();
+        await idempotency.abort();
         return fail(res, 404, "RESOURCE_NOT_FOUND", "Project not found.");
       }
       if (req.body.requirementId) {
-        const requirement = repository.findRequirementProject(req.body.requirementId);
+        const requirement = await repository.findRequirementProject(req.body.requirementId);
         if (!requirement) {
-          idempotency.abort();
+          await idempotency.abort();
           return fail(res, 404, "RESOURCE_NOT_FOUND", "Requirement not found.");
         }
         if (requirement.project_id !== project.id) {
-          idempotency.abort();
+          await idempotency.abort();
           return fail(res, 400, "VALIDATION_FAILED", "Requirement must belong to the same project as the task.");
         }
       }
       if (req.body.parentId) {
-        const parentTask = repository.findTaskProject(req.body.parentId);
+        const parentTask = await repository.findTaskProject(req.body.parentId);
         if (!parentTask) {
-          idempotency.abort();
+          await idempotency.abort();
           return fail(res, 404, "RESOURCE_NOT_FOUND", "Parent task not found.");
         }
         if (parentTask.project_id !== project.id) {
-          idempotency.abort();
+          await idempotency.abort();
           return fail(res, 400, "VALIDATION_FAILED", "Parent task must belong to the same project as the task.");
         }
       }
-      const targetSprint = req.body.sprintId ? repository.findSprint(req.body.sprintId) : null;
+      const targetSprint = req.body.sprintId ? await repository.findSprint(req.body.sprintId) : null;
       if (req.body.sprintId && !targetSprint) {
-        idempotency.abort();
+        await idempotency.abort();
         return fail(res, 404, "RESOURCE_NOT_FOUND", "Sprint not found.");
       }
       if (targetSprint && targetSprint.project_id !== project.id) {
-        idempotency.abort();
+        await idempotency.abort();
         return fail(res, 400, "VALIDATION_FAILED", "Sprint must belong to the same project as the task.");
       }
       const createScopeReason = targetSprint ? requireScopeChangeReason(res, targetSprint, req.body) : "";
       if (targetSprint?.status === "active" && !createScopeReason) {
-        idempotency.abort();
+        await idempotency.abort();
         return;
       }
-      const taskId = nextId("TASK", "tasks");
-      const dependencyValidation = validateTaskDependencies({
+      const taskId = await nextId("TASK", "tasks");
+      const dependencyValidation = await validateTaskDependencies({
         taskId,
         projectId: project.id,
         dependencyIds: req.body.dependencyIds,
       });
       if (!dependencyValidation.ok) {
-        idempotency.abort();
+        await idempotency.abort();
         return fail(res, 400, "TASK_DEPENDENCY_INVALID", dependencyValidation.message);
       }
-      if (!canManageProject(req.user, project.id)) {
-        idempotency.abort();
+      if (!(await canManageProject(req.user, project.id))) {
+        await idempotency.abort();
         return fail(res, 403, "PERMISSION_DENIED", "无权在该项目中创建任务。");
       }
-      const response = transaction(() => {
+      const response = await transaction(async () => {
         const task = buildTaskCreate(
           { ...req.body, dependencyIds: dependencyValidation.dependencyIds },
           { id: taskId, projectId: req.params.id, dueDate: now().slice(0, 10), sortOrder: Date.now(), json },
         );
-        repository.createTask(task);
-        statusHistory.record({
+        await repository.createTask(task);
+        await statusHistory.record({
           resourceType: "task",
           resourceId: task.id,
           projectId: task.project_id,
@@ -298,36 +301,36 @@ function createTasksRouter({
           reason: "任务创建",
           actor: req.user,
         });
-        if (task.sprint_id) recordBurndownSnapshot(task.sprint_id);
+        if (task.sprint_id) await recordBurndownSnapshot(task.sprint_id);
         if (targetSprint?.status === "active") {
-          sprintCommitment.recordScopeChange({ sprint: targetSprint, task, changeType: "add", impactHours: task.estimated_hours, reason: createScopeReason, actor: req.user });
+          await sprintCommitment.recordScopeChange({ sprint: targetSprint, task, changeType: "add", impactHours: task.estimated_hours, reason: createScopeReason, actor: req.user });
         }
-        const created = ok(mapTask(repository.findTask(task.id)));
-        audit(req.user, "task.create", "task", task.id, null, created.data, req.ip);
-        idempotency.commit(201, created);
+        const created = ok(mapTask(await repository.findTask(task.id)));
+        await audit(req.user, "task.create", "task", task.id, null, created.data, req.ip);
+        await idempotency.commit(201, created);
         return created;
       });
       res.status(201).json(response);
     } catch (error) {
-      idempotency.abort();
+      await idempotency.abort();
       throw error;
     }
   });
 
-  router.patch("/tasks/:id/kanban-position", requirePermission("project:*"), (req, res) => {
+  router.patch("/tasks/:id/kanban-position", requirePermission("project:*"), async (req, res) => {
     if (!req.body.kanbanColumn || !taskStatuses.includes(req.body.kanbanColumn)) {
       return fail(res, 400, "VALIDATION_FAILED", `kanbanColumn must be one of: ${taskStatuses.join(", ")}`);
     }
-    const before = repository.findTask(req.params.id);
+    const before = await repository.findTask(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Task not found.");
-    if (!canManageProject(req.user, before.project_id)) return fail(res, 403, "PERMISSION_DENIED", "无权移动该任务。");
+    if (!(await canManageProject(req.user, before.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权移动该任务。");
     const expectedVersion = expectedTaskVersion(req, res, before, fail);
     if (expectedVersion === null) return;
     if (!canTransition("task", before.status, req.body.kanbanColumn)) {
       return fail(res, 409, "STATE_TRANSITION_NOT_ALLOWED", `Task cannot transition from ${before.status} to ${req.body.kanbanColumn}.`);
     }
-    if (req.body.kanbanColumn === "done" && !ensureTaskCanComplete(res, before)) return;
-    const updateResult = repository.updateTaskKanban({
+    if (req.body.kanbanColumn === "done" && !await ensureTaskCanComplete(res, before)) return;
+    const updateResult = await repository.updateTaskKanban({
       id: req.params.id,
       expectedVersion,
       column: req.body.kanbanColumn,
@@ -336,9 +339,9 @@ function createTasksRouter({
       remainingHours: closedTaskStatuses.has(req.body.kanbanColumn) ? 0 : before.remaining_hours,
       progress: req.body.kanbanColumn === "done" ? 100 : before.progress,
     });
-    if (updateResult.changes === 0) return taskVersionConflict(res, before, expectedVersion, repository, fail);
-    const after = repository.findTask(req.params.id);
-    statusHistory.record({
+    if (updateResult.changes === 0) return await taskVersionConflict(res, before, expectedVersion, repository, fail);
+    const after = await repository.findTask(req.params.id);
+    await statusHistory.record({
       resourceType: "task",
       resourceId: after.id,
       projectId: after.project_id,
@@ -347,23 +350,23 @@ function createTasksRouter({
       reason: req.body?.statusReason,
       actor: req.user,
     });
-    audit(req.user, "task.kanban_move", "task", req.params.id, before, after, req.ip);
+    await audit(req.user, "task.kanban_move", "task", req.params.id, before, after, req.ip);
     res.json(ok(mapTask(after)));
   });
 
-  router.get("/tasks/:id", (req, res) => {
-    const task = repository.findTask(req.params.id);
+  router.get("/tasks/:id", async (req, res) => {
+    const task = await repository.findTask(req.params.id);
     if (!task) return fail(res, 404, "RESOURCE_NOT_FOUND", "Task not found.");
-    if (!canAccessProject(req.user, task.project_id)) return fail(res, 403, "PERMISSION_DENIED", "无权访问该任务。");
+    if (!(await canAccessProject(req.user, task.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权访问该任务。");
     res.json(ok(mapTask(task)));
   });
 
-  router.get("/tasks/:id/work-logs", (req, res) => {
-    const task = repository.findTask(req.params.id);
+  router.get("/tasks/:id/work-logs", async (req, res) => {
+    const task = await repository.findTask(req.params.id);
     if (!task) return fail(res, 404, "RESOURCE_NOT_FOUND", "Task not found.");
-    if (!canAccessProject(req.user, task.project_id)) return fail(res, 403, "PERMISSION_DENIED", "无权访问该任务工作日志。");
-    const project = repository.findProject(task.project_id);
-    const logs = repository.listWorkLogsForProjectEvidence({ projectId: task.project_id, projectName: project?.name });
+    if (!(await canAccessProject(req.user, task.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权访问该任务工作日志。");
+    const project = await repository.findProject(task.project_id);
+    const logs = await repository.listWorkLogsForProjectEvidence({ projectId: task.project_id, projectName: project?.name });
     const title = String(task.title || "").trim();
     const titleIsSpecific = title.length >= 4;
     const matched = logs.map((item) => {
@@ -387,22 +390,22 @@ function createTasksRouter({
     res.json(ok(paginatedResponse(matched, req.query)));
   });
 
-  router.get("/tasks/:id/status-history", (req, res) => {
-    const task = repository.findTaskId(req.params.id);
+  router.get("/tasks/:id/status-history", async (req, res) => {
+    const task = await repository.findTaskId(req.params.id);
     if (!task) return fail(res, 404, "RESOURCE_NOT_FOUND", "Task not found.");
-    if (!canAccessProject(req.user, task.project_id)) return fail(res, 403, "PERMISSION_DENIED", "无权访问该任务状态历史。");
-    res.json(ok(statusHistory.list("task", task.id)));
+    if (!(await canAccessProject(req.user, task.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权访问该任务状态历史。");
+    res.json(ok(await statusHistory.list("task", task.id)));
   });
 
-  router.patch("/tasks/:id", requirePermission("project:*"), (req, res) => {
-    const before = repository.findTask(req.params.id);
+  router.patch("/tasks/:id", requirePermission("project:*"), async (req, res) => {
+    const before = await repository.findTask(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Task not found.");
-    if (!canManageProject(req.user, before.project_id)) return fail(res, 403, "PERMISSION_DENIED", "无权编辑该任务。");
+    if (!(await canManageProject(req.user, before.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权编辑该任务。");
     const expectedVersion = expectedTaskVersion(req, res, before, fail);
     if (expectedVersion === null) return;
     const { title, owner, progress, status, type, estimatedHours, actualHours, remainingHours, dueDate, sprintId, assigneeId, dependencyIds } = req.body || {};
-    const oldSprint = before.sprint_id ? repository.findSprint(before.sprint_id) : null;
-    const targetSprint = sprintId !== undefined && sprintId ? repository.findSprint(sprintId) : null;
+    const oldSprint = before.sprint_id ? await repository.findSprint(before.sprint_id) : null;
+    const targetSprint = sprintId !== undefined && sprintId ? await repository.findSprint(sprintId) : null;
     if (sprintId !== undefined && sprintId && !targetSprint) return fail(res, 404, "RESOURCE_NOT_FOUND", "Sprint not found.");
     if (targetSprint && targetSprint.project_id !== before.project_id) return fail(res, 400, "VALIDATION_FAILED", "Sprint must belong to the same project as the task.");
     const membershipChanged = sprintId !== undefined && sprintId !== before.sprint_id;
@@ -411,7 +414,7 @@ function createTasksRouter({
     const updateScopeReason = requiresScopeReason ? scopeChangeReason(req.body) : "";
     if (requiresScopeReason && !updateScopeReason) return fail(res, 400, "SCOPE_CHANGE_REASON_REQUIRED", "Active sprint scope changes require a reason.");
     const dependencyValidation = dependencyIds !== undefined
-      ? validateTaskDependencies({ taskId: before.id, projectId: before.project_id, dependencyIds })
+      ? await validateTaskDependencies({ taskId: before.id, projectId: before.project_id, dependencyIds })
       : null;
     if (dependencyValidation && !dependencyValidation.ok) return fail(res, 400, "TASK_DEPENDENCY_INVALID", dependencyValidation.message);
     if (status !== undefined && !taskStatuses.includes(status)) {
@@ -420,7 +423,7 @@ function createTasksRouter({
     if (status !== undefined && !canTransition("task", before.status, status)) {
       return fail(res, 409, "STATE_TRANSITION_NOT_ALLOWED", `Task cannot transition from ${before.status} to ${status}.`);
     }
-    if (status === "done" && !ensureTaskCanComplete(res, before)) return;
+    if (status === "done" && !await ensureTaskCanComplete(res, before)) return;
     if (type !== undefined && !taskTypes.includes(type)) {
       return fail(res, 400, "VALIDATION_FAILED", `Task type must be one of: ${taskTypes.join(", ")}`);
     }
@@ -429,20 +432,20 @@ function createTasksRouter({
       { title, owner, progress, status, type, estimatedHours, actualHours, remainingHours, dueDate, sprintId, assigneeId, dependencyIds: dependencyValidation?.dependencyIds },
       { expectedVersion, json },
     );
-    const updateResult = repository.updateTask(next);
-    if (updateResult.changes === 0) return taskVersionConflict(res, before, expectedVersion, repository, fail);
-    const after = repository.findTask(req.params.id);
+    const updateResult = await repository.updateTask(next);
+    if (updateResult.changes === 0) return await taskVersionConflict(res, before, expectedVersion, repository, fail);
+    const after = await repository.findTask(req.params.id);
     if (membershipChanged && oldSprint?.status === "active") {
-      sprintCommitment.recordScopeChange({ sprint: oldSprint, task: before, changeType: "remove", impactHours: -Number(before.estimated_hours || 0), reason: updateScopeReason, actor: req.user });
+      await sprintCommitment.recordScopeChange({ sprint: oldSprint, task: before, changeType: "remove", impactHours: -Number(before.estimated_hours || 0), reason: updateScopeReason, actor: req.user });
     }
     if (membershipChanged && targetSprint?.status === "active") {
-      sprintCommitment.recordScopeChange({ sprint: targetSprint, task: after, changeType: "add", impactHours: Number(after.estimated_hours || 0), reason: updateScopeReason, actor: req.user });
+      await sprintCommitment.recordScopeChange({ sprint: targetSprint, task: after, changeType: "add", impactHours: Number(after.estimated_hours || 0), reason: updateScopeReason, actor: req.user });
     }
     if (!membershipChanged && estimateChanged && oldSprint?.status === "active") {
-      sprintCommitment.recordScopeChange({ sprint: oldSprint, task: after, changeType: "reestimate", impactHours: Number(after.estimated_hours || 0) - Number(before.estimated_hours || 0), reason: updateScopeReason, actor: req.user });
+      await sprintCommitment.recordScopeChange({ sprint: oldSprint, task: after, changeType: "reestimate", impactHours: Number(after.estimated_hours || 0) - Number(before.estimated_hours || 0), reason: updateScopeReason, actor: req.user });
     }
     if (status !== undefined) {
-      statusHistory.record({
+      await statusHistory.record({
         resourceType: "task",
         resourceId: after.id,
         projectId: after.project_id,
@@ -453,16 +456,16 @@ function createTasksRouter({
       });
     }
     if (after.sprint_id && (estimatedHours !== undefined || actualHours !== undefined || remainingHours !== undefined || sprintId !== undefined)) {
-      recordBurndownSnapshot(after.sprint_id);
+      await recordBurndownSnapshot(after.sprint_id);
     }
-    audit(req.user, "task.update", "task", req.params.id, before, after, req.ip);
+    await audit(req.user, "task.update", "task", req.params.id, before, after, req.ip);
     res.json(ok(mapTask(after)));
   });
 
-  router.patch("/tasks/:id/status", requirePermission("project:*"), (req, res) => {
-    const before = repository.findTask(req.params.id);
+  router.patch("/tasks/:id/status", requirePermission("project:*"), async (req, res) => {
+    const before = await repository.findTask(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Task not found.");
-    if (!canManageProject(req.user, before.project_id)) return fail(res, 403, "PERMISSION_DENIED", "无权变更该任务状态。");
+    if (!(await canManageProject(req.user, before.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权变更该任务状态。");
     const expectedVersion = expectedTaskVersion(req, res, before, fail);
     if (expectedVersion === null) return;
     const { status, progress } = req.body || {};
@@ -471,8 +474,8 @@ function createTasksRouter({
     if (!canTransition("task", before.status, status)) {
       return fail(res, 409, "STATE_TRANSITION_NOT_ALLOWED", `Task cannot transition from ${before.status} to ${status}.`);
     }
-    if (status === "done" && !ensureTaskCanComplete(res, before)) return;
-    const updateResult = repository.updateTaskStatus({
+    if (status === "done" && !await ensureTaskCanComplete(res, before)) return;
+    const updateResult = await repository.updateTaskStatus({
       id: req.params.id,
       expectedVersion,
       status,
@@ -480,9 +483,9 @@ function createTasksRouter({
       remainingHours: closedTaskStatuses.has(status) ? 0 : before.remaining_hours,
       progress: progress === undefined ? (status === "done" ? 100 : before.progress) : Number(progress),
     });
-    if (updateResult.changes === 0) return taskVersionConflict(res, before, expectedVersion, repository, fail);
-    const after = repository.findTask(req.params.id);
-    statusHistory.record({
+    if (updateResult.changes === 0) return await taskVersionConflict(res, before, expectedVersion, repository, fail);
+    const after = await repository.findTask(req.params.id);
+    await statusHistory.record({
       resourceType: "task",
       resourceId: after.id,
       projectId: after.project_id,
@@ -491,29 +494,29 @@ function createTasksRouter({
       reason: req.body?.reason,
       actor: req.user,
     });
-    audit(req.user, "task.status_update", "task", req.params.id, before, after, req.ip);
+    await audit(req.user, "task.status_update", "task", req.params.id, before, after, req.ip);
     res.json(ok(mapTask(after)));
   });
 
-  router.delete("/tasks/:id", requirePermission("project:*"), (req, res) => {
-    const before = repository.findTask(req.params.id);
+  router.delete("/tasks/:id", requirePermission("project:*"), async (req, res) => {
+    const before = await repository.findTask(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Task not found.");
-    if (!canManageProject(req.user, before.project_id)) return fail(res, 403, "PERMISSION_DENIED", "无权删除该任务。");
-    const dependents = repository.listProjectTaskDependencies(before.project_id)
+    if (!(await canManageProject(req.user, before.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权删除该任务。");
+    const dependents = (await repository.listProjectTaskDependencies(before.project_id))
       .filter((task) => task.id !== before.id && dependencyIdsFor(task).includes(before.id))
       .map((task) => task.id);
     if (dependents.length) {
       return fail(res, 409, "TASK_HAS_DEPENDENTS", "Task is still referenced by dependent tasks.", { dependentTaskIds: dependents });
     }
-    repository.deleteTask(req.params.id);
-    audit(req.user, "task.delete", "task", req.params.id, before, null, req.ip);
+    await repository.deleteTask(req.params.id);
+    await audit(req.user, "task.delete", "task", req.params.id, before, null, req.ip);
     res.json(ok({ deleted: true, id: req.params.id }));
   });
 
-  router.patch("/sprints/:id", requirePermission("project:*"), (req, res) => {
-    const before = repository.findSprint(req.params.id);
+  router.patch("/sprints/:id", requirePermission("project:*"), async (req, res) => {
+    const before = await repository.findSprint(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Sprint not found.");
-    if (!canManageProject(req.user, before.project_id)) return fail(res, 403, "PERMISSION_DENIED", "无权编辑该迭代。");
+    if (!(await canManageProject(req.user, before.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权编辑该迭代。");
     const { name, goal, status, startDate, endDate } = req.body || {};
     if (status !== undefined && !sprintStatuses.includes(status)) {
       return fail(res, 400, "VALIDATION_FAILED", `Status must be one of: ${sprintStatuses.join(", ")}`);
@@ -522,18 +525,18 @@ function createTasksRouter({
       return fail(res, 409, "STATE_TRANSITION_NOT_ALLOWED", `Sprint cannot transition from ${before.status} to ${status}.`);
     }
     if (status === "active" && before.status !== "active") {
-      const readiness = sprintActivationReadiness(before, { startDate, endDate });
+      const readiness = await sprintActivationReadiness(before, { startDate, endDate });
       if (!readiness.ok) return fail(res, 409, "SPRINT_ACTIVATION_GATE_BLOCKED", "Sprint needs valid dates and committed tasks before activation.", readiness);
     }
-    if (name !== undefined) repository.updateSprintName(req.params.id, String(name).trim());
-    if (goal !== undefined) repository.updateSprintGoal(req.params.id, goal);
-    if (status !== undefined) repository.updateSprintStatus(req.params.id, status);
-    if (startDate !== undefined) repository.updateSprintStartDate(req.params.id, startDate);
-    if (endDate !== undefined) repository.updateSprintEndDate(req.params.id, endDate);
-    const after = repository.findSprint(req.params.id);
-    if (status === "active" && before.status !== "active") sprintCommitment.createBaseline(after, req.user);
+    if (name !== undefined) await repository.updateSprintName(req.params.id, String(name).trim());
+    if (goal !== undefined) await repository.updateSprintGoal(req.params.id, goal);
+    if (status !== undefined) await repository.updateSprintStatus(req.params.id, status);
+    if (startDate !== undefined) await repository.updateSprintStartDate(req.params.id, startDate);
+    if (endDate !== undefined) await repository.updateSprintEndDate(req.params.id, endDate);
+    const after = await repository.findSprint(req.params.id);
+    if (status === "active" && before.status !== "active") await sprintCommitment.createBaseline(after, req.user);
     if (status !== undefined) {
-      statusHistory.record({
+      await statusHistory.record({
         resourceType: "sprint",
         resourceId: after.id,
         projectId: after.project_id,
@@ -543,16 +546,16 @@ function createTasksRouter({
         actor: req.user,
       });
     }
-    audit(req.user, "sprint.update", "sprint", req.params.id, before, after, req.ip);
+    await audit(req.user, "sprint.update", "sprint", req.params.id, before, after, req.ip);
     res.json(ok(mapSprint(after)));
   });
 
-  router.delete("/sprints/:id", requirePermission("project:*"), (req, res) => {
-    const before = repository.findSprint(req.params.id);
+  router.delete("/sprints/:id", requirePermission("project:*"), async (req, res) => {
+    const before = await repository.findSprint(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Sprint not found.");
-    if (!canManageProject(req.user, before.project_id)) return fail(res, 403, "PERMISSION_DENIED", "无权删除该迭代。");
+    if (!(await canManageProject(req.user, before.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权删除该迭代。");
     if (before.status === "active") return fail(res, 409, "SPRINT_ACTIVE_CANNOT_DELETE", "Active sprint must be closed before deletion.");
-    const taskCount = repository.taskCountForSprint(req.params.id);
+    const taskCount = await repository.taskCountForSprint(req.params.id);
     if (taskCount > 0) {
       return fail(
         res,
@@ -562,60 +565,60 @@ function createTasksRouter({
         { dependencies: { tasks: taskCount } },
       );
     }
-    repository.deleteSprint(req.params.id);
-    audit(req.user, "sprint.delete", "sprint", req.params.id, before, null, req.ip);
+    await repository.deleteSprint(req.params.id);
+    await audit(req.user, "sprint.delete", "sprint", req.params.id, before, null, req.ip);
     res.json(ok({ deleted: true, id: req.params.id }));
   });
 
-  router.get("/sprints/:id/status-history", (req, res) => {
-    const sprint = repository.findSprintId(req.params.id);
+  router.get("/sprints/:id/status-history", async (req, res) => {
+    const sprint = await repository.findSprintId(req.params.id);
     if (!sprint) return fail(res, 404, "RESOURCE_NOT_FOUND", "Sprint not found.");
-    if (!canAccessProject(req.user, sprint.project_id)) return fail(res, 403, "PERMISSION_DENIED", "无权访问该迭代状态历史。");
-    res.json(ok(statusHistory.list("sprint", sprint.id)));
+    if (!(await canAccessProject(req.user, sprint.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权访问该迭代状态历史。");
+    res.json(ok(await statusHistory.list("sprint", sprint.id)));
   });
 
-  router.get("/sprints/:id/commitment", (req, res) => {
-    const sprint = repository.findSprintId(req.params.id);
+  router.get("/sprints/:id/commitment", async (req, res) => {
+    const sprint = await repository.findSprintId(req.params.id);
     if (!sprint) return fail(res, 404, "RESOURCE_NOT_FOUND", "Sprint not found.");
-    if (!canAccessProject(req.user, sprint.project_id)) return fail(res, 403, "PERMISSION_DENIED", "无权访问该迭代承诺基线。");
-    res.json(ok(sprintCommitment.getCommitment(sprint.id)));
+    if (!(await canAccessProject(req.user, sprint.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权访问该迭代承诺基线。");
+    res.json(ok(await sprintCommitment.getCommitment(sprint.id)));
   });
 
-  router.get("/sprints/:id/scope-changes", (req, res) => {
-    const sprint = repository.findSprintId(req.params.id);
+  router.get("/sprints/:id/scope-changes", async (req, res) => {
+    const sprint = await repository.findSprintId(req.params.id);
     if (!sprint) return fail(res, 404, "RESOURCE_NOT_FOUND", "Sprint not found.");
-    if (!canAccessProject(req.user, sprint.project_id)) return fail(res, 403, "PERMISSION_DENIED", "无权访问该迭代范围变更记录。");
-    res.json(ok(sprintCommitment.listScopeChanges(sprint.id)));
+    if (!(await canAccessProject(req.user, sprint.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权访问该迭代范围变更记录。");
+    res.json(ok(await sprintCommitment.listScopeChanges(sprint.id)));
   });
 
-  router.post("/sprints/:id/tasks", requirePermission("project:*"), (req, res) => {
-    const sprint = repository.findSprint(req.params.id);
+  router.post("/sprints/:id/tasks", requirePermission("project:*"), async (req, res) => {
+    const sprint = await repository.findSprint(req.params.id);
     if (!sprint) return fail(res, 404, "RESOURCE_NOT_FOUND", "Sprint not found.");
-    if (!canManageProject(req.user, sprint.project_id)) return fail(res, 403, "PERMISSION_DENIED", "无权管理该迭代任务。");
+    if (!(await canManageProject(req.user, sprint.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权管理该迭代任务。");
     const { taskId } = req.body || {};
     if (!taskId) return fail(res, 400, "VALIDATION_FAILED", "taskId is required.");
-    const task = repository.findTask(taskId);
+    const task = await repository.findTask(taskId);
     if (!task) return fail(res, 404, "RESOURCE_NOT_FOUND", "Task not found.");
     if (task.project_id !== sprint.project_id) {
       return fail(res, 400, "VALIDATION_FAILED", "Task must belong to the same project as the sprint.");
     }
     const addScopeReason = requireScopeChangeReason(res, sprint, req.body);
     if (sprint.status === "active" && !addScopeReason) return;
-    repository.assignTaskToSprint(taskId, req.params.id);
-    const updated = repository.findTask(taskId);
-    recordBurndownSnapshot(req.params.id);
+    await repository.assignTaskToSprint(taskId, req.params.id);
+    const updated = await repository.findTask(taskId);
+    await recordBurndownSnapshot(req.params.id);
     if (sprint.status === "active") {
-      sprintCommitment.recordScopeChange({ sprint, task: updated, changeType: "add", impactHours: updated.estimated_hours, reason: addScopeReason, actor: req.user });
+      await sprintCommitment.recordScopeChange({ sprint, task: updated, changeType: "add", impactHours: updated.estimated_hours, reason: addScopeReason, actor: req.user });
     }
-    audit(req.user, "sprint.add_task", "task", taskId, task, updated, req.ip);
+    await audit(req.user, "sprint.add_task", "task", taskId, task, updated, req.ip);
     res.json(ok(mapTask(updated)));
   });
 
-  router.get("/sprints/:id/burndown", (req, res) => {
-    const sprint = repository.findSprint(req.params.id);
+  router.get("/sprints/:id/burndown", async (req, res) => {
+    const sprint = await repository.findSprint(req.params.id);
     if (!sprint) return fail(res, 404, "RESOURCE_NOT_FOUND", "Sprint not found.");
-    if (!canAccessProject(req.user, sprint.project_id)) return fail(res, 403, "PERMISSION_DENIED", "无权访问该迭代燃尽图。");
-    const data = buildSprintBurndown(req.params.id);
+    if (!(await canAccessProject(req.user, sprint.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权访问该迭代燃尽图。");
+    const data = await buildSprintBurndown(req.params.id);
     if (!data) return fail(res, 404, "RESOURCE_NOT_FOUND", "Sprint not found.");
     res.json(ok(data));
   });

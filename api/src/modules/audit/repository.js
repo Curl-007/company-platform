@@ -1,5 +1,5 @@
 function createAuditRepository({ rows }) {
-  function listAuditLogs({ keyword, actor, action, resourceType, dateFrom, dateTo, includePageViews } = {}) {
+  async function listAuditLogs({ keyword, actor, action, resourceType, dateFrom, dateTo, includePageViews } = {}) {
     const clauses = [];
     const params = {};
     if (actor) {
@@ -28,7 +28,7 @@ function createAuditRepository({ rows }) {
       params.keyword = `%${String(keyword).trim()}%`;
     }
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    return rows(`SELECT * FROM audit_logs ${where} ORDER BY created_at DESC LIMIT 1000`, params);
+    return await rows(`SELECT * FROM audit_logs ${where} ORDER BY created_at DESC LIMIT 1000`, params);
   }
 
   return { listAuditLogs };

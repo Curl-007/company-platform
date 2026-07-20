@@ -33,10 +33,10 @@ function createDocumentsRouter({
   upload,
 }) {
   const router = express.Router();
-  const canRead = (user, document) => canViewDocument(user, document, { canAccessProject, mapDocument });
-  const canManage = (user, document) => canManageDocument(user, document, { canWriteProject });
+  const canRead = async (user, document) => canViewDocument(user, document, { canAccessProject, mapDocument });
+  const canManage = async (user, document) => canManageDocument(user, document, { canWriteProject });
 
-  router.get("/documents", (req, res) => {
+  router.get("/documents", async (req, res) => {
     let sql = "SELECT * FROM documents WHERE 1=1";
     const params = {};
     if (req.query.keyword) {
@@ -60,16 +60,22 @@ function createDocumentsRouter({
       params.ownerRole = req.query.ownerRole;
     }
     sql += " ORDER BY updated_at DESC";
-    let allItems = rows(sql, params).map(mapDocument);
+    let allItems = (await rows(sql, params)).map(mapDocument);
     if (req.user?.role !== "admin") {
       allItems = allItems.filter((item) => item.ownerRole ? canManageDocumentRole(req.user, item.ownerRole) : true);
     }
-    allItems = allItems.filter((item) => !item.projectId || canAccessProject(req.user, item.projectId));
+    {
+      const __next_allItems = [];
+      for (const item of allItems) {
+        if ((!item.projectId ) || (await canAccessProject(req.user, item.projectId))) __next_allItems.push(item);
+      }
+      allItems = __next_allItems;
+    }
     const data = paginatedResponse(allItems, req.query);
     res.json(ok(data));
   });
 
-  router.post("/documents", requirePermission("document:*"), (req, res) => {
+  router.post("/documents", requirePermission("document:*"), async (req, res) => {
     const { title, type, category, owner, ownerRole, projectId, fileName, fileSize, fileType, contentBase64 } = req.body || {};
     if (!title || !type || !owner || !fileName) return fail(res, 400, "VALIDATION_FAILED", "Document title, type, owner, and fileName are required.");
     if (category && !documentCategories.includes(category)) {
@@ -78,10 +84,10 @@ function createDocumentsRouter({
     if (ownerRole && !canManageDocumentRole(req.user, ownerRole)) {
       return fail(res, 403, "PERMISSION_DENIED", "You can only manage documents for allowed roles.");
     }
-    if (projectId && !canWriteProject(req.user, projectId)) {
+    if (projectId && !(await canWriteProject(req.user, projectId))) {
       return fail(res, 403, "PROJECT_ARCHIVED_OR_ACCESS_DENIED", "You cannot create a document in an archived or inaccessible project.");
     }
-    if (projectId && !canAccessProject(req.user, projectId)) {
+    if (projectId && !(await canAccessProject(req.user, projectId))) {
       return fail(res, 403, "PERMISSION_DENIED", "You cannot create a document in this project.");
     }
     const uploadCheck = validateUploadMeta({
@@ -93,7 +99,7 @@ function createDocumentsRouter({
     if (!uploadCheck.ok) {
       return fail(res, 400, uploadCheck.errorCode || "VALIDATION_FAILED", uploadCheck.message);
     }
-    const id = nextId("DOC", "documents");
+    const id = await nextId("DOC", "documents");
     const storageKey = `${id}_${String(fileName).replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")}`;
     let content = "";
     if (contentBase64) {
@@ -101,7 +107,7 @@ function createDocumentsRouter({
       const buffer = Buffer.from(base64, "base64");
       fs.writeFileSync(path.join(storageDir, storageKey), buffer);
       content = extractTextFromUpload(fileName, fileType, contentBase64);
-      insert("objects", { id: `OBJ-${id}`, bucket: "documents", storage_key: storageKey, original_name: fileName, mime_type: fileType || "application/octet-stream", size: buffer.length, created_by: req.user.id, created_at: now() });
+      await insert("objects", { id: `OBJ-${id}`, bucket: "documents", storage_key: storageKey, original_name: fileName, mime_type: fileType || "application/octet-stream", size: buffer.length, created_by: req.user.id, created_at: now() });
     }
     const document = {
       id,
@@ -122,16 +128,16 @@ function createDocumentsRouter({
       storage_key: storageKey,
       content,
     };
-    insert("documents", document);
+    await insert("documents", document);
     reindexDocument?.(document);
-    audit(req.user, "document.upload", "document", id, null, document, req.ip);
-    res.status(201).json(ok(mapDocument(row("SELECT * FROM documents WHERE id = @id", { id }))));
+    await audit(req.user, "document.upload", "document", id, null, document, req.ip);
+    res.status(201).json(ok(mapDocument(await row("SELECT * FROM documents WHERE id = @id", { id }))));
   });
 
-  router.get("/documents/:id", (req, res) => {
-    const document = row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
+  router.get("/documents/:id", async (req, res) => {
+    const document = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
     if (!document) return fail(res, 404, "RESOURCE_NOT_FOUND", "Document not found.");
-    if (!canRead(req.user, document)) {
+    if (!(await canRead(req.user, document))) {
       return fail(res, 403, "PERMISSION_DENIED", "You cannot access this document.");
     }
     res.json(ok(mapDocument(document)));
@@ -139,10 +145,10 @@ function createDocumentsRouter({
 
   // As-built transitional contract for object-storage style clients.
   // Returns the existing multipart upload endpoint instead of a cloud presigned URL.
-  router.post("/documents/:id/upload-url", requirePermission("document:*"), (req, res) => {
-    const document = row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
+  router.post("/documents/:id/upload-url", requirePermission("document:*"), async (req, res) => {
+    const document = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
     if (!document) return fail(res, 404, "RESOURCE_NOT_FOUND", "Document not found.");
-    if (!canManage(req.user, document)) {
+    if (!(await canManage(req.user, document))) {
       return fail(res, 403, "PERMISSION_DENIED", "You can only manage documents for allowed roles.");
     }
     const fileName = String(req.body?.fileName || document.file_name || "upload.bin");
@@ -165,27 +171,27 @@ function createDocumentsRouter({
     }));
   });
 
-  router.post("/documents/:id/object", requirePermission("document:*"), upload.single("file"), (req, res) => {
-    const document = row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
+  router.post("/documents/:id/object", requirePermission("document:*"), upload.single("file"), async (req, res) => {
+    const document = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
     if (!document) return fail(res, 404, "RESOURCE_NOT_FOUND", "Document not found.");
-    if (!canManage(req.user, document)) {
+    if (!(await canManage(req.user, document))) {
       return fail(res, 403, "PERMISSION_DENIED", "You can only manage documents for allowed roles.");
     }
-    insert("objects", { id: `OBJ-${Date.now()}`, bucket: "documents", storage_key: req.file.filename, original_name: req.file.originalname, mime_type: req.file.mimetype, size: req.file.size, created_by: req.user.id, created_at: now() });
+    await insert("objects", { id: `OBJ-${Date.now()}`, bucket: "documents", storage_key: req.file.filename, original_name: req.file.originalname, mime_type: req.file.mimetype, size: req.file.size, created_by: req.user.id, created_at: now() });
     const buffer = fs.readFileSync(req.file.path);
     const contentBase64 = `data:${req.file.mimetype};base64,${buffer.toString("base64")}`;
     const content = extractTextFromUpload(req.file.originalname, req.file.mimetype, contentBase64);
-    run("UPDATE documents SET storage_key = @key, file_name = @name, file_size = @size, file_type = @type, content = @content, updated_at = @updated WHERE id = @id", { id: req.params.id, key: req.file.filename, name: req.file.originalname, size: req.file.size, type: req.file.mimetype, content, updated: now() });
-    const after = row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
+    await run("UPDATE documents SET storage_key = @key, file_name = @name, file_size = @size, file_type = @type, content = @content, updated_at = @updated WHERE id = @id", { id: req.params.id, key: req.file.filename, name: req.file.originalname, size: req.file.size, type: req.file.mimetype, content, updated: now() });
+    const after = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
     reindexDocument?.(after);
-    audit(req.user, "object.upload", "document", req.params.id, null, req.file, req.ip);
+    await audit(req.user, "object.upload", "document", req.params.id, null, req.file, req.ip);
     res.json(ok({ objectKey: req.file.filename }));
   });
 
-  router.patch("/documents/:id", requirePermission("document:*"), (req, res) => {
-    const before = row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
+  router.patch("/documents/:id", requirePermission("document:*"), async (req, res) => {
+    const before = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Document not found.");
-    if (!canManage(req.user, before)) {
+    if (!(await canManage(req.user, before))) {
       return fail(res, 403, "PERMISSION_DENIED", "You can only manage documents for allowed roles.");
     }
     const { title, type, category, owner, ownerRole, projectId } = req.body || {};
@@ -195,47 +201,47 @@ function createDocumentsRouter({
     if (ownerRole !== undefined && !canManageDocumentRole(req.user, ownerRole)) {
       return fail(res, 403, "PERMISSION_DENIED", "You can only manage documents for allowed roles.");
     }
-    if (projectId !== undefined && projectId && !canWriteProject(req.user, projectId)) {
+    if (projectId !== undefined && projectId && !(await canWriteProject(req.user, projectId))) {
       return fail(res, 403, "PROJECT_ARCHIVED_OR_ACCESS_DENIED", "You cannot move a document to an archived or inaccessible project.");
     }
-    if (projectId !== undefined && projectId && !canAccessProject(req.user, projectId)) {
+    if (projectId !== undefined && projectId && !(await canAccessProject(req.user, projectId))) {
       return fail(res, 403, "PERMISSION_DENIED", "You cannot move a document to this project.");
     }
-    if (title !== undefined) run("UPDATE documents SET title = @title WHERE id = @id", { id: req.params.id, title: String(title).trim() });
-    if (type !== undefined) run("UPDATE documents SET type = @type WHERE id = @id", { id: req.params.id, type });
-    if (category !== undefined) run("UPDATE documents SET category = @category WHERE id = @id", { id: req.params.id, category });
-    if (owner !== undefined) run("UPDATE documents SET owner = @owner WHERE id = @id", { id: req.params.id, owner: String(owner).trim() });
-    if (ownerRole !== undefined) run("UPDATE documents SET owner_role = @ownerRole WHERE id = @id", { id: req.params.id, ownerRole });
-    if (projectId !== undefined) run("UPDATE documents SET project_id = @projectId WHERE id = @id", { id: req.params.id, projectId: projectId || null });
-    run("UPDATE documents SET updated_at = @updated WHERE id = @id", { id: req.params.id, updated: now() });
-    const after = row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
+    if (title !== undefined) await run("UPDATE documents SET title = @title WHERE id = @id", { id: req.params.id, title: String(title).trim() });
+    if (type !== undefined) await run("UPDATE documents SET type = @type WHERE id = @id", { id: req.params.id, type });
+    if (category !== undefined) await run("UPDATE documents SET category = @category WHERE id = @id", { id: req.params.id, category });
+    if (owner !== undefined) await run("UPDATE documents SET owner = @owner WHERE id = @id", { id: req.params.id, owner: String(owner).trim() });
+    if (ownerRole !== undefined) await run("UPDATE documents SET owner_role = @ownerRole WHERE id = @id", { id: req.params.id, ownerRole });
+    if (projectId !== undefined) await run("UPDATE documents SET project_id = @projectId WHERE id = @id", { id: req.params.id, projectId: projectId || null });
+    await run("UPDATE documents SET updated_at = @updated WHERE id = @id", { id: req.params.id, updated: now() });
+    const after = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
     reindexDocument?.(after);
-    audit(req.user, "document.update", "document", req.params.id, before, after, req.ip);
+    await audit(req.user, "document.update", "document", req.params.id, before, after, req.ip);
     res.json(ok(mapDocument(after)));
   });
 
-  router.delete("/documents/:id", requirePermission("document:*"), (req, res) => {
-    const before = row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
+  router.delete("/documents/:id", requirePermission("document:*"), async (req, res) => {
+    const before = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Document not found.");
-    if (!canManage(req.user, before)) {
+    if (!(await canManage(req.user, before))) {
       return fail(res, 403, "PERMISSION_DENIED", "You can only manage documents for allowed roles.");
     }
     deleteDocumentRagIndex?.(req.params.id);
-    run("DELETE FROM documents WHERE id = @id", { id: req.params.id });
+    await run("DELETE FROM documents WHERE id = @id", { id: req.params.id });
     if (before.storage_key) {
       try { fs.unlinkSync(path.join(storageDir, before.storage_key)); } catch { /* file may not exist */ }
     }
-    audit(req.user, "document.delete", "document", req.params.id, before, null, req.ip);
+    await audit(req.user, "document.delete", "document", req.params.id, before, null, req.ip);
     res.json(ok({ deleted: true, id: req.params.id }));
   });
 
-  router.get("/objects/:key", (req, res) => {
-    const object = row("SELECT * FROM objects WHERE storage_key = @key", { key: req.params.key });
+  router.get("/objects/:key", async (req, res) => {
+    const object = await row("SELECT * FROM objects WHERE storage_key = @key", { key: req.params.key });
     if (!object) return fail(res, 404, "RESOURCE_NOT_FOUND", "Object not found.");
     if (object.bucket === "documents") {
-      const document = row("SELECT * FROM documents WHERE storage_key = @key", { key: req.params.key });
+      const document = await row("SELECT * FROM documents WHERE storage_key = @key", { key: req.params.key });
       if (!document) return fail(res, 404, "RESOURCE_NOT_FOUND", "Document object not found.");
-      if (!canRead(req.user, document)) {
+      if (!(await canRead(req.user, document))) {
         return fail(res, 403, "PERMISSION_DENIED", "You cannot access this document object.");
       }
     } else if (!hasPermission(req.user, "document:*")) {

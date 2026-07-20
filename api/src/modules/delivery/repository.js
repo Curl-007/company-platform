@@ -6,7 +6,7 @@ function createDeliveryRepository({ insert, row, rows, run }) {
     };
   }
 
-  function listBuilds({ projectId, status, keyword } = {}) {
+  async function listBuilds({ projectId, status, keyword } = {}) {
     let sql = "SELECT * FROM builds";
     const clauses = [];
     const params = {};
@@ -14,21 +14,21 @@ function createDeliveryRepository({ insert, row, rows, run }) {
     if (status) { clauses.push("status = @status"); params.status = status; }
     if (keyword) { clauses.push("(name LIKE @kw OR version LIKE @kw)"); params.kw = `%${keyword}%`; }
     if (clauses.length) sql += ` WHERE ${clauses.join(" AND ")}`;
-    return rows(`${sql} ORDER BY created_at DESC`, params);
+    return await rows(`${sql} ORDER BY created_at DESC`, params);
   }
 
-  function listReleases({ productId, status } = {}) {
+  async function listReleases({ productId, status } = {}) {
     let sql = "SELECT * FROM releases";
     const clauses = [];
     const params = {};
     if (productId) { clauses.push("product_id = @pid"); params.pid = productId; }
     if (status) { clauses.push("status = @status"); params.status = status; }
     if (clauses.length) sql += ` WHERE ${clauses.join(" AND ")}`;
-    return rows(`${sql} ORDER BY release_date DESC`, params);
+    return await rows(`${sql} ORDER BY release_date DESC`, params);
   }
 
   return {
-    countReleasesForBuild: (buildId) => Number(row("SELECT COUNT(*) AS count FROM releases WHERE build_id = @id", { id: buildId })?.count || 0),
+    countReleasesForBuild: async (buildId) => Number((await row("SELECT COUNT(*) AS count FROM releases WHERE build_id = @id", { id: buildId }))?.count || 0),
     createApproval: (approval) => run(`INSERT INTO release_approvals
       (id, release_id, decision, comment, approver_id, approver_name, created_at)
       VALUES (@id, @release_id, @decision, @comment, @approver_id, @approver_name, @created_at)`, approval),
@@ -36,10 +36,10 @@ function createDeliveryRepository({ insert, row, rows, run }) {
     createRelease: (release) => insert("releases", release),
     createRollback: (rollback) => insert("rollback_records", rollback),
     deleteBuild: (id) => run("DELETE FROM builds WHERE id = @id", { id }),
-    deleteRelease: (id) => {
-      run("DELETE FROM release_approvals WHERE release_id = @id", { id });
-      run("DELETE FROM rollback_records WHERE release_id = @id", { id });
-      return run("DELETE FROM releases WHERE id = @id", { id });
+    deleteRelease: async (id) => {
+      await run("DELETE FROM release_approvals WHERE release_id = @id", { id });
+      await run("DELETE FROM rollback_records WHERE release_id = @id", { id });
+      return await run("DELETE FROM releases WHERE id = @id", { id });
     },
     findBuild: (id) => row("SELECT * FROM builds WHERE id = @id", { id }),
     findDefectProject: (id) => row("SELECT project_id FROM defects WHERE id = @id", { id }),
@@ -50,43 +50,43 @@ function createDeliveryRepository({ insert, row, rows, run }) {
       "SELECT * FROM release_approvals WHERE release_id = @releaseId AND approver_id = @approverId",
       { releaseId, approverId },
     ),
-    hasApprovedRelease: (releaseId) => Boolean(row(
+    hasApprovedRelease: async (releaseId) => Boolean(await row(
       "SELECT id FROM release_approvals WHERE release_id = @id AND decision = 'approve' ORDER BY created_at DESC LIMIT 1",
       { id: releaseId },
     )),
-    listActiveRequirementsByIds: (ids) => {
+    listActiveRequirementsByIds: async (ids) => {
       if (!ids.length) return [];
       const bound = idBindings(ids);
-      return rows(`SELECT * FROM requirements WHERE deleted_at IS NULL AND id IN (${bound.placeholders}) ORDER BY id`, bound.params);
+      return await rows(`SELECT * FROM requirements WHERE deleted_at IS NULL AND id IN (${bound.placeholders}) ORDER BY id`, bound.params);
     },
     listApprovals: (releaseId) => rows("SELECT * FROM release_approvals WHERE release_id = @id ORDER BY created_at DESC", { id: releaseId }),
     listBuilds,
-    listDefectsByIds: (ids) => {
+    listDefectsByIds: async (ids) => {
       if (!ids.length) return [];
       const bound = idBindings(ids);
-      return rows(`SELECT * FROM defects WHERE id IN (${bound.placeholders}) ORDER BY id`, bound.params);
+      return await rows(`SELECT * FROM defects WHERE id IN (${bound.placeholders}) ORDER BY id`, bound.params);
     },
-    listDeliveryAudit: (resourceIds) => {
+    listDeliveryAudit: async (resourceIds) => {
       if (!resourceIds.length) return [];
       const bound = idBindings(resourceIds);
-      return rows(`SELECT * FROM audit_logs WHERE resource_id IN (${bound.placeholders}) ORDER BY created_at DESC LIMIT 50`, bound.params);
+      return await rows(`SELECT * FROM audit_logs WHERE resource_id IN (${bound.placeholders}) ORDER BY created_at DESC LIMIT 50`, bound.params);
     },
     listReleases,
     listRollbacks: (releaseId) => rows("SELECT * FROM rollback_records WHERE release_id = @id ORDER BY created_at DESC", { id: releaseId }),
-    listTasksByRequirementIds: (ids) => {
+    listTasksByRequirementIds: async (ids) => {
       if (!ids.length) return [];
       const bound = idBindings(ids);
-      return rows(`SELECT id, title, status, progress, remaining_hours, blocker, requirement_id FROM tasks WHERE requirement_id IN (${bound.placeholders})`, bound.params);
+      return await rows(`SELECT id, title, status, progress, remaining_hours, blocker, requirement_id FROM tasks WHERE requirement_id IN (${bound.placeholders})`, bound.params);
     },
-    listTestCasesByRequirementIds: (ids) => {
+    listTestCasesByRequirementIds: async (ids) => {
       if (!ids.length) return [];
       const bound = idBindings(ids);
-      return rows(`SELECT id, name, status, total_cases, passed_cases, failed_cases, blocked_cases, requirement_id FROM test_cases WHERE requirement_id IN (${bound.placeholders})`, bound.params);
+      return await rows(`SELECT id, name, status, total_cases, passed_cases, failed_cases, blocked_cases, requirement_id FROM test_cases WHERE requirement_id IN (${bound.placeholders})`, bound.params);
     },
-    listDefectsByRequirementIds: (ids) => {
+    listDefectsByRequirementIds: async (ids) => {
       if (!ids.length) return [];
       const bound = idBindings(ids);
-      return rows(`SELECT id, title, status, severity, requirement_id, found_in_build FROM defects WHERE requirement_id IN (${bound.placeholders})`, bound.params);
+      return await rows(`SELECT id, title, status, severity, requirement_id, found_in_build FROM defects WHERE requirement_id IN (${bound.placeholders})`, bound.params);
     },
     updateBuildBugs: (id, linkedBugs) => run("UPDATE builds SET linked_bugs = @b WHERE id = @id", { id, b: linkedBugs }),
     updateBuildDate: (id, buildDate) => run("UPDATE builds SET build_date = @d WHERE id = @id", { id, d: buildDate }),

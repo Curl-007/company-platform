@@ -29,8 +29,8 @@ function createAiModelClient({
   if (typeof getConfig !== "function") throw new Error("AI provider config resolver is required.");
 
   async function callModel(prompt, options = {}) {
-    const config = getConfig();
-    if (!config.enabled) return null;
+    const config = await getConfig();
+    if (!config || !config.enabled) return null;
     if (!config.apiKey || !config.baseUrl || !config.model) return null;
     const system = options.system || "你是企业项目管理平台的分析助手，输出简洁、可审核、可落地的中文内容。";
     const imageAttachments = normalizeAttachments(options.attachments || []).filter((item) => item.kind === "image");
@@ -82,12 +82,12 @@ function createAiModelClient({
           throw error;
         }
         const data = await response.json();
-        recordSuccess({ wireApi, latencyMs: Date.now() - attemptStarted });
+        await recordSuccess({ wireApi, latencyMs: Date.now() - attemptStarted });
         return wireApi === "responses"
           ? extractResponsesText(data)
           : data.choices?.[0]?.message?.content || null;
       } catch (error) {
-        recordFailure(error, { wireApi, latencyMs: Date.now() - attemptStarted });
+        await recordFailure(error, { wireApi, latencyMs: Date.now() - attemptStarted });
         throw error;
       } finally {
         clearTimeout(timeout);

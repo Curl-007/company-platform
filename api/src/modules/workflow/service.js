@@ -1,13 +1,13 @@
 function createProjectFlowService({ row, rows }) {
-  function evaluateProjectFlow(projectId) {
-    const project = row("SELECT * FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectId });
+  async function evaluateProjectFlow(projectId) {
+    const project = await row("SELECT * FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectId });
     if (!project) return null;
 
-    const reqs = rows("SELECT status FROM requirements WHERE project_id = @pid AND deleted_at IS NULL", { pid: projectId });
-    const tasks = rows("SELECT status, estimated_hours, actual_hours, remaining_hours FROM tasks WHERE project_id = @pid", { pid: projectId });
-    const defects = rows("SELECT status, severity FROM defects WHERE project_id = @pid", { pid: projectId });
-    const tests = rows("SELECT total_cases, passed_cases, failed_cases, blocked_cases FROM test_cases WHERE project_id = @pid", { pid: projectId });
-    const docs = rows("SELECT type, ai_status FROM documents", {});
+    const reqs = await rows("SELECT status FROM requirements WHERE project_id = @pid AND deleted_at IS NULL", { pid: projectId });
+    const tasks = await rows("SELECT status, estimated_hours, actual_hours, remaining_hours FROM tasks WHERE project_id = @pid", { pid: projectId });
+    const defects = await rows("SELECT status, severity FROM defects WHERE project_id = @pid", { pid: projectId });
+    const tests = await rows("SELECT total_cases, passed_cases, failed_cases, blocked_cases FROM test_cases WHERE project_id = @pid", { pid: projectId });
+    const docs = await rows("SELECT type, ai_status FROM documents", {});
     const designDocs = docs.filter((d) => d.type === "design");
     const testDocs = docs.filter((d) => d.type === "test");
 
@@ -98,8 +98,8 @@ function createProjectFlowService({ row, rows }) {
 
     const priorPassed = gates.slice(0, 6).every((gate) => gate.state === "passed" || gate.state === "done");
     const releasedRelease = project.product_id
-      ? row("SELECT id FROM releases WHERE product_id = @pid AND status = 'released' LIMIT 1", { pid: project.product_id })
-      : row("SELECT id FROM releases WHERE status = 'released' LIMIT 1", {});
+      ? await row("SELECT id FROM releases WHERE product_id = @pid AND status = 'released' LIMIT 1", { pid: project.product_id })
+      : await row("SELECT id FROM releases WHERE status = 'released' LIMIT 1", {});
     const hasRelease = Boolean(releasedRelease);
     gates[6].checks[0].passed = priorPassed;
     gates[6].checks[0].detail = priorPassed ? "全部前置门禁已通过" : "前置阶段未全部通过";

@@ -1,8 +1,8 @@
 # W2 真 PostgreSQL 运行时切换计划
 
-> **状态**：执行中（W0 决策已锁定；W1–W2 代码起步）  
+> **状态**：执行中（W0 决策已锁定；W1–W4 代码完成；**runtime 仍 fail-closed，W5 待办**）  
 > **分支**：`codex/project-review`  
-> **范围外**：pgvector / embedding、长期双写、强制删 SQLite、ORM、MinIO/Redis Worker  
+> **范围外**：pgvector / embedding、长期双写、强制删 SQLite、ORM、MinIO/Redis Worker 
 
 ## 0. 已锁定默认决策（用户 123 一并采纳）
 
@@ -45,19 +45,19 @@ routes/services
 | Runtime | `api/src/db/runtime.js` | dialect 选择；W5 前 postgres 仍 fail-closed |
 | Pool | `api/src/db/postgres.js` | `pg.Pool`、ping、close、URL 脱敏 |
 | Dialect | `api/src/db/sql.js` | 参数与 SQLite 方言翻译 |
-| Access | `api/src/db/access.js`（后续） | 统一异步访问 API |
-| Import | `api/scripts/import-ndjson-to-postgres.js`（后续） | NDJSON → PG |
-| Schema | PG baseline + dual migrations（后续） | 空库建表 |
+| Access | `api/src/db/access.js` | 统一异步访问 API（仅 SQLite 实现；PG 端仍 fail-closed） |
+| Import | `api/scripts/import-ndjson-to-postgres.js` | NDJSON → PG（脚本路径；非 runtime） |
+| Schema | `api/src/db/schema/postgres-baseline.sql` + `apply-postgres-schema.js` | 空库最终态建表 + `schema_migrations` 记账 |
 
 ## 3. Wave 与进度
 
 | Wave | 内容 | 状态 |
 |------|------|------|
 | W0 | 决策与契约 | **完成**（本文件） |
-| W1 | `pg` 依赖 + pool + env 边界 | **进行中** |
-| W2 | SQL 方言 helpers + 单测 | **进行中** |
-| W3 | PG baseline schema + dual migrations | 待办 |
-| W4 | import NDJSON | 待办 |
+| W1 | `pg` 依赖 + pool + env 边界 | **完成**（runtime 仍 fail-closed） |
+| W2 | SQL 方言 helpers + 单测 | **完成**（含 COLLATE NOCASE / app_settings key upsert） |
+| W3 | PG baseline schema + dual migrations | **完成**（`postgres-baseline.sql` 最终列集含 `leave_records`；SQLite 仍走 `initDb`/JS migrations；标记 schema 漂移风险但非 W5 阻塞） |
+| W4 | import NDJSON | **完成**（`import-ndjson-to-postgres.js` + `postgres-import.test.js` fake-pool 单测；真库集成验收待 W6） |
 | W5 | 全路径 async + 解除 fail-closed | 待办（主工期） |
 | W6 | 门控 PG 集成 + 可选 CI service | 待办 |
 | W7 | runbook 切换/回滚 | 待办 |
@@ -92,12 +92,17 @@ SQLite 侧可用 Promise 包装现有 sync，保证双 dialect 同一 API。
 
 ```
 preflight → export:postgres → verify
-  → PG init/migrate
-  → import:postgres   # 新建
+  → apply:postgres-schema   # 或 import:postgres -- --apply-schema
+  → import:postgres
   → generate:postgres-target-report
   → reconcile:postgres-import
-  → API smoke
+  → API smoke（W5 后）
 ```
+
+脚本：
+
+- `npm run apply:postgres-schema -w api -- --connection $env:POSTGRES_TARGET_URL`
+- `npm run import:postgres -w api -- --dir <export> --connection $env:POSTGRES_TARGET_URL [--apply-schema]`
 
 ## 7. 安全
 
@@ -107,10 +112,11 @@ preflight → export:postgres → verify
 
 ## 8. 验收（DoD）
 
-- [ ] 默认 SQLite：`npm run test -w api` 全绿
-- [ ] 真 PG：init + import 对账 + smoke
+- [x] 默认 SQLite：`npm run test -w api` 全绿（含 access-contract、sql-dialect、database-runtime）
+- [ ] 真 PG：init + import 对账 + smoke（待 W6 门控集成）
 - [ ] 仅 W5 验收后 `createDatabaseRuntime` 允许 postgres
-- [ ] 无 pgvector 蔓延；runbook 可回滚 SQLite
+- [x] 无 pgvector 蔓延；runbook 可回滚 SQLite（基线 SQL 确认无 JSONB/VECTOR/FK；`postgres-baseline.sql` `leave_records` 已含）
+- [ ] `leave_records`：仓库 `initDb`/`CORE_TABLES` 尚未纳入（已知 schema 漂移风险；非 W5 阻塞）
 
 ## 9. 建议 commit 切片
 

@@ -1,6 +1,6 @@
 function createDefectTaskSync({ row, run, insert, nextId, closedDefectStatuses }) {
-  function syncDefectTask(defectRow) {
-    const existing = row(
+  async function syncDefectTask(defectRow) {
+    const existing = await row(
       "SELECT * FROM tasks WHERE source_type = 'defect' AND source_id = @sourceId",
       { sourceId: defectRow.id },
     );
@@ -37,7 +37,7 @@ function createDefectTaskSync({ row, run, insert, nextId, closedDefectStatuses }
     };
 
     if (existing) {
-      run(
+      await run(
         `UPDATE tasks SET
           title = @title,
           status = @status,
@@ -72,8 +72,8 @@ function createDefectTaskSync({ row, run, insert, nextId, closedDefectStatuses }
       return existing.id;
     }
 
-    const taskId = nextId("TASK", "tasks");
-    insert("tasks", { id: taskId, ...taskPayload });
+    const taskId = await nextId("TASK", "tasks");
+    await insert("tasks", { id: taskId, ...taskPayload });
     return taskId;
   }
 

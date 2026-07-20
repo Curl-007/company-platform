@@ -1,3 +1,4 @@
+const { filterAsync, mapAsync } = require("../../lib/asyncIter");
 const CATEGORIES = ["delivery", "support", "meeting", "training", "other"];
 const WORK_NATURES = ["planned", "unplanned", "unspecified"];
 
@@ -37,28 +38,28 @@ function validateInput(body = {}, existing = {}) {
 }
 
 function createTimeEntriesService({ canAccessProject, canWriteProject, repository }) {
-  function validateProjectAndTask(user, input) {
-    const project = repository.findProject(input.projectId);
+  async function validateProjectAndTask(user, input) {
+    const project = await repository.findProject(input.projectId);
     if (!project) return { ok: false, status: 404, code: "RESOURCE_NOT_FOUND", message: "Project not found." };
-    if (!canWriteProject(user, input.projectId)) return { ok: false, status: 403, code: "PROJECT_ARCHIVED_OR_ACCESS_DENIED", message: "Cannot record time for an archived or inaccessible project." };
+    if (!(await canWriteProject(user, input.projectId))) return { ok: false, status: 403, code: "PROJECT_ARCHIVED_OR_ACCESS_DENIED", message: "Cannot record time for an archived or inaccessible project." };
     if (input.taskId) {
-      const task = repository.findTask(input.taskId);
+      const task = await repository.findTask(input.taskId);
       if (!task || task.project_id !== input.projectId) return { ok: false, status: 400, code: "VALIDATION_FAILED", message: "Task must belong to the selected project." };
     }
     return { ok: true, project };
   }
 
   return {
-    listForUser: (user, query = {}) => {
-      const projects = new Map(repository.listProjects().map((project) => [project.id, project]));
-      return repository.listForUser({
+    listForUser: async (user, query = {}) => {
+      const projects = new Map((await repository.listProjects()).map((project) => [project.id, project]));
+      const entries = await repository.listForUser({
         userId: user.id,
         periodStart: query.periodStart ? isoDate(query.periodStart) : "",
         periodEnd: query.periodEnd ? isoDate(query.periodEnd) : "",
         projectId: query.projectId,
-      })
-        .filter((entry) => canAccessProject(user, entry.project_id))
-        .map((entry) => mapTimeEntry(entry, projects.get(entry.project_id)));
+      });
+      const visible = await filterAsync(entries, async (entry) => await canAccessProject(user, entry.project_id));
+      return visible.map((entry) => mapTimeEntry(entry, projects.get(entry.project_id)));
     },
     mapTimeEntry,
     validateInput,

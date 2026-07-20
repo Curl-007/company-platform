@@ -30,16 +30,16 @@ function mapScopeChange(item) {
 }
 
 function createSprintCommitment({ insert, nextId, now, row, rows }) {
-  function getCommitment(sprintId) {
-    return mapCommitment(row("SELECT * FROM sprint_commitments WHERE sprint_id = @sprintId", { sprintId }));
+  async function getCommitment(sprintId) {
+    return mapCommitment(await row("SELECT * FROM sprint_commitments WHERE sprint_id = @sprintId", { sprintId }));
   }
 
-  function createBaseline(sprint, actor) {
-    const existing = getCommitment(sprint.id);
+  async function createBaseline(sprint, actor) {
+    const existing = await getCommitment(sprint.id);
     if (existing) return existing;
-    const tasks = rows("SELECT id, estimated_hours, remaining_hours FROM tasks WHERE sprint_id = @sprintId ORDER BY id", { sprintId: sprint.id });
+    const tasks = await rows("SELECT id, estimated_hours, remaining_hours FROM tasks WHERE sprint_id = @sprintId ORDER BY id", { sprintId: sprint.id });
     const commitment = {
-      id: nextId("COM", "sprint_commitments"),
+      id: await nextId("COM", "sprint_commitments"),
       sprint_id: sprint.id,
       project_id: sprint.project_id,
       baseline_task_ids: JSON.stringify(tasks.map((task) => task.id)),
@@ -50,13 +50,13 @@ function createSprintCommitment({ insert, nextId, now, row, rows }) {
       committed_by_name: actor?.name || "",
       committed_at: now(),
     };
-    insert("sprint_commitments", commitment);
+    await insert("sprint_commitments", commitment);
     return mapCommitment(commitment);
   }
 
-  function recordScopeChange({ sprint, task, changeType, impactHours = 0, reason, actor }) {
+  async function recordScopeChange({ sprint, task, changeType, impactHours = 0, reason, actor }) {
     const change = {
-      id: nextId("SCP", "sprint_scope_changes"),
+      id: await nextId("SCP", "sprint_scope_changes"),
       sprint_id: sprint.id,
       project_id: sprint.project_id,
       task_id: task?.id || null,
@@ -67,12 +67,12 @@ function createSprintCommitment({ insert, nextId, now, row, rows }) {
       actor_name: actor?.name || "",
       created_at: now(),
     };
-    insert("sprint_scope_changes", change);
+    await insert("sprint_scope_changes", change);
     return mapScopeChange(change);
   }
 
-  function listScopeChanges(sprintId) {
-    return rows("SELECT * FROM sprint_scope_changes WHERE sprint_id = @sprintId ORDER BY created_at DESC, id DESC", { sprintId })
+  async function listScopeChanges(sprintId) {
+    return (await rows("SELECT * FROM sprint_scope_changes WHERE sprint_id = @sprintId ORDER BY created_at DESC, id DESC", { sprintId }))
       .map(mapScopeChange);
   }
 

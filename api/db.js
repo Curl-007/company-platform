@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { DatabaseSync } = require("node:sqlite");
 const { createDatabaseRuntime } = require("./src/db/runtime");
+const { createSqliteAccess } = require("./src/db/access");
 const bcrypt = require("bcryptjs");
 const {
   programs,
@@ -28,10 +29,16 @@ const STORAGE_DIR = path.join(__dirname, "storage");
 const MIGRATIONS_DIR = path.join(__dirname, "migrations");
 const databaseRuntime = createDatabaseRuntime({ DatabaseSync, databaseFile: DB_FILE });
 const db = databaseRuntime.connection;
+const access = createSqliteAccess(databaseRuntime);
 
-function exec(sql) {
-  databaseRuntime.exec(sql);
-}
+// Private sync helpers for migrations / seed / init only. Public contract is async.
+const {
+  row: rowSync,
+  rows: rowsSync,
+  run: runSync,
+  insert: insertSync,
+  exec,
+} = access._sync;
 
 function json(value, fallback = null) {
   if (value === undefined) return fallback;
@@ -591,7 +598,7 @@ function initDb() {
   try { exec("ALTER TABLE defects ADD COLUMN assignee_role TEXT"); } catch (e) { /* column already exists */ }
   try { exec("ALTER TABLE project_members ADD COLUMN user_id TEXT"); } catch (e) { /* column already exists */ }
   try { exec("ALTER TABLE releases ADD COLUMN creator_id TEXT"); } catch (e) { /* column already exists */ }
-  run(
+  runSync(
     `UPDATE project_members
      SET user_id = (SELECT id FROM users WHERE users.name = project_members.user_name)
      WHERE user_id IS NULL
@@ -619,13 +626,7 @@ function initDb() {
 }
 
 function count(table) {
-  return db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count;
-}
-
-function insert(table, row) {
-  const keys = Object.keys(row);
-  const placeholders = keys.map((key) => `@${key}`).join(", ");
-  db.prepare(`INSERT OR REPLACE INTO ${table} (${keys.join(", ")}) VALUES (${placeholders})`).run(row);
+  return rowSync(`SELECT COUNT(*) AS count FROM ${table}`).count;
 }
 
 const DEFAULT_DEPARTMENT_BY_ROLE = Object.freeze({
@@ -637,7 +638,7 @@ const DEFAULT_DEPARTMENT_BY_ROLE = Object.freeze({
 });
 
 function alignDefaultOrganizationMembership() {
-  const unassigned = rows("SELECT id, role, department FROM users WHERE department_id IS NULL OR TRIM(department_id) = ''");
+  const unassigned = rowsSync("SELECT id, role, department FROM users WHERE department_id IS NULL OR TRIM(department_id) = ''");
   if (!unassigned.length) return;
   const findUnit = db.prepare("SELECT id FROM org_units WHERE name = @name");
   const insertUnit = db.prepare(`INSERT INTO org_units
@@ -666,11 +667,11 @@ function seed() {
   const devPassword = process.env.SEED_DEV_PASSWORD || (process.env.NODE_ENV === "production" ? null : "Dev@12345");
   const qaPassword = process.env.SEED_QA_PASSWORD || (process.env.NODE_ENV === "production" ? null : "Qa@12345");
   const pdmPassword = process.env.SEED_PDM_PASSWORD || (process.env.NODE_ENV === "production" ? null : "Pdm@12345");
-  const adminExists = row("SELECT id FROM users WHERE email = @email", { email: "admin@example.com" });
-  const pmExists = row("SELECT id FROM users WHERE email = @email", { email: "pm@example.com" });
-  const devExists = row("SELECT id FROM users WHERE email = @email", { email: "dev@example.com" });
-  const qaExists = row("SELECT id FROM users WHERE email = @email", { email: "qa@example.com" });
-  const pdmExists = row("SELECT id FROM users WHERE email = @email", { email: "pdm@example.com" });
+  const adminExists = rowSync("SELECT id FROM users WHERE email = @email", { email: "admin@example.com" });
+  const pmExists = rowSync("SELECT id FROM users WHERE email = @email", { email: "pm@example.com" });
+  const devExists = rowSync("SELECT id FROM users WHERE email = @email", { email: "dev@example.com" });
+  const qaExists = rowSync("SELECT id FROM users WHERE email = @email", { email: "qa@example.com" });
+  const pdmExists = rowSync("SELECT id FROM users WHERE email = @email", { email: "pdm@example.com" });
 
   // Seed accounts are bootstrap-only. Never overwrite an existing account's
   // name, role, permissions, password, or disabled state on process restart.
@@ -678,7 +679,7 @@ function seed() {
     if (process.env.NODE_ENV !== "production") {
       console.warn("Seeding demo admin (admin@example.com) — remove before production or set SEED_ADMIN_PASSWORD.");
     }
-    insert("users", {
+    insertSync("users", {
       id: "USR-ADMIN",
       name: "系统管理员",
       email: "admin@example.com",
@@ -691,7 +692,7 @@ function seed() {
   }
 
   if (!pmExists && pmPassword) {
-    insert("users", {
+    insertSync("users", {
       id: "USR-PM",
       name: "项目经理",
       email: "pm@example.com",
@@ -705,7 +706,7 @@ function seed() {
 
   // Dev engineer: sees projects, requirements, builds, documents, my-work, dynamic.
   if (!devExists && devPassword) {
-    insert("users", {
+    insertSync("users", {
       id: "USR-DEV",
       name: "开发工程师",
       email: "dev@example.com",
@@ -719,7 +720,7 @@ function seed() {
 
   // QA engineer: sees testing, defects, documents, my-work, dynamic.
   if (!qaExists && qaPassword) {
-    insert("users", {
+    insertSync("users", {
       id: "USR-QA",
       name: "测试工程师",
       email: "qa@example.com",
@@ -732,7 +733,7 @@ function seed() {
   }
 
   if (!pdmExists && pdmPassword) {
-    insert("users", {
+    insertSync("users", {
       id: "USR-PDM",
       name: "产品经理",
       email: "pdm@example.com",
@@ -756,7 +757,7 @@ function seed() {
   }
   if (count("programs") === 0) {
     programs.forEach((item) =>
-      insert("programs", {
+      insertSync("programs", {
         id: item.id,
         name: item.name,
         owner: item.owner,
@@ -771,7 +772,7 @@ function seed() {
   }
   if (count("portfolios") === 0) {
     portfolios.forEach((item) =>
-      insert("portfolios", {
+      insertSync("portfolios", {
         id: item.id,
         name: item.name,
         owner: item.owner,
@@ -783,7 +784,7 @@ function seed() {
   }
   if (count("projects") === 0) {
     projects.forEach((item) =>
-      insert("projects", {
+      insertSync("projects", {
         id: item.id,
         name: item.name,
         status: item.status,
@@ -801,7 +802,7 @@ function seed() {
   }
   if (count("products") === 0) {
     products.forEach((item) =>
-      insert("products", {
+      insertSync("products", {
         id: item.id,
         name: item.name,
         owner: item.owner,
@@ -825,7 +826,7 @@ function seed() {
   }
   if (count("requirements") === 0) {
     requirements.forEach((item) =>
-      insert("requirements", {
+      insertSync("requirements", {
         id: item.id,
         title: item.title,
         description: item.description || "",
@@ -847,7 +848,7 @@ function seed() {
   }
   if (count("tasks") === 0) {
     tasks.forEach((item) =>
-      insert("tasks", {
+      insertSync("tasks", {
         id: item.id,
         title: item.title,
         status: item.status,
@@ -875,7 +876,7 @@ function seed() {
   }
   if (count("test_cases") === 0) {
     tests.forEach((item) =>
-      insert("test_cases", {
+      insertSync("test_cases", {
         id: item.id,
         name: item.name,
         requirement_id: item.requirementId,
@@ -892,7 +893,7 @@ function seed() {
   }
   if (count("documents") === 0) {
     documents.forEach((item) =>
-      insert("documents", {
+      insertSync("documents", {
         id: item.id,
         title: item.title,
         type: item.type,
@@ -915,7 +916,7 @@ function seed() {
   }
   if (count("sprints") === 0) {
     sprints.forEach((item) =>
-      insert("sprints", {
+      insertSync("sprints", {
         id: item.id,
         project_id: item.projectId,
         name: item.name,
@@ -928,7 +929,7 @@ function seed() {
   }
   if (count("defects") === 0) {
     defects.forEach((item) =>
-      insert("defects", {
+      insertSync("defects", {
         id: item.id,
         title: item.title,
         severity: item.severity,
@@ -945,7 +946,7 @@ function seed() {
   }
   if (count("builds") === 0) {
     builds.forEach((item) =>
-      insert("builds", {
+      insertSync("builds", {
         id: item.id,
         project_id: item.projectId,
         name: item.name,
@@ -963,7 +964,7 @@ function seed() {
   }
   if (count("releases") === 0) {
     releases.forEach((item) =>
-      insert("releases", {
+      insertSync("releases", {
         id: item.id,
         product_id: item.productId || null,
         name: item.name,
@@ -982,29 +983,12 @@ function seed() {
   }
 }
 
-function rows(sql, params = {}) {
-  return db.prepare(sql).all(params);
-}
-
-function row(sql, params = {}) {
-  return db.prepare(sql).get(params);
-}
-
-function run(sql, params = {}) {
-  return db.prepare(sql).run(params);
-}
-
-function transaction(work) {
-  exec("BEGIN IMMEDIATE");
-  try {
-    const result = work();
-    exec("COMMIT");
-    return result;
-  } catch (error) {
-    try { exec("ROLLBACK"); } catch { /* transaction was not opened */ }
-    throw error;
-  }
-}
+// Public async access contract (Promise-based). Prefer these at all call sites.
+const row = access.row;
+const rows = access.rows;
+const run = access.run;
+const insert = access.insert;
+const transaction = access.transaction;
 
 function mapProject(item) {
   return {
@@ -1274,8 +1258,8 @@ function sanitizeAuditValue(value) {
   ]));
 }
 
-function audit(actor, action, resourceType, resourceId, beforeValue, afterValue, ip) {
-  insert("audit_logs", {
+async function audit(actor, action, resourceType, resourceId, beforeValue, afterValue, ip) {
+  await insert("audit_logs", {
     id: `AUD-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
     actor_id: actor?.id || null,
     actor_name: actor?.name || "anonymous",
@@ -1294,18 +1278,18 @@ function audit(actor, action, resourceType, resourceId, beforeValue, afterValue,
  * Called whenever a task's hours change, so the burndown chart has a data
  * point for "today". One snapshot per sprint per calendar day.
  */
-function recordBurndownSnapshot(sprintId) {
+async function recordBurndownSnapshot(sprintId) {
   if (!sprintId) return;
   const today = now().slice(0, 10);
   // Sum remaining hours across all tasks in this sprint.
-  const total = rows("SELECT remaining_hours AS h FROM tasks WHERE sprint_id = @sid", { sid: sprintId })
-    .reduce((sum, t) => sum + (Number(t.h) || 0), 0);
+  const taskHours = await rows("SELECT remaining_hours AS h FROM tasks WHERE sprint_id = @sid", { sid: sprintId });
+  const total = taskHours.reduce((sum, t) => sum + (Number(t.h) || 0), 0);
   // Upsert: one row per sprint+date. Try update first; insert if missing.
-  const existing = row("SELECT id FROM burndown_snapshots WHERE sprint_id = @sid AND date = @date", { sid: sprintId, date: today });
+  const existing = await row("SELECT id FROM burndown_snapshots WHERE sprint_id = @sid AND date = @date", { sid: sprintId, date: today });
   if (existing) {
-    run("UPDATE burndown_snapshots SET remaining_hours = @h WHERE id = @id", { id: existing.id, h: total });
+    await run("UPDATE burndown_snapshots SET remaining_hours = @h WHERE id = @id", { id: existing.id, h: total });
   } else {
-    insert("burndown_snapshots", {
+    await insert("burndown_snapshots", {
       id: `BURN-${sprintId}-${today}`,
       sprint_id: sprintId,
       date: today,
@@ -1320,12 +1304,12 @@ function recordBurndownSnapshot(sprintId) {
  * estimate to zero across the sprint span) + actual remaining line (from
  * snapshots). Falls back to a single point if no snapshots exist yet.
  */
-function buildSprintBurndown(sprintId) {
-  const sprint = row("SELECT * FROM sprints WHERE id = @id", { id: sprintId });
+async function buildSprintBurndown(sprintId) {
+  const sprint = await row("SELECT * FROM sprints WHERE id = @id", { id: sprintId });
   if (!sprint) return null;
-  const tasks = rows("SELECT * FROM tasks WHERE sprint_id = @sid", { sid: sprintId });
+  const tasks = await rows("SELECT * FROM tasks WHERE sprint_id = @sid", { sid: sprintId });
   const totalEstimate = tasks.reduce((sum, t) => sum + (Number(t.estimated_hours) || 0), 0);
-  const snapshots = rows("SELECT * FROM burndown_snapshots WHERE sprint_id = @sid ORDER BY date ASC", { sid: sprintId });
+  const snapshots = await rows("SELECT * FROM burndown_snapshots WHERE sprint_id = @sid ORDER BY date ASC", { sid: sprintId });
 
   // Date span: sprint start → end (or today, whichever is later for the tail).
   const start = sprint.start_date ? sprint.start_date.slice(0, 10) : now().slice(0, 10);

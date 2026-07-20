@@ -6,7 +6,7 @@
 
 当前代码仍以 SQLite 为运行数据源。以下步骤是切换前置条件，不代表已启用 PostgreSQL。
 
-> 运行时保护：当前可设置 `DATABASE_DIALECT=sqlite`（默认）。若显式设置为 `postgres`，服务会在启动时拒绝运行，而不会把同步 SQLite 仓储误连到 PostgreSQL。待异步 Repository 适配层和双环境验收完成后，才允许解除该保护并实际切换。
+> 运行时保护：当前可设置 `DATABASE_DIALECT=sqlite`（默认）。若显式设置为 `postgres`，服务会在启动时拒绝运行（W5 前 fail-closed），而不会把同步 SQLite 仓储误连到 PostgreSQL。待 W5 异步 Repository 适配层和双环境验收完成后，才允许解除该保护并实际切换。
 
 ## 迁移前置条件
 
@@ -43,10 +43,29 @@
 
 ## 导入与验收门禁
 
-1. 在隔离 PostgreSQL 环境导入 NDJSON；按依赖顺序导入用户、组织、产品/项目、交付数据、审计数据。
-2. 按 `manifest.postgresImport.tableOrder` 导入；`deferredReferenceRules` 中的循环/自引用必须在数据导入后补建或执行 `VALIDATE CONSTRAINT`。
-3. 校验每张表的导入行数与 manifest 相等，并核对文件 SHA-256、`appliedMigrations` 及源库预检结果。
-4. 将目标 PostgreSQL 的导入结果导出为 target report JSON，并与 manifest 对账。真实隔离 PostgreSQL 环境使用：
+> **注意**：当前 API **runtime 仍未启用** PostgreSQL（`DATABASE_DIALECT=postgres` 会在启动时 fail-closed）。以下步骤仅用于隔离目标库的数据迁移与对账，不切换线上读写。
+
+1. 在隔离 PostgreSQL 环境先应用最终态 baseline schema（无 SQL FK；JSON 列保持 TEXT）：
+
+   ```powershell
+   npm run apply:postgres-schema -w api -- --connection $env:POSTGRES_TARGET_URL
+   ```
+
+   等价地，可在导入时加 `--apply-schema`。Canonical DDL：`api/src/db/schema/postgres-baseline.sql`。SQLite 路径仍使用 `api/db.js` + `api/migrations/*.js`；PG 不跑逐条 JS migration 的 DDL，只按需把迁移 id/checksum 记入 `schema_migrations` 以便与 export manifest 对账。
+
+2. 导入 NDJSON（按 `manifest.postgresImport.tableOrder`；缺连接串 fail-closed）：
+
+   ```powershell
+   npm run import:postgres -w api -- --dir C:\migration\project-management-20260713 --connection $env:POSTGRES_TARGET_URL
+   # 或一步：... --apply-schema
+   ```
+
+   `app_settings` 以 `key` 为冲突目标 upsert；导入失败整事务 `ROLLBACK` 并以非 0 退出。日志中的连接串已脱敏。
+   未提供 `--connection` 且环境变量 `DATABASE_URL` / `POSTGRES_TARGET_URL` 均未设置时，脚本拒绝运行。
+
+3. 按 `manifest.postgresImport.tableOrder` 导入；`deferredReferenceRules` 中的循环/自引用在导入后做应用层计数校验（本阶段不添加 SQL FK，故无 `VALIDATE CONSTRAINT`）。
+4. 校验每张表的导入行数与 manifest 相等，并核对文件 SHA-256、`appliedMigrations` 及源库预检结果。
+5. 将目标 PostgreSQL 的导入结果导出为 target report JSON，并与 manifest 对账。真实隔离 PostgreSQL 环境使用：
    ```powershell
    npm run generate:postgres-target-report -w api -- --dir C:\migration\project-management-20260713 --out C:\migration\postgres-target-report.json --connection $env:POSTGRES_TARGET_URL
    ```
@@ -68,9 +87,19 @@
    ```
 
    对账必须显示表数量、行数、迁移校验和全部匹配，且目标库无外键、引用、约束或 JSON 违规。CI 中的 `create-postgres-target-report-fixture.js` 仅用于脚本自检，不代表真实 PostgreSQL 导入验收。
-5. 执行目标库外键检查、迁移版本检查和关键索引检查。
-6. 使用同一套测试数据执行 API 回归：登录与禁用用户、项目数据范围、项目激活、交付门禁、容量访问、AI 人工确认。
-7. 在灰度环境以只读影子比对确认仪表盘、项目流和交付统计的聚合结果一致后，才允许切换写流量。
+6. 执行目标库迁移版本检查和关键索引检查（本阶段无 SQL FK 强制约束）。
+7. 使用同一套测试数据执行 API 回归：登录与禁用用户、项目数据范围、项目激活、交付门禁、容量访问、AI 人工确认（需 W5 解除 runtime fail-closed 之后）。
+8. 在灰度环境以只读影子比对确认仪表盘、项目流和交付统计的聚合结果一致后，才允许切换写流量。
+
+### 推荐完整链路
+
+```text
+preflight → export:postgres → verify:postgres-export
+  → apply:postgres-schema → import:postgres
+  → generate:postgres-target-report → reconcile:postgres-import
+```
+
+> **重要**：即使在隔离 PG 环境执行完整链路并完成对账，API runtime 仍未启用 PostgreSQL。设置 `DATABASE_DIALECT=postgres` 仍会导致进程启动时拒绝运行（W5 前 fail-closed）。本链路的唯一目的是数据迁移与对账，不切换线上读写。
 
 ## 回滚
 

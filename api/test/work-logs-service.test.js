@@ -6,7 +6,7 @@ function normalizeRole(role) {
   return ["admin", "pm", "pdm", "dev", "qa"].includes(role) ? role : "dev";
 }
 
-test("work log helpers preserve weekly summary and collaboration boundaries", () => {
+test("work log helpers preserve weekly summary and collaboration boundaries", async () => {
   const fixtures = {
     projects: [{ id: "PRJ-001", name: "Alpha", owner: "Pat" }],
     users: [{ id: "USR-PM", name: "Pat", role: "pm", status: "active" }],
@@ -59,11 +59,11 @@ test("work log helpers preserve weekly summary and collaboration boundaries", ()
   assert.deepEqual(summary.nextPlans, ["继续测试"]);
   assert.deepEqual(summary.linkedRequirements, [{ id: "REQ-001", title: "登录" }]);
 
-  assert.deepEqual(helpers.resolveWorkLogProjectFilter({ projectId: "PRJ-001" }), { id: "PRJ-001", name: "Alpha" });
+  assert.deepEqual(await helpers.resolveWorkLogProjectFilter({ projectId: "PRJ-001" }), { id: "PRJ-001", name: "Alpha" });
   assert.equal(helpers.workLogMatchesProject({ projectId: "PRJ-001", project: "Alpha" }, { id: "PRJ-001", name: "Alpha" }), true);
   assert.equal(helpers.workLogMatchesProject({ projectId: "PRJ-002", project: "Beta" }, { id: "PRJ-001", name: "Alpha" }), false);
 
-  const members = helpers.collectProjectMembers({ id: "PRJ-001", name: "Alpha" });
+  const members = await helpers.collectProjectMembers({ id: "PRJ-001", name: "Alpha" });
   assert.deepEqual(
     members.map((item) => `${item.name}:${item.role}`).sort(),
     ["Dev A:dev", "Dev B:dev", "Pdm A:pdm", "Qa A:qa", "Qa B:qa"],

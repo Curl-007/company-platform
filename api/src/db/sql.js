@@ -53,6 +53,22 @@ function toPostgresParams(sql, params) {
  * Translate a limited set of SQLite-only constructs into PostgreSQL.
  * Table/column structure is assumed portable (TEXT/INTEGER, no PRAGMA).
  */
+/**
+ * Pick ON CONFLICT target for INSERT OR REPLACE.
+ * Prefer known identity columns: id, then job_id, then key, else first column.
+ * app_settings uses PK = key (not id); ai_jobs uses job_id.
+ */
+function resolveReplaceConflictTarget(table, columns) {
+  const cols = columns.map((c) => String(c).trim());
+  const tableName = String(table || "").toLowerCase();
+  if (tableName === "app_settings" && cols.includes("key")) return "key";
+  if (tableName === "ai_jobs" && cols.includes("job_id")) return "job_id";
+  if (cols.includes("id")) return "id";
+  if (cols.includes("job_id")) return "job_id";
+  if (cols.includes("key")) return "key";
+  return cols[0];
+}
+
 function translateSqliteToPostgres(sql) {
   let text = String(sql || "");
 
@@ -62,6 +78,28 @@ function translateSqliteToPostgres(sql) {
   // Prefer application-layer now(); still normalize common SQLite default.
   text = text.replace(/datetime\s*\(\s*'now'\s*\)/gi, "(NOW() AT TIME ZONE 'utc')");
   text = text.replace(/datetime\s*\(\s*"now"\s*\)/gi, "(NOW() AT TIME ZONE 'utc')");
+
+  // Case-insensitive ordering: SQLite COLLATE NOCASE → PostgreSQL lower(...).
+  // Handles "ORDER BY name COLLATE NOCASE" and multi-column forms.
+  text = text.replace(
+    /\bORDER\s+BY\s+((?:[^;]+?)\s+COLLATE\s+NOCASE(?:\s*,\s*(?:[^;]+?))*)/gi,
+    (match, orderList) => {
+      const rewritten = String(orderList)
+        .split(",")
+        .map((part) => {
+          const piece = part.trim();
+          const collated = piece.match(/^(.+?)\s+COLLATE\s+NOCASE(\s+(ASC|DESC))?$/i);
+          if (!collated) return piece;
+          const expr = collated[1].trim();
+          const dir = collated[3] ? ` ${collated[3].toUpperCase()}` : "";
+          return `lower(${expr})${dir}`;
+        })
+        .join(", ");
+      return `ORDER BY ${rewritten}`;
+    },
+  );
+  // Remaining bare COLLATE NOCASE (e.g. WHERE name COLLATE NOCASE = ...).
+  text = text.replace(/\s+COLLATE\s+NOCASE\b/gi, "");
 
   // INSERT OR IGNORE INTO t (...) VALUES (...)
   text = text.replace(
@@ -76,7 +114,7 @@ function translateSqliteToPostgres(sql) {
   }
 
   // INSERT OR REPLACE INTO t (cols) VALUES (...)
-  // Assumes primary key on first identity column "id" when present in column list.
+  // Prefer id, then job_id, then key (app_settings), else first column.
   const orReplace = text.match(
     /^\s*INSERT\s+OR\s+REPLACE\s+INTO\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)\s*;?\s*$/i,
   );
@@ -84,7 +122,7 @@ function translateSqliteToPostgres(sql) {
     const table = orReplace[1];
     const cols = orReplace[2].split(",").map((c) => c.trim());
     const vals = orReplace[3];
-    const conflictTarget = cols.includes("id") ? "id" : cols[0];
+    const conflictTarget = resolveReplaceConflictTarget(table, cols);
     const assignments = cols
       .filter((c) => c !== conflictTarget)
       .map((c) => `${c} = EXCLUDED.${c}`)
@@ -118,27 +156,30 @@ function toPostgresQuery(sql, params) {
 /**
  * Build a portable upsert for dynamic insert(table, row) helpers.
  */
-function buildUpsertSql(table, columns, { dialect = "sqlite", conflictTarget = "id" } = {}) {
+function buildUpsertSql(table, columns, { dialect = "sqlite", conflictTarget } = {}) {
   const cols = columns.map((c) => String(c));
   const placeholders = cols.map((c) => (dialect === "postgres" ? null : `@${c}`));
+  const target = conflictTarget || resolveReplaceConflictTarget(table, cols);
   if (dialect === "sqlite") {
     return {
       sql: `INSERT OR REPLACE INTO ${table} (${cols.join(", ")}) VALUES (${placeholders.join(", ")})`,
       paramsStyle: "named",
+      conflictTarget: target,
     };
   }
 
   const values = cols.map((_, i) => `$${i + 1}`);
   const assignments = cols
-    .filter((c) => c !== conflictTarget)
+    .filter((c) => c !== target)
     .map((c) => `${c} = EXCLUDED.${c}`)
     .join(", ");
   const updateClause = assignments
-    ? ` ON CONFLICT (${conflictTarget}) DO UPDATE SET ${assignments}`
-    : ` ON CONFLICT (${conflictTarget}) DO NOTHING`;
+    ? ` ON CONFLICT (${target}) DO UPDATE SET ${assignments}`
+    : ` ON CONFLICT (${target}) DO NOTHING`;
   return {
     sql: `INSERT INTO ${table} (${cols.join(", ")}) VALUES (${values.join(", ")})${updateClause}`,
     paramsStyle: "positional",
+    conflictTarget: target,
   };
 }
 
@@ -147,4 +188,5 @@ module.exports = {
   translateSqliteToPostgres,
   toPostgresQuery,
   buildUpsertSql,
+  resolveReplaceConflictTarget,
 };

@@ -2,14 +2,14 @@ const jwt = require("jsonwebtoken");
 const { hasPermission, publicUser } = require("../security/accessControl");
 
 function createAuthMiddleware({ jwtSecret, fail, row }) {
-  function authenticate(req, res, next) {
+  async function authenticate(req, res, next) {
     if (req.path === "/api/health" || req.path === "/api/auth/login") return next();
     const header = req.headers.authorization || "";
     const token = header.startsWith("Bearer ") ? header.slice(7) : "";
     if (!token) return fail(res, 401, "UNAUTHENTICATED", "请先登录。");
     try {
       const payload = jwt.verify(token, jwtSecret);
-      const user = row("SELECT * FROM users WHERE id = @id", { id: payload.sub });
+      const user = await row("SELECT * FROM users WHERE id = @id", { id: payload.sub });
       if (!user) return fail(res, 401, "UNAUTHENTICATED", "登录已失效。");
       if (user.status === "disabled") return fail(res, 403, "ACCOUNT_DISABLED", "该账号已被禁用。");
       req.user = publicUser(user);
@@ -56,12 +56,12 @@ function createAuthMiddleware({ jwtSecret, fail, row }) {
     return queryToken;
   }
 
-  function authenticateSocket(req) {
+  async function authenticateSocket(req) {
     const token = extractSocketToken(req);
     if (!token) return null;
     try {
       const payload = jwt.verify(token, jwtSecret);
-      const user = row("SELECT * FROM users WHERE id = @id", { id: payload.sub });
+      const user = await row("SELECT * FROM users WHERE id = @id", { id: payload.sub });
       return user && user.status === "active" ? publicUser(user) : null;
     } catch {
       return null;

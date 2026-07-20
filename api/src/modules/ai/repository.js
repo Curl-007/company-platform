@@ -23,23 +23,23 @@ function transitionError(message, code = "AI_JOB_TRANSITION_NOT_ALLOWED") {
 
 function createAiJobRepository({ insert, row, rows, run }) {
   return {
-    createJob(job) {
-      insert("ai_jobs", job);
+    async createJob(job) {
+      await insert("ai_jobs", job);
       return this.findJob(job.job_id);
     },
-    findJob(jobId) {
-      return row("SELECT * FROM ai_jobs WHERE job_id = @id", { id: jobId });
+    async findJob(jobId) {
+      return await row("SELECT * FROM ai_jobs WHERE job_id = @id", { id: jobId });
     },
-    listTimedOutRunningJobs(cutoffIso) {
-      return rows(
+    async listTimedOutRunningJobs(cutoffIso) {
+      return await rows(
         "SELECT * FROM ai_jobs WHERE status = 'running' AND COALESCE(started_at, created_at) <= @cutoffIso ORDER BY created_at ASC",
         { cutoffIso },
       );
     },
-    findDocument(documentId) {
-      return row("SELECT * FROM documents WHERE id = @id", { id: documentId });
+    async findDocument(documentId) {
+      return await row("SELECT * FROM documents WHERE id = @id", { id: documentId });
     },
-    listDocuments({ projectId, documentIds, limit = 200 } = {}) {
+    async listDocuments({ projectId, documentIds, limit = 200 } = {}) {
       let sql = "SELECT * FROM documents WHERE 1=1";
       const params = { limit };
       if (projectId) {
@@ -52,24 +52,24 @@ function createAiJobRepository({ insert, row, rows, run }) {
         documentIds.forEach((id, index) => { params[`documentId${index}`] = id; });
       }
       sql += " ORDER BY updated_at DESC LIMIT @limit";
-      return rows(sql, params);
+      return await rows(sql, params);
     },
-    listChunksForDocuments(documentIds) {
+    async listChunksForDocuments(documentIds) {
       if (!Array.isArray(documentIds) || !documentIds.length) return [];
       const params = {};
       const keys = documentIds.map((id, index) => {
         params[`documentId${index}`] = id;
         return `@documentId${index}`;
       });
-      return rows(
+      return await rows(
         `SELECT * FROM document_chunk WHERE document_id IN (${keys.join(", ")}) ORDER BY document_id, chunk_index`,
         params,
       );
     },
-    replaceDocumentChunks(document, chunks, indexedAt) {
-      run("DELETE FROM document_chunk WHERE document_id = @documentId", { documentId: document.id });
+    async replaceDocumentChunks(document, chunks, indexedAt) {
+      await run("DELETE FROM document_chunk WHERE document_id = @documentId", { documentId: document.id });
       for (const chunk of chunks) {
-        insert("document_chunk", {
+        await insert("document_chunk", {
           ...chunk,
           project_id: document.project_id || null,
           indexed_at: indexedAt,
@@ -77,27 +77,28 @@ function createAiJobRepository({ insert, row, rows, run }) {
       }
       return chunks.length;
     },
-    createRagCitation(citation) {
-      insert("rag_citation", citation);
-      return row("SELECT * FROM rag_citation WHERE id = @id", { id: citation.id });
+    async createRagCitation(citation) {
+      await insert("rag_citation", citation);
+      return await row("SELECT * FROM rag_citation WHERE id = @id", { id: citation.id });
     },
-    findRequirementProject(requirementId) {
-      return row("SELECT project_id FROM requirements WHERE id = @id AND deleted_at IS NULL", { id: requirementId })?.project_id || null;
+    async findRequirementProject(requirementId) {
+      const requirement = await row("SELECT project_id FROM requirements WHERE id = @id AND deleted_at IS NULL", { id: requirementId });
+      return requirement?.project_id || null;
     },
-    listLiveProjectIds() {
-      return rows("SELECT id FROM projects WHERE deleted_at IS NULL ORDER BY id").map((item) => item.id);
+    async listLiveProjectIds() {
+      return (await rows("SELECT id FROM projects WHERE deleted_at IS NULL ORDER BY id")).map((item) => item.id);
     },
-    findLiveProject(projectId) {
-      return row("SELECT * FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectId });
+    async findLiveProject(projectId) {
+      return await row("SELECT * FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectId });
     },
-    createRequirement(requirement) {
-      insert("requirements", requirement);
+    async createRequirement(requirement) {
+      await insert("requirements", requirement);
       return requirement;
     },
-    updateDocumentAiStatus(documentId, status) {
-      run("UPDATE documents SET ai_status = @status WHERE id = @id", { id: documentId, status });
+    async updateDocumentAiStatus(documentId, status) {
+      await run("UPDATE documents SET ai_status = @status WHERE id = @id", { id: documentId, status });
     },
-    transition(job, to, patch = {}) {
+    async transition(job, to, patch = {}) {
       if (!job?.job_id) throw transitionError("AI job is required.", "AI_JOB_NOT_FOUND");
       if (!canTransition("aiJob", job.status, to)) {
         throw transitionError(`Cannot transition AI job from "${job.status}" to "${to}".`);
@@ -107,7 +108,7 @@ function createAiJobRepository({ insert, row, rows, run }) {
         throw transitionError("AI job transition includes an unsupported field.", "AI_JOB_INVALID_PATCH");
       }
       const assignments = ["status = @status", ...columns.map((column) => `${column} = @${column}`)];
-      const result = run(
+      const result = await run(
         `UPDATE ai_jobs SET ${assignments.join(", ")} WHERE job_id = @jobId AND status = @fromStatus`,
         { jobId: job.job_id, fromStatus: job.status, status: to, ...patch },
       );
@@ -121,65 +122,65 @@ function createAiJobRepository({ insert, row, rows, run }) {
 
 function createBusinessAdviceRepository({ row, rows }) {
   return {
-    findBuild(id) {
-      return row("SELECT * FROM builds WHERE id = @id", { id });
+    async findBuild(id) {
+      return await row("SELECT * FROM builds WHERE id = @id", { id });
     },
-    findDefect(id) {
-      return row("SELECT * FROM defects WHERE id = @id", { id });
+    async findDefect(id) {
+      return await row("SELECT * FROM defects WHERE id = @id", { id });
     },
-    findDocument(id) {
-      return row("SELECT * FROM documents WHERE id = @id", { id });
+    async findDocument(id) {
+      return await row("SELECT * FROM documents WHERE id = @id", { id });
     },
-    findProject(id) {
-      return row("SELECT * FROM projects WHERE id = @id AND deleted_at IS NULL", { id });
+    async findProject(id) {
+      return await row("SELECT * FROM projects WHERE id = @id AND deleted_at IS NULL", { id });
     },
-    findRelease(id) {
-      return row("SELECT * FROM releases WHERE id = @id", { id });
+    async findRelease(id) {
+      return await row("SELECT * FROM releases WHERE id = @id", { id });
     },
-    findRequirement(id) {
-      return row("SELECT * FROM requirements WHERE id = @id AND deleted_at IS NULL", { id });
+    async findRequirement(id) {
+      return await row("SELECT * FROM requirements WHERE id = @id AND deleted_at IS NULL", { id });
     },
-    findTestCase(id) {
-      return row("SELECT * FROM test_cases WHERE id = @id", { id });
+    async findTestCase(id) {
+      return await row("SELECT * FROM test_cases WHERE id = @id", { id });
     },
-    listAiJobsForSource(sourceType, sourceId, limit = 5) {
-      return rows(
+    async listAiJobsForSource(sourceType, sourceId, limit = 5) {
+      return await rows(
         "SELECT * FROM ai_jobs WHERE source_type = @sourceType AND source_id = @sourceId ORDER BY created_at DESC LIMIT @limit",
         { sourceType, sourceId, limit },
       );
     },
-    listBuildsForProject(projectId) {
-      return rows("SELECT * FROM builds WHERE project_id = @id ORDER BY created_at DESC", { id: projectId });
+    async listBuildsForProject(projectId) {
+      return await rows("SELECT * FROM builds WHERE project_id = @id ORDER BY created_at DESC", { id: projectId });
     },
-    listDefectsForProject(projectId) {
-      return rows("SELECT * FROM defects WHERE project_id = @id ORDER BY id", { id: projectId });
+    async listDefectsForProject(projectId) {
+      return await rows("SELECT * FROM defects WHERE project_id = @id ORDER BY id", { id: projectId });
     },
-    listDefectsForRequirement(requirementId) {
-      return rows("SELECT * FROM defects WHERE requirement_id = @id ORDER BY id", { id: requirementId });
+    async listDefectsForRequirement(requirementId) {
+      return await rows("SELECT * FROM defects WHERE requirement_id = @id ORDER BY id", { id: requirementId });
     },
-    listRequirementsForProject(projectId) {
-      return rows("SELECT * FROM requirements WHERE project_id = @id AND deleted_at IS NULL ORDER BY id", { id: projectId });
+    async listRequirementsForProject(projectId) {
+      return await rows("SELECT * FROM requirements WHERE project_id = @id AND deleted_at IS NULL ORDER BY id", { id: projectId });
     },
-    listTasksForDefect(defectId) {
-      return rows("SELECT * FROM tasks WHERE source_type = 'defect' AND source_id = @id", { id: defectId });
+    async listTasksForDefect(defectId) {
+      return await rows("SELECT * FROM tasks WHERE source_type = 'defect' AND source_id = @id", { id: defectId });
     },
-    listTasksForProject(projectId) {
-      return rows("SELECT * FROM tasks WHERE project_id = @id ORDER BY sort_order", { id: projectId });
+    async listTasksForProject(projectId) {
+      return await rows("SELECT * FROM tasks WHERE project_id = @id ORDER BY sort_order", { id: projectId });
     },
-    listTasksForRequirement(requirementId) {
-      return rows("SELECT * FROM tasks WHERE requirement_id = @id ORDER BY sort_order", { id: requirementId });
+    async listTasksForRequirement(requirementId) {
+      return await rows("SELECT * FROM tasks WHERE requirement_id = @id ORDER BY sort_order", { id: requirementId });
     },
-    listTasksForTestCase(testCaseId) {
-      return rows("SELECT * FROM tasks WHERE source_type = 'test_case' AND source_id = @id", { id: testCaseId });
+    async listTasksForTestCase(testCaseId) {
+      return await rows("SELECT * FROM tasks WHERE source_type = 'test_case' AND source_id = @id", { id: testCaseId });
     },
-    listTestCasesForProject(projectId) {
-      return rows("SELECT * FROM test_cases WHERE project_id = @id ORDER BY id", { id: projectId });
+    async listTestCasesForProject(projectId) {
+      return await rows("SELECT * FROM test_cases WHERE project_id = @id ORDER BY id", { id: projectId });
     },
-    listTestCasesForRequirement(requirementId) {
-      return rows("SELECT * FROM test_cases WHERE requirement_id = @id ORDER BY id", { id: requirementId });
+    async listTestCasesForRequirement(requirementId) {
+      return await rows("SELECT * FROM test_cases WHERE requirement_id = @id ORDER BY id", { id: requirementId });
     },
-    listTestRunsForCase(testCaseId) {
-      return rows("SELECT * FROM test_runs WHERE test_case_id = @id ORDER BY created_at DESC LIMIT 12", { id: testCaseId });
+    async listTestRunsForCase(testCaseId) {
+      return await rows("SELECT * FROM test_runs WHERE test_case_id = @id ORDER BY created_at DESC LIMIT 12", { id: testCaseId });
     },
   };
 }

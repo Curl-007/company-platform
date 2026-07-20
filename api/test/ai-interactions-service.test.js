@@ -146,7 +146,7 @@ test("AI business advice helpers keep advice operational and compact review cont
   assert.equal(normalized.fallback, false);
 });
 
-test("AI business advice context service assembles auditable domain context from repository rows", () => {
+test("AI business advice context service assembles auditable domain context from repository rows", async () => {
   const releaseRow = { id: "REL-001", name: "Release", status: "staging" };
   const service = createBusinessAdviceContextService({
     repository: {
@@ -168,15 +168,15 @@ test("AI business advice context service assembles auditable domain context from
     buildReleaseReport: (item) => ({ release: { id: item.id }, metrics: { approvalCount: 0 } }),
   });
 
-  const requirementContext = service.load("requirement", "REQ-001");
+  const requirementContext = await service.load("requirement", "REQ-001");
   assert.equal(requirementContext.target.id, "REQ-001");
   assert.equal(requirementContext.project.id, "PRJ-001");
   assert.equal(requirementContext.tasks[0].id, "TASK-001");
   assert.equal(requirementContext.score.score, 80);
 
-  const releaseContext = service.load("release", "REL-001");
+  const releaseContext = await service.load("release", "REL-001");
   assert.equal(releaseContext.target.id, "REL-001");
   assert.equal(releaseContext.gates.ready, false);
   assert.equal(releaseContext.report.metrics.approvalCount, 0);
-  assert.equal(service.load("requirement", "REQ-404"), null);
+  assert.equal(await service.load("requirement", "REQ-404"), null);
 });

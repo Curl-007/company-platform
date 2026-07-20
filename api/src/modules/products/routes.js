@@ -1,4 +1,5 @@
 const express = require("express");
+const { filterAsync, mapAsync, forEachAsync } = require("../../lib/asyncIter");
 
 function normalizeProductImageUrls(body) {
   if (Array.isArray(body?.imageUrls)) {
@@ -34,22 +35,19 @@ function createProductsRouter({
     return hasPermission(user, "product:*") || hasPermission(user, "project:*");
   }
 
-  function visibleProductsForUser(user) {
-    const products = rows("SELECT * FROM products").map(mapProduct);
+  async function visibleProductsForUser(user) {
+    const products = (await rows("SELECT * FROM products")).map(mapProduct);
     if (canReadEntireProductCatalog(user)) return products;
-    const visibleProductIds = new Set(
-      rows("SELECT id, product_id FROM projects WHERE deleted_at IS NULL")
-        .filter((project) => canAccessProject(user, project.id))
-        .map((project) => project.product_id)
-        .filter(Boolean),
-    );
+    const __src_visibleProductIds = await rows("SELECT id, product_id FROM projects WHERE deleted_at IS NULL");
+    const __mid_visibleProductIds = await filterAsync(__src_visibleProductIds, async (project) => await canAccessProject(user, project.id));
+    const visibleProductIds = new Set(__mid_visibleProductIds.map((project) => project.product_id).filter(Boolean));
     return products.filter((product) => visibleProductIds.has(product.id));
   }
 
-  router.get("/programs", requireAnyPermission(["product:*", "project:*", "project:read"]), (req, res) => {
-    const projects = rows("SELECT * FROM projects WHERE deleted_at IS NULL")
-      .filter((project) => canAccessProject(req.user, project.id))
-      .map(mapProject);
+  router.get("/programs", requireAnyPermission(["product:*", "project:*", "project:read"]), async (req, res) => {
+    const __src_projects = await rows("SELECT * FROM projects WHERE deleted_at IS NULL");
+    const __mid_projects = await filterAsync(__src_projects, async (project) => await canAccessProject(req.user, project.id));
+    const projects = __mid_projects.map(mapProject);
     const grouped = new Map();
     projects.forEach((project) => {
       const key = project.programId || "unassigned";
@@ -89,8 +87,8 @@ function createProductsRouter({
     res.json(ok(programs));
   });
 
-  router.get("/portfolios", requireAnyPermission(["product:*", "project:*", "project:read"]), (req, res) => {
-    const products = visibleProductsForUser(req.user);
+  router.get("/portfolios", requireAnyPermission(["product:*", "project:*", "project:read"]), async (req, res) => {
+    const products = await visibleProductsForUser(req.user);
     const grouped = new Map();
     products.forEach((product) => {
       const key = product.id.split("-")[1]?.slice(0, 1) ? `PORT-${product.id.split("-")[1].slice(0, 1)}` : "PORT-UNASSIGNED";
@@ -122,26 +120,27 @@ function createProductsRouter({
     res.json(ok(portfolios));
   });
 
-  router.get("/products", requireAnyPermission(["product:*", "project:*", "project:read"]), (req, res) => {
-    res.json(ok(visibleProductsForUser(req.user)));
+  router.get("/products", requireAnyPermission(["product:*", "project:*", "project:read"]), async (req, res) => {
+    res.json(ok(await visibleProductsForUser(req.user)));
   });
 
-  router.get("/products/:id/requirements", requireAnyPermission(["product:*", "project:*", "project:read"]), (req, res) => {
-    const product = row("SELECT * FROM products WHERE id = @id", { id: req.params.id });
+  router.get("/products/:id/requirements", requireAnyPermission(["product:*", "project:*", "project:read"]), async (req, res) => {
+    const product = await row("SELECT * FROM products WHERE id = @id", { id: req.params.id });
     if (!product) return fail(res, 404, "RESOURCE_NOT_FOUND", "Product not found.");
-    if (!visibleProductsForUser(req.user).some((item) => item.id === product.id)) {
+    const visibleProducts = await visibleProductsForUser(req.user);
+    if (!visibleProducts.some((item) => item.id === product.id)) {
       return fail(res, 403, "PERMISSION_DENIED", "You cannot access this product's requirements.");
     }
-    const requirements = rows(
+    const __src_requirements = await rows(
       "SELECT * FROM requirements WHERE product_id = @productId AND deleted_at IS NULL ORDER BY id DESC",
       { productId: product.id },
-    )
-      .filter((requirement) => canAccessProject(req.user, requirement.project_id))
-      .map(mapRequirement);
+    );
+    const __mid_requirements = await filterAsync(__src_requirements, async (requirement) => await canAccessProject(req.user, requirement.project_id));
+    const requirements = __mid_requirements.map(mapRequirement);
     res.json(ok(requirements));
   });
 
-  router.post("/products", requirePermission("product:*"), (req, res) => {
+  router.post("/products", requirePermission("product:*"), async (req, res) => {
     const {
       name, owner, version, stage, description, systemName, systemVersion,
       applicationVersion, modules, roadmap, hardwareInfo, systemInfo, applicationInfo,
@@ -150,7 +149,7 @@ function createProductsRouter({
     const imageUrls = normalizeProductImageUrls(req.body);
     if (!name || !owner) return fail(res, 400, "VALIDATION_FAILED", "Product name and owner are required.");
     const product = {
-      id: nextId("PROD", "products"),
+      id: await nextId("PROD", "products"),
       name: String(name).trim(),
       owner: String(owner).trim(),
       version: version || "1.0.0",
@@ -169,13 +168,13 @@ function createProductsRouter({
       system_metrics: json(Array.isArray(systemMetrics) ? systemMetrics : []),
       app_metrics: json(Array.isArray(appMetrics) ? appMetrics : []),
     };
-    insert("products", product);
-    audit(req.user, "product.create", "product", product.id, null, product, req.ip);
-    res.status(201).json(ok(mapProduct(row("SELECT * FROM products WHERE id = @id", { id: product.id }))));
+    await insert("products", product);
+    await audit(req.user, "product.create", "product", product.id, null, product, req.ip);
+    res.status(201).json(ok(mapProduct(await row("SELECT * FROM products WHERE id = @id", { id: product.id }))));
   });
 
-  router.patch("/products/:id", requirePermission("product:*"), (req, res) => {
-    const before = row("SELECT * FROM products WHERE id = @id", { id: req.params.id });
+  router.patch("/products/:id", requirePermission("product:*"), async (req, res) => {
+    const before = await row("SELECT * FROM products WHERE id = @id", { id: req.params.id });
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Product not found.");
     const hasImageUrls = Array.isArray(req.body?.imageUrls) || req.body?.imageUrl !== undefined;
     const fields = {
@@ -197,19 +196,19 @@ function createProductsRouter({
       system_metrics: req.body?.systemMetrics ? json(req.body.systemMetrics) : undefined,
       app_metrics: req.body?.appMetrics ? json(req.body.appMetrics) : undefined,
     };
-    Object.entries(fields).forEach(([key, value]) => {
-      if (value !== undefined) run(`UPDATE products SET ${key} = @value WHERE id = @id`, { id: req.params.id, value });
-    });
-    const after = row("SELECT * FROM products WHERE id = @id", { id: req.params.id });
-    audit(req.user, "product.update", "product", req.params.id, before, after, req.ip);
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined) await run(`UPDATE products SET ${key} = @value WHERE id = @id`, { id: req.params.id, value });
+    }
+    const after = await row("SELECT * FROM products WHERE id = @id", { id: req.params.id });
+    await audit(req.user, "product.update", "product", req.params.id, before, after, req.ip);
     res.json(ok(mapProduct(after)));
   });
 
-  router.delete("/products/:id", requirePermission("product:*"), (req, res) => {
-    const before = row("SELECT * FROM products WHERE id = @id", { id: req.params.id });
+  router.delete("/products/:id", requirePermission("product:*"), async (req, res) => {
+    const before = await row("SELECT * FROM products WHERE id = @id", { id: req.params.id });
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Product not found.");
-    run("DELETE FROM products WHERE id = @id", { id: req.params.id });
-    audit(req.user, "product.delete", "product", req.params.id, before, null, req.ip);
+    await run("DELETE FROM products WHERE id = @id", { id: req.params.id });
+    await audit(req.user, "product.delete", "product", req.params.id, before, null, req.ip);
     res.json(ok({ success: true }));
   });
 

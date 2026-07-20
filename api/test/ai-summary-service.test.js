@@ -21,9 +21,9 @@ function rows(sql) {
   return [];
 }
 
-test("AI summary service builds auditable snapshots and local operational summaries", () => {
+test("AI summary service builds auditable snapshots and local operational summaries", async () => {
   assert.equal(compactText("a ".repeat(200), 20), "a a a a a a a a a a ...");
-  const snapshot = collectAiBusinessSnapshot({ rows }, "dashboard");
+  const snapshot = await collectAiBusinessSnapshot({ rows }, "dashboard");
   assert.equal(snapshot.projects[0].healthScore, 65);
   assert.equal(snapshot.tasks[0].blocker, "API waiting");
 

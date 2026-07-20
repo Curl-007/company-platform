@@ -87,10 +87,10 @@ function createDeliveryService({
     return Array.from(new Set(ids.filter(Boolean)));
   }
 
-  function loadLinkedDefects(ids) {
+  async function loadLinkedDefects(ids) {
     const defectIds = uniqueIds(ids);
     if (defectIds.length === 0) return { missing: [], open: [] };
-    const found = repository.listDefectsByIds(defectIds);
+    const found = await repository.listDefectsByIds(defectIds);
     const foundIds = new Set(found.map((item) => item.id));
     return {
       missing: defectIds.filter((id) => !foundIds.has(id)),
@@ -98,10 +98,10 @@ function createDeliveryService({
     };
   }
 
-  function loadLinkedRequirements(ids) {
+  async function loadLinkedRequirements(ids) {
     const requirementIds = uniqueIds(ids);
     if (requirementIds.length === 0) return { missing: [], items: [] };
-    const found = repository.listActiveRequirementsByIds(requirementIds);
+    const found = await repository.listActiveRequirementsByIds(requirementIds);
     const foundIds = new Set(found.map((item) => item.id));
     return {
       missing: requirementIds.filter((id) => !foundIds.has(id)),
@@ -109,8 +109,8 @@ function createDeliveryService({
     };
   }
 
-  function loadRequirementReadiness(ids) {
-    const requirements = loadLinkedRequirements(ids);
+  async function loadRequirementReadiness(ids) {
+    const requirements = await loadLinkedRequirements(ids);
     const requirementIds = requirements.items.map((item) => item.id);
     if (requirementIds.length === 0) {
       return {
@@ -124,9 +124,9 @@ function createDeliveryService({
       };
     }
 
-    const tasks = repository.listTasksByRequirementIds(requirementIds);
-    const tests = repository.listTestCasesByRequirementIds(requirementIds);
-    const defects = repository.listDefectsByRequirementIds(requirementIds);
+    const tasks = await repository.listTasksByRequirementIds(requirementIds);
+    const tests = await repository.listTestCasesByRequirementIds(requirementIds);
+    const defects = await repository.listDefectsByRequirementIds(requirementIds);
     const testsByRequirement = tests.reduce((map, item) => {
       if (!map.has(item.requirement_id)) map.set(item.requirement_id, []);
       map.get(item.requirement_id).push(item);
@@ -177,7 +177,7 @@ function createDeliveryService({
     return currentStatus === nextStatus || Boolean(transitions[currentStatus]?.includes(nextStatus));
   }
 
-  function validateBuildStatusTransition(build, nextStatus) {
+  async function validateBuildStatusTransition(build, nextStatus) {
     if (!isDeliveryStatusTransitionAllowed(buildStatusTransitions, build.status, nextStatus)) {
       return deliveryGateFailure(`构建不能从 ${build.status} 直接切换到 ${nextStatus}。`, { gate: "status", currentStatus: build.status, nextStatus });
     }
@@ -195,7 +195,7 @@ function createDeliveryService({
       return deliveryGateFailure("构建进入可发布前必须填写构建备注，说明变更内容和验证范围。", { gate: "notes" });
     }
 
-    const readiness = loadRequirementReadiness(linkedStories);
+    const readiness = await loadRequirementReadiness(linkedStories);
     if (readiness.missing.length > 0) {
       return deliveryGateFailure(`构建关联的需求不存在：${readiness.missing.join(", ")}。`, { gate: "linkedStories", missing: readiness.missing });
     }
@@ -227,7 +227,7 @@ function createDeliveryService({
       );
     }
 
-    const defects = loadLinkedDefects(linkedBugs);
+    const defects = await loadLinkedDefects(linkedBugs);
     if (defects.missing.length > 0) {
       return deliveryGateFailure(`构建关联的缺陷不存在：${defects.missing.join(", ")}。`, { gate: "linkedBugs", missing: defects.missing });
     }
@@ -241,11 +241,11 @@ function createDeliveryService({
     return deliveryGatePassed({ linkedStories, linkedBugs });
   }
 
-  function hasApprovedRelease(releaseId) {
-    return repository.hasApprovedRelease(releaseId);
+  async function hasApprovedRelease(releaseId) {
+    return await repository.hasApprovedRelease(releaseId);
   }
 
-  function validateReleaseStatusTransition(release, nextStatus) {
+  async function validateReleaseStatusTransition(release, nextStatus) {
     if (!isDeliveryStatusTransitionAllowed(releaseStatusTransitions, release.status, nextStatus)) {
       return deliveryGateFailure(`发布不能从 ${release.status} 直接切换到 ${nextStatus}。`, { gate: "status", currentStatus: release.status, nextStatus });
     }
@@ -256,7 +256,7 @@ function createDeliveryService({
       if (release.status !== "staging") {
         return deliveryGateFailure("正式发布前必须先进入预发布状态。", { gate: "status", currentStatus: release.status });
       }
-      if (!hasApprovedRelease(release.id)) {
+      if (!(await hasApprovedRelease(release.id))) {
         return deliveryGateFailure("正式发布前必须至少有一条审批通过记录。", { gate: "approval" });
       }
     }
@@ -265,7 +265,7 @@ function createDeliveryService({
       return deliveryGateFailure("发布进入预发布或正式发布前必须填写发布说明。", { gate: "releaseNotes" });
     }
 
-    const linkedBuild = release.build_id ? repository.findBuild(release.build_id) : null;
+    const linkedBuild = release.build_id ? await repository.findBuild(release.build_id) : null;
     if (!linkedBuild) {
       return deliveryGateFailure("发布进入预发布或正式发布前必须关联一个已可发布的构建。", { gate: "build" });
     }
@@ -286,7 +286,7 @@ function createDeliveryService({
       return deliveryGateFailure("发布进入预发布或正式发布前必须至少关联一个需求或故事。", { gate: "linkedStories" });
     }
 
-    const readiness = loadRequirementReadiness(linkedStories);
+    const readiness = await loadRequirementReadiness(linkedStories);
     if (readiness.missing.length > 0) {
       return deliveryGateFailure(`发布关联的需求不存在：${readiness.missing.join(", ")}。`, { gate: "linkedStories", missing: readiness.missing });
     }
@@ -318,7 +318,7 @@ function createDeliveryService({
       );
     }
 
-    const defects = loadLinkedDefects(linkedBugs);
+    const defects = await loadLinkedDefects(linkedBugs);
     if (defects.missing.length > 0) {
       return deliveryGateFailure(`发布关联的缺陷不存在：${defects.missing.join(", ")}。`, { gate: "linkedBugs", missing: defects.missing });
     }
@@ -343,11 +343,11 @@ function createDeliveryService({
     };
   }
 
-  function evaluateBuildDeliveryGates(build) {
+  async function evaluateBuildDeliveryGates(build) {
     const linkedStories = normalizeIdList(build.linked_stories);
     const linkedBugs = normalizeIdList(build.linked_bugs);
-    const readiness = loadRequirementReadiness(linkedStories);
-    const defects = loadLinkedDefects(linkedBugs);
+    const readiness = await loadRequirementReadiness(linkedStories);
+    const defects = await loadLinkedDefects(linkedBugs);
     const storyPassed = linkedStories.length > 0 && readiness.missing.length === 0;
     const requirementPassed = storyPassed && readiness.notReady.length === 0;
     const taskPassed = storyPassed && readiness.unfinishedTasks.length === 0;
@@ -376,8 +376,8 @@ function createDeliveryService({
     };
   }
 
-  function evaluateReleaseDeliveryGates(release) {
-    const linkedBuild = release.build_id ? repository.findBuild(release.build_id) : null;
+  async function evaluateReleaseDeliveryGates(release) {
+    const linkedBuild = release.build_id ? await repository.findBuild(release.build_id) : null;
     const linkedStories = uniqueIds([
       ...normalizeIdList(release.linked_stories),
       ...(linkedBuild ? normalizeIdList(linkedBuild.linked_stories) : []),
@@ -386,11 +386,11 @@ function createDeliveryService({
       ...normalizeIdList(release.linked_bugs),
       ...(linkedBuild ? normalizeIdList(linkedBuild.linked_bugs) : []),
     ]);
-    const readiness = loadRequirementReadiness(linkedStories);
-    const defects = loadLinkedDefects(linkedBugs);
+    const readiness = await loadRequirementReadiness(linkedStories);
+    const defects = await loadLinkedDefects(linkedBugs);
     const notesPassed = Boolean(String(release.release_notes || "").trim());
     const buildPassed = Boolean(linkedBuild && linkedBuild.status === "released");
-    const approvalPassed = hasApprovedRelease(release.id);
+    const approvalPassed = await hasApprovedRelease(release.id);
     const storyPassed = linkedStories.length > 0 && readiness.missing.length === 0;
     const requirementPassed = storyPassed && readiness.notReady.length === 0;
     const taskPassed = storyPassed && readiness.unfinishedTasks.length === 0;
@@ -420,26 +420,30 @@ function createDeliveryService({
     };
   }
 
-  function listDeliveryGateResults() {
-    const buildResults = repository.listBuilds().map(evaluateBuildDeliveryGates);
-    const releaseResults = repository.listReleases().map(evaluateReleaseDeliveryGates);
+  async function listDeliveryGateResults() {
+    const builds = await repository.listBuilds();
+    const buildResults = [];
+    for (const build of builds) buildResults.push(await evaluateBuildDeliveryGates(build));
+    const releases = await repository.listReleases();
+    const releaseResults = [];
+    for (const release of releases) releaseResults.push(await evaluateReleaseDeliveryGates(release));
     return [...buildResults, ...releaseResults];
   }
 
-  function loadRequirementsByIds(ids) {
+  async function loadRequirementsByIds(ids) {
     const requirementIds = uniqueIds(ids);
     if (!requirementIds.length) return [];
-    return repository.listActiveRequirementsByIds(requirementIds).map(mapRequirement);
+    return (await repository.listActiveRequirementsByIds(requirementIds)).map(mapRequirement);
   }
 
-  function loadDefectsByIds(ids) {
+  async function loadDefectsByIds(ids) {
     const defectIds = uniqueIds(ids);
     if (!defectIds.length) return [];
-    return repository.listDefectsByIds(defectIds).map(mapDefect);
+    return (await repository.listDefectsByIds(defectIds)).map(mapDefect);
   }
 
-  function buildReleaseReport(releaseRow) {
-    const buildRow = releaseRow.build_id ? repository.findBuild(releaseRow.build_id) : null;
+  async function buildReleaseReport(releaseRow) {
+    const buildRow = releaseRow.build_id ? await repository.findBuild(releaseRow.build_id) : null;
     const release = mapRelease(releaseRow);
     const build = buildRow ? mapBuild(buildRow) : null;
     const linkedStories = uniqueIds([
@@ -450,13 +454,13 @@ function createDeliveryService({
       ...normalizeIdList(releaseRow.linked_bugs),
       ...(buildRow ? normalizeIdList(buildRow.linked_bugs) : []),
     ]);
-    const requirements = loadRequirementsByIds(linkedStories);
-    const defects = loadDefectsByIds(linkedBugs);
-    const approvals = repository.listApprovals(releaseRow.id).map(mapReleaseApproval);
-    const rollbacks = repository.listRollbacks(releaseRow.id).map(mapRollbackRecord);
-    const gate = evaluateReleaseDeliveryGates(releaseRow);
+    const requirements = await loadRequirementsByIds(linkedStories);
+    const defects = await loadDefectsByIds(linkedBugs);
+    const approvals = (await repository.listApprovals(releaseRow.id)).map(mapReleaseApproval);
+    const rollbacks = (await repository.listRollbacks(releaseRow.id)).map(mapRollbackRecord);
+    const gate = await evaluateReleaseDeliveryGates(releaseRow);
     const resourceIds = [releaseRow.id, buildRow?.id].filter(Boolean);
-    const auditTrail = repository.listDeliveryAudit(resourceIds).map(mapDeliveryAudit);
+    const auditTrail = (await repository.listDeliveryAudit(resourceIds)).map(mapDeliveryAudit);
     const openDefects = defects.filter((item) => !closedDefectStatuses.has(item.status));
     const approved = approvals.some((item) => item.decision === "approve");
     const rejected = approvals.some((item) => item.decision === "reject");

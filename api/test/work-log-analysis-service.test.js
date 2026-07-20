@@ -22,9 +22,9 @@ function createFixtures(overrides = {}) {
   };
 }
 
-test("work log analysis local rules extract collaboration signals without performance fields", () => {
+test("work log analysis local rules extract collaboration signals without performance fields", async () => {
   const service = createWorkLogAnalysisService(createFixtures());
-  const result = service.localAnalyze({
+  const result = await service.localAnalyze({
     content: "完成 REQ-001 登录联调，进度 20% 到 45%。等待测试环境，有阻塞风险。",
   });
 

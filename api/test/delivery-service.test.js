@@ -35,7 +35,7 @@ test("delivery service builds traceable build, release, approval, and rollback r
   assert.equal(rollback.operator_name, actor.name);
 });
 
-test("delivery service evaluates release gates and assembles auditable release reports", () => {
+test("delivery service evaluates release gates and assembles auditable release reports", async () => {
   const build = {
     id: "BLD-001",
     project_id: "PRJ-001",
@@ -84,14 +84,14 @@ test("delivery service evaluates release gates and assembles auditable release r
     mapRollbackRecord: (item) => ({ id: item.id }),
   });
 
-  const buildGate = service.validateBuildStatusTransition(build, "released");
+  const buildGate = await service.validateBuildStatusTransition(build, "released");
   assert.equal(buildGate.ok, true);
 
-  const releaseGate = service.evaluateReleaseDeliveryGates(release);
+  const releaseGate = await service.evaluateReleaseDeliveryGates(release);
   assert.equal(releaseGate.ready, true);
   assert.equal(releaseGate.score, 100);
 
-  const report = service.buildReleaseReport(release);
+  const report = await service.buildReleaseReport(release);
   assert.equal(report.metrics.requirementCount, 1);
   assert.equal(report.metrics.defectCount, 1);
   assert.equal(report.metrics.approvalCount, 1);

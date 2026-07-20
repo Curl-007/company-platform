@@ -1,6 +1,6 @@
 function createTestCaseTaskSync({ row, run, insert, nextId }) {
-  function syncTestCaseTask(testCaseRow) {
-    const existing = row(
+  async function syncTestCaseTask(testCaseRow) {
+    const existing = await row(
       "SELECT * FROM tasks WHERE source_type = 'test_case' AND source_id = @sourceId",
       { sourceId: testCaseRow.id },
     );
@@ -35,7 +35,7 @@ function createTestCaseTaskSync({ row, run, insert, nextId }) {
     };
 
     if (existing) {
-      run(
+      await run(
         `UPDATE tasks SET
           title = @title,
           status = @status,
@@ -70,8 +70,8 @@ function createTestCaseTaskSync({ row, run, insert, nextId }) {
       return existing.id;
     }
 
-    const taskId = nextId("TASK", "tasks");
-    insert("tasks", { id: taskId, ...taskPayload });
+    const taskId = await nextId("TASK", "tasks");
+    await insert("tasks", { id: taskId, ...taskPayload });
     return taskId;
   }
 

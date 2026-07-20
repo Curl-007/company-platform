@@ -44,20 +44,20 @@ function createMemoryStore(initial = {}) {
   return { settings, store, writes };
 }
 
-test("AI provider store resolves default environment config and masks public output", () => {
+test("AI provider store resolves default environment config and masks public output", async () => {
   const { store } = createMemoryStore();
-  const config = store.resolveConfig();
+  const config = await store.resolveConfig();
   assert.equal(config.id, "AIP-DEFAULT");
   assert.equal(config.apiKey, "env-secret");
   assert.equal(config.apiKeySource, "database");
   assert.equal(config.baseUrl, "https://api.example.test/v1");
-  const publicConfig = store.publicConfig(config);
+  const publicConfig = await store.publicConfig(config);
   assert.equal(publicConfig.configured, true);
   assert.equal(publicConfig.apiKeyMasked, "env...cret");
   assert.equal(publicConfig.providers[0].apiKeyMasked, "env...cret");
 });
 
-test("AI provider store serializes API keys encrypted and migrates legacy plaintext settings", () => {
+test("AI provider store serializes API keys encrypted and migrates legacy plaintext settings", async () => {
   const legacyList = JSON.stringify({
     activeId: "AIP-OLD",
     providers: [{
@@ -71,26 +71,26 @@ test("AI provider store serializes API keys encrypted and migrates legacy plaint
     }],
   });
   const { settings, store } = createMemoryStore({ ai_providers: legacyList });
-  store.migrateSecrets();
+  await store.migrateSecrets();
   const stored = JSON.parse(settings.get("ai_providers"));
   assert.equal(stored.providers[0].apiKey, undefined);
   assert.equal(stored.providers[0].apiKeyEncrypted, "enc:plain-secret");
-  assert.equal(store.resolveConfig().apiKey, "plain-secret");
+  assert.equal((await store.resolveConfig()).apiKey, "plain-secret");
 });
 
-test("AI provider store records health success and degraded failure evidence", () => {
+test("AI provider store records health success and degraded failure evidence", async () => {
   const { store } = createMemoryStore();
-  const before = store.publicConfig();
+  const before = await store.publicConfig();
   assert.equal(before.health.status, "unknown");
 
-  store.recordSuccess({ wireApi: "chat_completions", latencyMs: 42 });
-  const healthy = store.publicConfig();
+  await store.recordSuccess({ wireApi: "chat_completions", latencyMs: 42 });
+  const healthy = await store.publicConfig();
   assert.equal(healthy.health.status, "healthy");
   assert.equal(healthy.health.lastWireApi, "chat_completions");
   assert.equal(healthy.health.lastLatencyMs, 42);
 
-  store.recordFailure(Object.assign(new Error("Bearer sk-secret failed with 502"), { status: 502 }), { wireApi: "responses", latencyMs: 55 });
-  const degraded = store.publicConfig();
+  await store.recordFailure(Object.assign(new Error("Bearer sk-secret failed with 502"), { status: 502 }), { wireApi: "responses", latencyMs: 55 });
+  const degraded = await store.publicConfig();
   assert.equal(degraded.health.status, "degraded");
   assert.equal(degraded.health.lastWireApi, "responses");
   assert.equal(degraded.health.lastErrorCode, "502");

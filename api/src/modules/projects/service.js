@@ -46,13 +46,13 @@ function buildProjectUpdate(before, input = {}, { expectedVersion, now }) {
   };
 }
 
-function projectActivationReadiness(project, repository, parse) {
+async function projectActivationReadiness(project, repository, parse) {
   const missing = [];
   const projectStart = String(project.start_date ?? project.startDate ?? "");
   const projectEnd = String(project.end_date ?? project.endDate ?? "");
   if (!String(project.objective || "").trim()) missing.push("projectObjective");
   if (!projectStart || !projectEnd) missing.push("plannedDates");
-  const evidence = repository.activationEvidence({ projectId: project.id, projectStart, projectEnd });
+  const evidence = await repository.activationEvidence({ projectId: project.id, projectStart, projectEnd });
   if (evidence.memberCount === 0) missing.push("projectMembers");
   const milestones = parse(project.milestones, []);
   const hasMilestone = Array.isArray(milestones) && milestones.some((milestone) => String(milestone?.name || "").trim() && String(milestone?.date || "").trim());

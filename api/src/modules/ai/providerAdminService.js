@@ -27,20 +27,20 @@ function createAiProviderAdminService({
     }
   }
 
-  function persist({ activeId, providers, legacyActive }) {
-    writeList({ activeId, providers });
-    if (legacyActive) writeActive(legacyActive);
-    resetHealth();
+  async function persist({ activeId, providers, legacyActive }) {
+    await writeList({ activeId, providers });
+    if (legacyActive) await writeActive(legacyActive);
+    await resetHealth();
     return { activeId, providers };
   }
 
   return {
-    get() {
+    async get() {
       return publicConfig();
     },
-    update(body = {}) {
-      const before = readActive();
-      const stored = readList();
+    async update(body = {}) {
+      const before = await readActive();
+      const stored = await readList();
       const existing = body.id ? stored.providers.find((item) => item.id === String(body.id)) : null;
       if (body.id && !existing) throw providerError("RESOURCE_NOT_FOUND", "AI Provider config not found.", 404);
       const active = stored.providers.find((item) => item.id === stored.activeId) || stored.providers[0] || null;
@@ -55,6 +55,7 @@ function createAiProviderAdminService({
         disableResponseStorage: body.disableResponseStorage !== undefined ? body.disableResponseStorage : base.disableResponseStorage,
         enabled: body.enabled !== undefined ? body.enabled : base.enabled !== undefined ? base.enabled : true,
         apiKey: base.apiKey || "",
+        apiKeyEncrypted: base.apiKeyEncrypted || "",
         createdAt: base.createdAt || now(),
         updatedAt: now(),
       });
@@ -65,42 +66,46 @@ function createAiProviderAdminService({
         next.apiKey = body.apiKey.trim();
       }
       validate(next);
-      const providers = body.createNew ? [...stored.providers, next] : stored.providers.map((item) => item.id === next.id ? next : item);
+      const providers = body.createNew
+        ? [...stored.providers, next]
+        : stored.providers.some((item) => item.id === next.id)
+          ? stored.providers.map((item) => (item.id === next.id ? next : item))
+          : [...stored.providers, next];
       const activeId = body.activate || body.createNew || !stored.activeId ? next.id : stored.activeId;
-      persist({ activeId, providers, legacyActive: next });
-      return { before: publicConfig(before), after: publicConfig(readActive()), resourceId: next.id };
+      await persist({ activeId, providers, legacyActive: next });
+      return { before: await publicConfig(before), after: await publicConfig(await readActive()), resourceId: next.id };
     },
-    activate(id) {
-      const before = readActive();
-      const stored = readList();
+    async activate(id) {
+      const before = await readActive();
+      const stored = await readList();
       const target = stored.providers.find((item) => item.id === id);
       if (!target) throw providerError("RESOURCE_NOT_FOUND", "AI Provider config not found.", 404);
       const providers = stored.providers.map((item) => item.id === target.id ? { ...item, enabled: true, updatedAt: now() } : item);
       const active = providers.find((item) => item.id === target.id);
-      persist({ activeId: target.id, providers, legacyActive: active });
-      return { before: publicConfig(before), after: publicConfig(readActive()), resourceId: target.id };
+      await persist({ activeId: target.id, providers, legacyActive: active });
+      return { before: await publicConfig(before), after: await publicConfig(await readActive()), resourceId: target.id };
     },
-    setStatus(id, enabled) {
-      const before = readActive();
-      const stored = readList();
+    async setStatus(id, enabled) {
+      const before = await readActive();
+      const stored = await readList();
       const target = stored.providers.find((item) => item.id === id);
       if (!target) throw providerError("RESOURCE_NOT_FOUND", "AI Provider config not found.", 404);
       const updated = { ...target, enabled: Boolean(enabled), updatedAt: now() };
       const providers = stored.providers.map((item) => item.id === target.id ? updated : item);
       const activeId = stored.activeId || target.id;
-      persist({ activeId, providers, legacyActive: activeId === target.id ? updated : null });
-      return { before: publicConfig(before), after: publicConfig(readActive()), resourceId: target.id, enabled: Boolean(enabled) };
+      await persist({ activeId, providers, legacyActive: activeId === target.id ? updated : null });
+      return { before: await publicConfig(before), after: await publicConfig(await readActive()), resourceId: target.id, enabled: Boolean(enabled) };
     },
-    remove(id) {
-      const before = readActive();
-      const stored = readList();
+    async remove(id) {
+      const before = await readActive();
+      const stored = await readList();
       const target = stored.providers.find((item) => item.id === id);
       if (!target) throw providerError("RESOURCE_NOT_FOUND", "AI Provider config not found.", 404);
       const providers = stored.providers.filter((item) => item.id !== target.id);
       const activeId = stored.activeId === target.id ? (providers.find((item) => item.enabled)?.id || providers[0]?.id || null) : stored.activeId;
       const active = providers.find((item) => item.id === activeId) || null;
-      persist({ activeId, providers, legacyActive: active });
-      return { before: publicConfig(before), after: publicConfig(readActive()), resourceId: target.id };
+      await persist({ activeId, providers, legacyActive: active });
+      return { before: await publicConfig(before), after: await publicConfig(await readActive()), resourceId: target.id };
     },
   };
 }

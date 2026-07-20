@@ -349,84 +349,84 @@ function createBusinessAdviceContextService({
   repository,
   requirementScore,
 }) {
-  function load(targetType, targetId) {
+  async function load(targetType, targetId) {
     if (targetType === "requirement") {
-      const requirement = repository.findRequirement(targetId);
+      const requirement = await repository.findRequirement(targetId);
       if (!requirement) return null;
-      const project = requirement.project_id ? repository.findProject(requirement.project_id) : null;
+      const project = requirement.project_id ? await repository.findProject(requirement.project_id) : null;
       return {
         target: mapRequirement(requirement),
-        score: requirementScore(targetId),
-        tasks: repository.listTasksForRequirement(targetId).map(mapTask),
-        tests: repository.listTestCasesForRequirement(targetId).map(mapTestCase),
-        defects: repository.listDefectsForRequirement(targetId).map(mapDefect),
+        score: await requirementScore(targetId),
+        tasks: (await repository.listTasksForRequirement(targetId)).map(mapTask),
+        tests: (await repository.listTestCasesForRequirement(targetId)).map(mapTestCase),
+        defects: (await repository.listDefectsForRequirement(targetId)).map(mapDefect),
         project: project ? mapProject(project) : null,
       };
     }
     if (targetType === "project") {
-      const project = repository.findProject(targetId);
+      const project = await repository.findProject(targetId);
       if (!project) return null;
       return {
         target: mapProject(project),
-        requirements: repository.listRequirementsForProject(targetId).map(mapRequirement),
-        tasks: repository.listTasksForProject(targetId).map(mapTask),
-        tests: repository.listTestCasesForProject(targetId).map(mapTestCase),
-        defects: repository.listDefectsForProject(targetId).map(mapDefect),
-        builds: repository.listBuildsForProject(targetId).map(mapBuild),
+        requirements: (await repository.listRequirementsForProject(targetId)).map(mapRequirement),
+        tasks: (await repository.listTasksForProject(targetId)).map(mapTask),
+        tests: (await repository.listTestCasesForProject(targetId)).map(mapTestCase),
+        defects: (await repository.listDefectsForProject(targetId)).map(mapDefect),
+        builds: (await repository.listBuildsForProject(targetId)).map(mapBuild),
       };
     }
     if (targetType === "defect") {
-      const defect = repository.findDefect(targetId);
+      const defect = await repository.findDefect(targetId);
       if (!defect) return null;
-      const requirement = defect.requirement_id ? repository.findRequirement(defect.requirement_id) : null;
-      const build = defect.found_in_build ? repository.findBuild(defect.found_in_build) : null;
+      const requirement = defect.requirement_id ? await repository.findRequirement(defect.requirement_id) : null;
+      const build = defect.found_in_build ? await repository.findBuild(defect.found_in_build) : null;
       return {
         target: mapDefect(defect),
         requirement: requirement ? mapRequirement(requirement) : null,
         build: build ? mapBuild(build) : null,
-        relatedTasks: repository.listTasksForDefect(targetId).map(mapTask),
+        relatedTasks: (await repository.listTasksForDefect(targetId)).map(mapTask),
       };
     }
     if (targetType === "test_case") {
-      const testCase = repository.findTestCase(targetId);
+      const testCase = await repository.findTestCase(targetId);
       if (!testCase) return null;
-      const requirement = testCase.requirement_id ? repository.findRequirement(testCase.requirement_id) : null;
+      const requirement = testCase.requirement_id ? await repository.findRequirement(testCase.requirement_id) : null;
       return {
         target: mapTestCase(testCase),
         requirement: requirement ? mapRequirement(requirement) : null,
         defects: testCase.requirement_id
-          ? repository.listDefectsForRequirement(testCase.requirement_id).map(mapDefect)
+          ? (await repository.listDefectsForRequirement(testCase.requirement_id)).map(mapDefect)
           : [],
-        runs: repository.listTestRunsForCase(targetId).map(mapTestRun),
-        relatedTasks: repository.listTasksForTestCase(targetId).map(mapTask),
+        runs: (await repository.listTestRunsForCase(targetId)).map(mapTestRun),
+        relatedTasks: (await repository.listTasksForTestCase(targetId)).map(mapTask),
       };
     }
     if (targetType === "build") {
-      const build = repository.findBuild(targetId);
+      const build = await repository.findBuild(targetId);
       if (!build) return null;
       return {
         target: mapBuild(build),
-        gates: evaluateBuildDeliveryGates(build),
-        readiness: loadRequirementReadiness(normalizeIdList(build.linked_stories)),
-        linkedDefects: loadLinkedDefects(normalizeIdList(build.linked_bugs)),
+        gates: await evaluateBuildDeliveryGates(build),
+        readiness: await loadRequirementReadiness(normalizeIdList(build.linked_stories)),
+        linkedDefects: await loadLinkedDefects(normalizeIdList(build.linked_bugs)),
       };
     }
     if (targetType === "release") {
-      const release = repository.findRelease(targetId);
+      const release = await repository.findRelease(targetId);
       if (!release) return null;
       return {
         target: mapRelease(release),
-        gates: evaluateReleaseDeliveryGates(release),
-        report: buildReleaseReport(release),
+        gates: await evaluateReleaseDeliveryGates(release),
+        report: await buildReleaseReport(release),
       };
     }
     if (targetType === "document") {
-      const document = repository.findDocument(targetId);
+      const document = await repository.findDocument(targetId);
       if (!document) return null;
       return {
         target: mapDocument(document),
         contentPreview: compactText(document.content, 5000),
-        aiJobs: repository.listAiJobsForSource("document", targetId, 5),
+        aiJobs: await repository.listAiJobsForSource("document", targetId, 5),
       };
     }
     return null;

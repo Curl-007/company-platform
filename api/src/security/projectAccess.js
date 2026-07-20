@@ -6,14 +6,14 @@ function createProjectAccess({ row }) {
     return role === "admin" || role === "pm";
   }
 
-  function canAccessProject(user, projectId) {
+  async function canAccessProject(user, projectId) {
     if (!user || !projectId) return false;
-    const project = row("SELECT id, owner FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectId });
+    const project = await row("SELECT id, owner FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectId });
     if (!project) return false;
     if (isOrganizationProjectManager(user)) return true;
     if (project.owner === user.name) return true;
 
-    const membership = row(
+    const membership = await row(
       `SELECT id
        FROM project_members
        WHERE project_id = @projectId
@@ -23,15 +23,15 @@ function createProjectAccess({ row }) {
     return Boolean(membership);
   }
 
-  function canWriteProject(user, projectId) {
-    if (!canAccessProject(user, projectId)) return false;
-    const project = row("SELECT status FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectId });
+  async function canWriteProject(user, projectId) {
+    if (!(await canAccessProject(user, projectId))) return false;
+    const project = await row("SELECT status FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectId });
     return Boolean(project && project.status !== "archived");
   }
 
-  function canManageProject(user, projectId) {
+  async function canManageProject(user, projectId) {
     if (!user?.permissions?.includes("*") && !user?.permissions?.includes("project:*")) return false;
-    return canWriteProject(user, projectId);
+    return await canWriteProject(user, projectId);
   }
 
   return {

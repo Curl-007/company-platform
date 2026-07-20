@@ -5,9 +5,9 @@ function createCapacityRepository({ insert, row, rows, run }) {
       "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (@key, @value, @updatedAt)",
       { key, value, updatedAt },
     ),
-    listActiveUsers: (userId) => userId
-      ? rows("SELECT * FROM users WHERE id = @id AND status = 'active'", { id: userId })
-      : rows("SELECT * FROM users WHERE status = 'active' ORDER BY name"),
+    listActiveUsers: async (userId) => userId
+      ? await rows("SELECT * FROM users WHERE id = @id AND status = 'active'", { id: userId })
+      : await rows("SELECT * FROM users WHERE status = 'active' ORDER BY name"),
     findActiveUser: (id) => row("SELECT id, name FROM users WHERE id = @id AND status = 'active'", { id }),
     listPlans: (period) => rows(
       "SELECT * FROM capacity_plans WHERE period_start = @periodStart AND period_end = @periodEnd",
@@ -59,8 +59,8 @@ function createCapacityRepository({ insert, row, rows, run }) {
          AND (user_id = @userId OR (user_id IS NULL AND user_name = @userName))`,
       { projectId, userId, userName },
     ),
-    defaultCalendar: () => row("SELECT * FROM work_calendars WHERE is_default = 1 ORDER BY updated_at DESC LIMIT 1") ||
-      row("SELECT * FROM work_calendars ORDER BY updated_at DESC LIMIT 1"),
+    defaultCalendar: async () => (await row("SELECT * FROM work_calendars WHERE is_default = 1 ORDER BY updated_at DESC LIMIT 1"))
+      || (await row("SELECT * FROM work_calendars ORDER BY updated_at DESC LIMIT 1")),
     listCalendarExceptions: ({ calendarId, periodStart, periodEnd }) => rows(
       `SELECT * FROM work_calendar_exceptions
        WHERE calendar_id = @calendarId AND calendar_date >= @periodStart AND calendar_date <= @periodEnd

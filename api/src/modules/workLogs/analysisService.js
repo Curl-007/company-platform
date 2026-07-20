@@ -25,14 +25,17 @@ function extractJsonPayload(text) {
 }
 
 function createWorkLogAnalysisService({ callModel, getModelName, row, rows }) {
-  const modelName = () => (typeof getModelName === "function" ? getModelName() : "local-rule-engine");
+  async function modelName() {
+    if (typeof getModelName !== "function") return "local-rule-engine";
+    return await getModelName() || "local-rule-engine";
+  }
 
-  function resolveRequirement(id) {
-    const requirement = row("SELECT * FROM requirements WHERE id = @id AND deleted_at IS NULL", { id });
+  async function resolveRequirement(id) {
+    const requirement = await row("SELECT * FROM requirements WHERE id = @id AND deleted_at IS NULL", { id });
     return { id, title: requirement?.title || id, known: Boolean(requirement), currentCompletion: requirement?.completion ?? null };
   }
 
-  function localAnalyze(input) {
+  async function localAnalyze(input) {
     const normalized = [input?.content, input?.blockers, input?.nextPlan].filter(Boolean).join("\n").trim();
     const requirementIds = [...new Set((normalized.match(/REQ-\d+/gi) || []).map((id) => id.toUpperCase()))];
     const percentages = [...new Set((normalized.match(/\d{1,3}%/g) || []).map((value) => Number(value.replace("%", ""))))]
@@ -42,7 +45,7 @@ function createWorkLogAnalysisService({ callModel, getModelName, row, rows }) {
     return {
       completedItems: completedItems.length ? completedItems : ["No explicit completed item was detected."],
       blockers: blockers.length ? blockers : ["No explicit blocker was detected."],
-      linkedRequirements: requirementIds.map(resolveRequirement),
+      linkedRequirements: await Promise.all(requirementIds.map((id) => resolveRequirement(id))),
       progressChange: percentages.length >= 2
         ? { from: percentages[0], to: percentages[percentages.length - 1], delta: percentages[percentages.length - 1] - percentages[0] }
         : percentages.length === 1 ? { from: null, to: percentages[0], delta: null } : { from: null, to: null, delta: null },
@@ -54,7 +57,7 @@ function createWorkLogAnalysisService({ callModel, getModelName, row, rows }) {
     };
   }
 
-  function normalize(value, fallback) {
+  async function normalize(value, fallback) {
     const linkedIds = [...new Set((Array.isArray(value?.linkedRequirements) ? value.linkedRequirements : [])
       .map((item) => (typeof item === "string" ? item : item?.id))
       .filter(Boolean)
@@ -67,7 +70,7 @@ function createWorkLogAnalysisService({ callModel, getModelName, row, rows }) {
         ? value.blockers.map(String).slice(0, 8)
         : fallback.blockers,
       linkedRequirements: linkedIds.length
-        ? linkedIds.map(resolveRequirement)
+        ? await Promise.all(linkedIds.map((id) => resolveRequirement(id)))
         : fallback.linkedRequirements,
       progressChange: {
         from: Number.isFinite(Number(value?.progressChange?.from)) ? Number(value.progressChange.from) : fallback.progressChange.from,
@@ -78,15 +81,15 @@ function createWorkLogAnalysisService({ callModel, getModelName, row, rows }) {
       suggestedActions: Array.isArray(value?.suggestedActions) && value.suggestedActions.length
         ? value.suggestedActions.map(String).slice(0, 8)
         : fallback.suggestedActions,
-      modelUsed: value?.modelUsed || modelName(),
+      modelUsed: value?.modelUsed || await modelName(),
     };
   }
 
   async function analyze(input) {
-    const fallback = localAnalyze(input);
+    const fallback = await localAnalyze(input);
     const normalized = [input?.content, input?.blockers, input?.nextPlan].filter(Boolean).join("\n").trim();
     if (!normalized || typeof callModel !== "function") return fallback;
-    const knownRequirements = rows("SELECT id, title, completion, status FROM requirements WHERE deleted_at IS NULL ORDER BY id LIMIT 80")
+    const knownRequirements = (await rows("SELECT id, title, completion, status FROM requirements WHERE deleted_at IS NULL ORDER BY id LIMIT 80"))
       .map((item) => ({ id: item.id, title: item.title, completion: item.completion, status: item.status }));
     const modelText = await callModel(
       [
@@ -108,7 +111,7 @@ function createWorkLogAnalysisService({ callModel, getModelName, row, rows }) {
     ).catch(() => null);
     const parsed = extractJsonPayload(modelText);
     if (!parsed) return fallback;
-    return normalize({ ...parsed, modelUsed: modelName() }, fallback);
+    return await normalize({ ...parsed, modelUsed: await modelName() }, fallback);
   }
 
   return {

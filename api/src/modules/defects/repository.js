@@ -1,5 +1,5 @@
 function createDefectsRepository({ insert, row, rows, run }) {
-  function listDefects({ keyword, status, severity, projectId, assignee } = {}) {
+  async function listDefects({ keyword, status, severity, projectId, assignee } = {}) {
     let sql = "SELECT * FROM defects WHERE 1=1";
     const params = {};
     if (keyword) { sql += " AND title LIKE @keyword"; params.keyword = `%${keyword}%`; }
@@ -7,11 +7,11 @@ function createDefectsRepository({ insert, row, rows, run }) {
     if (severity) { sql += " AND severity = @severity"; params.severity = severity; }
     if (projectId) { sql += " AND project_id = @projectId"; params.projectId = projectId; }
     if (assignee) { sql += " AND assignee = @assignee"; params.assignee = assignee; }
-    return rows(sql, params);
+    return await rows(sql, params);
   }
   return {
     createDefect: (defect) => insert("defects", defect),
-    deleteDefect: (id) => { run("DELETE FROM defects WHERE id = @id", { id }); return run("DELETE FROM tasks WHERE source_type = 'defect' AND source_id = @id", { id }); },
+    deleteDefect: async (id) => { await run("DELETE FROM defects WHERE id = @id", { id }); return await run("DELETE FROM tasks WHERE source_type = 'defect' AND source_id = @id", { id }); },
     findDefect: (id) => row("SELECT * FROM defects WHERE id = @id", { id }),
     findBuildProject: (id) => row("SELECT project_id FROM builds WHERE id = @id", { id }),
     findRequirementProject: (id) => row("SELECT project_id FROM requirements WHERE id = @id AND deleted_at IS NULL", { id }),

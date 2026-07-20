@@ -76,9 +76,9 @@ test("AI chat service normalizes messages and attachments for model-safe prompts
   assert.equal(dataUrlForAttachment(attachments[1]), "data:image/png;base64,aW1n");
 });
 
-test("AI chat service builds project context and fallback replies without performance scoring", () => {
+test("AI chat service builds project context and fallback replies without performance scoring", async () => {
   const service = createService();
-  const context = service.buildContext();
+  const context = await service.buildContext();
   assert.equal(context.metrics.projects, 2);
   assert.equal(context.metrics.activeProjects, 1);
   assert.equal(context.metrics.riskyProjects, 1);
@@ -87,12 +87,12 @@ test("AI chat service builds project context and fallback replies without perfor
 
   const messages = [{ role: "user", content: "这个版本有什么风险？" }];
   const attachments = [{ kind: "document", name: "spec.md", mimeType: "text/markdown", size: 10, contentText: "验收标准" }];
-  const prompt = service.buildPrompt({ messages, attachments, scope: "delivery", currentPage: "DeliveryCenter" });
+  const prompt = await service.buildPrompt({ messages, attachments, scope: "delivery", currentPage: "DeliveryCenter" });
   assert.match(prompt, /当前页面：DeliveryCenter/);
   assert.match(prompt, /平台上下文/);
   assert.match(prompt, /验收标准/);
 
-  const reply = service.localReplyV2({ messages, attachments });
+  const reply = await service.localReplyV2({ messages, attachments });
   assert.match(reply, /平台快照：2 个项目、1 条需求、1 个阻塞任务、1 个未关闭缺陷/);
   assert.doesNotMatch(reply, /绩效|评分|排名|薪酬|晋升|淘汰/);
 });

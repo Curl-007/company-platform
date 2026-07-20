@@ -6,7 +6,7 @@ function normalizeRole(role) {
   return ["admin", "pm", "pdm", "dev", "qa"].includes(role) ? role : "dev";
 }
 
-test("team service builds collaboration context without performance scoring fields", () => {
+test("team service builds collaboration context without performance scoring fields", async () => {
   const now = new Date();
   const rowsByTable = {
     users: [
@@ -72,7 +72,7 @@ test("team service builds collaboration context without performance scoring fiel
   assert.deepEqual(service.roleSkills("dev"), ["研发实现", "代码评审", "构建发布"]);
   assert.equal(service.derivePresence(rowsByTable.users[0], rowsByTable.audit_logs), "online");
 
-  const [member] = service.buildTeamMembers();
+  const [member] = await service.buildTeamMembers();
   assert.equal(member.name, "Dev A");
   assert.equal(member.presence, "online");
   assert.equal(member.stats.totalTasks, 3);

@@ -1,6 +1,6 @@
 function createRequirementTaskSync({ row, run, insert, nextId, json, parse }) {
-  function syncRequirementTask(requirementRow) {
-    const existing = row(
+  async function syncRequirementTask(requirementRow) {
+    const existing = await row(
       "SELECT * FROM tasks WHERE source_type = 'requirement' AND source_id = @sourceId",
       { sourceId: requirementRow.id },
     );
@@ -32,7 +32,7 @@ function createRequirementTaskSync({ row, run, insert, nextId, json, parse }) {
     };
 
     if (existing) {
-      run(
+      await run(
         `UPDATE tasks SET
           title = @title,
           status = @status,
@@ -67,18 +67,18 @@ function createRequirementTaskSync({ row, run, insert, nextId, json, parse }) {
       return existing.id;
     }
 
-    const taskId = nextId("TASK", "tasks");
-    insert("tasks", { id: taskId, ...taskPayload });
+    const taskId = await nextId("TASK", "tasks");
+    await insert("tasks", { id: taskId, ...taskPayload });
     return taskId;
   }
 
-  function mergeRequirementLinkedTask(requirementId, taskId) {
+  async function mergeRequirementLinkedTask(requirementId, taskId) {
     if (!requirementId || !taskId) return;
-    const requirement = row("SELECT linked_tasks FROM requirements WHERE id = @id AND deleted_at IS NULL", { id: requirementId });
+    const requirement = await row("SELECT linked_tasks FROM requirements WHERE id = @id AND deleted_at IS NULL", { id: requirementId });
     if (!requirement) return;
     const linkedTasks = parse(requirement?.linked_tasks, []);
     const merged = [...new Set([...(Array.isArray(linkedTasks) ? linkedTasks : []), taskId])];
-    run("UPDATE requirements SET linked_tasks = @tasks WHERE id = @id", { id: requirementId, tasks: json(merged) });
+    await run("UPDATE requirements SET linked_tasks = @tasks WHERE id = @id", { id: requirementId, tasks: json(merged) });
   }
 
   return { syncRequirementTask, mergeRequirementLinkedTask };

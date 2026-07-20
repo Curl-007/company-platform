@@ -1,19 +1,19 @@
 function createRequirementScoreService({ row, rows, parse }) {
-  function requirementScore(requirementId) {
-    const requirement = row("SELECT * FROM requirements WHERE id = @id AND deleted_at IS NULL", { id: requirementId });
+  async function requirementScore(requirementId) {
+    const requirement = await row("SELECT * FROM requirements WHERE id = @id AND deleted_at IS NULL", { id: requirementId });
     if (!requirement) return null;
     // 1) Task completion rate × 0.40
-    const linkedTasks = rows("SELECT * FROM tasks WHERE requirement_id = @id", { id: requirementId });
+    const linkedTasks = await rows("SELECT * FROM tasks WHERE requirement_id = @id", { id: requirementId });
     const taskScore = linkedTasks.length ? Math.round(linkedTasks.reduce((sum, task) => sum + task.progress, 0) / linkedTasks.length) : 0;
 
     // 2) Test pass rate × 0.30
-    const linkedTests = rows("SELECT * FROM test_cases WHERE requirement_id = @id", { id: requirementId });
+    const linkedTests = await rows("SELECT * FROM test_cases WHERE requirement_id = @id", { id: requirementId });
     const testScore = linkedTests.length
       ? Math.round(linkedTests.reduce((sum, test) => sum + (test.total_cases > 0 ? (test.passed_cases / test.total_cases) * 100 : 0), 0) / linkedTests.length)
       : 0;
 
     // 3) Work log progress × 0.20 — scan work_logs whose analysis references this requirement
-    const allLogs = rows("SELECT analysis FROM work_logs WHERE analysis != ''");
+    const allLogs = await rows("SELECT analysis FROM work_logs WHERE analysis != ''");
     const matchingLogs = allLogs.filter((log) => {
       const parsed = parse(log.analysis, {});
       const linked = parsed.linkedRequirements || [];
@@ -32,7 +32,7 @@ function createRequirementScoreService({ row, rows, parse }) {
     if (linkedTests.length === 0 && score > 80) {
       hardRules.push("No linked tests — max completion is 80%");
     }
-    const openBlockingDefects = rows("SELECT * FROM defects WHERE requirement_id = @id AND status NOT IN ('closed', 'verified', 'rejected')", { id: requirementId });
+    const openBlockingDefects = await rows("SELECT * FROM defects WHERE requirement_id = @id AND status NOT IN ('closed', 'verified', 'rejected')", { id: requirementId });
     if (openBlockingDefects.length > 0 && score > 70) {
       hardRules.push(`Has ${openBlockingDefects.length} open defect(s) — max completion is 70%`);
     }
