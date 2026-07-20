@@ -12,6 +12,13 @@ api/state.json
 api/uploads/
 api/app.db*
 api/storage/
+api/backups/
+
+# Playwright / local smoke artifacts
+web/test-results/
+web/playwright-report/
+web/blob-report/
+playwright/.cache/
 
 # Local workspace/tooling state
 .agents/
