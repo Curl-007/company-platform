@@ -1,0 +1,124 @@
+const path = require("node:path");
+const zlib = require("node:zlib");
+
+function cleanText(value) {
+  return String(value || "")
+    .replace(/\u0000/g, " ")
+    .replace(/[^\S\r\n]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, 20000);
+}
+
+function decodeXmlEntities(value) {
+  return String(value || "")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&apos;/g, "'");
+}
+
+function readZipEntry(buffer, targetName) {
+  let offset = 0;
+  while (offset + 30 < buffer.length) {
+    const signature = buffer.readUInt32LE(offset);
+    if (signature !== 0x04034b50) {
+      offset += 1;
+      continue;
+    }
+    const compression = buffer.readUInt16LE(offset + 8);
+    const compressedSize = buffer.readUInt32LE(offset + 18);
+    const fileNameLength = buffer.readUInt16LE(offset + 26);
+    const extraLength = buffer.readUInt16LE(offset + 28);
+    const nameStart = offset + 30;
+    const nameEnd = nameStart + fileNameLength;
+    const fileName = buffer.slice(nameStart, nameEnd).toString("utf8");
+    const dataStart = nameEnd + extraLength;
+    const dataEnd = dataStart + compressedSize;
+    if (dataEnd > buffer.length) return "";
+    if (fileName === targetName) {
+      const data = buffer.slice(dataStart, dataEnd);
+      if (compression === 0) return data.toString("utf8");
+      if (compression === 8) return zlib.inflateRawSync(data).toString("utf8");
+      return "";
+    }
+    offset = dataEnd;
+  }
+  return "";
+}
+
+function extractDocxText(buffer) {
+  try {
+    const xml = readZipEntry(buffer, "word/document.xml");
+    if (!xml) return "";
+    return decodeXmlEntities(xml
+      .replace(/<w:tab\/>/g, "\t")
+      .replace(/<w:br\/>/g, "\n")
+      .replace(/<\/w:p>/g, "\n")
+      .replace(/<[^>]+>/g, " "));
+  } catch {
+    return "";
+  }
+}
+
+function extractTextFromUpload(fileName, fileType, contentBase64) {
+  if (!contentBase64) return "";
+  const base64 = String(contentBase64).includes(",") ? String(contentBase64).split(",").pop() : String(contentBase64);
+  const buffer = Buffer.from(base64 || "", "base64");
+  const ext = path.extname(String(fileName || "")).toLowerCase();
+  const mime = String(fileType || "").toLowerCase();
+
+  if (
+    ext === ".txt" ||
+    ext === ".md" ||
+    ext === ".csv" ||
+    ext === ".json" ||
+    ext === ".xml" ||
+    ext === ".yaml" ||
+    ext === ".yml" ||
+    ext === ".log" ||
+    mime.startsWith("text/") ||
+    ["application/json", "application/xml", "application/x-yaml"].includes(mime)
+  ) {
+    return cleanText(buffer.toString("utf8"));
+  }
+  if (ext === ".pdf" || mime === "application/pdf") {
+    const raw = buffer.toString("latin1");
+    const chunks = [];
+    const literalStrings = raw.matchAll(/\(([^()]{2,500})\)\s*T[jJ]/g);
+    for (const match of literalStrings) chunks.push(match[1]);
+    const bracketStrings = raw.matchAll(/\[((?:\s*\([^()]{1,300}\)\s*){1,80})\]\s*TJ/g);
+    for (const match of bracketStrings) {
+      const inner = [...String(match[1]).matchAll(/\(([^()]{1,300})\)/g)].map((item) => item[1]).join("");
+      if (inner) chunks.push(inner);
+    }
+    const decoded = chunks.join("\n")
+      .replace(/\\([nrtbf()\\])/g, (_, ch) => ({ n: "\n", r: "\r", t: "\t", b: "", f: "", "(": "(", ")": ")", "\\": "\\" }[ch] || ch))
+      .replace(/\\([0-7]{1,3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)));
+    const text = cleanText(decoded);
+    if (text.length > 20) return text;
+    return "PDF 文件已上传，但未能直接抽取可读正文。建议上传可复制文本的 PDF，或补充 Markdown/TXT 版本以提升 AI 分析质量。";
+  }
+  if (ext === ".docx") {
+    const extractedDocx = extractDocxText(buffer);
+    const matches = extractedDocx ? [[null, extractedDocx]] : [];
+    if (matches.length) {
+      return cleanText(matches.map((item) => item[1]).join(""));
+    }
+    return "DOCX 文件已上传。当前未安装 Word 解析器，无法稳定抽取正文；建议上传 TXT/Markdown 导出版，或在系统中启用文档解析依赖。";
+  }
+  if (ext === ".doc") {
+    return cleanText(buffer.toString("utf8").replace(/[^\u4e00-\u9fa5\w\s.,;:!?()\-]/g, " "));
+  }
+  const text = cleanText(buffer.toString("utf8"));
+  return text || "文件已上传，但当前格式无法直接抽取正文。";
+}
+
+module.exports = {
+  cleanText,
+  decodeXmlEntities,
+  extractDocxText,
+  extractTextFromUpload,
+  readZipEntry,
+};

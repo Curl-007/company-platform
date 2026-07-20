@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { DatabaseSync } = require("node:sqlite");
+const { createDatabaseRuntime } = require("./src/db/runtime");
 const bcrypt = require("bcryptjs");
 const {
   programs,
@@ -18,12 +19,18 @@ const {
   releases,
 } = require("./data");
 
-const DB_FILE = path.join(__dirname, "app.db");
+// DATABASE_FILE is primarily used by isolated integration tests and local
+// environments. Production continues to use the configured persistent volume.
+const DB_FILE = process.env.DATABASE_FILE
+  ? path.resolve(process.env.DATABASE_FILE)
+  : path.join(__dirname, "app.db");
 const STORAGE_DIR = path.join(__dirname, "storage");
-const db = new DatabaseSync(DB_FILE);
+const MIGRATIONS_DIR = path.join(__dirname, "migrations");
+const databaseRuntime = createDatabaseRuntime({ DatabaseSync, databaseFile: DB_FILE });
+const db = databaseRuntime.connection;
 
 function exec(sql) {
-  db.exec(sql);
+  databaseRuntime.exec(sql);
 }
 
 function json(value, fallback = null) {
@@ -42,6 +49,48 @@ function parse(value, fallback = null) {
 
 function now() {
   return new Date().toISOString();
+}
+
+function runMigrations() {
+  exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      id TEXT PRIMARY KEY,
+      checksum TEXT NOT NULL,
+      applied_at TEXT NOT NULL
+    );
+  `);
+  if (!fs.existsSync(MIGRATIONS_DIR)) return;
+
+  const files = fs.readdirSync(MIGRATIONS_DIR)
+    .filter((file) => /^\d+_.+\.js$/.test(file))
+    .sort();
+  for (const file of files) {
+    const filename = path.join(MIGRATIONS_DIR, file);
+    const migration = require(filename);
+    if (!migration?.id || typeof migration.up !== "function") throw new Error(`Invalid database migration: ${file}`);
+    const rawSource = fs.readFileSync(filename, "utf8");
+    const source = rawSource.replace(/\r\n/g, "\n");
+    const checksum = require("crypto").createHash("sha256").update(source).digest("hex");
+    const applied = db.prepare("SELECT checksum FROM schema_migrations WHERE id = @id").get({ id: migration.id });
+    if (applied) {
+      if (applied.checksum !== checksum) {
+        const legacyChecksum = require("crypto").createHash("sha256").update(rawSource).digest("hex");
+        if (applied.checksum !== legacyChecksum) throw new Error(`Applied migration was modified: ${migration.id}`);
+        db.prepare("UPDATE schema_migrations SET checksum = @checksum WHERE id = @id").run({ id: migration.id, checksum });
+      }
+      continue;
+    }
+    try {
+      exec("BEGIN IMMEDIATE");
+      migration.up({ db, now });
+      db.prepare("INSERT INTO schema_migrations (id, checksum, applied_at) VALUES (@id, @checksum, @appliedAt)")
+        .run({ id: migration.id, checksum, appliedAt: now() });
+      exec("COMMIT");
+    } catch (error) {
+      try { exec("ROLLBACK"); } catch { /* transaction was not opened */ }
+      throw error;
+    }
+  }
 }
 
 function initDb() {
@@ -84,6 +133,7 @@ function initDb() {
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      objective TEXT DEFAULT '',
       status TEXT NOT NULL,
       health_score INTEGER NOT NULL,
       owner TEXT NOT NULL,
@@ -130,7 +180,8 @@ function initDb() {
       assignment_status TEXT DEFAULT 'unassigned',
       completion INTEGER NOT NULL,
       linked_tasks TEXT NOT NULL,
-      acceptance_criteria TEXT NOT NULL
+      acceptance_criteria TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1
     );
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
@@ -151,6 +202,7 @@ function initDb() {
       sort_order INTEGER NOT NULL,
       estimated_hours REAL NOT NULL,
       actual_hours REAL NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
       assignee_role TEXT,
       source_type TEXT,
       source_id TEXT
@@ -196,7 +248,35 @@ function initDb() {
       file_size INTEGER,
       file_type TEXT,
       storage_key TEXT,
-      content TEXT DEFAULT ''
+      content TEXT DEFAULT '',
+      collab_revision INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS document_chunk (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL,
+      project_id TEXT,
+      chunk_index INTEGER NOT NULL,
+      section_title TEXT,
+      page_no INTEGER NOT NULL DEFAULT 1,
+      content TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      token_estimate INTEGER NOT NULL DEFAULT 0,
+      embedding_provider TEXT,
+      embedding_model TEXT,
+      embedding_vector TEXT,
+      indexed_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS rag_citation (
+      id TEXT PRIMARY KEY,
+      query_hash TEXT NOT NULL,
+      document_id TEXT NOT NULL,
+      chunk_id TEXT NOT NULL,
+      project_id TEXT,
+      quote TEXT NOT NULL,
+      score REAL NOT NULL,
+      source TEXT NOT NULL,
+      created_by TEXT,
+      created_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS objects (
       id TEXT PRIMARY KEY,
@@ -211,6 +291,7 @@ function initDb() {
     CREATE TABLE IF NOT EXISTS work_logs (
       id TEXT PRIMARY KEY,
       author TEXT NOT NULL,
+      author_id TEXT,
       project TEXT,
       content TEXT NOT NULL,
       blockers TEXT,
@@ -221,10 +302,78 @@ function initDb() {
     CREATE TABLE IF NOT EXISTS project_members (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
+      user_id TEXT,
       user_name TEXT NOT NULL,
       role TEXT NOT NULL,
       source TEXT DEFAULT 'manual',
       created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS capacity_plans (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      period_start TEXT NOT NULL,
+      period_end TEXT NOT NULL,
+      working_days REAL NOT NULL DEFAULT 5,
+      daily_hours REAL NOT NULL DEFAULT 8,
+      meeting_hours REAL NOT NULL DEFAULT 0,
+      training_hours REAL NOT NULL DEFAULT 0,
+      support_hours REAL NOT NULL DEFAULT 0,
+      other_commitment_hours REAL NOT NULL DEFAULT 0,
+      notes TEXT DEFAULT '',
+      updated_by TEXT,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS project_allocations (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      period_start TEXT NOT NULL,
+      period_end TEXT NOT NULL,
+      allocation_percent REAL NOT NULL DEFAULT 0,
+      planned_hours REAL,
+      notes TEXT DEFAULT '',
+      updated_by TEXT,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS time_entries (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      task_id TEXT,
+      work_date TEXT NOT NULL,
+      hours REAL NOT NULL,
+      category TEXT NOT NULL DEFAULT 'delivery',
+      note TEXT DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS project_risks (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      severity TEXT NOT NULL DEFAULT 'medium',
+      status TEXT NOT NULL DEFAULT 'open',
+      owner_id TEXT,
+      owner_name TEXT,
+      mitigation_plan TEXT DEFAULT '',
+      due_date TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      closed_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS project_decisions (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      context TEXT DEFAULT '',
+      decision TEXT DEFAULT '',
+      owner_id TEXT,
+      owner_name TEXT,
+      status TEXT NOT NULL DEFAULT 'proposed',
+      decided_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS ai_jobs (
       job_id TEXT PRIMARY KEY,
@@ -250,6 +399,30 @@ function initDb() {
       start_date TEXT,
       end_date TEXT
     );
+    CREATE TABLE IF NOT EXISTS sprint_commitments (
+      id TEXT PRIMARY KEY,
+      sprint_id TEXT UNIQUE NOT NULL,
+      project_id TEXT NOT NULL,
+      baseline_task_ids TEXT NOT NULL,
+      baseline_task_count INTEGER NOT NULL,
+      baseline_estimated_hours REAL NOT NULL,
+      baseline_remaining_hours REAL NOT NULL,
+      committed_by TEXT,
+      committed_by_name TEXT,
+      committed_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS sprint_scope_changes (
+      id TEXT PRIMARY KEY,
+      sprint_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      task_id TEXT,
+      change_type TEXT NOT NULL,
+      impact_hours REAL NOT NULL DEFAULT 0,
+      reason TEXT NOT NULL,
+      actor_id TEXT,
+      actor_name TEXT,
+      created_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS defects (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -270,6 +443,18 @@ function initDb() {
       before_json TEXT,
       after_json TEXT,
       ip TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS status_histories (
+      id TEXT PRIMARY KEY,
+      resource_type TEXT NOT NULL,
+      resource_id TEXT NOT NULL,
+      project_id TEXT,
+      from_status TEXT,
+      to_status TEXT NOT NULL,
+      reason TEXT DEFAULT '',
+      actor_id TEXT,
+      actor_name TEXT,
       created_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS burndown_snapshots (
@@ -310,6 +495,7 @@ function initDb() {
       linked_bugs TEXT DEFAULT '[]',
       release_notes TEXT,
       creator TEXT,
+      creator_id TEXT,
       status TEXT NOT NULL DEFAULT 'draft',
       created_at TEXT NOT NULL
     );
@@ -389,6 +575,7 @@ function initDb() {
   try { exec("ALTER TABLE work_logs ADD COLUMN weekly_summary TEXT"); } catch (e) { /* column already exists */ }
   try { exec("ALTER TABLE work_logs ADD COLUMN role TEXT DEFAULT 'dev'"); } catch (e) { /* column already exists */ }
   try { exec("ALTER TABLE work_logs ADD COLUMN project_id TEXT"); } catch (e) { /* column already exists */ }
+  try { exec("ALTER TABLE work_logs ADD COLUMN author_id TEXT"); } catch (e) { /* column already exists */ }
   try { exec("ALTER TABLE requirements ADD COLUMN assignee TEXT"); } catch (e) { /* column already exists */ }
   try { exec("ALTER TABLE requirements ADD COLUMN assignee_role TEXT"); } catch (e) { /* column already exists */ }
   try { exec("ALTER TABLE requirements ADD COLUMN assignment_status TEXT DEFAULT 'unassigned'"); } catch (e) { /* column already exists */ }
@@ -400,7 +587,34 @@ function initDb() {
   try { exec("ALTER TABLE documents ADD COLUMN category TEXT NOT NULL DEFAULT 'project'"); } catch (e) { /* column already exists */ }
   try { exec("ALTER TABLE documents ADD COLUMN owner_role TEXT DEFAULT 'pm'"); } catch (e) { /* column already exists */ }
   try { exec("ALTER TABLE documents ADD COLUMN project_id TEXT"); } catch (e) { /* column already exists */ }
+  try { exec("ALTER TABLE documents ADD COLUMN collab_revision INTEGER NOT NULL DEFAULT 0"); } catch (e) { /* column already exists */ }
   try { exec("ALTER TABLE defects ADD COLUMN assignee_role TEXT"); } catch (e) { /* column already exists */ }
+  try { exec("ALTER TABLE project_members ADD COLUMN user_id TEXT"); } catch (e) { /* column already exists */ }
+  try { exec("ALTER TABLE releases ADD COLUMN creator_id TEXT"); } catch (e) { /* column already exists */ }
+  run(
+    `UPDATE project_members
+     SET user_id = (SELECT id FROM users WHERE users.name = project_members.user_name)
+     WHERE user_id IS NULL
+       AND EXISTS (SELECT 1 FROM users WHERE users.name = project_members.user_name)`,
+  );
+  exec("CREATE INDEX IF NOT EXISTS idx_work_logs_author_id_created_at ON work_logs(author_id, created_at DESC)");
+  exec("CREATE INDEX IF NOT EXISTS idx_project_members_project_user ON project_members(project_id, user_id)");
+  exec("CREATE INDEX IF NOT EXISTS idx_releases_creator_id ON releases(creator_id)");
+  exec("CREATE INDEX IF NOT EXISTS idx_status_histories_resource_created ON status_histories(resource_type, resource_id, created_at DESC)");
+  exec("CREATE INDEX IF NOT EXISTS idx_status_histories_project_created ON status_histories(project_id, created_at DESC)");
+  exec("CREATE INDEX IF NOT EXISTS idx_sprint_scope_changes_sprint_created ON sprint_scope_changes(sprint_id, created_at DESC)");
+  exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_capacity_plans_user_period ON capacity_plans(user_id, period_start, period_end)");
+  exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_project_allocations_user_project_period ON project_allocations(project_id, user_id, period_start, period_end)");
+  exec("CREATE INDEX IF NOT EXISTS idx_project_allocations_project_period ON project_allocations(project_id, period_start, period_end)");
+  exec("CREATE INDEX IF NOT EXISTS idx_time_entries_user_date ON time_entries(user_id, work_date DESC)");
+  exec("CREATE INDEX IF NOT EXISTS idx_time_entries_project_date ON time_entries(project_id, work_date DESC)");
+  exec("CREATE INDEX IF NOT EXISTS idx_project_risks_project_status ON project_risks(project_id, status)");
+  exec("CREATE INDEX IF NOT EXISTS idx_project_decisions_project_status ON project_decisions(project_id, status)");
+  exec("CREATE INDEX IF NOT EXISTS idx_document_chunk_document ON document_chunk(document_id, chunk_index)");
+  exec("CREATE INDEX IF NOT EXISTS idx_document_chunk_project ON document_chunk(project_id)");
+  exec("CREATE INDEX IF NOT EXISTS idx_rag_citation_query_created ON rag_citation(query_hash, created_at DESC)");
+  exec("CREATE INDEX IF NOT EXISTS idx_rag_citation_document ON rag_citation(document_id, created_at DESC)");
+  runMigrations();
   seed();
 }
 
@@ -412,6 +626,38 @@ function insert(table, row) {
   const keys = Object.keys(row);
   const placeholders = keys.map((key) => `@${key}`).join(", ");
   db.prepare(`INSERT OR REPLACE INTO ${table} (${keys.join(", ")}) VALUES (${placeholders})`).run(row);
+}
+
+const DEFAULT_DEPARTMENT_BY_ROLE = Object.freeze({
+  admin: "平台管理",
+  pm: "项目管理部",
+  pdm: "产品部",
+  qa: "测试部",
+  dev: "研发部",
+});
+
+function alignDefaultOrganizationMembership() {
+  const unassigned = rows("SELECT id, role, department FROM users WHERE department_id IS NULL OR TRIM(department_id) = ''");
+  if (!unassigned.length) return;
+  const findUnit = db.prepare("SELECT id FROM org_units WHERE name = @name");
+  const insertUnit = db.prepare(`INSERT INTO org_units
+    (id, name, parent_id, manager_user_id, responsibilities, status, created_at, updated_at)
+    VALUES (@id, @name, NULL, NULL, '', 'active', @createdAt, @updatedAt)`);
+  const bindUser = db.prepare("UPDATE users SET department_id = @departmentId, department = @name WHERE id = @id");
+  const units = new Map();
+  let sequence = 0;
+  for (const user of unassigned) {
+    const name = String(user.department || "").trim() || DEFAULT_DEPARTMENT_BY_ROLE[user.role] || DEFAULT_DEPARTMENT_BY_ROLE.dev;
+    let unit = units.get(name) || findUnit.get({ name });
+    if (!unit) {
+      sequence += 1;
+      const stamp = now();
+      unit = { id: `ORG-BOOTSTRAP-${Date.now()}-${sequence}` };
+      insertUnit.run({ id: unit.id, name, createdAt: stamp, updatedAt: stamp });
+    }
+    units.set(name, unit);
+    bindUser.run({ id: user.id, departmentId: unit.id, name });
+  }
 }
 
 function seed() {
@@ -426,14 +672,9 @@ function seed() {
   const qaExists = row("SELECT id FROM users WHERE email = @email", { email: "qa@example.com" });
   const pdmExists = row("SELECT id FROM users WHERE email = @email", { email: "pdm@example.com" });
 
-  if (adminExists) {
-    run("UPDATE users SET name = @name, permissions = @permissions, status = @status WHERE email = @email", {
-      name: "系统管理员",
-      permissions: json(["*"]),
-      status: "active",
-      email: "admin@example.com",
-    });
-  } else if (adminPassword) {
+  // Seed accounts are bootstrap-only. Never overwrite an existing account's
+  // name, role, permissions, password, or disabled state on process restart.
+  if (!adminExists && adminPassword) {
     if (process.env.NODE_ENV !== "production") {
       console.warn("Seeding demo admin (admin@example.com) — remove before production or set SEED_ADMIN_PASSWORD.");
     }
@@ -449,14 +690,7 @@ function seed() {
     });
   }
 
-  if (pmExists) {
-    run("UPDATE users SET name = @name, permissions = @permissions, status = @status WHERE email = @email", {
-      name: "项目经理",
-      permissions: json(["project:*", "requirement:*", "document:*", "ai:*", "audit:read", "source:read"]),
-      status: "active",
-      email: "pm@example.com",
-    });
-  } else if (pmPassword) {
+  if (!pmExists && pmPassword) {
     insert("users", {
       id: "USR-PM",
       name: "项目经理",
@@ -470,37 +704,21 @@ function seed() {
   }
 
   // Dev engineer: sees projects, requirements, builds, documents, my-work, dynamic.
-  if (devExists) {
-    run("UPDATE users SET name = @name, role = @role, permissions = @permissions, status = @status WHERE email = @email", {
-      name: "开发工程师",
-      role: "dev",
-      permissions: json(["project:read", "project:update", "requirement:read", "build:*", "document:*", "audit:read"]),
-      status: "active",
-      email: "dev@example.com",
-    });
-  } else if (devPassword) {
+  if (!devExists && devPassword) {
     insert("users", {
       id: "USR-DEV",
       name: "开发工程师",
       email: "dev@example.com",
       password_hash: bcrypt.hashSync(devPassword, 10),
       role: "dev",
-      permissions: json(["project:read", "project:update", "requirement:read", "build:*", "document:*", "audit:read"]),
+      permissions: json(["project:read", "requirement:read", "build:*", "document:*", "audit:read"]),
       status: "active",
       created_at: now(),
     });
   }
 
   // QA engineer: sees testing, defects, documents, my-work, dynamic.
-  if (qaExists) {
-    run("UPDATE users SET name = @name, role = @role, permissions = @permissions, status = @status WHERE email = @email", {
-      name: "测试工程师",
-      role: "qa",
-      permissions: json(["test:*", "defect:*", "document:read", "audit:read"]),
-      status: "active",
-      email: "qa@example.com",
-    });
-  } else if (qaPassword) {
+  if (!qaExists && qaPassword) {
     insert("users", {
       id: "USR-QA",
       name: "测试工程师",
@@ -513,15 +731,7 @@ function seed() {
     });
   }
 
-  if (pdmExists) {
-    run("UPDATE users SET name = @name, role = @role, permissions = @permissions, status = @status WHERE email = @email", {
-      name: "产品经理",
-      role: "pdm",
-      permissions: json(["product:*", "document:*", "project:read", "requirement:*", "audit:read"]),
-      status: "active",
-      email: "pdm@example.com",
-    });
-  } else if (pdmPassword) {
+  if (!pdmExists && pdmPassword) {
     insert("users", {
       id: "USR-PDM",
       name: "产品经理",
@@ -533,6 +743,10 @@ function seed() {
       created_at: now(),
     });
   }
+
+  // Migrations run before seed data; align newly-created demo users without
+  // overwriting any persisted organization assignment.
+  alignDefaultOrganizationMembership();
 
   if (count("users") === 0) {
     console.warn("No seed users created (production mode without SEED_*_PASSWORD). Create users manually.");
@@ -780,10 +994,23 @@ function run(sql, params = {}) {
   return db.prepare(sql).run(params);
 }
 
+function transaction(work) {
+  exec("BEGIN IMMEDIATE");
+  try {
+    const result = work();
+    exec("COMMIT");
+    return result;
+  } catch (error) {
+    try { exec("ROLLBACK"); } catch { /* transaction was not opened */ }
+    throw error;
+  }
+}
+
 function mapProject(item) {
   return {
     id: item.id,
     name: item.name,
+    objective: item.objective || "",
     code: item.code,
     description: item.description,
     status: item.status,
@@ -798,6 +1025,7 @@ function mapProject(item) {
     startDate: item.start_date,
     endDate: item.end_date,
     sourcePath: item.source_path,
+    version: Number(item.version) || 1,
     updatedAt: item.updated_at,
   };
 }
@@ -820,6 +1048,7 @@ function mapRequirement(item) {
     completion: item.completion,
     linkedTasks: parse(item.linked_tasks, []),
     acceptanceCriteria: parse(item.acceptance_criteria, []),
+    version: Number(item.version) || 1,
   };
 }
 
@@ -842,6 +1071,7 @@ function mapDocument(item) {
     fileType: item.file_type,
     storedFile: item.storage_key,
     content: item.content,
+    collabRevision: Number(item.collab_revision) || 0,
   };
 }
 
@@ -866,6 +1096,7 @@ function mapTask(item) {
     estimatedHours: item.estimated_hours,
     actualHours: item.actual_hours,
     remainingHours: item.remaining_hours ?? 0,
+    version: Number(item.version) || 1,
     sprintId: item.sprint_id,
     assigneeId: item.assignee_id,
     assigneeRole: item.assignee_role || null,
@@ -948,6 +1179,7 @@ function mapUser(item) {
     phone: item.phone || "",
     position: item.position || "",
     department: item.department || "",
+    departmentId: item.department_id || null,
     bio: item.bio || "",
     createdAt: item.created_at,
   };
@@ -983,6 +1215,7 @@ function mapRelease(item) {
     linkedBugs: parse(item.linked_bugs, []),
     releaseNotes: item.release_notes,
     creator: item.creator,
+    creatorId: item.creator_id || null,
     status: item.status,
     createdAt: item.created_at,
   };
@@ -1018,6 +1251,29 @@ function mapProduct(item) {
   };
 }
 
+const AUDIT_SECRET_KEYS = new Set([
+  "password",
+  "password_hash",
+  "passwordHash",
+  "api_key",
+  "apiKey",
+  "api_key_encrypted",
+  "apiKeyEncrypted",
+  "authorization",
+  "token",
+  "accessToken",
+  "refreshToken",
+]);
+
+function sanitizeAuditValue(value) {
+  if (Array.isArray(value)) return value.map(sanitizeAuditValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    key,
+    AUDIT_SECRET_KEYS.has(key) ? "[REDACTED]" : sanitizeAuditValue(item),
+  ]));
+}
+
 function audit(actor, action, resourceType, resourceId, beforeValue, afterValue, ip) {
   insert("audit_logs", {
     id: `AUD-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
@@ -1026,8 +1282,8 @@ function audit(actor, action, resourceType, resourceId, beforeValue, afterValue,
     action,
     resource_type: resourceType,
     resource_id: resourceId || null,
-    before_json: json(beforeValue),
-    after_json: json(afterValue),
+    before_json: json(sanitizeAuditValue(beforeValue)),
+    after_json: json(sanitizeAuditValue(afterValue)),
     ip: ip || null,
     created_at: now(),
   });
@@ -1118,10 +1374,12 @@ module.exports = {
   rows,
   row,
   run,
+  transaction,
   json,
   parse,
   now,
   audit,
+  sanitizeAuditValue,
   recordBurndownSnapshot,
   buildSprintBurndown,
   mapProject,
