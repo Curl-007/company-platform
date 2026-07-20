@@ -1,9 +1,8 @@
 /**
- * PostgreSQL connection pool boundary (W2 Wave 1).
+ * PostgreSQL connection pool boundary (W2 Wave 1 / Wave 5 runtime wiring).
  *
- * Runtime selection still fails closed for DATABASE_DIALECT=postgres until the
- * async access layer and dual-environment verification land (Wave 5). This
- * module is safe to require for scripts and future runtime wiring.
+ * Used by scripts (import/apply) and by createDatabaseRuntime when
+ * DATABASE_DIALECT=postgres. Credentials must come from env only.
  */
 
 function resolveDatabaseUrl(env = process.env) {
@@ -73,8 +72,8 @@ function createPgPool({ connectionString, env = process.env, Pool } = {}) {
 }
 
 /**
- * Placeholder used by runtime selection once Wave 5 enables postgres.
- * Today createDatabaseRuntime still throws; this documents the future shape.
+ * Process runtime shape for DATABASE_DIALECT=postgres.
+ * No sync prepare/exec — repositories must use the async access layer.
  */
 function createPostgresRuntime(options = {}) {
   const handle = createPgPool(options);
@@ -89,6 +88,9 @@ function createPostgresRuntime(options = {}) {
     },
     async query(sql, params) {
       return handle.query(sql, params);
+    },
+    async connect() {
+      return handle.connect();
     },
     async ping() {
       return handle.ping();

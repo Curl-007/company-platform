@@ -1,6 +1,6 @@
 # W2 真 PostgreSQL 运行时切换计划
 
-> **状态**：执行中（W0 决策已锁定；W1–W4 代码完成；**runtime 仍 fail-closed，W5 待办**）  
+> **状态**：执行中（W0–W5 代码完成；**默认仍 sqlite**；真库端到端门控归 **W6**）  
 > **分支**：`codex/project-review`  
 > **范围外**：pgvector / embedding、长期双写、强制删 SQLite、ORM、MinIO/Redis Worker 
 
@@ -19,7 +19,7 @@
 
 **目标**
 
-- `DATABASE_DIALECT=postgres` + `DATABASE_URL` 可安全启动真库（在 W5 验收后解除 fail-closed）
+- `DATABASE_DIALECT=postgres` + `DATABASE_URL` 可创建 runtime（W5 已解除 fail-closed；真库验收归 W6）
 - 默认 `sqlite` 本地/dev/CI 无回归
 - NDJSON：`export → verify → import（新建）→ target-report → reconcile`
 - REST / 权限 / 审计语义不变
@@ -42,11 +42,11 @@ routes/services
 
 | 模块 | 路径 | 职责 |
 |------|------|------|
-| Runtime | `api/src/db/runtime.js` | dialect 选择；W5 前 postgres 仍 fail-closed |
+| Runtime | `api/src/db/runtime.js` | dialect 选择；postgres 走 `createPostgresRuntime`（需 URL） |
 | Pool | `api/src/db/postgres.js` | `pg.Pool`、ping、close、URL 脱敏 |
 | Dialect | `api/src/db/sql.js` | 参数与 SQLite 方言翻译 |
-| Access | `api/src/db/access.js` | 统一异步访问 API（仅 SQLite 实现；PG 端仍 fail-closed） |
-| Import | `api/scripts/import-ndjson-to-postgres.js` | NDJSON → PG（脚本路径；非 runtime） |
+| Access | `api/src/db/access.js` | 统一异步访问 API（sqlite + postgres；PG 事务 ALS 同连接） |
+| Import | `api/scripts/import-ndjson-to-postgres.js` | NDJSON → PG（脚本路径；非 runtime seed） |
 | Schema | `api/src/db/schema/postgres-baseline.sql` + `apply-postgres-schema.js` | 空库最终态建表 + `schema_migrations` 记账 |
 
 ## 3. Wave 与进度
@@ -54,15 +54,24 @@ routes/services
 | Wave | 内容 | 状态 |
 |------|------|------|
 | W0 | 决策与契约 | **完成**（本文件） |
-| W1 | `pg` 依赖 + pool + env 边界 | **完成**（runtime 仍 fail-closed） |
+| W1 | `pg` 依赖 + pool + env 边界 | **完成** |
 | W2 | SQL 方言 helpers + 单测 | **完成**（含 COLLATE NOCASE / app_settings key upsert） |
-| W3 | PG baseline schema + dual migrations | **完成**（`postgres-baseline.sql` 最终列集含 `leave_records`；SQLite 仍走 `initDb`/JS migrations；标记 schema 漂移风险但非 W5 阻塞） |
-| W4 | import NDJSON | **完成**（`import-ndjson-to-postgres.js` + `postgres-import.test.js` fake-pool 单测；真库集成验收待 W6） |
-| W5 | 全路径 async + 解除 fail-closed | 待办（主工期） |
+| W3 | PG baseline schema + dual migrations | **完成**（`postgres-baseline.sql` + SQLite `initDb`/JS migrations） |
+| W4 | import NDJSON | **完成**（`import-ndjson-to-postgres.js` + fake-pool 单测；真库集成验收待 W6） |
+| W5 | 全路径 async + 解除 fail-closed + schema 对齐 | **完成（代码）**（见下；真 PG 端到端仍归 W6） |
 | W6 | 门控 PG 集成 + 可选 CI service | 待办 |
-| W7 | runbook 切换/回滚 | 待办 |
+| W7 | runbook 生产切换/回滚演练 | 待办（runbook 已写启用步骤；生产演练待做） |
 
-粗估合计：**9–16 人日**（主风险在 W5）。
+粗估合计：**9–16 人日**（主风险在 W5；代码路径已落地）。
+
+### W5 交付摘要（本波次）
+
+- `createPostgresAccess` + `createAccess(runtime)`：公共契约 `row/rows/run/insert/transaction`；PG 事务用 `AsyncLocalStorage` 绑定同一 client
+- `createDatabaseRuntime`：`DATABASE_DIALECT=postgres` 时创建 PG runtime（缺 URL 明确报错）；默认 sqlite
+- `api/db.js` 双路径：sqlite 保持 `_sync` + CREATE/migrations/seed；postgres 仅 ping + 关键表检查（不跑 PRAGMA / JS migrations / seed）
+- `server.js`：`await Promise.resolve(initDb())` 后再 listen
+- schema：`leave_records` 纳入 `initDb` + `CORE_TABLES` + migration `20260720_17_leave_records`；`capacity_plans.leave_hours` 对齐 baseline
+- 单测：`database-runtime`（注入 FakePool）、`postgres-access`（fake pool 契约）；默认 `npm run test -w api` 仍为 sqlite 全绿
 
 ## 4. 异步 DB 契约（目标签名）
 
@@ -74,7 +83,7 @@ insert(table, row) → Promise<void>
 transaction(work) → Promise<T>  // work 可为 async
 ```
 
-SQLite 侧可用 Promise 包装现有 sync，保证双 dialect 同一 API。
+SQLite 侧用 Promise 包装现有 sync；Postgres 侧 `changes` ← `rowCount`。
 
 ## 5. 方言差异（实施检查表）
 
@@ -96,7 +105,7 @@ preflight → export:postgres → verify
   → import:postgres
   → generate:postgres-target-report
   → reconcile:postgres-import
-  → API smoke（W5 后）
+  → API smoke（W5 代码已可启动；真库门控 W6）
 ```
 
 脚本：
@@ -112,18 +121,18 @@ preflight → export:postgres → verify
 
 ## 8. 验收（DoD）
 
-- [x] 默认 SQLite：`npm run test -w api` 全绿（含 access-contract、sql-dialect、database-runtime）
+- [x] 默认 SQLite：`npm run test -w api` 全绿（含 access-contract、sql-dialect、database-runtime、postgres-access）
 - [ ] 真 PG：init + import 对账 + smoke（待 W6 门控集成）
-- [ ] 仅 W5 验收后 `createDatabaseRuntime` 允许 postgres
-- [x] 无 pgvector 蔓延；runbook 可回滚 SQLite（基线 SQL 确认无 JSONB/VECTOR/FK；`postgres-baseline.sql` `leave_records` 已含）
-- [ ] `leave_records`：仓库 `initDb`/`CORE_TABLES` 尚未纳入（已知 schema 漂移风险；非 W5 阻塞）
+- [x] W5：`createDatabaseRuntime` 允许 postgres（需 URL；可注入 Pool 单测证明）
+- [x] 无 pgvector 蔓延；runbook 可回滚 SQLite（基线 SQL 确认无 JSONB/VECTOR/FK）
+- [x] `leave_records`：`initDb` / `CORE_TABLES` / migration `20260720_17_leave_records` 已对齐
 
 ## 9. 建议 commit 切片
 
 1. `docs: add W2 postgres runtime plan with locked defaults`
 2. `db: add pg pool module and DATABASE_URL boundary`
 3. `db: introduce SQL dialect helpers for postgres`
-4. （后续）async access / schema / import / enable runtime / CI / runbook
+4. `db: async access + enable postgres runtime (W5) + leave_records alignment`
 
 ## 10. 参考
 

@@ -207,7 +207,8 @@ const ALLOWED_ORIGINS = (process.env.CORS_ORIGIN || "http://localhost:5173")
   .map((o) => o.trim())
   .filter(Boolean);
 
-initDb();
+// initDb is sync for sqlite and async for postgres — always await via Promise.resolve.
+const _dbInitPromise = Promise.resolve(initDb());
 const aiProviderStore = createAiProviderStore({
   defaults: DEFAULT_AI_PROVIDER,
   row,
@@ -1038,5 +1039,14 @@ function startServer(port) {
     console.log(`Company project management API listening on http://localhost:${port}`);
   });
 }
-startServer(PORT);
+
+// Wait for dialect-specific init (sync sqlite / async postgres ping+schema check).
+_dbInitPromise
+  .then(() => {
+    startServer(PORT);
+  })
+  .catch((error) => {
+    console.error("FATAL: database initialization failed:", error && error.message ? error.message : error);
+    process.exit(1);
+  });
 

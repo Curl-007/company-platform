@@ -1,6 +1,6 @@
 const CORE_TABLES = Object.freeze([
   "users", "org_units", "strategic_goals", "programs", "portfolios", "projects", "products", "requirements", "tasks", "test_cases", "test_runs",
-  "documents", "document_chunk", "rag_citation", "objects", "work_logs", "project_members", "capacity_plans", "project_allocations", "time_entries",
+  "documents", "document_chunk", "rag_citation", "objects", "work_logs", "project_members", "capacity_plans", "leave_records", "project_allocations", "time_entries",
   "project_risks", "project_decisions", "ai_jobs", "sprints", "sprint_commitments", "sprint_scope_changes",
   "defects", "audit_logs", "status_histories", "burndown_snapshots", "app_settings", "builds", "releases",
   "release_approvals", "rollback_records", "schema_migrations", "work_calendars", "work_calendar_exceptions", "idempotency_keys",

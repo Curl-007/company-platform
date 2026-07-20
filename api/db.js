@@ -1,8 +1,9 @@
 const fs = require("fs");
 const path = require("path");
 const { DatabaseSync } = require("node:sqlite");
-const { createDatabaseRuntime } = require("./src/db/runtime");
-const { createSqliteAccess } = require("./src/db/access");
+const { createDatabaseRuntime, resolveDatabaseDialect } = require("./src/db/runtime");
+const { createAccess } = require("./src/db/access");
+const { CORE_TABLES } = require("./src/db/migrationPreflight");
 const bcrypt = require("bcryptjs");
 const {
   programs,
@@ -27,18 +28,23 @@ const DB_FILE = process.env.DATABASE_FILE
   : path.join(__dirname, "app.db");
 const STORAGE_DIR = path.join(__dirname, "storage");
 const MIGRATIONS_DIR = path.join(__dirname, "migrations");
-const databaseRuntime = createDatabaseRuntime({ DatabaseSync, databaseFile: DB_FILE });
+const dialect = resolveDatabaseDialect(process.env);
+const databaseRuntime = createDatabaseRuntime({
+  DatabaseSync,
+  databaseFile: DB_FILE,
+  env: process.env,
+});
+const access = createAccess(databaseRuntime);
+// SQLite: sync connection. Postgres: null (use async access / pool only).
 const db = databaseRuntime.connection;
-const access = createSqliteAccess(databaseRuntime);
 
-// Private sync helpers for migrations / seed / init only. Public contract is async.
-const {
-  row: rowSync,
-  rows: rowsSync,
-  run: runSync,
-  insert: insertSync,
-  exec,
-} = access._sync;
+// Private sync helpers for migrations / seed / init only (sqlite). Public contract is async.
+const sync = dialect === "sqlite" ? access._sync : null;
+const rowSync = sync ? sync.row : null;
+const rowsSync = sync ? sync.rows : null;
+const runSync = sync ? sync.run : null;
+const insertSync = sync ? sync.insert : null;
+const exec = sync ? sync.exec : null;
 
 function json(value, fallback = null) {
   if (value === undefined) return fallback;
@@ -59,6 +65,9 @@ function now() {
 }
 
 function runMigrations() {
+  if (dialect !== "sqlite") {
+    throw new Error("runMigrations() is SQLite-only. Apply PostgreSQL schema via npm run apply:postgres-schema -w api.");
+  }
   exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       id TEXT PRIMARY KEY,
@@ -100,7 +109,64 @@ function runMigrations() {
   }
 }
 
-function initDb() {
+/**
+ * Postgres startup: ping pool and ensure core tables exist.
+ * Does not run SQLite PRAGMA/CREATE/JS migrations or seed.
+ * Apply schema first: npm run apply:postgres-schema -w api
+ */
+async function initDbPostgres() {
+  fs.mkdirSync(STORAGE_DIR, { recursive: true });
+  if (typeof databaseRuntime.ping === "function") {
+    const ok = await databaseRuntime.ping();
+    if (!ok) {
+      throw new Error("PostgreSQL ping failed (SELECT 1). Check DATABASE_URL connectivity.");
+    }
+  }
+
+  const required = ["schema_migrations", "users", "projects"];
+  const listed = await databaseRuntime.query(
+    `SELECT table_name
+       FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = ANY($1::text[])`,
+    [required],
+  );
+  const present = new Set((listed.rows || []).map((r) => r.table_name));
+  const missing = required.filter((name) => !present.has(name));
+  if (missing.length) {
+    throw new Error(
+      `PostgreSQL is missing required tables: ${missing.join(", ")}. ` +
+        "Apply baseline schema first: npm run apply:postgres-schema -w api -- --connection $DATABASE_URL " +
+        "(see docs/postgresql-migration-runbook.md).",
+    );
+  }
+
+  // Soft check: warn (do not fail) if CORE_TABLES are incomplete — import/schema may be partial.
+  try {
+    const coreListed = await databaseRuntime.query(
+      `SELECT table_name
+         FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = ANY($1::text[])`,
+      [[...CORE_TABLES]],
+    );
+    const corePresent = new Set((coreListed.rows || []).map((r) => r.table_name));
+    const coreMissing = CORE_TABLES.filter((name) => !corePresent.has(name));
+    if (coreMissing.length) {
+      console.warn(
+        `[db] PostgreSQL missing optional core tables (${coreMissing.length}): ${coreMissing.slice(0, 8).join(", ")}${coreMissing.length > 8 ? "…" : ""}. ` +
+          "Re-apply postgres-baseline.sql if this is unexpected.",
+      );
+    }
+  } catch (error) {
+    console.warn("[db] PostgreSQL core table check skipped:", error.message);
+  }
+
+  // Seed is SQLite bootstrap-only; PG is expected to be loaded via import or ops seed.
+  return { dialect: "postgres", seeded: false };
+}
+
+function initDbSqlite() {
   fs.mkdirSync(STORAGE_DIR, { recursive: true });
   exec(`
     PRAGMA journal_mode = WAL;
@@ -322,12 +388,27 @@ function initDb() {
       period_end TEXT NOT NULL,
       working_days REAL NOT NULL DEFAULT 5,
       daily_hours REAL NOT NULL DEFAULT 8,
+      leave_hours REAL NOT NULL DEFAULT 0,
       meeting_hours REAL NOT NULL DEFAULT 0,
       training_hours REAL NOT NULL DEFAULT 0,
       support_hours REAL NOT NULL DEFAULT 0,
       other_commitment_hours REAL NOT NULL DEFAULT 0,
       notes TEXT DEFAULT '',
       updated_by TEXT,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS leave_records (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      leave_date TEXT NOT NULL,
+      hours REAL NOT NULL,
+      category TEXT NOT NULL DEFAULT 'annual',
+      status TEXT NOT NULL DEFAULT 'submitted',
+      reason TEXT DEFAULT '',
+      created_by TEXT NOT NULL,
+      reviewed_by TEXT,
+      reviewed_at TEXT,
+      created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS project_allocations (
@@ -610,7 +691,10 @@ function initDb() {
   exec("CREATE INDEX IF NOT EXISTS idx_status_histories_resource_created ON status_histories(resource_type, resource_id, created_at DESC)");
   exec("CREATE INDEX IF NOT EXISTS idx_status_histories_project_created ON status_histories(project_id, created_at DESC)");
   exec("CREATE INDEX IF NOT EXISTS idx_sprint_scope_changes_sprint_created ON sprint_scope_changes(sprint_id, created_at DESC)");
+  try { exec("ALTER TABLE capacity_plans ADD COLUMN leave_hours REAL NOT NULL DEFAULT 0"); } catch (e) { /* column already exists */ }
   exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_capacity_plans_user_period ON capacity_plans(user_id, period_start, period_end)");
+  exec("CREATE INDEX IF NOT EXISTS idx_leave_records_status_date ON leave_records(status, leave_date)");
+  exec("CREATE INDEX IF NOT EXISTS idx_leave_records_user_date ON leave_records(user_id, leave_date DESC)");
   exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_project_allocations_user_project_period ON project_allocations(project_id, user_id, period_start, period_end)");
   exec("CREATE INDEX IF NOT EXISTS idx_project_allocations_project_period ON project_allocations(project_id, period_start, period_end)");
   exec("CREATE INDEX IF NOT EXISTS idx_time_entries_user_date ON time_entries(user_id, work_date DESC)");
@@ -623,6 +707,25 @@ function initDb() {
   exec("CREATE INDEX IF NOT EXISTS idx_rag_citation_document ON rag_citation(document_id, created_at DESC)");
   runMigrations();
   seed();
+}
+
+/**
+ * Initialize the database for the configured dialect.
+ * - sqlite: sync CREATE/ALTER + JS migrations + seed (returns undefined).
+ * - postgres: async ping + required-table check (returns Promise).
+ * Call sites should `await Promise.resolve(initDb())`.
+ */
+function initDb() {
+  if (dialect === "postgres") {
+    return initDbPostgres();
+  }
+  return initDbSqlite();
+}
+
+async function closeDatabase() {
+  if (typeof databaseRuntime.close === "function") {
+    await databaseRuntime.close();
+  }
 }
 
 function count(table) {
@@ -1353,7 +1456,10 @@ function enumerateDays(start, end) {
 
 module.exports = {
   db,
+  dialect,
+  databaseRuntime,
   initDb,
+  closeDatabase,
   insert,
   rows,
   row,

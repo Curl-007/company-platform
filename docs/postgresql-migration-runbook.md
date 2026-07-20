@@ -4,9 +4,50 @@
 
 此手册定义从当前 SQLite 试点数据迁移至 PostgreSQL 的可回滚路径。迁移期间保持现有 REST URL、`{ data, meta }` 成功响应和权限语义不变；SQLite 不会被原地替换或删除。
 
-当前代码仍以 SQLite 为运行数据源。以下步骤是切换前置条件，不代表已启用 PostgreSQL。
+**默认运行数据源仍是 SQLite**（`DATABASE_DIALECT` 未设置或为 `sqlite`）。W5 已解除进程级 fail-closed：在完成 schema apply / 数据导入与对账后，可用 `DATABASE_DIALECT=postgres` + `DATABASE_URL` 启动 API。真库端到端门控与生产切换验收归 **W6**。
 
-> 运行时保护：当前可设置 `DATABASE_DIALECT=sqlite`（默认）。若显式设置为 `postgres`，服务会在启动时拒绝运行（W5 前 fail-closed），而不会把同步 SQLite 仓储误连到 PostgreSQL。待 W5 异步 Repository 适配层和双环境验收完成后，才允许解除该保护并实际切换。
+## 运行时方言选择（W5）
+
+| 环境变量 | 含义 |
+|----------|------|
+| `DATABASE_DIALECT` | `sqlite`（默认）或 `postgres` / `postgresql` |
+| `DATABASE_URL` | 进程 runtime 使用的 PostgreSQL 连接串（也可用 `POSTGRES_TARGET_URL` 作为回退） |
+| `POSTGRES_TARGET_URL` | 迁移脚本目标库连接串（可与 runtime 相同） |
+| `DATABASE_FILE` | 仅 sqlite：数据库文件路径 |
+
+### 用 PostgreSQL 启动 API（隔离/灰度环境）
+
+**前置**：目标库已执行 baseline schema（及可选 NDJSON 导入与对账）。API 在 postgres 模式下 **不会** 跑 SQLite `PRAGMA` / `CREATE` 堆 / JS migrations / seed。
+
+```powershell
+# 1) 应用最终态 schema（空库或确认可重复执行的 baseline）
+$env:POSTGRES_TARGET_URL = "postgres://USER:PASS@HOST:5432/DB"   # 勿写入仓库
+npm run apply:postgres-schema -w api -- --connection $env:POSTGRES_TARGET_URL
+
+# 2) （可选）导入已校验的 NDJSON 导出包
+npm run import:postgres -w api -- --dir C:\migration\project-management-20260713 --connection $env:POSTGRES_TARGET_URL
+
+# 3) 启动 API 指向同一库
+$env:DATABASE_DIALECT = "postgres"
+$env:DATABASE_URL = $env:POSTGRES_TARGET_URL
+npm run start -w api
+```
+
+启动时 postgres 路径会：`ping` pool，并检查 `schema_migrations` / `users` / `projects` 是否存在；缺失则 fail-fast，并提示先 `apply:postgres-schema`。
+
+### 回滚到 SQLite
+
+```powershell
+# 停止 postgres 写流量后，恢复默认方言与文件库
+Remove-Item Env:DATABASE_DIALECT -ErrorAction SilentlyContinue
+Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
+# 如需显式：
+$env:DATABASE_DIALECT = "sqlite"
+# $env:DATABASE_FILE = "C:\path\to\frozen\app.db"   # 可选：指向冻结副本
+npm run start -w api
+```
+
+切换后发现数据、权限或 API 契约不一致时，停止 PostgreSQL 写流量并恢复到冻结时的 SQLite 只读副本；根据 audit log 和导出 manifest 定位差异。不得通过覆盖源库或手工删除审计记录来回滚。
 
 ## 迁移前置条件
 
@@ -40,10 +81,12 @@
 - 在目标库补齐主外键、唯一约束、检查约束及项目/状态/时间维度索引；导入前处理 SQLite 中已存在的逻辑孤儿数据。
 - 文档对象先保留原 `storage_key`，对象存储迁移独立进行，不能混入关系库切换窗口。
 - AI Worker、Redis 和 RAG 只在 PostgreSQL 数据校验和 API 回归稳定后引入。
+- Canonical DDL：`api/src/db/schema/postgres-baseline.sql`（无 SQL FK；JSON 列保持 TEXT；含 `leave_records`）。
+- SQLite 路径仍使用 `api/db.js` initDb + `api/migrations/*.js`（含 `20260720_17_leave_records`）。PG **不**跑逐条 JS migration 的 DDL。
 
 ## 导入与验收门禁
 
-> **注意**：当前 API **runtime 仍未启用** PostgreSQL（`DATABASE_DIALECT=postgres` 会在启动时 fail-closed）。以下步骤仅用于隔离目标库的数据迁移与对账，不切换线上读写。
+> **注意**：以下步骤用于隔离目标库的数据迁移与对账。完成后再按上文「用 PostgreSQL 启动 API」切换读写。本地/CI 默认仍为 sqlite。
 
 1. 在隔离 PostgreSQL 环境先应用最终态 baseline schema（无 SQL FK；JSON 列保持 TEXT）：
 
@@ -88,7 +131,7 @@
 
    对账必须显示表数量、行数、迁移校验和全部匹配，且目标库无外键、引用、约束或 JSON 违规。CI 中的 `create-postgres-target-report-fixture.js` 仅用于脚本自检，不代表真实 PostgreSQL 导入验收。
 6. 执行目标库迁移版本检查和关键索引检查（本阶段无 SQL FK 强制约束）。
-7. 使用同一套测试数据执行 API 回归：登录与禁用用户、项目数据范围、项目激活、交付门禁、容量访问、AI 人工确认（需 W5 解除 runtime fail-closed 之后）。
+7. 使用同一套测试数据执行 API 回归：登录与禁用用户、项目数据范围、项目激活、交付门禁、容量访问、AI 人工确认（`DATABASE_DIALECT=postgres` + 已 apply/import 的库）。
 8. 在灰度环境以只读影子比对确认仪表盘、项目流和交付统计的聚合结果一致后，才允许切换写流量。
 
 ### 推荐完整链路
@@ -97,10 +140,11 @@
 preflight → export:postgres → verify:postgres-export
   → apply:postgres-schema → import:postgres
   → generate:postgres-target-report → reconcile:postgres-import
+  → DATABASE_DIALECT=postgres DATABASE_URL=... npm run start -w api
 ```
 
-> **重要**：即使在隔离 PG 环境执行完整链路并完成对账，API runtime 仍未启用 PostgreSQL。设置 `DATABASE_DIALECT=postgres` 仍会导致进程启动时拒绝运行（W5 前 fail-closed）。本链路的唯一目的是数据迁移与对账，不切换线上读写。
+> **诚实说明**：仓库默认 CI/本地仍跑 sqlite。本机若无可用 `DATABASE_URL`，真 PG 冒烟标为 **not_run**，完整门控在 W6。
 
 ## 回滚
 
-切换后发现数据、权限或 API 契约不一致时，停止 PostgreSQL 写流量并恢复到冻结时的 SQLite 只读副本；根据 audit log 和导出 manifest 定位差异。不得通过覆盖源库或手工删除审计记录来回滚。
+见上文「回滚到 SQLite」。切换后发现数据、权限或 API 契约不一致时，停止 PostgreSQL 写流量并恢复到冻结时的 SQLite 只读副本；根据 audit log 和导出 manifest 定位差异。不得通过覆盖源库或手工删除审计记录来回滚。
