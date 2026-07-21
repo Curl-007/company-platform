@@ -55,6 +55,7 @@ test("template store create/publish/bind against memory sqlite helpers", async (
     );
   `);
 
+  let nextIdSeq = 0;
   const store = createWorkflowTemplateStore({
     insert: async (table, data) => {
       const keys = Object.keys(data);
@@ -68,7 +69,10 @@ test("template store create/publish/bind against memory sqlite helpers", async (
       try { return JSON.parse(value); } catch { return fallback; }
     },
     now: () => "2026-07-21T10:00:00.000Z",
-    nextId: async () => "WFT-TEST-1",
+    nextId: async () => {
+      nextIdSeq += 1;
+      return `WFT-TEST-${nextIdSeq}`;
+    },
   });
 
   const draft = await store.createDraft({
