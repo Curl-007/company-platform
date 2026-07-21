@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
@@ -10,7 +10,7 @@ const multer = require("multer");
 const { WebSocketServer } = require("ws");
 const {
   aiSummaries,
-  audit,
+  audit: writeAuditLog,
   initDb,
   insert,
   json,
@@ -305,6 +305,20 @@ const aiSummaryService = createAiSummaryService({
   getModelName: async () => (await aiProviderStore.resolveConfig()).model,
   rows,
 });
+
+// Keep process-local AI summary cache coherent after mutating business data.
+// Scope is process-wide clear (cheap) so dashboards/summary don't serve stale TTL.
+async function audit(actor, action, resourceType, resourceId, beforeValue, afterValue, ip) {
+  const result = await writeAuditLog(actor, action, resourceType, resourceId, beforeValue, afterValue, ip);
+  try {
+    if (typeof action === "string" && !action.startsWith("ai.") && !action.startsWith("auth.") && action !== "page.view") {
+      aiSummaryService.clearCache();
+    }
+  } catch {
+    // never fail writes because of cache maintenance
+  }
+  return result;
+}
 const dashboardService = createDashboardService({
   createAiSummary: aiSummaryService.createSummary,
   mapBuild,

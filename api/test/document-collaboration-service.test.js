@@ -81,11 +81,27 @@ test("document collaboration update writes audit evidence and broadcasts to peer
     canManageDocument: () => true,
   });
   assert.equal(result, "updated");
-  assert.deepEqual(socket.sent[0], { type: "saved", documentId: "DOC-001", revision: 3 });
+  assert.equal(socket.sent[0].type, "saved");
+  assert.equal(socket.sent[0].documentId, "DOC-001");
+  assert.equal(socket.sent[0].revision, 3);
+  assert.ok(Array.isArray(socket.sent[0].peers));
   assert.equal(peer.sent.length, 1);
-  assert.deepEqual(peer.sent[0], { type: "update", documentId: "DOC-001", content: "updated content", revision: 3 });
+  assert.equal(peer.sent[0].type, "update");
+  assert.equal(peer.sent[0].documentId, "DOC-001");
+  assert.equal(peer.sent[0].content, "updated content");
+  assert.equal(peer.sent[0].revision, 3);
   assert.equal(audits[0][1], "document.collab_update");
   assert.equal(audits[0][3], "DOC-001");
   assert.equal(audits[0][5].contentLength, "updated content".length);
   assert.equal(audits[0][6], "127.0.0.1");
+});
+
+test("document collaboration presence lists unique online peers", () => {
+  const { listRoomPresence } = require("../src/modules/documents/collaboration");
+  const a = { readyState: 1, collabUser: { id: "USR-1", name: "甲" } };
+  const b = { readyState: 1, collabUser: { id: "USR-2", name: "乙" } };
+  const rooms = new Map([["DOC-1", new Set([a, b, a])]]);
+  const peers = listRoomPresence(rooms, "DOC-1");
+  assert.equal(peers.length, 2);
+  assert.deepEqual(peers.map((item) => item.id).sort(), ["USR-1", "USR-2"]);
 });

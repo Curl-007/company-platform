@@ -7958,3 +7958,20 @@ html {
 .products-page-body .management-detail-pane::before {
   display: none !important;
 }
+
+/* Document collaboration editor chrome */
+.collab-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.collab-presence {
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -191,6 +191,11 @@ function DocumentDetail({
 
 type CollabStatus = 'connecting' | 'connected' | 'saving' | 'saved' | 'conflict' | 'error' | 'closed';
 
+interface CollabPeer {
+  id?: string;
+  name?: string;
+}
+
 interface CollabMessage {
   type?: string;
   documentId?: string;
@@ -198,6 +203,8 @@ interface CollabMessage {
   revision?: number;
   code?: string;
   message?: string;
+  peers?: CollabPeer[];
+  count?: number;
 }
 
 function collabStatusText(status: CollabStatus) {
@@ -208,6 +215,14 @@ function collabStatusText(status: CollabStatus) {
   if (status === 'conflict') return '存在版本冲突';
   if (status === 'error') return '连接异常';
   return '已关闭';
+}
+
+function formatPresence(peers: CollabPeer[]) {
+  if (!peers.length) return '仅自己在线';
+  if (peers.length === 1) return `在线 1 人 · ${peers[0]?.name || peers[0]?.id || '用户'}`;
+  const names = peers.slice(0, 3).map((peer) => peer.name || peer.id || '用户').join('、');
+  const extra = peers.length > 3 ? ` 等 ${peers.length} 人` : '';
+  return `在线 ${peers.length} 人 · ${names}${extra}`;
 }
 
 function buildCollaborationUrl(documentId: string) {
@@ -233,6 +248,8 @@ function DocumentCollaborationEditor({
   const [revision, setRevision] = useState(Number(doc.collabRevision) || 0);
   const [status, setStatus] = useState<CollabStatus>('connecting');
   const [message, setMessage] = useState<string | null>(null);
+  const [peers, setPeers] = useState<CollabPeer[]>([]);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
 
   useEffect(() => {
     const token = getToken();
@@ -246,6 +263,8 @@ function DocumentCollaborationEditor({
     socketRef.current = socket;
     setStatus('connecting');
     setMessage(null);
+    setPeers([]);
+    setLastSavedAt(null);
 
     socket.onopen = () => {
       setStatus('connected');
@@ -255,6 +274,13 @@ function DocumentCollaborationEditor({
       try {
         payload = JSON.parse(String(event.data));
       } catch {
+        return;
+      }
+      if (Array.isArray(payload.peers)) {
+        setPeers(payload.peers);
+      }
+      if (payload.type === 'presence') {
+        setPeers(Array.isArray(payload.peers) ? payload.peers : []);
         return;
       }
       if (payload.type === 'snapshot') {
@@ -275,6 +301,7 @@ function DocumentCollaborationEditor({
         setRevision(nextRevision);
         dirtyRef.current = false;
         setStatus('saved');
+        setLastSavedAt(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         setMessage('正文已保存，其他在线编辑者会收到更新。');
         onSaved(contentRef.current, nextRevision);
         return;
@@ -319,6 +346,7 @@ function DocumentCollaborationEditor({
     };
     socket.onclose = () => {
       setStatus((current) => current === 'error' ? current : 'closed');
+      setPeers([]);
     };
 
     return () => {
@@ -350,8 +378,13 @@ function DocumentCollaborationEditor({
     <Overlay onClose={onClose}>
       <Panel
         title="协同编辑正文"
-        subtitle={`${doc.title} · revision ${revision}`}
-        toolbar={<StatusBadge label={collabStatusText(status)} variant={status === 'error' || status === 'conflict' ? 'warning' : status === 'saved' ? 'success' : 'info'} />}
+        subtitle={`${doc.title} · revision ${revision}${lastSavedAt ? ` · 上次保存 ${lastSavedAt}` : ''}`}
+        toolbar={(
+          <div className="collab-toolbar">
+            <span className="collab-presence">{formatPresence(peers)}</span>
+            <StatusBadge label={collabStatusText(status)} variant={status === 'error' || status === 'conflict' ? 'warning' : status === 'saved' ? 'success' : 'info'} />
+          </div>
+        )}
       >
         {message ? <div className={status === 'error' || status === 'conflict' ? 'form-error' : 'form-help-text'} style={{ marginBottom: 10 }}>{message}</div> : null}
         <div className="form-group">
@@ -363,7 +396,9 @@ function DocumentCollaborationEditor({
             onChange={(event) => updateContent(event.target.value)}
             placeholder="在这里编辑文档正文；保存后会广播给同一文档的在线编辑者。"
           />
-          <div className="form-help-text">保存使用服务器 revision 做冲突检测；若别人先保存，会提示冲突并刷新为最新内容。</div>
+          <div className="form-help-text">
+            保存使用服务器 revision 做冲突检测；顶部会显示当前在线人数与最近保存时间。若别人先保存，会提示冲突并刷新为最新内容。
+          </div>
         </div>
         <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end' }}>
           <button className="btn btn-secondary btn-sm" onClick={onClose}>关闭</button>

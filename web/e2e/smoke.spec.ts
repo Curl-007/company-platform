@@ -44,12 +44,18 @@ test.describe('manual checklist automation', () => {
     await openNav(page, '产品管理');
     await expect(page.getByRole('heading', { name: '产品管理' })).toBeVisible({ timeout: 15_000 });
 
-    // As-built: 产品 / 项目集 / 组合 only（公司目标入口已从产品页移除；API /api/strategic-goals 仍保留）
+    // Main tabs remain 产品/项目集/组合；公司目标通过页头按钮进入（不是第 4 个 tab）
     for (const tab of ['产品', '项目集', '组合'] as const) {
       await page.locator('.nav-tabs.products-page-tabs, .products-page-tabs, .nav-tabs').getByRole('button', { name: tab, exact: true }).click();
       await expect(page.locator('.nav-tabs .nav-tab.active')).toContainText(tab);
     }
     await expect(page.locator('.nav-tabs').getByRole('button', { name: '公司目标', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: '公司目标 / OKR', exact: true }).click();
+    await expect(page.getByRole('button', { name: '返回产品工作台', exact: true })).toBeVisible();
+    await expect(page.locator('.nav-tabs')).toHaveCount(0);
+    await page.getByRole('button', { name: '返回产品工作台', exact: true }).click();
+    await expect(page.locator('.nav-tabs .nav-tab')).toHaveCount(3);
+    await expect(page.locator('.nav-tabs .nav-tab.active')).toBeVisible();
   });
 
   test('delivery center loads', async ({ page }) => {
