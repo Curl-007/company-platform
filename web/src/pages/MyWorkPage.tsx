@@ -121,21 +121,13 @@ function MyWorkPage({ user }: { user?: SessionUser | null }) {
   ];
 
   return (
-    <div>
+    <div className="mywork-page">
       <PageHeader
         title="我的工作"
-        description={`${user?.name ?? ''} 的任务队列、缺陷处理、需求跟进与日报周报入口`}
-        actions={(
-          <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
-            <button className={`btn btn-sm ${taskFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setTaskFilter('all')}>全部</button>
-            <button className={`btn btn-sm ${taskFilter === 'requirement' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setTaskFilter('requirement')}>需求任务</button>
-            <button className={`btn btn-sm ${taskFilter === 'test_case' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setTaskFilter('test_case')}>测试任务</button>
-            <button className={`btn btn-sm ${taskFilter === 'defect' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setTaskFilter('defect')}>缺陷修复</button>
-          </div>
-        )}
+        description={`${user?.name ?? ''} 的任务、缺陷、需求与日报入口`}
       />
 
-      <div className="metric-bar" style={{ marginBottom: 16 }}>
+      <div className="metric-bar mywork-metric-bar">
         {metricCards.map((item) => (
           <div key={item.label} className="metric-card">
             <div className="metric-value">{item.value}</div>
@@ -144,13 +136,13 @@ function MyWorkPage({ user }: { user?: SessionUser | null }) {
         ))}
       </div>
 
-      <Panel title="我的本期容量" subtitle="用于协调任务安排，不作为个人绩效评分。" style={{ marginBottom: 16 }}>
+      <Panel title="我的本期容量" subtitle="用于协调任务安排，不作为个人绩效评分。" className="mywork-capacity-panel">
         {personalCapacityAsync.loading ? (
           <div className="body-text">正在加载本期容量…</div>
         ) : personalCapacityAsync.error ? (
           <div className="form-error">容量信息加载失败，请稍后刷新页面重试。</div>
         ) : personalCapacityAsync.data ? (
-          <div className="detail-grid">
+          <div className="detail-grid mywork-capacity-grid">
             <div className="detail-field">
               <span className="detail-label">有效可投入工时</span>
               <span className="detail-value">{personalCapacityAsync.data.effectiveHours} 小时</span>
@@ -183,7 +175,7 @@ function MyWorkPage({ user }: { user?: SessionUser | null }) {
         )}
       </Panel>
 
-      <div className="tab-bar" style={{ marginBottom: 16 }}>
+      <div className="tab-bar mywork-tab-bar">
         <button className={`tab-item ${tab === 'tasks' ? 'active' : ''}`} onClick={() => setTab('tasks')}>我的任务</button>
         <button className={`tab-item ${tab === 'bugs' ? 'active' : ''}`} onClick={() => setTab('bugs')}>我的缺陷</button>
         <button className={`tab-item ${tab === 'requirements' ? 'active' : ''}`} onClick={() => setTab('requirements')}>我的需求</button>
@@ -191,20 +183,28 @@ function MyWorkPage({ user }: { user?: SessionUser | null }) {
       </div>
 
       {tab === 'tasks' ? (
-        <div className="mywork-panels">
+        <div className="mywork-tasks">
+          <div className="mywork-task-filters">
+            <button className={`btn btn-sm ${taskFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setTaskFilter('all')}>全部</button>
+            <button className={`btn btn-sm ${taskFilter === 'requirement' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setTaskFilter('requirement')}>需求任务</button>
+            <button className={`btn btn-sm ${taskFilter === 'test_case' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setTaskFilter('test_case')}>测试任务</button>
+            <button className={`btn btn-sm ${taskFilter === 'defect' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setTaskFilter('defect')}>缺陷修复</button>
+          </div>
+
+          <div className="mywork-panels">
           <Panel title="任务队列" subtitle={`当前共 ${visibleTasks.length} 条任务`} className="mywork-panel-left">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="mywork-queue">
               {visibleTasks.map((task) => (
                 <div
                   key={task.id}
                   className={`mywork-queue-item ${selectedTask?.id === task.id ? 'selected' : ''}`}
                   onClick={() => setSelectedTaskId(task.id)}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                  <div className="mywork-queue-item-main">
                     <span className="mywork-queue-item-title">{task.title}</span>
                     <StatusBadge status={task.status} label={labelOf(TASK_STATUS_LABELS, task.status)} showDot={false} />
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
+                  <div className="mywork-queue-item-meta">
                     <span>{task.sourceType ? labelOf({ requirement: '需求', test_case: '测试', defect: '缺陷' }, task.sourceType) : labelOf(TASK_TYPE_LABELS, task.type)}</span>
                     <span>{task.assigneeRole ? labelOf(USER_ROLE_LABELS, task.assigneeRole) : '未设角色'}</span>
                   </div>
@@ -244,7 +244,7 @@ function MyWorkPage({ user }: { user?: SessionUser | null }) {
                     <span className="detail-value text-mono">{selectedTask.wbsCode}</span>
                   </div>
                 </div>
-                <div className="detail-field" style={{ marginTop: 8 }}>
+                <div className="detail-field mywork-detail-progress">
                   <span className="detail-label">当前进度</span>
                   <ProgressBar percent={selectedTask.progress} />
                 </div>
@@ -280,6 +280,7 @@ function MyWorkPage({ user }: { user?: SessionUser | null }) {
               <div className="empty-state-desc">请选择左侧任务查看详情。</div>
             )}
           </Panel>
+          </div>
         </div>
       ) : null}
 

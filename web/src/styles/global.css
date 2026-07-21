@@ -5817,15 +5817,18 @@ html {
    Metrics horizontal bar (MyWorkPage)
    --------------------------------------------------------------------------- */
 .metric-bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 .metric-bar .metric-card {
-  flex: 1;
+  min-width: 0;
   padding: 14px 16px;
-  flex-direction: row;
-  align-items: center;
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
 }
 .metric-bar .metric-value {
   font-size: 24px;
@@ -5844,27 +5847,56 @@ html {
 .metric-bar .metric-card.risk { border-left: 3px solid var(--color-risk); }
 
 /* ---------------------------------------------------------------------------
-   MyWorkPage — three‑column layout
+   MyWorkPage — two-column task workspace
    --------------------------------------------------------------------------- */
+.mywork-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.mywork-metric-bar,
+.mywork-capacity-panel,
+.mywork-tab-bar,
+.mywork-tasks {
+  margin: 0;
+}
+.mywork-capacity-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+.mywork-task-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
 .mywork-panels {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+}
+.mywork-panel-left,
+.mywork-panel-center {
+  min-width: 0;
+  height: 100%;
 }
 .mywork-panel-left .panel-body,
-.mywork-panel-center .panel-body,
-.mywork-panel-right .panel-body {
+.mywork-panel-center .panel-body {
   padding: 0;
+  min-height: 480px;
 }
-.mywork-panel-left .panel-header { border-bottom-color: var(--border-divider); }
-.mywork-panel-center .panel-header { border-bottom-color: var(--border-divider); }
-.mywork-panel-right .panel-header { border-bottom-color: var(--border-divider); }
+.mywork-panel-left .panel-header,
+.mywork-panel-center .panel-header {
+  border-bottom-color: var(--border-divider);
+}
 
 /* Task queue */
 .mywork-queue {
-  max-height: 520px;
+  max-height: 560px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 .mywork-queue-group-header {
   display: flex;
@@ -5889,21 +5921,75 @@ html {
 
 .mywork-queue-item {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
   cursor: pointer;
   border-bottom: 1px solid var(--border-divider);
   transition: background var(--transition-fast);
 }
 .mywork-queue-item:hover { background: var(--bg-hover); }
 .mywork-queue-item.selected { background: rgba(36, 41, 47, 0.06); border-left: 3px solid var(--accent); padding-left: 11px; }
+.mywork-queue-item-main,
+.mywork-queue-item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.mywork-queue-item-meta {
+  color: var(--text-secondary);
+  font-size: var(--fs-helper);
+}
 .mywork-queue-item-title {
   flex: 1;
+  min-width: 0;
   font-size: var(--fs-body);
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.mywork-detail {
+  padding: 16px;
+}
+.mywork-detail-progress {
+  margin-top: 12px;
+}
+.mywork-detail-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+@media (max-width: 1100px) {
+  .mywork-panels {
+    grid-template-columns: 1fr;
+  }
+  .mywork-capacity-grid,
+  .metric-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .mywork-capacity-grid,
+  .metric-bar,
+  .mywork-detail-meta {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Products page */
+.products-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.products-page-tabs {
+  margin: 0;
+}
+.products-page-body {
+  min-width: 0;
 }
 .mywork-queue-item-pct {
   font-size: var(--fs-helper);
@@ -7352,4 +7438,17 @@ html {
   .team-detail-hero {
     align-items: flex-start;
   }
+}
+
+
+/* Products page spacing */
+.products-page-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.products-page-body > .panel,
+.products-page-body .product-workbench {
+  width: 100%;
 }
