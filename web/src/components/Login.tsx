@@ -1,5 +1,5 @@
 import React, { useState, FormEvent } from 'react';
-import { Check } from 'lucide-react';
+import { Check, LockKeyhole, Mail } from 'lucide-react';
 import { login } from '../services/auth';
 import type { SessionUser } from '../types';
 
@@ -45,66 +45,81 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
   return (
     <div className="login-screen">
-      <div className="login-brand-panel">
-        <div className="login-brand-logo-lg">P</div>
-        <h1 className="login-brand-title">项目管理平台</h1>
-        <p className="login-brand-subtitle">AI 驱动的企业级项目协作工作台</p>
-        <ul className="login-brand-highlights">
-          {HIGHLIGHTS.map((item) => (
-            <li key={item}>
-              <Check size={16} />
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+      <div className="login-shell">
+        <div className="login-brand-panel">
+          <div className="login-brand-logo-lg">P</div>
+          <h1 className="login-brand-title">项目管理平台</h1>
+          <p className="login-brand-subtitle">AI 驱动的企业级项目协作工作台</p>
+          <ul className="login-brand-highlights">
+            {HIGHLIGHTS.map((item) => (
+              <li key={item}>
+                <Check size={16} />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
 
-      <div className="login-form-panel">
-        <div className="login-card">
-          <div className="login-card-header">
-            <h2 className="login-card-title">欢迎回来</h2>
-            <p className="login-card-subtitle">登录后进入工作台</p>
-          </div>
-
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label className="form-label" htmlFor="login-email">邮箱</label>
-              <input
-                id="login-email"
-                className="form-input"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@company.com"
-                autoComplete="email"
-                autoFocus
-              />
+        <div className="login-form-panel">
+          <div className="login-card">
+            <div className="login-card-header">
+              <span className="login-card-kicker">Sign in</span>
+              <h2 className="login-card-title">欢迎回来</h2>
+              <p className="login-card-subtitle">使用企业账号登录，进入项目协作工作台</p>
             </div>
 
-            <div className="form-group">
-              <label className="form-label" htmlFor="login-password">密码</label>
-              <input
-                id="login-password"
-                className="form-input"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="请输入密码"
-                autoComplete="current-password"
-              />
+            <form className="login-form" onSubmit={handleSubmit}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="login-email">邮箱</label>
+                <div className="login-input-wrap">
+                  <Mail size={16} className="login-input-icon" aria-hidden />
+                  <input
+                    id="login-email"
+                    className="form-input login-input"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@company.com"
+                    autoComplete="email"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="login-password">密码</label>
+                <div className="login-input-wrap">
+                  <LockKeyhole size={16} className="login-input-icon" aria-hidden />
+                  <input
+                    id="login-password"
+                    className="form-input login-input"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="请输入密码"
+                    autoComplete="current-password"
+                  />
+                </div>
+              </div>
+
+              {error && <div className="form-error">{error}</div>}
+
+              <button className="btn btn-primary btn-lg login-submit" type="submit" disabled={loading}>
+                {loading ? '登录中...' : '登录'}
+              </button>
+            </form>
+
+            <div className="login-card-hint">
+              <div className="login-card-hint-title">演示账号</div>
+              <div className="login-card-hint-row">
+                <span>管理员</span>
+                <code>admin@example.com / Admin@123</code>
+              </div>
+              <div className="login-card-hint-row">
+                <span>项目经理</span>
+                <code>pm@example.com / Pm@12345</code>
+              </div>
             </div>
-
-            {error && <div className="form-error">{error}</div>}
-
-            <button className="btn btn-primary btn-lg" type="submit" disabled={loading}>
-              {loading ? '登录中...' : '登录'}
-            </button>
-          </form>
-
-          <div className="login-card-hint">
-            <strong>演示账号</strong> · 管理员 `admin@example.com / Admin@123`
-            <br />
-            项目经理 `pm@example.com / Pm@12345`
           </div>
         </div>
       </div>

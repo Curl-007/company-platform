@@ -2621,17 +2621,32 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   justify-content: center;
   background: #1F2328;
-  padding: 24px;
+  padding: 28px;
+}
+
+.login-shell {
+  width: min(1080px, 100%);
+  min-height: min(640px, calc(100vh - 56px));
+  display: flex;
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 40px 80px rgba(0, 0, 0, 0.35),
+    0 12px 28px rgba(0, 0, 0, 0.22);
+  background: rgba(18, 20, 24, 0.72);
 }
 
 .login-card {
   width: 100%;
-  max-width: 400px;
-  background: var(--bg-content);
-  border: none;
-  border-radius: var(--radius-modal);
-  padding: 40px 36px 32px;
-  box-shadow: var(--shadow-modal);
+  max-width: 420px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(216, 222, 228, 0.9);
+  border-radius: 22px;
+  padding: 32px 30px 28px;
+  box-shadow:
+    0 24px 48px rgba(15, 23, 42, 0.12),
+    0 2px 0 rgba(255, 255, 255, 0.65) inset;
 }
 
 .login-card-brand {
@@ -2651,40 +2666,123 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 4px 12px rgba(31, 35, 40, 0.3);
 }
 
+.login-card-kicker {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(36, 41, 47, 0.06);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .login-card-title {
-  font-size: var(--fs-page-title);
-  font-weight: 600;
+  font-size: 28px;
+  font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 4px;
+  margin: 0 0 8px;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 
 .login-card-subtitle {
-  font-size: var(--fs-helper);
+  font-size: 14px;
   color: var(--text-secondary);
-  margin-bottom: 24px;
+  margin: 0;
+  line-height: 1.55;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .login-card form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
+.login-input-wrap {
+  position: relative;
+}
+
+.login-input-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.login-input {
+  padding-left: 38px !important;
+  min-height: 44px;
+  border-radius: 12px !important;
+  background: rgba(247, 248, 250, 0.95) !important;
+}
+
+.login-input:focus {
+  background: #fff !important;
+  box-shadow: 0 0 0 4px rgba(36, 41, 47, 0.08) !important;
+}
+
+.login-submit,
 .login-card .btn {
   width: 100%;
-  padding: 11px;
-  margin-top: 6px;
+  min-height: 46px;
+  margin-top: 4px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 650;
 }
 
 .login-card-hint {
-  margin-top: 18px;
-  padding: 11px 14px;
-  background: var(--bg-subtle);
-  border: 1px solid var(--border-divider);
-  border-radius: var(--radius-input);
+  margin-top: 20px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(247, 248, 250, 0.98), rgba(241, 243, 246, 0.92));
+  border: 1px solid rgba(216, 222, 228, 0.9);
+  border-radius: 14px;
   font-size: 12px;
   color: var(--text-secondary);
-  line-height: 1.6;
+  line-height: 1.55;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.login-card-hint-title {
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.login-card-hint-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.login-card-hint-row span {
+  color: var(--text-secondary);
+}
+
+.login-card-hint-row code {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(216, 222, 228, 0.9);
+  border-radius: 8px;
+  padding: 3px 8px;
 }
 
 .login-card-hint strong {
@@ -2694,18 +2792,22 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Split-screen login */
 .login-brand-panel {
-  flex: 1 1 480px;
-  max-width: 560px;
+  flex: 1.05 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 48px;
+  padding: 48px 44px;
   color: #fff;
+  background:
+    radial-gradient(circle at 20% 18%, rgba(74, 222, 128, 0.16), transparent 34%),
+    radial-gradient(circle at 80% 12%, rgba(96, 165, 250, 0.14), transparent 28%),
+    linear-gradient(160deg, rgba(24, 28, 36, 0.2), rgba(10, 12, 16, 0.35));
 }
 .login-brand-logo-lg {
   width: 56px;
   height: 56px;
-  border-radius: 14px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.12);
   display: flex;
   align-items: center;
@@ -2716,15 +2818,19 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 .login-brand-title {
-  font-size: 28px;
-  font-weight: 700;
-  margin: 0 0 8px;
+  font-size: clamp(28px, 3.4vw, 40px);
+  font-weight: 750;
+  margin: 0 0 10px;
   color: #fff;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
 }
 .login-brand-subtitle {
   font-size: 15px;
-  color: rgba(255, 255, 255, 0.7);
-  margin: 0 0 36px;
+  color: rgba(255, 255, 255, 0.72);
+  margin: 0 0 32px;
+  max-width: 34ch;
+  line-height: 1.6;
 }
 .login-brand-highlights {
   list-style: none;
@@ -2732,7 +2838,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 .login-brand-highlights li {
   display: flex;
@@ -2740,36 +2846,64 @@ h1, h2, h3, h4, h5, h6 {
   gap: 12px;
   font-size: 14px;
   color: rgba(255, 255, 255, 0.9);
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 .login-brand-highlights li svg {
   color: #4ade80;
   flex-shrink: 0;
 }
 .login-form-panel {
-  flex: 1 1 400px;
+  flex: 0.95 1 0;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-content);
-  padding: 24px;
+  padding: 36px 32px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 247, 250, 0.96));
 }
 .login-form-panel .login-card {
-  max-width: 380px;
-  box-shadow: none;
-  padding: 0;
+  max-width: 400px;
 }
 .login-card-header {
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
-.login-card-header .login-card-title {
-  font-size: 22px;
+@media (max-width: 900px) {
+  .login-shell {
+    min-height: auto;
+    flex-direction: column;
+  }
+  .login-brand-panel {
+    padding: 32px 28px 20px;
+  }
+  .login-brand-highlights {
+    display: none;
+  }
+  .login-form-panel {
+    padding: 20px 20px 28px;
+    background: transparent;
+  }
 }
-@media (max-width: 860px) {
-  .login-brand-panel { display: none; }
-}
-@media (max-width: 480px) {
+@media (max-width: 560px) {
+  .login-screen {
+    padding: 12px;
+  }
+  .login-shell {
+    border-radius: 20px;
+  }
   .login-card {
-    padding: 24px 0;
+    padding: 24px 18px 20px;
+    border-radius: 18px;
+  }
+  .login-card-title {
+    font-size: 24px;
+  }
+  .login-card-hint-row {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
@@ -7441,17 +7575,30 @@ html {
 }
 
 
-/* Products page spacing */
+/* Products page: near-flush stacking (workbench + list almost stuck) */
 .products-page {
-  gap: 8px;
+  gap: 4px !important;
+}
+.products-page > .page-header {
+  margin-bottom: 4px !important;
+  padding: 0 2px 4px !important;
+  border-bottom: none !important;
+}
+.products-page > .page-header .page-header-info h1,
+.products-page > .page-header .page-title {
+  margin-bottom: 2px !important;
+}
+.products-page > .page-header .page-header-info p {
+  margin: 0 !important;
+  line-height: 1.4 !important;
 }
 .products-page-tabs {
-  margin: 0 0 4px;
+  margin: 0 !important;
 }
 .products-page-body {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 0 !important;
   min-width: 0;
 }
 .products-page-body > .panel,
@@ -7461,69 +7608,50 @@ html {
 }
 .products-page-body .product-workbench,
 .products-page-body .management-workbench {
-  gap: 8px;
-}
-.products-page-body .product-workbench > .panel,
-.products-page-body .management-workbench > .panel {
-  margin-bottom: 0;
-}
-.products-page-body .product-workbench-grid,
-.products-page-body .management-grid {
-  gap: 8px;
-  margin-top: 0;
-}
-.products-page-body .product-list-pane,
-.products-page-body .management-list-pane {
-  top: 64px;
-}
-.products-page-body .panel-header {
-  padding-top: 12px;
-  padding-bottom: 10px;
-}
-.products-page-body .panel-body {
-  padding-top: 12px;
-}
-
-/* Products page spacing hard override */
-.products-page {
-  gap: 6px !important;
-}
-.products-page > .page-header {
-  margin-bottom: 8px !important;
-  padding-bottom: 6px !important;
-}
-.products-page-tabs {
-  margin: 0 0 2px !important;
-}
-.products-page-body {
-  gap: 0 !important;
-}
-.products-page-body .product-workbench,
-.products-page-body .management-workbench {
-  gap: 6px !important;
+  gap: 2px !important;
 }
 .products-page-body .product-workbench > .panel,
 .products-page-body .management-workbench > .panel {
   margin: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
 }
 .products-page-body .product-workbench-grid,
 .products-page-body .management-grid {
-  gap: 6px !important;
+  gap: 2px !important;
   margin-top: 0 !important;
+}
+.products-page-body .product-list-pane,
+.products-page-body .management-list-pane {
+  top: 56px;
+  border-top-left-radius: 0 !important;
+}
+.products-page-body .product-detail-pane,
+.products-page-body .management-detail-pane {
+  border-top-right-radius: 0 !important;
 }
 .products-page-body .product-workbench > .panel .panel-header,
 .products-page-body .management-workbench > .panel .panel-header {
-  padding: 10px 14px !important;
+  padding: 8px 12px !important;
 }
 .products-page-body .product-workbench > .panel .panel-body,
 .products-page-body .management-workbench > .panel .panel-body {
-  padding: 10px 14px !important;
+  padding: 8px 12px !important;
 }
 .products-page-body .product-list-pane .panel-header,
 .products-page-body .management-list-pane .panel-header {
-  padding: 10px 14px !important;
+  padding: 8px 12px !important;
 }
 .products-page-body .product-list,
 .products-page-body .management-list {
   padding-top: 0 !important;
+  gap: 1px !important;
+}
+.products-page-body .product-metric-strip,
+.products-page-body .product-metric-strip.metric-bar {
+  gap: 6px !important;
+  margin: 0 !important;
+}
+.products-page-body .product-metric-strip .metric-card {
+  padding: 10px 12px !important;
 }
