@@ -80,105 +80,119 @@ export default function ProgramsTab() {
 
   return (
     <>
-    <div className="management-workbench">
-      <Panel
-        title="项目集工作台"
-        subtitle="按交付目标聚合多个项目，集中查看跨项目进度、健康度、风险和项目清单。"
-        toolbar={canManagePrograms ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建项目集</button> : undefined}
-      >
-        <ManagementSummaryStrip
-          items={[
-            { label: '项目集', value: programs.length },
-            { label: '关联项目', value: totalProjects },
-            { label: '平均进度', value: `${avgProgress}%` },
-            { label: '平均健康度', value: avgHealth },
-            { label: '风险提示', value: riskCount },
-          ]}
-        />
-      </Panel>
-      <div className="management-grid">
-        <Panel className="management-list-pane" title="项目集清单" noPadding>
-          <div className="management-list">
-            {programs.map((item) => (
-              <ManagementListItem
-                key={item.id}
-                active={selected?.id === item.id}
-                title={item.name}
-                subtitle={`${item.owner} · ${item.projectIds.length} 个项目`}
-                status={item.status}
-                statusLabel={labelOf(PROJECT_STATUS_LABELS, item.status)}
-                meta={`${item.progress}%`}
-                onClick={() => setSelectedId(item.id)}
-              />
-            ))}
+      <div className="management-workbench management-workbench-flush">
+        <Panel
+          className="management-workbench-main"
+          title="项目集工作台"
+          subtitle="按交付目标聚合多个项目，集中查看跨项目进度、健康度、风险和项目清单。"
+          toolbar={canManagePrograms ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建项目集</button> : undefined}
+          noPadding
+        >
+          <div className="management-workbench-metrics">
+            <ManagementSummaryStrip
+              items={[
+                { label: '项目集', value: programs.length },
+                { label: '关联项目', value: totalProjects },
+                { label: '平均进度', value: `${avgProgress}%` },
+                { label: '平均健康度', value: avgHealth },
+                { label: '风险提示', value: riskCount },
+              ]}
+            />
+          </div>
+
+          <div className="management-grid">
+            <div className="management-list-pane">
+              <div className="management-list-pane-header">项目集清单</div>
+              <div className="management-list">
+                {programs.map((item) => (
+                  <ManagementListItem
+                    key={item.id}
+                    active={selected?.id === item.id}
+                    title={item.name}
+                    subtitle={`${item.owner} · ${item.projectIds.length} 个项目`}
+                    status={item.status}
+                    statusLabel={labelOf(PROJECT_STATUS_LABELS, item.status)}
+                    meta={`${item.progress}%`}
+                    onClick={() => setSelectedId(item.id)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {selected ? (
+              <div className="management-detail-pane">
+                <div className="management-hero">
+                  <div>
+                    <div className="product-hero-top">
+                      <StatusBadge status={selected.status} label={labelOf(PROJECT_STATUS_LABELS, selected.status)} />
+                      <span className="tag">{selected.id}</span>
+                    </div>
+                    <h2>{selected.name}</h2>
+                    <p><strong>目标：</strong>{selected.objective || '尚未定义目标。'}</p>
+                    <p>负责人 {selected.owner}，当前聚合 {selected.projectIds.length} 个项目。用于看项目群是否按共同目标推进。</p>
+                  </div>
+                  <div className="management-score-grid">
+                    <div>
+                      <span>平均进度</span>
+                      <strong>{selected.progress}%</strong>
+                    </div>
+                    <div>
+                      <span>健康度</span>
+                      <strong>{selected.healthScore}</strong>
+                    </div>
+                    <div>
+                      <span>风险数</span>
+                      <strong>{selected.risks.length}</strong>
+                    </div>
+                  </div>
+                </div>
+                <div className="management-progress">
+                  <span>项目集推进</span>
+                  <div><i style={{ width: `${Math.min(100, Math.max(0, selected.progress))}%` }} /></div>
+                </div>
+                {canManagePrograms ? (
+                  <div className="product-hero-actions">
+                    <button className="btn btn-secondary btn-sm" onClick={() => setEditing(selected)}>编辑项目集</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(selected)} disabled={deletingId === selected.id}>
+                      {deletingId === selected.id ? '删除中…' : '删除项目集'}
+                    </button>
+                  </div>
+                ) : null}
+                <div className="management-detail-grid">
+                  <div className="product-section">
+                    <div className="product-section-head">
+                      <div>
+                        <h3>关联项目</h3>
+                        <p>当前项目集下的项目范围。</p>
+                      </div>
+                    </div>
+                    <div className="management-chip-list">
+                      {selected.projectIds.length ? selected.projectIds.map((id) => <span key={id}>{id}</span>) : <div className="product-empty-line">暂无关联项目。</div>}
+                    </div>
+                  </div>
+                  <div className="product-section">
+                    <div className="product-section-head">
+                      <div>
+                        <h3>风险提示</h3>
+                        <p>从项目风险聚合而来。</p>
+                      </div>
+                    </div>
+                    {selected.risks.length ? (
+                      <div className="management-risk-list">
+                        {selected.risks.map((risk, index) => <div key={`${risk}-${index}`}>{risk}</div>)}
+                      </div>
+                    ) : (
+                      <div className="product-empty-line">当前没有明显风险项。</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </Panel>
-        {selected ? (
-          <Panel className="management-detail-pane">
-            <div className="management-hero">
-              <div>
-                <div className="product-hero-top">
-                  <StatusBadge status={selected.status} label={labelOf(PROJECT_STATUS_LABELS, selected.status)} />
-                  <span className="tag">{selected.id}</span>
-                </div>
-                <h2>{selected.name}</h2>
-                <p><strong>目标：</strong>{selected.objective || '尚未定义目标。'}</p>
-                <p>负责人 {selected.owner}，当前聚合 {selected.projectIds.length} 个项目。用于看项目群是否按共同目标推进。</p>
-              </div>
-              <div className="management-score-grid">
-                <div>
-                  <span>平均进度</span>
-                  <strong>{selected.progress}%</strong>
-                </div>
-                <div>
-                  <span>健康度</span>
-                  <strong>{selected.healthScore}</strong>
-                </div>
-                <div>
-                  <span>风险数</span>
-                  <strong>{selected.risks.length}</strong>
-                </div>
-              </div>
-            </div>
-            <div className="management-progress">
-              <span>项目集推进</span>
-              <div><i style={{ width: `${Math.min(100, Math.max(0, selected.progress))}%` }} /></div>
-            </div>
-            {canManagePrograms ? <div className="product-hero-actions"><button className="btn btn-secondary btn-sm" onClick={() => setEditing(selected)}>编辑项目集</button><button className="btn btn-danger btn-sm" onClick={() => handleDelete(selected)} disabled={deletingId === selected.id}>{deletingId === selected.id ? '删除中…' : '删除项目集'}</button></div> : null}
-            <div className="management-detail-grid">
-              <div className="product-section">
-                <div className="product-section-head">
-                  <div>
-                    <h3>关联项目</h3>
-                    <p>当前项目集下的项目范围。</p>
-                  </div>
-                </div>
-                <div className="management-chip-list">
-                  {selected.projectIds.length ? selected.projectIds.map((id) => <span key={id}>{id}</span>) : <div className="product-empty-line">暂无关联项目。</div>}
-                </div>
-              </div>
-              <div className="product-section">
-                <div className="product-section-head">
-                  <div>
-                    <h3>风险提示</h3>
-                    <p>从项目风险聚合而来。</p>
-                  </div>
-                </div>
-                {selected.risks.length ? (
-                  <div className="management-risk-list">
-                    {selected.risks.map((risk, index) => <div key={`${risk}-${index}`}>{risk}</div>)}
-                  </div>
-                ) : (
-                  <div className="product-empty-line">当前没有明显风险项。</div>
-                )}
-              </div>
-            </div>
-          </Panel>
-        ) : null}
       </div>
-    </div>
-    {creating && canManagePrograms ? <StrategyForm kind="program" onClose={() => setCreating(false)} onSubmit={async (input) => { await createProgram(input); toast.success('项目集已创建。'); setCreating(false); reload(); }} /> : null}
-    {editing && canManagePrograms ? <StrategyForm kind="program" initial={editing} onClose={() => setEditing(null)} onSubmit={async (input) => { await updateProgram(editing.id, input); toast.success('项目集已更新。'); setEditing(null); reload(); }} /> : null}
+      {creating && canManagePrograms ? <StrategyForm kind="program" onClose={() => setCreating(false)} onSubmit={async (input) => { await createProgram(input); toast.success('项目集已创建。'); setCreating(false); reload(); }} /> : null}
+      {editing && canManagePrograms ? <StrategyForm kind="program" initial={editing} onClose={() => setEditing(null)} onSubmit={async (input) => { await updateProgram(editing.id, input); toast.success('项目集已更新。'); setEditing(null); reload(); }} /> : null}
     </>
   );
 }
