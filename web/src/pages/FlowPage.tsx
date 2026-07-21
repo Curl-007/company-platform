@@ -3,6 +3,7 @@ import { fetchFlowOverview, fetchProjectFlow } from '../features/projects/api';
 import {
   cloneWorkflowTemplate,
   createWorkflowTemplate,
+  fetchGateRuleCatalog,
   fetchWorkflowTemplates,
   publishWorkflowTemplate,
   updateWorkflowTemplate,
@@ -15,7 +16,15 @@ import Panel from '../components/common/Panel';
 import PageState from '../components/common/PageState';
 import FlowPipeline from '../components/common/FlowPipeline';
 import DefectFunnel from '../components/common/DefectFunnel';
-import type { FlowOverviewItem, ProjectFlow, GateState, WorkflowStage, WorkflowTemplate } from '../types';
+import type {
+  FlowOverviewItem,
+  GateRuleCatalogItem,
+  GateState,
+  ProjectFlow,
+  WorkflowGateRule,
+  WorkflowStage,
+  WorkflowTemplate,
+} from '../types';
 
 const DEFAULT_STAGE_LABELS: Record<string, string> = {
   initiation: '立项',
@@ -37,20 +46,77 @@ const STATE_DOT: Record<GateState, string> = {
 
 const DEFAULT_STAGE_ORDER = ['initiation', 'requirement', 'design', 'development', 'testing', 'acceptance', 'release'];
 
+type EditableRule = {
+  key: string;
+  id: string;
+  op: string;
+  threshold: string;
+  required: boolean;
+};
+
 type EditableStage = {
   key: string;
   id: string;
   label: string;
   description: string;
+  rules: EditableRule[];
 };
 
-function toEditableStages(stages: WorkflowStage[] | undefined): EditableStage[] {
+function toEditableRules(rules: WorkflowGateRule[] | undefined, catalog: GateRuleCatalogItem[]): EditableRule[] {
+  return (rules || []).map((rule, index) => {
+    const meta = catalog.find((item) => item.id === rule.id);
+    const threshold = rule.threshold ?? meta?.defaultThreshold ?? '';
+    return {
+      key: `${rule.id || 'rule'}-${index}-${Math.random().toString(36).slice(2, 6)}`,
+      id: rule.id,
+      op: String(rule.op || meta?.defaultOp || 'gte'),
+      threshold: meta?.valueType === 'ratio'
+        ? String(Math.round(Number(threshold) * (Number(threshold) <= 1 ? 100 : 1)))
+        : String(threshold),
+      required: rule.required !== false,
+    };
+  });
+}
+
+function toEditableStages(stages: WorkflowStage[] | undefined, catalog: GateRuleCatalogItem[]): EditableStage[] {
   return (stages || []).map((stage, index) => ({
     key: `${stage.id || 'stage'}-${index}-${Math.random().toString(36).slice(2, 7)}`,
     id: stage.id || `stage_${index + 1}`,
     label: stage.label || stage.id || `阶段${index + 1}`,
     description: stage.description || '',
+    rules: toEditableRules(stage.rules, catalog),
   }));
+}
+
+function serializeStages(editStages: EditableStage[], catalog: GateRuleCatalogItem[]): WorkflowStage[] {
+  return editStages
+    .map((stage) => {
+      const rules = stage.rules
+        .filter((rule) => rule.id)
+        .map((rule) => {
+          const meta = catalog.find((item) => item.id === rule.id);
+          let threshold: number | boolean | string = rule.threshold;
+          if (meta?.valueType === 'ratio') {
+            const n = Number(rule.threshold);
+            threshold = Number.isFinite(n) ? (n > 1 ? n / 100 : n) : (meta.defaultThreshold ?? 0.5);
+          } else if (meta?.valueType === 'boolean') {
+            threshold = rule.threshold === 'true' || rule.threshold === '1' || rule.threshold === true as unknown as string;
+          }
+          return {
+            id: rule.id,
+            op: rule.op || meta?.defaultOp || 'gte',
+            threshold,
+            required: rule.required,
+          } as WorkflowGateRule;
+        });
+      return {
+        id: stage.id.trim(),
+        label: stage.label.trim(),
+        description: stage.description.trim(),
+        rules,
+      } as WorkflowStage;
+    })
+    .filter((stage) => stage.id && stage.label);
 }
 
 function FlowPage() {
@@ -64,19 +130,24 @@ function FlowPage() {
     error: templateError,
     reload: reloadTemplates,
   } = useAsync(() => fetchWorkflowTemplates(canAdmin), [canAdmin]);
+  const {
+    data: ruleCatalog,
+    loading: ruleLoading,
+    error: ruleError,
+    reload: reloadRules,
+  } = useAsync(fetchGateRuleCatalog, []);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionOk, setActionOk] = useState<string | null>(null);
-
-  // editable draft fields
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editStages, setEditStages] = useState<EditableStage[]>([]);
   const [dirty, setDirty] = useState(false);
 
+  const catalogRules = ruleCatalog?.rules || [];
   const templates = templateCatalog?.templates ?? [];
   const activeTemplate = useMemo(() => {
     if (!templates.length) return null;
@@ -88,9 +159,9 @@ function FlowPage() {
     if (!activeTemplate) return;
     setEditName(activeTemplate.name || '');
     setEditDescription(activeTemplate.description || '');
-    setEditStages(toEditableStages(activeTemplate.stages));
+    setEditStages(toEditableStages(activeTemplate.stages, catalogRules));
     setDirty(false);
-  }, [activeTemplate?.id, activeTemplate?.updatedAt, activeTemplate?.version, activeTemplate?.status]);
+  }, [activeTemplate?.id, activeTemplate?.updatedAt, activeTemplate?.version, activeTemplate?.status, catalogRules.length]);
 
   const stageOrder = (dirty ? editStages.map((s) => s.id) : activeTemplate?.stages?.map((stage) => stage.id))
     ?? DEFAULT_STAGE_ORDER;
@@ -125,12 +196,12 @@ function FlowPage() {
     await runAction('已创建空白草稿', async () => {
       const created = await createWorkflowTemplate({
         name: '新流程草稿',
-        description: '可编辑阶段名称、顺序与说明，保存后发布并绑定到项目。',
+        description: '可编辑阶段与门禁规则，保存发布后绑定到项目。',
         stages: [
-          { id: 'initiation', label: '启动', description: '' },
-          { id: 'development', label: '开发', description: '' },
-          { id: 'testing', label: '测试', description: '' },
-          { id: 'release', label: '发布', description: '' },
+          { id: 'initiation', label: '启动', rules: [{ id: 'project_not_planning' }] },
+          { id: 'development', label: '开发', rules: [{ id: 'task_completion_ratio', op: 'gte', threshold: 0.8 }, { id: 'no_blocked_tasks' }] },
+          { id: 'testing', label: '测试', rules: [{ id: 'no_open_blocking_defects' }, { id: 'no_open_critical_defects' }] },
+          { id: 'release', label: '发布', rules: [{ id: 'prior_stages_passed' }, { id: 'release_exists' }] },
         ],
         guardrails: ['工作日志/工时/容量不用于个人绩效评价。'],
       });
@@ -156,13 +227,7 @@ function FlowPage() {
 
   async function handleSaveDraft() {
     if (!canEditCurrent || !activeTemplate) return;
-    const stages = editStages
-      .map((stage) => ({
-        id: stage.id.trim(),
-        label: stage.label.trim(),
-        description: stage.description.trim(),
-      }))
-      .filter((stage) => stage.id && stage.label);
+    const stages = serializeStages(editStages, catalogRules);
     if (!stages.length) {
       setActionError('至少保留一个有效阶段（ID + 名称）');
       return;
@@ -172,7 +237,7 @@ function FlowPage() {
       setActionError('阶段 ID 不能重复');
       return;
     }
-    await runAction('草稿已保存', async () => {
+    await runAction('草稿已保存（含门禁规则）', async () => {
       await updateWorkflowTemplate(activeTemplate.id, {
         name: editName.trim() || activeTemplate.name,
         description: editDescription,
@@ -232,8 +297,68 @@ function FlowPage() {
         id: `stage_${n}`,
         label: `新阶段${n}`,
         description: '',
+        rules: [],
       },
     ]);
+    setDirty(true);
+    setActionOk(null);
+  }
+
+  function addRule(stageKey: string) {
+    const first = catalogRules[0];
+    if (!first) return;
+    setEditStages((prev) => prev.map((stage) => {
+      if (stage.key !== stageKey) return stage;
+      return {
+        ...stage,
+        rules: [
+          ...stage.rules,
+          {
+            key: `rule-${Date.now()}-${stage.rules.length}`,
+            id: first.id,
+            op: first.defaultOp || 'gte',
+            threshold: first.valueType === 'ratio'
+              ? String(Math.round(Number(first.defaultThreshold ?? 0.5) * 100))
+              : String(first.defaultThreshold ?? true),
+            required: true,
+          },
+        ],
+      };
+    }));
+    setDirty(true);
+    setActionOk(null);
+  }
+
+  function updateRule(stageKey: string, ruleKey: string, patch: Partial<EditableRule>) {
+    setEditStages((prev) => prev.map((stage) => {
+      if (stage.key !== stageKey) return stage;
+      return {
+        ...stage,
+        rules: stage.rules.map((rule) => {
+          if (rule.key !== ruleKey) return rule;
+          const next = { ...rule, ...patch };
+          if (patch.id) {
+            const meta = catalogRules.find((item) => item.id === patch.id);
+            if (meta) {
+              next.op = meta.defaultOp || next.op;
+              next.threshold = meta.valueType === 'ratio'
+                ? String(Math.round(Number(meta.defaultThreshold ?? 0.5) * 100))
+                : String(meta.defaultThreshold ?? true);
+            }
+          }
+          return next;
+        }),
+      };
+    }));
+    setDirty(true);
+    setActionOk(null);
+  }
+
+  function removeRule(stageKey: string, ruleKey: string) {
+    setEditStages((prev) => prev.map((stage) => {
+      if (stage.key !== stageKey) return stage;
+      return { ...stage, rules: stage.rules.filter((rule) => rule.key !== ruleKey) };
+    }));
     setDirty(true);
     setActionOk(null);
   }
@@ -263,14 +388,14 @@ function FlowPage() {
       </div>
 
       <Panel
-        title="流程模板（可编辑）"
+        title="流程模板与门禁规则（可编辑）"
         subtitle={activeTemplate
           ? `${activeTemplate.name} · ${activeTemplate.builtin ? '内置' : (activeTemplate.status || 'custom')} · ${activeTemplate.version}${dirty ? ' · 未保存' : ''}`
           : '加载模板中'}
         className="mt-12"
       >
-        {templateLoading && <p className="text-secondary">正在读取模板...</p>}
-        {templateError && <p className="form-error">{templateError}</p>}
+        {(templateLoading || ruleLoading) && <p className="text-secondary">正在读取模板/规则...</p>}
+        {(templateError || ruleError) && <p className="form-error">{templateError || ruleError}</p>}
 
         {activeTemplate && (
           <>
@@ -315,19 +440,15 @@ function FlowPage() {
                   )}
                 </>
               )}
-              <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => reloadTemplates()}>刷新模板</button>
+              <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => { reloadTemplates(); reloadRules(); }}>刷新</button>
             </div>
 
             {actionError && <p className="form-error">{actionError}</p>}
             {actionOk && <p className="text-secondary" style={{ color: 'var(--color-success, #16a34a)' }}>{actionOk}</p>}
 
-            {!canAdmin && (
-              <p className="text-secondary">当前账号只读。管理员可复制内置模板为草稿后，直接改阶段名称/顺序并发布。</p>
-            )}
-
             {canAdmin && !canEditCurrent && (
               <p className="text-secondary">
-                内置或已发布模板不可直接改。请点「复制为可编辑草稿」，改完再「保存草稿」并「发布草稿」，然后到项目详情绑定。
+                内置/已发布模板只读。请先「复制为可编辑草稿」，再改阶段与门禁规则，保存并发布后到项目详情绑定。
               </p>
             )}
 
@@ -338,11 +459,7 @@ function FlowPage() {
                   className="form-input"
                   value={editName}
                   disabled={!canEditCurrent || busy}
-                  onChange={(e) => {
-                    setEditName(e.target.value);
-                    setDirty(true);
-                    setActionOk(null);
-                  }}
+                  onChange={(e) => { setEditName(e.target.value); setDirty(true); setActionOk(null); }}
                 />
               </label>
               <label className="text-secondary" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -351,51 +468,77 @@ function FlowPage() {
                   className="form-input"
                   value={editDescription}
                   disabled={!canEditCurrent || busy}
-                  onChange={(e) => {
-                    setEditDescription(e.target.value);
-                    setDirty(true);
-                    setActionOk(null);
-                  }}
+                  onChange={(e) => { setEditDescription(e.target.value); setDirty(true); setActionOk(null); }}
                 />
               </label>
             </div>
 
-            <div className="section-title" style={{ marginTop: 16 }}>阶段列表（可增删改排序）</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+            <div className="section-title" style={{ marginTop: 16 }}>阶段与门禁规则</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
               {editStages.map((stage, index) => (
                 <div key={stage.key} className="panel-soft" style={{ padding: 12 }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                     <span className="text-mono" style={{ minWidth: 28 }}>{index + 1}</span>
-                    <input
-                      className="form-input"
-                      style={{ width: 140 }}
-                      placeholder="阶段ID"
-                      value={stage.id}
-                      disabled={!canEditCurrent || busy}
-                      onChange={(e) => updateStage(stage.key, { id: e.target.value })}
-                    />
-                    <input
-                      className="form-input"
-                      style={{ width: 160 }}
-                      placeholder="阶段名称"
-                      value={stage.label}
-                      disabled={!canEditCurrent || busy}
-                      onChange={(e) => updateStage(stage.key, { label: e.target.value })}
-                    />
-                    <input
-                      className="form-input"
-                      style={{ flex: 1, minWidth: 180 }}
-                      placeholder="阶段说明（可选）"
-                      value={stage.description}
-                      disabled={!canEditCurrent || busy}
-                      onChange={(e) => updateStage(stage.key, { description: e.target.value })}
-                    />
+                    <input className="form-input" style={{ width: 130 }} placeholder="阶段ID" value={stage.id} disabled={!canEditCurrent || busy} onChange={(e) => updateStage(stage.key, { id: e.target.value })} />
+                    <input className="form-input" style={{ width: 150 }} placeholder="阶段名称" value={stage.label} disabled={!canEditCurrent || busy} onChange={(e) => updateStage(stage.key, { label: e.target.value })} />
+                    <input className="form-input" style={{ flex: 1, minWidth: 160 }} placeholder="阶段说明" value={stage.description} disabled={!canEditCurrent || busy} onChange={(e) => updateStage(stage.key, { description: e.target.value })} />
                     {canEditCurrent && (
                       <>
                         <button className="btn btn-secondary btn-sm" disabled={busy || index === 0} onClick={() => moveStage(stage.key, -1)}>上移</button>
                         <button className="btn btn-secondary btn-sm" disabled={busy || index === editStages.length - 1} onClick={() => moveStage(stage.key, 1)}>下移</button>
-                        <button className="btn btn-secondary btn-sm" disabled={busy || editStages.length <= 1} onClick={() => removeStage(stage.key)}>删除</button>
+                        <button className="btn btn-secondary btn-sm" disabled={busy || editStages.length <= 1} onClick={() => removeStage(stage.key)}>删除阶段</button>
                       </>
+                    )}
+                  </div>
+
+                  <div style={{ marginTop: 10, paddingLeft: 28 }}>
+                    <div className="text-secondary" style={{ marginBottom: 6 }}>门禁规则</div>
+                    {stage.rules.length === 0 && <p className="text-secondary" style={{ margin: 0 }}>未配置规则时，将按阶段 ID 使用系统默认规则。</p>}
+                    {stage.rules.map((rule) => {
+                      const meta = catalogRules.find((item) => item.id === rule.id);
+                      return (
+                        <div key={rule.key} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                          <select
+                            className="form-input"
+                            style={{ minWidth: 220 }}
+                            value={rule.id}
+                            disabled={!canEditCurrent || busy}
+                            onChange={(e) => updateRule(stage.key, rule.key, { id: e.target.value })}
+                          >
+                            {catalogRules.map((item) => (
+                              <option key={item.id} value={item.id}>{item.label}</option>
+                            ))}
+                          </select>
+                          {meta?.valueType === 'ratio' ? (
+                            <>
+                              <select className="form-input" style={{ width: 90 }} value={rule.op} disabled={!canEditCurrent || busy} onChange={(e) => updateRule(stage.key, rule.key, { op: e.target.value })}>
+                                <option value="gte">≥</option>
+                                <option value="gt">＞</option>
+                                <option value="lte">≤</option>
+                                <option value="lt">＜</option>
+                                <option value="eq">＝</option>
+                              </select>
+                              <input className="form-input" style={{ width: 90 }} value={rule.threshold} disabled={!canEditCurrent || busy} onChange={(e) => updateRule(stage.key, rule.key, { threshold: e.target.value })} />
+                              <span className="text-secondary">%</span>
+                            </>
+                          ) : (
+                            <select className="form-input" style={{ width: 120 }} value={String(rule.threshold)} disabled={!canEditCurrent || busy} onChange={(e) => updateRule(stage.key, rule.key, { threshold: e.target.value, op: 'eq' })}>
+                              <option value="true">必须满足</option>
+                              <option value="false">必须不满足</option>
+                            </select>
+                          )}
+                          <label className="text-secondary" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                            <input type="checkbox" checked={rule.required} disabled={!canEditCurrent || busy} onChange={(e) => updateRule(stage.key, rule.key, { required: e.target.checked })} />
+                            必过
+                          </label>
+                          {canEditCurrent && (
+                            <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => removeRule(stage.key, rule.key)}>删除规则</button>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {canEditCurrent && (
+                      <button className="btn btn-secondary btn-sm" disabled={busy || catalogRules.length === 0} onClick={() => addRule(stage.key)}>添加门禁规则</button>
                     )}
                   </div>
                 </div>
@@ -407,21 +550,11 @@ function FlowPage() {
                 <button className="btn btn-secondary btn-sm" disabled={busy} onClick={addStage}>新增阶段</button>
               </div>
             )}
-
-            <div className="flow-stepper" style={{ marginTop: 16 }}>
-              {editStages.map((stage, index) => (
-                <div key={`preview-${stage.key}`} className="flow-step">
-                  <span className="flow-step-node">{index + 1}</span>
-                  <span className="flow-step-label" title={stage.description}>{stage.label || stage.id}</span>
-                  {index < editStages.length - 1 && <span className="flow-step-connector filled" />}
-                </div>
-              ))}
-            </div>
           </>
         )}
       </Panel>
 
-      <Panel title="项目阶段矩阵" subtitle="点击项目行可展开详情；列顺序跟随当前选中模板" className="mt-12">
+      <Panel title="项目阶段矩阵" subtitle="列顺序跟随当前选中模板；门禁结果按项目绑定模板规则评估" className="mt-12">
         <div className="flow-matrix">
           <div className="flow-matrix-row flow-matrix-header">
             <div className="flow-matrix-cell flow-matrix-project">项目</div>
@@ -430,30 +563,20 @@ function FlowPage() {
             ))}
             <div className="flow-matrix-cell flow-matrix-health">健康度</div>
           </div>
-
           {overview.map((item) => {
             const isOpen = selectedId === item.projectId;
             return (
               <div key={item.projectId}>
-                <div
-                  className={`flow-matrix-row ${isOpen ? 'flow-matrix-row-active' : ''}`}
-                  onClick={() => setSelectedId(isOpen ? null : item.projectId)}
-                >
+                <div className={`flow-matrix-row ${isOpen ? 'flow-matrix-row-active' : ''}`} onClick={() => setSelectedId(isOpen ? null : item.projectId)}>
                   <div className="flow-matrix-cell flow-matrix-project font-medium">
                     {item.projectName}
-                    {item.workflow?.templateName ? (
-                      <div className="text-secondary" style={{ fontSize: 11 }}>{item.workflow.templateName}</div>
-                    ) : null}
+                    {item.workflow?.templateName ? <div className="text-secondary" style={{ fontSize: 11 }}>{item.workflow.templateName}</div> : null}
                   </div>
                   {stageOrder.map((stage) => {
                     const gate = item.gates.find((entry) => entry.stage === stage);
                     return (
                       <div key={stage} className="flow-matrix-cell flow-matrix-stage">
-                        <span
-                          className="flow-matrix-dot"
-                          style={{ background: gate ? STATE_DOT[gate.state] : STATE_DOT.pending }}
-                          title={gate ? `${gate.label || stage}: ${gate.state}` : stage}
-                        />
+                        <span className="flow-matrix-dot" style={{ background: gate ? STATE_DOT[gate.state] : STATE_DOT.pending }} title={gate ? `${gate.label || stage}: ${gate.state}` : stage} />
                       </div>
                     );
                   })}
@@ -496,9 +619,6 @@ function ProjectFlowDetail({ projectId }: { projectId: string }) {
             <div className="metric-card"><div className="metric-card-label">已消耗</div><div className="metric-card-value">{data.hours.consumed}h</div></div>
             <div className="metric-card"><div className="metric-card-label">剩余</div><div className="metric-card-value">{data.hours.remaining}h</div></div>
           </div>
-          <p className="text-secondary" style={{ fontSize: 13, marginTop: 8 }}>
-            需求 {data.counts.requirements} · 任务 {data.counts.tasks} · 缺陷 {data.counts.defects} · 用例 {data.counts.testCases}
-          </p>
         </div>
       </div>
     </div>

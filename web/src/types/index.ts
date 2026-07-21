@@ -357,12 +357,35 @@ export interface FlowOverviewItem {
 }
 
 // Workflow template catalog (GET /api/flow/templates)
+export interface WorkflowGateRule {
+  id: string;
+  op?: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | string;
+  threshold?: number | boolean | string;
+  required?: boolean;
+}
+
 export interface WorkflowStage {
   id: string;
   label: string;
   description?: string;
   evidence?: string[];
   exitCriteria?: string[];
+  rules?: WorkflowGateRule[];
+}
+
+export interface GateRuleCatalogItem {
+  id: string;
+  label: string;
+  description?: string;
+  valueType: 'boolean' | 'ratio' | string;
+  defaultOp?: string;
+  defaultThreshold?: number | boolean;
+}
+
+export interface GateRuleCatalog {
+  version: string;
+  rules: GateRuleCatalogItem[];
+  defaultStageRules?: Record<string, WorkflowGateRule[]>;
 }
 
 export interface WorkflowResourceFlow {

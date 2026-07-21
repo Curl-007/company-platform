@@ -7,6 +7,7 @@
  */
 
 const { publicWorkflowTemplates } = require("./templates");
+const { defaultRulesForStage, normalizeStageRules } = require("./gateRules");
 
 const BUILTIN_ID = "fixed-project-delivery-v1";
 
@@ -22,6 +23,7 @@ function normalizeStage(stage, index = 0) {
     error.code = "VALIDATION_FAILED";
     throw error;
   }
+  const explicitRules = Array.isArray(stage?.rules) ? normalizeStageRules(stage.rules) : null;
   return {
     id,
     label,
@@ -32,6 +34,8 @@ function normalizeStage(stage, index = 0) {
     exitCriteria: Array.isArray(stage?.exitCriteria)
       ? stage.exitCriteria.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 20)
       : [],
+    // Keep empty array if caller explicitly clears rules; only default when omitted.
+    rules: explicitRules == null ? defaultRulesForStage(id) : explicitRules,
   };
 }
 

@@ -1,5 +1,6 @@
 const express = require("express");
 const { filterAsync, mapAsync } = require("../../lib/asyncIter");
+const { GATE_RULE_CATALOG, DEFAULT_STAGE_RULES } = require("../../workflow/gateRules");
 
 function createWorkflowRouter({
   audit,
@@ -14,6 +15,14 @@ function createWorkflowRouter({
   workflowTemplates,
 }) {
   const router = express.Router();
+
+  router.get("/flow/gate-rules", (req, res) => {
+    return res.json(ok({
+      version: "2026-07-21",
+      rules: GATE_RULE_CATALOG,
+      defaultStageRules: DEFAULT_STAGE_RULES,
+    }));
+  });
 
   router.get("/projects/:id/flow", async (req, res) => {
     const project = await repository.findProjectId(req.params.id);

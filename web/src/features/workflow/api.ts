@@ -1,5 +1,6 @@
 import { unwrap, unwrapPatch, unwrapPost, unwrapPut } from '../../services/apiClient';
 import type {
+  GateRuleCatalog,
   ProjectWorkflowBinding,
   StatusHistoryEntry,
   WorkflowTemplate,
@@ -14,6 +15,10 @@ export function fetchTaskStatusHistory(taskId: string): Promise<StatusHistoryEnt
 export function fetchWorkflowTemplates(includeDrafts = false): Promise<WorkflowTemplateCatalog> {
   const query = includeDrafts ? '?includeDrafts=1' : '';
   return unwrap<WorkflowTemplateCatalog>(`/api/flow/templates${query}`);
+}
+
+export function fetchGateRuleCatalog(): Promise<GateRuleCatalog> {
+  return unwrap<GateRuleCatalog>('/api/flow/gate-rules');
 }
 
 export function createWorkflowTemplate(input: WorkflowTemplateInput): Promise<WorkflowTemplate> {
