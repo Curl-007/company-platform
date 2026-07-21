@@ -2,10 +2,10 @@ const express = require("express");
 const crypto = require("node:crypto");
 const {
   buildDocumentChunks,
-  mapChunkSearchResult,
-  scoreChunk,
   sha256,
 } = require("./ragIndex");
+const { rankChunksHybrid, mapHybridSearchResult } = require("./ragSearch");
+const { serializeEmbedding } = require("./embedding");
 const {
   RETRYABLE_STATUSES,
   buildRequirementDraft,
@@ -97,44 +97,45 @@ function createAiJobsRouter({
     }
     const chunks = await repository.listChunksForDocuments([...visibleById.keys()]);
     const queryHash = crypto.createHash("sha256").update(query).digest("hex");
-    const rankedHits = chunks
-      .map((chunk) => {
-        const document = visibleById.get(chunk.document_id);
-        if (!document) return null;
-        const { score, matchedFields } = scoreChunk(chunk, document, query);
-        if (!score) return null;
-        return { chunk, document, score, matchedFields };
-      })
-      .filter(Boolean)
-      .sort((a, b) => b.score - a.score || String(b.document.updated_at || "").localeCompare(String(a.document.updated_at || "")))
-      .slice(0, limit);
+    const ranked = rankChunksHybrid({
+      chunks,
+      documentsById: visibleById,
+      query,
+      limit,
+    });
+
+    // Persist local embeddings for chunks that were scored without stored vectors.
+    for (const item of ranked.hits) {
+      if (!item.needsPersist) continue;
+      if (typeof repository.updateChunkEmbedding === "function") {
+        await repository.updateChunkEmbedding(item.chunk.id, {
+          provider: item.chunk.embedding_provider,
+          model: item.chunk.embedding_model,
+          vectorJson: item.chunk.embedding_vector || serializeEmbedding([]),
+        });
+      }
+    }
 
     const results = [];
-
-    for (let index = 0; index < rankedHits.length; index++) {
-
-      const item = rankedHits[index];
-
+    for (let index = 0; index < ranked.hits.length; index += 1) {
+      const item = ranked.hits[index];
       const citationId = `RAGC-${sha256(`${queryHash}:${item.chunk.id}:${req.user?.id || "anonymous"}:${Date.now()}:${index}`).slice(0, 24)}`;
-
-      const result = mapChunkSearchResult({ ...item, query, citationId });
-
+      const result = mapHybridSearchResult(item, { query, citationId });
       await repository.createRagCitation({
-          id: citationId,
-          query_hash: queryHash,
-          document_id: item.document.id,
-          chunk_id: item.chunk.id,
-          project_id: item.document.project_id || null,
-          quote: result.quote,
-          score: result.score,
-          source: result.source,
-          created_by: req.user?.id || null,
-          created_at: now(),
-        });
-
+        id: citationId,
+        query_hash: queryHash,
+        document_id: item.document.id,
+        chunk_id: item.chunk.id,
+        project_id: item.document.project_id || null,
+        quote: result.quote,
+        score: result.score,
+        source: result.source,
+        created_by: req.user?.id || null,
+        created_at: now(),
+      });
       results.push(result);
-
     }
+
     await audit(req.user, "ai.rag_search", "ai", null, null, {
       queryHash,
       projectId,
@@ -142,9 +143,18 @@ function createAiJobsRouter({
       resultDocumentIds: results.map((item) => item.documentId),
       resultChunkIds: results.map((item) => item.chunkId),
       citationIds: results.map((item) => item.citationId),
-      mode: "keyword",
+      mode: ranked.mode,
+      embeddingProvider: ranked.queryEmbedding?.provider || null,
+      embeddingModel: ranked.queryEmbedding?.model || null,
     }, req.ip);
-    res.json(ok({ query, mode: "keyword", results }));
+    res.json(ok({
+      query,
+      mode: ranked.mode,
+      embedding: ranked.queryEmbedding
+        ? { provider: ranked.queryEmbedding.provider, model: ranked.queryEmbedding.model, dimensions: ranked.queryEmbedding.dimensions }
+        : null,
+      results,
+    }));
   });
 
   router.post("/ai/documents/analyze", requirePermission("ai:*"), async (req, res, next) => {

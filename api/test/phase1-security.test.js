@@ -883,15 +883,16 @@ test("seed accounts remain disabled after restart, work logs keep authenticated 
     body: JSON.stringify({ query: updatedDocument.body.data.content, projectId: project.body.data.id }),
   });
   assert.equal(ragSearch.response.status, 200);
-  assert.equal(ragSearch.body.data.mode, "keyword");
+  assert.ok(["keyword", "hybrid"].includes(ragSearch.body.data.mode));
   assert.deepEqual(ragSearch.body.data.results.map((item) => item.documentId), [document.body.data.id]);
-  assert.equal(ragSearch.body.data.results[0].source, "keyword");
+  assert.ok(["keyword", "hybrid"].includes(ragSearch.body.data.results[0].source));
   assert.match(ragSearch.body.data.results[0].chunkId, /^DCH-/);
   assert.match(ragSearch.body.data.results[0].citationId, /^RAGC-/);
   const ragDb = new DatabaseSync(databaseFile);
   const indexedChunk = ragDb.prepare("SELECT * FROM document_chunk WHERE id = ?").get(ragSearch.body.data.results[0].chunkId);
   assert.equal(indexedChunk.document_id, document.body.data.id);
   assert.equal(indexedChunk.project_id, project.body.data.id);
+  assert.ok(indexedChunk.embedding_vector);
   const citation = ragDb.prepare("SELECT * FROM rag_citation WHERE id = ?").get(ragSearch.body.data.results[0].citationId);
   assert.equal(citation.document_id, document.body.data.id);
   assert.equal(citation.chunk_id, indexedChunk.id);

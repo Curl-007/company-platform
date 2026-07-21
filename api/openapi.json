@@ -11369,7 +11369,8 @@
           "source": {
             "type": "string",
             "enum": [
-              "keyword"
+              "keyword",
+              "hybrid"
             ]
           },
           "matchFields": {
@@ -11394,6 +11395,19 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "keywordScore": {
+            "type": "number"
+          },
+          "vectorScore": {
+            "type": "number"
+          },
+          "scoreMode": {
+            "type": "string",
+            "enum": [
+              "keyword",
+              "hybrid"
+            ]
           }
         },
         "additionalProperties": false
@@ -11412,8 +11426,25 @@
           "mode": {
             "type": "string",
             "enum": [
-              "keyword"
+              "keyword",
+              "hybrid"
             ]
+          },
+          "embedding": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "provider": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "dimensions": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": false
           },
           "results": {
             "type": "array",

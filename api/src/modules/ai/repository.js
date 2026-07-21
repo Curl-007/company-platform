@@ -70,12 +70,32 @@ function createAiJobRepository({ insert, row, rows, run }) {
       await run("DELETE FROM document_chunk WHERE document_id = @documentId", { documentId: document.id });
       for (const chunk of chunks) {
         await insert("document_chunk", {
-          ...chunk,
-          project_id: document.project_id || null,
+          id: chunk.id,
+          document_id: chunk.document_id || document.id,
+          project_id: document.project_id || chunk.project_id || null,
+          chunk_index: chunk.chunk_index,
+          section_title: chunk.section_title ?? null,
+          page_no: chunk.page_no ?? 1,
+          content: chunk.content,
+          content_hash: chunk.content_hash,
+          token_estimate: chunk.token_estimate ?? 0,
+          embedding_provider: chunk.embedding_provider ?? null,
+          embedding_model: chunk.embedding_model ?? null,
+          embedding_vector: chunk.embedding_vector ?? null,
           indexed_at: indexedAt,
         });
       }
       return chunks.length;
+    },
+    async updateChunkEmbedding(chunkId, { provider, model, vectorJson }) {
+      await run(
+        `UPDATE document_chunk
+         SET embedding_provider = @provider,
+             embedding_model = @model,
+             embedding_vector = @vector
+         WHERE id = @id`,
+        { id: chunkId, provider, model, vector: vectorJson },
+      );
     },
     async createRagCitation(citation) {
       await insert("rag_citation", citation);

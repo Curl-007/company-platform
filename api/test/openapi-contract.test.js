@@ -197,10 +197,10 @@ test("OpenAPI core contract validates and describes versioned project writes", a
   assert.deepEqual(document.components.schemas.UserUpdateInput.properties.status.enum, ["active", "disabled"]);
   assert.deepEqual(document.components.schemas.AiDocumentAnalysisInput.required, ["documentId"]);
   assert.deepEqual(document.components.schemas.AiRagSearchInput.required, ["query"]);
-  assert.deepEqual(document.components.schemas.AiRagSearch.properties.mode.enum, ["keyword"]);
+  assert.deepEqual(document.components.schemas.AiRagSearch.properties.mode.enum, ["keyword", "hybrid"]);
   assert.ok(document.components.schemas.AiRagSearchResult.properties.chunkId);
   assert.ok(document.components.schemas.AiRagSearchResult.properties.citationId);
-  assert.deepEqual(document.components.schemas.AiRagSearchResult.properties.source.enum, ["keyword"]);
+  assert.deepEqual(document.components.schemas.AiRagSearchResult.properties.source.enum, ["keyword", "hybrid"]);
   assert.ok(document.components.schemas.EnvelopeAiRagSearch);
   assert.deepEqual(document.components.schemas.AiJob.properties.status.enum, ["queued", "running", "awaiting_review", "confirmed", "rejected", "failed", "retried"]);
   assert.equal(document.components.schemas.AiProviderUpdateInput.properties.apiKey.writeOnly, true);

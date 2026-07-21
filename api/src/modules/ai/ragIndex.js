@@ -62,21 +62,28 @@ function chunkText(text, { chunkSize = DEFAULT_CHUNK_SIZE, overlap = DEFAULT_OVE
 }
 
 function buildDocumentChunks(document, options = {}) {
+  const { embedLocal, serializeEmbedding, LOCAL_PROVIDER, LOCAL_MODEL } = require("./embedding");
   const title = normalizeText(document?.title);
   const body = normalizeText(document?.content || document?.file_name || document?.fileName || title);
   const source = body || title;
   if (!source) return [];
-  return chunkText(source, options).map((content, index) => ({
-    id: `DCH-${sha256(`${document.id}:${index}:${content}`).slice(0, 24)}`,
-    document_id: document.id,
-    project_id: document.project_id || null,
-    chunk_index: index,
-    section_title: title || null,
-    page_no: 1,
-    content,
-    content_hash: sha256(content),
-    token_estimate: estimateTokens(content),
-  }));
+  return chunkText(source, options).map((content, index) => {
+    const embedded = embedLocal(`${title}\n${content}`);
+    return {
+      id: `DCH-${sha256(`${document.id}:${index}:${content}`).slice(0, 24)}`,
+      document_id: document.id,
+      project_id: document.project_id || null,
+      chunk_index: index,
+      section_title: title || null,
+      page_no: 1,
+      content,
+      content_hash: sha256(content),
+      token_estimate: estimateTokens(content),
+      embedding_provider: LOCAL_PROVIDER,
+      embedding_model: LOCAL_MODEL,
+      embedding_vector: serializeEmbedding(embedded.vector),
+    };
+  });
 }
 
 function scoreChunk(chunk, document, query) {
