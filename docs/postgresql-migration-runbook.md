@@ -4,7 +4,7 @@
 
 此手册定义从当前 SQLite 试点数据迁移至 PostgreSQL 的可回滚路径。迁移期间保持现有 REST URL、`{ data, meta }` 成功响应和权限语义不变；SQLite 不会被原地替换或删除。
 
-**默认运行数据源仍是 SQLite**（`DATABASE_DIALECT` 未设置或为 `sqlite`）。W5 已解除进程级 fail-closed：在完成 schema apply / 数据导入与对账后，可用 `DATABASE_DIALECT=postgres` + `DATABASE_URL` 启动 API。真库端到端门控与生产切换验收归 **W6**。
+**默认运行数据源仍是 SQLite**（`DATABASE_DIALECT` 未设置或为 `sqlite`）。W5 已解除进程级 fail-closed；W6 本地真库导入/对账/API 冒烟已验；W7 提供开发机读路径切换演练（`drill:postgres-switch`）。**生产维护窗口切换与 CI 真 PG service 仍未做。**
 
 ## 运行时方言选择（W5）
 
@@ -33,7 +33,8 @@ $env:DATABASE_URL = $env:POSTGRES_TARGET_URL
 npm run start -w api
 ```
 
-启动时 postgres 路径会：`ping` pool，并检查 `schema_migrations` / `users` / `projects` 是否存在；缺失则 fail-fast，并提示先 `apply:postgres-schema`。
+启动时 postgres 路径会：`ping` pool，并检查 `schema_migrations` / `users` / `projects` 是否存在；缺失则 fail-fast，并提示先 `apply:postgres-schema`。  
+`GET /api/health` 的 `data.database` 为当前 dialect（`sqlite` 或 `postgres`），可用于确认是否已切库。
 
 ### 回滚到 SQLite
 
@@ -188,7 +189,10 @@ preflight → export:postgres → verify:postgres-export
   → DATABASE_DIALECT=postgres DATABASE_URL=... npm run start -w api
 ```
 
-> **诚实说明**：仓库默认 CI/本地仍跑 sqlite。本机若无可用 `DATABASE_URL`，真 PG 冒烟标为 **not_run**，完整门控在 W6。
+> **诚实说明（as-built，2026-07-21）**  
+> - 仓库默认 CI / 无 `DATABASE_URL` 时：单测仍以 **sqlite** 为主；门控 PG 测试 **skip**。  
+> - 本机有可达 PG 时：W6 全链路与 W7 drill **已在开发机验证**（见 [w2-postgres-plan.md](./w2-postgres-plan.md)）。  
+> - **未做**：CI 挂 Postgres service；生产冻结写 / 灰度切写 / 运维签字回滚。
 
 ## 回滚
 

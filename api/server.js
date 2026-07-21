@@ -34,6 +34,7 @@ const {
   rows,
   run,
   transaction,
+  dialect,
   STORAGE_DIR,
 } = require("./db");
 const {
@@ -573,7 +574,7 @@ async function callRealModel(prompt, options = {}) {
   return aiModelClient.callModel(prompt, options);
 }
 
-app.get("/api/health", (req, res) => res.json(ok({ status: "ok", service: "company-project-management-api", database: "sqlite", uptime: Math.round(process.uptime()) })));
+app.get("/api/health", (req, res) => res.json(ok({ status: "ok", service: "company-project-management-api", database: dialect || "sqlite", uptime: Math.round(process.uptime()) })));
 
 app.use("/api", createAuthRouter({
   audit,
