@@ -136,7 +136,7 @@ test("OpenAPI core contract validates and describes versioned project writes", a
   assert.deepEqual(document.components.schemas.MetaEnums.properties.enums.properties.taskTypes.items.enum, ["epic", "story", "task", "bug", "milestone", "work_package"]);
   assert.ok(document.components.schemas.EnvelopeMetaEnums);
   assert.ok(document.components.schemas.EnvelopeWorkflowTemplateCatalog);
-  assert.deepEqual(document.components.schemas.WorkflowTemplate.properties.mode.enum, ["fixed"]);
+  assert.deepEqual(document.components.schemas.WorkflowTemplate.properties.mode.enum, ["fixed", "configurable"]);
   assert.deepEqual(document.components.schemas.WorkflowResourceFlow.properties.resource.enum, ["project", "requirement", "task", "sprint", "aiJob"]);
   assert.ok(document.paths["/api/admin/ai-provider"]?.patch);
   assert.ok(document.paths["/api/admin/ai-provider/{id}"]?.delete);

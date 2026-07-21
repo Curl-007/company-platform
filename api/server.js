@@ -127,6 +127,7 @@ const { canTransition } = require("./src/workflow/stateMachine");
 const { createStatusHistory } = require("./src/workflow/statusHistory");
 const { createSprintCommitment } = require("./src/workflow/sprintCommitment");
 const { publicWorkflowTemplates } = require("./src/workflow/templates");
+const { createWorkflowTemplateStore } = require("./src/workflow/templateStore");
 const {
   BUILD_STATUSES,
   DEFECT_SEVERITIES,
@@ -380,7 +381,22 @@ const aiAdviceService = createAiAdviceService({
 });
 const statusHistory = createStatusHistory({ insert, nextId, now, rows });
 const sprintCommitment = createSprintCommitment({ insert, nextId, now, row, rows });
-const projectFlowService = createProjectFlowService({ row, rows });
+const workflowTemplateStore = createWorkflowTemplateStore({
+  insert,
+  row,
+  rows,
+  run,
+  json,
+  parse,
+  now,
+  nextId,
+});
+const projectFlowService = createProjectFlowService({
+  row,
+  rows,
+  getProjectBinding: workflowTemplateStore.getProjectBinding,
+  getTemplate: workflowTemplateStore.getTemplate,
+});
 const workLogHelpers = createWorkLogHelpers({ normalizeRole, parse, row, rows });
 const workLogAnalysisService = createWorkLogAnalysisService({
   callModel: callRealModel,
@@ -625,11 +641,15 @@ app.use("/api", createProjectsRouter({
 }));
 
 app.use("/api", createWorkflowRouter({
+  audit,
   canAccessProject: projectAccess.canAccessProject,
+  canManageProject: projectAccess.canManageProject,
   evaluateProjectFlow: projectFlowService.evaluateProjectFlow,
   fail,
   ok,
   repository: projectRepository,
+  requirePermission,
+  templateStore: workflowTemplateStore,
   workflowTemplates: publicWorkflowTemplates,
 }));
 

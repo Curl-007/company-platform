@@ -1,7 +1,14 @@
-function createProjectFlowService({ row, rows }) {
+function createProjectFlowService({ row, rows, getProjectBinding, getTemplate }) {
   async function evaluateProjectFlow(projectId) {
     const project = await row("SELECT * FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectId });
     if (!project) return null;
+
+    const binding = typeof getProjectBinding === "function"
+      ? await getProjectBinding(projectId)
+      : { templateId: "fixed-project-delivery-v1", templateVersion: "2026-07-15", source: "default" };
+    const template = typeof getTemplate === "function"
+      ? await getTemplate(binding.templateId)
+      : null;
 
     const reqs = await rows("SELECT status FROM requirements WHERE project_id = @pid AND deleted_at IS NULL", { pid: projectId });
     const tasks = await rows("SELECT status, estimated_hours, actual_hours, remaining_hours FROM tasks WHERE project_id = @pid", { pid: projectId });
@@ -35,16 +42,14 @@ function createProjectFlowService({ row, rows }) {
     const tcPassed = tests.reduce((sum, testCase) => sum + (Number(testCase.passed_cases) || 0), 0);
     const testPassRate = tcTotal > 0 ? tcPassed / tcTotal : 0;
 
-    const gates = [
-      {
-        stage: "initiation",
-        label: "立项",
+    // Metric evaluators keyed by known stage ids. Custom templates may reorder/rename;
+    // unknown stages are marked pending with template metadata only.
+    const metricByStage = {
+      initiation: {
         state: project.status !== "planning" ? "done" : "in_progress",
         checks: [{ name: "项目已立项", passed: project.status !== "planning" }],
       },
-      {
-        stage: "requirement",
-        label: "需求",
+      requirement: {
         state: reqTotal === 0 ? "pending" : reqApprovedRatio >= 0.5 ? "passed" : "blocked",
         checks: [{
           name: ">= 50% 需求已批准",
@@ -52,66 +57,103 @@ function createProjectFlowService({ row, rows }) {
           detail: reqTotal > 0 ? `${reqApproved}/${reqTotal} 已批准` : "无需求",
         }],
       },
-      {
-        stage: "design",
-        label: "设计",
+      design: {
         state: designDocs.length > 0 ? "passed" : "pending",
         checks: [{ name: "设计文档存在", passed: designDocs.length > 0, detail: designDocs.length > 0 ? `${designDocs.length} 份` : "未上传" }],
       },
-      {
-        stage: "development",
-        label: "开发",
+      development: {
         state: taskTotal === 0 ? "pending" : taskCompletion >= 0.8 ? "passed" : taskCompletion < 0.5 || taskBlocked > 0 ? "blocked" : "in_progress",
         checks: [
           { name: "任务完成率 >= 80%", passed: taskTotal > 0 && taskCompletion >= 0.8, detail: taskTotal > 0 ? `${Math.round(taskCompletion * 100)}% (${taskDone}/${taskTotal})` : "无任务" },
           { name: "无阻塞任务", passed: taskBlocked === 0, detail: taskBlocked > 0 ? `${taskBlocked} 个阻塞` : "无阻塞" },
         ],
       },
-      {
-        stage: "testing",
-        label: "测试",
+      testing: {
         state: defTotal === 0 && tcTotal === 0 ? "pending" : defBlocked === 0 && defCritical === 0 ? "passed" : "blocked",
         checks: [
           { name: "阻塞缺陷 = 0", passed: defBlocked === 0, detail: defBlocked > 0 ? `${defBlocked} 个未关闭` : "已清零" },
           { name: "无未关闭严重缺陷", passed: defCritical === 0, detail: defCritical > 0 ? `${defCritical} 个严重` : "无" },
         ],
       },
-      {
-        stage: "acceptance",
-        label: "验收",
+      acceptance: {
         state: testDocs.length === 0 ? "pending" : testPassRate >= 0.8 ? "passed" : "in_progress",
         checks: [
           { name: "验收文档存在", passed: testDocs.length > 0, detail: testDocs.length > 0 ? `${testDocs.length} 份` : "未上传" },
           { name: "测试通过率 >= 80%", passed: testPassRate >= 0.8, detail: tcTotal > 0 ? `${Math.round(testPassRate * 100)}%` : "无测试数据" },
         ],
       },
-      {
-        stage: "release",
-        label: "发布",
+      release: {
         state: "pending",
         checks: [
           { name: "前置门禁全部通过", passed: false, detail: "待前置阶段完成" },
           { name: "存在已发布记录", passed: false, detail: "无发布记录" },
         ],
       },
-    ];
+    };
 
-    const priorPassed = gates.slice(0, 6).every((gate) => gate.state === "passed" || gate.state === "done");
-    const releasedRelease = project.product_id
-      ? await row("SELECT id FROM releases WHERE product_id = @pid AND status = 'released' LIMIT 1", { pid: project.product_id })
-      : await row("SELECT id FROM releases WHERE status = 'released' LIMIT 1", {});
-    const hasRelease = Boolean(releasedRelease);
-    gates[6].checks[0].passed = priorPassed;
-    gates[6].checks[0].detail = priorPassed ? "全部前置门禁已通过" : "前置阶段未全部通过";
-    gates[6].checks[1].passed = hasRelease;
-    gates[6].checks[1].detail = hasRelease ? `存在已发布记录 ${releasedRelease.id}` : "无已发布记录";
-    gates[6].state = priorPassed && hasRelease ? "passed" : priorPassed ? "in_progress" : "pending";
+    const stageCatalog = Array.isArray(template?.stages) && template.stages.length
+      ? template.stages
+      : [
+          { id: "initiation", label: "立项" },
+          { id: "requirement", label: "需求" },
+          { id: "design", label: "设计" },
+          { id: "development", label: "开发" },
+          { id: "testing", label: "测试" },
+          { id: "acceptance", label: "验收" },
+          { id: "release", label: "发布" },
+        ];
+
+    const gates = stageCatalog.map((stage) => {
+      const metric = metricByStage[stage.id];
+      if (metric) {
+        return {
+          stage: stage.id,
+          label: stage.label || stage.id,
+          description: stage.description || "",
+          state: metric.state,
+          checks: metric.checks,
+          exitCriteria: stage.exitCriteria || [],
+          evidence: stage.evidence || [],
+        };
+      }
+      return {
+        stage: stage.id,
+        label: stage.label || stage.id,
+        description: stage.description || "",
+        state: "pending",
+        checks: [{ name: "自定义阶段（尚未绑定自动门禁指标）", passed: false, detail: "仅展示模板定义" }],
+        exitCriteria: stage.exitCriteria || [],
+        evidence: stage.evidence || [],
+      };
+    });
+
+    const releaseIndex = gates.findIndex((gate) => gate.stage === "release");
+    if (releaseIndex >= 0) {
+      const priorGates = gates.filter((_, index) => index !== releaseIndex);
+      const priorPassed = priorGates.every((gate) => gate.state === "passed" || gate.state === "done");
+      const releasedRelease = project.product_id
+        ? await row("SELECT id FROM releases WHERE product_id = @pid AND status = 'released' LIMIT 1", { pid: project.product_id })
+        : await row("SELECT id FROM releases WHERE status = 'released' LIMIT 1", {});
+      const hasRelease = Boolean(releasedRelease);
+      gates[releaseIndex].checks = [
+        { name: "前置门禁全部通过", passed: priorPassed, detail: priorPassed ? "全部前置门禁已通过" : "前置阶段未全部通过" },
+        { name: "存在已发布记录", passed: hasRelease, detail: hasRelease ? `存在已发布记录 ${releasedRelease.id}` : "无已发布记录" },
+      ];
+      gates[releaseIndex].state = priorPassed && hasRelease ? "passed" : priorPassed ? "in_progress" : "pending";
+    }
 
     return {
       projectId,
       projectName: project.name,
       status: project.status,
       healthScore: project.health_score,
+      workflow: {
+        templateId: template?.id || binding.templateId,
+        templateName: template?.name || null,
+        templateVersion: template?.version || binding.templateVersion,
+        bindingSource: binding.source || "default",
+        mode: template?.mode || "fixed",
+      },
       gates,
       defectFunnel: {
         new: defects.filter((defect) => defect.status === "new").length,

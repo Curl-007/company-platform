@@ -163,7 +163,7 @@ test("seed accounts remain disabled after restart, work logs keep authenticated 
 
   const workflowTemplates = await request(api.port, "/api/flow/templates", { headers: developer.headers });
   assert.equal(workflowTemplates.response.status, 200);
-  assert.equal(workflowTemplates.body.data.source, "api/src/workflow/templates.js");
+  assert.ok(["api/src/workflow/templates.js", "builtin+database"].includes(workflowTemplates.body.data.source));
   assert.equal(workflowTemplates.body.data.templates[0].id, "fixed-project-delivery-v1");
   assert.deepEqual(workflowTemplates.body.data.templates[0].stages.map((stage) => stage.id), ["initiation", "requirement", "design", "development", "testing", "acceptance", "release"]);
   assert.equal(workflowTemplates.body.data.templates[0].guardrails.some((item) => item.includes("不包含请假")), true);

@@ -4,6 +4,7 @@ const CORE_TABLES = Object.freeze([
   "project_risks", "project_decisions", "ai_jobs", "sprints", "sprint_commitments", "sprint_scope_changes",
   "defects", "audit_logs", "status_histories", "burndown_snapshots", "app_settings", "builds", "releases",
   "release_approvals", "rollback_records", "schema_migrations", "work_calendars", "work_calendar_exceptions", "idempotency_keys",
+  "workflow_templates", "project_workflow_bindings",
 ]);
 
 const REFERENCE_RULES = Object.freeze([
@@ -40,6 +41,10 @@ const REFERENCE_RULES = Object.freeze([
   ["leave_records", "user_id", "users", "id"],
   ["leave_records", "created_by", "users", "id"],
   ["leave_records", "reviewed_by", "users", "id"],
+  ["project_workflow_bindings", "project_id", "projects", "id"],
+  // template_id may reference builtin ids not stored in workflow_templates.
+  ["project_workflow_bindings", "bound_by", "users", "id"],
+  ["workflow_templates", "created_by", "users", "id"],
   ["project_allocations", "project_id", "projects", "id"],
   ["project_allocations", "user_id", "users", "id"],
   ["time_entries", "project_id", "projects", "id"],

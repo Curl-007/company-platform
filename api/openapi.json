@@ -934,6 +934,34 @@
             "$ref": "#/components/responses/Unauthorized"
           }
         }
+      },
+      "post": {
+        "summary": "Create draft workflow template",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowTemplateInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeWorkflowTemplate"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation failed"
+          }
+        }
       }
     },
     "/api/projects/{id}/wbs/tasks": {
@@ -5665,6 +5693,156 @@
           }
         }
       }
+    },
+    "/api/flow/templates/{id}": {
+      "patch": {
+        "summary": "Update draft workflow template",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowTemplateInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeWorkflowTemplate"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation failed"
+          },
+          "404": {
+            "description": "not found"
+          }
+        }
+      }
+    },
+    "/api/flow/templates/{id}/publish": {
+      "post": {
+        "summary": "Publish workflow template",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeWorkflowTemplate"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not found"
+          }
+        }
+      }
+    },
+    "/api/projects/{id}/workflow-binding": {
+      "get": {
+        "summary": "Get project workflow template binding",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeProjectWorkflowBinding"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden"
+          },
+          "404": {
+            "description": "not found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Bind project to a published workflow template",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectWorkflowBindingInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeProjectWorkflowBinding"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation failed"
+          },
+          "403": {
+            "description": "forbidden"
+          },
+          "404": {
+            "description": "not found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6157,10 +6335,7 @@
         "type": "object",
         "required": [
           "id",
-          "label",
-          "description",
-          "evidence",
-          "exitCriteria"
+          "label"
         ],
         "properties": {
           "id": {
@@ -6185,7 +6360,7 @@
             }
           }
         },
-        "additionalProperties": false
+        "additionalProperties": true
       },
       "WorkflowResourceFlow": {
         "type": "object",
@@ -6231,15 +6406,7 @@
         "type": "object",
         "required": [
           "id",
-          "name",
-          "version",
-          "scope",
-          "mode",
-          "description",
-          "processModes",
-          "stages",
-          "resources",
-          "guardrails"
+          "name"
         ],
         "properties": {
           "id": {
@@ -6251,31 +6418,25 @@
           "version": {
             "type": "string"
           },
-          "scope": {
+          "status": {
             "type": "string",
             "enum": [
-              "project"
-            ]
-          },
-          "mode": {
-            "type": "string",
-            "enum": [
-              "fixed"
+              "draft",
+              "published"
             ]
           },
           "description": {
             "type": "string"
           },
-          "processModes": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "enum": [
-                "scrum",
-                "kanban",
-                "waterfall"
-              ]
-            }
+          "mode": {
+            "type": "string",
+            "enum": [
+              "fixed",
+              "configurable"
+            ]
+          },
+          "builtin": {
+            "type": "boolean"
           },
           "stages": {
             "type": "array",
@@ -6283,10 +6444,10 @@
               "$ref": "#/components/schemas/WorkflowStage"
             }
           },
-          "resources": {
+          "processModes": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/WorkflowResourceFlow"
+              "type": "string"
             }
           },
           "guardrails": {
@@ -6294,9 +6455,15 @@
             "items": {
               "type": "string"
             }
+          },
+          "resources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowResourceFlow"
+            }
           }
         },
-        "additionalProperties": false
+        "additionalProperties": true
       },
       "WorkflowTemplateCatalog": {
         "type": "object",
@@ -13792,6 +13959,160 @@
             "$ref": "#/components/schemas/Meta"
           }
         }
+      },
+      "WorkflowTemplateInput": {
+        "type": "object",
+        "required": [
+          "name",
+          "stages"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "description": {
+            "type": "string"
+          },
+          "processModes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "stages": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/WorkflowStage"
+            }
+          },
+          "guardrails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkflowTemplateList": {
+        "type": "object",
+        "required": [
+          "templates"
+        ],
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "templates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowTemplate"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "ProjectWorkflowBinding": {
+        "type": "object",
+        "required": [
+          "projectId",
+          "templateId"
+        ],
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "templateId": {
+            "type": "string"
+          },
+          "templateVersion": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "boundAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "boundBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "template": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "ProjectWorkflowBindingInput": {
+        "type": "object",
+        "required": [
+          "templateId"
+        ],
+        "properties": {
+          "templateId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "EnvelopeWorkflowTemplate": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/WorkflowTemplate"
+          },
+          "meta": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "EnvelopeWorkflowTemplateList": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/WorkflowTemplateList"
+          },
+          "meta": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "EnvelopeProjectWorkflowBinding": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ProjectWorkflowBinding"
+          },
+          "meta": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
       }
     }
   }
