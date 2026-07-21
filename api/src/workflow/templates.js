@@ -67,14 +67,59 @@ function buildResourceFlow(resource, label) {
   };
 }
 
+const LIGHTWEIGHT_STAGES = Object.freeze([
+  Object.freeze({
+    id: "initiation",
+    label: "启动",
+    description: "明确目标和负责人后即可启动。",
+    evidence: Object.freeze(["项目目标", "负责人"]),
+    exitCriteria: Object.freeze(["项目已离开 planning 状态"]),
+    rules: Object.freeze([{ id: "project_not_planning", required: true }]),
+  }),
+  Object.freeze({
+    id: "development",
+    label: "开发",
+    description: "任务推进与阻塞清理。",
+    evidence: Object.freeze(["任务完成率", "阻塞任务"]),
+    exitCriteria: Object.freeze(["任务完成率达标且无阻塞任务"]),
+    rules: Object.freeze([
+      { id: "task_exists", required: true },
+      { id: "task_completion_ratio", op: "gte", threshold: 0.6, required: true },
+      { id: "no_blocked_tasks", required: true },
+    ]),
+  }),
+  Object.freeze({
+    id: "testing",
+    label: "测试",
+    description: "关键缺陷关闭后可进入发布。",
+    evidence: Object.freeze(["缺陷状态"]),
+    exitCriteria: Object.freeze(["无阻塞/严重未关闭缺陷"]),
+    rules: Object.freeze([
+      { id: "no_open_blocking_defects", required: true },
+      { id: "no_open_critical_defects", required: true },
+    ]),
+  }),
+  Object.freeze({
+    id: "release",
+    label: "发布",
+    description: "前置通过且存在发布记录。",
+    evidence: Object.freeze(["发布记录"]),
+    exitCriteria: Object.freeze(["前置阶段通过并完成发布"]),
+    rules: Object.freeze([
+      { id: "prior_stages_passed", required: true },
+      { id: "release_exists", required: true },
+    ]),
+  }),
+]);
+
 const WORKFLOW_TEMPLATES = Object.freeze([
   Object.freeze({
     id: "fixed-project-delivery-v1",
-    name: "固定项目交付流程",
-    version: "2026-07-15",
+    name: "固定交付",
+    version: "2026-07-21",
     scope: "project",
     mode: "fixed",
-    description: "当前实现使用固定阶段门禁与固定状态机；后续可配置模板引擎应保持本只读契约兼容。",
+    description: "完整七阶段交付流程：立项→需求→设计→开发→测试→验收→发布。",
     processModes: Object.freeze(["scrum", "kanban", "waterfall"]),
     stages: PROJECT_DELIVERY_STAGES,
     resources: Object.freeze([
@@ -85,10 +130,27 @@ const WORKFLOW_TEMPLATES = Object.freeze([
       Object.freeze(buildResourceFlow("aiJob", "AI 任务")),
     ]),
     guardrails: Object.freeze([
-      "项目激活仍受目标、计划、成员、里程碑/Sprint、容量投入和容量计划门禁约束。",
-      "所有状态变更必须经过固定状态机校验并写入状态历史或审计证据。",
-      "工作日志、工时、容量和 WIP 仅用于资源协调、交付追溯和风险提示，不用于个人绩效、排名、薪酬、晋升或淘汰。",
-      "当前模板不包含请假或请假审批流程。",
+      "默认完整交付模板，适合正式项目。",
+      "工作日志、工时、容量和 WIP 不用于个人绩效评价。",
+    ]),
+  }),
+  Object.freeze({
+    id: "lightweight-delivery-v1",
+    name: "轻量交付",
+    version: "2026-07-21",
+    scope: "project",
+    mode: "fixed",
+    description: "四阶段轻量流程：启动→开发→测试→发布，门禁更少、推进更快。",
+    processModes: Object.freeze(["scrum", "kanban"]),
+    stages: LIGHTWEIGHT_STAGES,
+    resources: Object.freeze([
+      Object.freeze(buildResourceFlow("project", "项目")),
+      Object.freeze(buildResourceFlow("task", "任务")),
+      Object.freeze(buildResourceFlow("sprint", "迭代")),
+    ]),
+    guardrails: Object.freeze([
+      "轻量模板适合试点或小改动项目。",
+      "工作日志、工时、容量和 WIP 不用于个人绩效评价。",
     ]),
   }),
 ]);
@@ -99,8 +161,9 @@ function publicWorkflowTemplates() {
     processModes: [...template.processModes],
     stages: template.stages.map((stage) => ({
       ...stage,
-      evidence: [...stage.evidence],
-      exitCriteria: [...stage.exitCriteria],
+      evidence: stage.evidence ? [...stage.evidence] : [],
+      exitCriteria: stage.exitCriteria ? [...stage.exitCriteria] : [],
+      rules: stage.rules ? stage.rules.map((rule) => ({ ...rule })) : undefined,
     })),
     resources: template.resources.map((resource) => ({
       ...resource,

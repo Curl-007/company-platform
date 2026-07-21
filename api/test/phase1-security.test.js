@@ -164,9 +164,12 @@ test("seed accounts remain disabled after restart, work logs keep authenticated 
   const workflowTemplates = await request(api.port, "/api/flow/templates", { headers: developer.headers });
   assert.equal(workflowTemplates.response.status, 200);
   assert.ok(["api/src/workflow/templates.js", "builtin+database"].includes(workflowTemplates.body.data.source));
+  assert.equal(workflowTemplates.body.data.templates.length, 2);
   assert.equal(workflowTemplates.body.data.templates[0].id, "fixed-project-delivery-v1");
+  assert.equal(workflowTemplates.body.data.templates[1].id, "lightweight-delivery-v1");
   assert.deepEqual(workflowTemplates.body.data.templates[0].stages.map((stage) => stage.id), ["initiation", "requirement", "design", "development", "testing", "acceptance", "release"]);
-  assert.equal(workflowTemplates.body.data.templates[0].guardrails.some((item) => item.includes("不包含请假")), true);
+  assert.deepEqual(workflowTemplates.body.data.templates[1].stages.map((stage) => stage.id), ["initiation", "development", "testing", "release"]);
+  assert.equal(workflowTemplates.body.data.templates[0].guardrails.some((item) => item.includes("个人绩效")), true);
 
   const profilePrivilegeAttempt = await request(api.port, "/api/auth/me", {
     method: "PATCH",

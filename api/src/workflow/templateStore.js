@@ -1,15 +1,20 @@
 /**
- * Configurable workflow templates (Wave 1).
+ * Workflow templates (simplified).
  *
- * Built-in fixed template remains the default.
- * Published custom templates can be bound per project and used to label/order gates.
- * Gate evaluation still uses fixed project metrics; stage catalog becomes configurable.
+ * Only two builtin templates are supported:
+ * - fixed-project-delivery-v1 (完整固定交付)
+ * - lightweight-delivery-v1 (轻量交付)
+ *
+ * Custom draft/publish authoring is disabled for UX simplicity.
+ * Projects only choose one of the two builtins.
  */
 
 const { publicWorkflowTemplates } = require("./templates");
 const { defaultRulesForStage, normalizeStageRules } = require("./gateRules");
 
 const BUILTIN_ID = "fixed-project-delivery-v1";
+const LIGHTWEIGHT_ID = "lightweight-delivery-v1";
+const ALLOWED_TEMPLATE_IDS = new Set([BUILTIN_ID, LIGHTWEIGHT_ID]);
 
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -120,128 +125,43 @@ function createWorkflowTemplateStore({
   now,
   nextId,
 }) {
-  async function listTemplates({ includeDrafts = false } = {}) {
-    const builtins = builtinTemplates();
-    const stored = await rows(
-      includeDrafts
-        ? "SELECT * FROM workflow_templates ORDER BY updated_at DESC"
-        : "SELECT * FROM workflow_templates WHERE status = 'published' ORDER BY updated_at DESC",
-    );
-    const mapped = stored.map((item) => mapStoredTemplate(item, parse));
-    // builtins first, then custom
-    return [...builtins, ...mapped];
+  async function listTemplates() {
+    // Only the two builtin templates are exposed.
+    return builtinTemplates();
   }
 
   async function getTemplate(templateId) {
-    if (!templateId || templateId === BUILTIN_ID) {
-      return builtinTemplates().find((item) => item.id === BUILTIN_ID) || builtinTemplates()[0];
-    }
-    const stored = await row("SELECT * FROM workflow_templates WHERE id = @id", { id: templateId });
-    return mapStoredTemplate(stored, parse);
+    const id = ALLOWED_TEMPLATE_IDS.has(templateId) ? templateId : BUILTIN_ID;
+    return builtinTemplates().find((item) => item.id === id) || builtinTemplates()[0];
   }
 
-  async function createDraft(input, actor) {
-    const body = normalizeTemplateBody(input);
-    const id = typeof nextId === "function"
-      ? await nextId("WFT", "workflow_templates", "id")
-      : `WFT-${Date.now()}`;
-    const stamp = now();
-    await insert("workflow_templates", {
-      id,
-      name: body.name,
-      version: "draft",
-      status: "draft",
-      description: body.description,
-      definition_json: json({
-        description: body.description,
-        processModes: body.processModes,
-        stages: body.stages,
-        resources: [],
-        guardrails: body.guardrails,
-      }),
-      created_by: actor?.id || null,
-      published_at: null,
-      created_at: stamp,
-      updated_at: stamp,
-    });
-    return getTemplate(id);
+  async function createDraft() {
+    const error = new Error("自定义模板已关闭：仅支持「固定交付」和「轻量交付」两个内置模板。");
+    error.code = "VALIDATION_FAILED";
+    throw error;
   }
 
-  async function updateDraft(templateId, input) {
-    const existing = await row("SELECT * FROM workflow_templates WHERE id = @id", { id: templateId });
-    if (!existing) {
-      const error = new Error("Template not found.");
-      error.code = "RESOURCE_NOT_FOUND";
-      throw error;
-    }
-    if (existing.status !== "draft") {
-      const error = new Error("Only draft templates can be edited. Clone a published/builtin template first.");
-      error.code = "VALIDATION_FAILED";
-      throw error;
-    }
-    const body = normalizeTemplateBody(input);
-    await run(
-      `UPDATE workflow_templates
-       SET name = @name,
-           description = @description,
-           definition_json = @definition,
-           updated_at = @updatedAt
-       WHERE id = @id`,
-      {
-        id: templateId,
-        name: body.name,
-        description: body.description,
-        definition: json({
-          description: body.description,
-          processModes: body.processModes,
-          stages: body.stages,
-          resources: [],
-          guardrails: body.guardrails,
-        }),
-        updatedAt: now(),
-      },
-    );
-    return getTemplate(templateId);
+  async function updateDraft() {
+    const error = new Error("内置模板不可编辑。请在项目中切换「固定交付 / 轻量交付」。");
+    error.code = "VALIDATION_FAILED";
+    throw error;
   }
 
-  async function cloneAsDraft(templateId, actor, overrides = {}) {
-    const source = await getTemplate(templateId);
-    if (!source) {
-      const error = new Error("Template not found.");
-      error.code = "RESOURCE_NOT_FOUND";
-      throw error;
-    }
-    // Prefer explicit override; otherwise keep source Chinese text as-is (UTF-8).
-    const fallbackName = source.name ? `${source.name}（可编辑副本）` : "可编辑流程副本";
-    return createDraft({
-      name: String(overrides.name || fallbackName).trim().slice(0, 160),
-      description: overrides.description != null ? overrides.description : source.description,
-      processModes: overrides.processModes || source.processModes,
-      stages: overrides.stages || source.stages,
-      guardrails: overrides.guardrails || source.guardrails,
-    }, actor);
+  async function cloneAsDraft() {
+    const error = new Error("已简化为两个固定模板，不再支持复制草稿。");
+    error.code = "VALIDATION_FAILED";
+    throw error;
   }
 
   async function publishTemplate(templateId) {
-    const existing = await row("SELECT * FROM workflow_templates WHERE id = @id", { id: templateId });
-    if (!existing) {
+    // Builtin templates are always published.
+    const template = await getTemplate(templateId);
+    if (!template) {
       const error = new Error("Template not found.");
       error.code = "RESOURCE_NOT_FOUND";
       throw error;
     }
-    if (existing.status === "published") return getTemplate(templateId);
-    const stamp = now();
-    const version = `v${stamp.slice(0, 10).replace(/-/g, "")}`;
-    await run(
-      `UPDATE workflow_templates
-       SET status = 'published',
-           version = @version,
-           published_at = @publishedAt,
-           updated_at = @updatedAt
-       WHERE id = @id`,
-      { id: templateId, version, publishedAt: stamp, updatedAt: stamp },
-    );
-    return getTemplate(templateId);
+    return template;
   }
 
   async function getProjectBinding(projectId) {
@@ -253,32 +173,34 @@ function createWorkflowTemplateStore({
       return {
         projectId,
         templateId: BUILTIN_ID,
-        templateVersion: "2026-07-15",
+        templateVersion: "2026-07-21",
         source: "default",
         boundAt: null,
         boundBy: null,
       };
     }
+    const templateId = ALLOWED_TEMPLATE_IDS.has(binding.template_id) ? binding.template_id : BUILTIN_ID;
+    const template = await getTemplate(templateId);
     return {
       projectId,
-      templateId: binding.template_id,
-      templateVersion: binding.template_version,
-      source: "binding",
+      templateId,
+      templateVersion: template?.version || binding.template_version || "2026-07-21",
+      source: templateId === binding.template_id ? "binding" : "default",
       boundAt: binding.bound_at,
       boundBy: binding.bound_by,
     };
   }
 
   async function bindProjectTemplate(projectId, templateId, actor) {
+    if (!ALLOWED_TEMPLATE_IDS.has(String(templateId || "").trim())) {
+      const error = new Error("仅支持绑定：固定交付 或 轻量交付。");
+      error.code = "VALIDATION_FAILED";
+      throw error;
+    }
     const template = await getTemplate(templateId);
     if (!template) {
       const error = new Error("Template not found.");
       error.code = "RESOURCE_NOT_FOUND";
-      throw error;
-    }
-    if (template.status && template.status !== "published" && !template.builtin) {
-      const error = new Error("Only published templates can be bound to projects.");
-      error.code = "VALIDATION_FAILED";
       throw error;
     }
     const stamp = now();
@@ -331,6 +253,8 @@ function createWorkflowTemplateStore({
 
 module.exports = {
   BUILTIN_ID,
+  LIGHTWEIGHT_ID,
+  ALLOWED_TEMPLATE_IDS,
   createWorkflowTemplateStore,
   normalizeTemplateBody,
   mapStoredTemplate,
