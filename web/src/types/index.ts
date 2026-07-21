@@ -305,6 +305,9 @@ export interface FlowGate {
   label: string;
   state: GateState;
   checks: GateCheck[];
+  description?: string;
+  exitCriteria?: string[];
+  evidence?: string[];
 }
 
 export interface DefectFunnelData {
@@ -322,11 +325,20 @@ export interface FlowHours {
   remaining: number;
 }
 
+export interface ProjectWorkflowInfo {
+  templateId: string;
+  templateName?: string | null;
+  templateVersion?: string | null;
+  bindingSource?: string | null;
+  mode?: 'fixed' | 'configurable' | string;
+}
+
 export interface ProjectFlow {
   projectId: string;
   projectName: string;
   status: string;
   healthScore: number;
+  workflow?: ProjectWorkflowInfo | null;
   gates: FlowGate[];
   defectFunnel: DefectFunnelData;
   hours: FlowHours;
@@ -340,20 +352,21 @@ export interface FlowOverviewItem {
   status: string;
   healthScore: number;
   currentStage: string;
-  gates: { stage: string; state: GateState }[];
+  workflow?: ProjectWorkflowInfo | null;
+  gates: { stage: string; state: GateState; label?: string }[];
 }
 
-// Read-only workflow template catalog (GET /api/flow/templates)
+// Workflow template catalog (GET /api/flow/templates)
 export interface WorkflowStage {
   id: string;
   label: string;
-  description: string;
-  evidence: string[];
-  exitCriteria: string[];
+  description?: string;
+  evidence?: string[];
+  exitCriteria?: string[];
 }
 
 export interface WorkflowResourceFlow {
-  resource: 'project' | 'requirement' | 'task' | 'sprint' | 'aiJob';
+  resource: 'project' | 'requirement' | 'task' | 'sprint' | 'aiJob' | string;
   label: string;
   statuses: string[];
   transitions: Record<string, string[]>;
@@ -363,19 +376,44 @@ export interface WorkflowTemplate {
   id: string;
   name: string;
   version: string;
-  scope: 'project';
-  mode: 'fixed';
+  scope?: 'project' | string;
+  mode: 'fixed' | 'configurable' | string;
+  status?: 'draft' | 'published' | string;
   description: string;
   processModes: string[];
   stages: WorkflowStage[];
   resources: WorkflowResourceFlow[];
   guardrails: string[];
+  builtin?: boolean;
+  source?: string;
+  createdBy?: string | null;
+  publishedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface WorkflowTemplateCatalog {
   version: string;
   source: string;
   templates: WorkflowTemplate[];
+}
+
+export interface WorkflowTemplateInput {
+  name: string;
+  description?: string;
+  processModes?: string[];
+  stages: WorkflowStage[];
+  guardrails?: string[];
+}
+
+export interface ProjectWorkflowBinding {
+  projectId: string;
+  templateId: string;
+  templateVersion: string;
+  source: string;
+  boundAt?: string | null;
+  boundBy?: string | null;
+  template?: { id: string; name: string; version: string; status?: string } | null;
 }
 
 // ---------------------------------------------------------------------------

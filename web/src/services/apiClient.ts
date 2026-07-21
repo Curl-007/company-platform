@@ -63,7 +63,7 @@ function cachePrefixesForPath(path: string): string[] {
     add('fetchDashboard');
   }
   if (normalized.includes('/flow') || normalized.includes('/workflow')) {
-    add('fetchWorkflowTemplates');
+    add('fetchWorkflowTemplates', 'fetchProjectFlow', 'fetchFlowOverview', 'fetchProjectWorkflowBinding');
   }
 
   return [...prefixes];

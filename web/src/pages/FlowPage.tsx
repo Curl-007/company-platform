@@ -1,7 +1,13 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { fetchFlowOverview, fetchProjectFlow } from '../features/projects/api';
-import { fetchWorkflowTemplates } from '../features/workflow/api';
+import {
+  createWorkflowTemplate,
+  fetchWorkflowTemplates,
+  publishWorkflowTemplate,
+} from '../features/workflow/api';
 import { useAsync } from '../hooks/useAsync';
+import { getSessionUser } from '../services/auth';
+import { canOperate } from '../constants/roles';
 import PageHeader from '../components/common/PageHeader';
 import Panel from '../components/common/Panel';
 import PageState from '../components/common/PageState';
@@ -9,7 +15,7 @@ import FlowPipeline from '../components/common/FlowPipeline';
 import DefectFunnel from '../components/common/DefectFunnel';
 import type { FlowOverviewItem, ProjectFlow, GateState, WorkflowTemplate } from '../types';
 
-const STAGE_LABELS: Record<string, string> = {
+const DEFAULT_STAGE_LABELS: Record<string, string> = {
   initiation: '立项',
   requirement: '需求',
   design: '设计',
@@ -27,13 +33,86 @@ const STATE_DOT: Record<GateState, string> = {
   pending: 'var(--color-border, #cbd5e1)',
 };
 
-const STAGE_ORDER = ['initiation', 'requirement', 'design', 'development', 'testing', 'acceptance', 'release'];
+const DEFAULT_STAGE_ORDER = ['initiation', 'requirement', 'design', 'development', 'testing', 'acceptance', 'release'];
 
 function FlowPage() {
+  const sessionUser = getSessionUser();
+  const canAdmin = canOperate(sessionUser, 'admin:*') || sessionUser?.role === 'admin';
+
   const { data: overview, loading, error, reload } = useAsync<FlowOverviewItem[]>(fetchFlowOverview, []);
-  const { data: templateCatalog, loading: templateLoading, error: templateError, reload: reloadTemplates } = useAsync(fetchWorkflowTemplates, []);
+  const {
+    data: templateCatalog,
+    loading: templateLoading,
+    error: templateError,
+    reload: reloadTemplates,
+  } = useAsync(() => fetchWorkflowTemplates(canAdmin), [canAdmin]);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const activeTemplate = templateCatalog?.templates[0] ?? null;
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [creating, setCreating] = useState(false);
+  const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionOk, setActionOk] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState('自定义轻量交付');
+
+  const templates = templateCatalog?.templates ?? [];
+  const activeTemplate = useMemo(() => {
+    if (!templates.length) return null;
+    if (selectedTemplateId) return templates.find((item) => item.id === selectedTemplateId) || templates[0];
+    return templates[0];
+  }, [templates, selectedTemplateId]);
+
+  const stageOrder = activeTemplate?.stages?.map((stage) => stage.id) ?? DEFAULT_STAGE_ORDER;
+  const stageLabels = useMemo(() => {
+    const map = { ...DEFAULT_STAGE_LABELS };
+    activeTemplate?.stages?.forEach((stage) => {
+      map[stage.id] = stage.label || stage.id;
+    });
+    return map;
+  }, [activeTemplate]);
+
+  async function handleCreateDraft() {
+    if (!canAdmin) return;
+    setCreating(true);
+    setActionError(null);
+    setActionOk(null);
+    try {
+      const created = await createWorkflowTemplate({
+        name: draftName.trim() || '自定义流程模板',
+        description: '从流程页创建的可配置模板草稿，可再发布并绑定到项目。',
+        stages: [
+          { id: 'initiation', label: '启动' },
+          { id: 'development', label: '开发' },
+          { id: 'testing', label: '测试' },
+          { id: 'release', label: '发布' },
+        ],
+        guardrails: ['工作日志/工时/容量不用于个人绩效评价。'],
+      });
+      setActionOk(`已创建草稿 ${created.id}`);
+      setSelectedTemplateId(created.id);
+      await reloadTemplates();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : '创建失败');
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handlePublish(templateId: string) {
+    if (!canAdmin) return;
+    setPublishingId(templateId);
+    setActionError(null);
+    setActionOk(null);
+    try {
+      const published = await publishWorkflowTemplate(templateId);
+      setActionOk(`已发布 ${published.name}（${published.version}）`);
+      await reloadTemplates();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : '发布失败');
+    } finally {
+      setPublishingId(null);
+    }
+  }
 
   if (loading || error || !overview) {
     return (
@@ -60,18 +139,29 @@ function FlowPage() {
       </div>
 
       <WorkflowTemplatePanel
-        template={activeTemplate}
+        templates={templates}
+        activeTemplate={activeTemplate}
         loading={templateLoading}
         error={templateError}
+        canAdmin={canAdmin}
+        draftName={draftName}
+        creating={creating}
+        publishingId={publishingId}
+        actionError={actionError}
+        actionOk={actionOk}
+        onDraftNameChange={setDraftName}
+        onSelectTemplate={setSelectedTemplateId}
+        onCreateDraft={handleCreateDraft}
+        onPublish={handlePublish}
         onRetry={reloadTemplates}
       />
 
-      <Panel title="项目阶段矩阵" subtitle="点击项目行可展开查看详细流程" className="mt-12">
+      <Panel title="项目阶段矩阵" subtitle="点击项目行可展开查看详细流程；列顺序跟随当前选中模板" className="mt-12">
         <div className="flow-matrix">
           <div className="flow-matrix-row flow-matrix-header">
             <div className="flow-matrix-cell flow-matrix-project">项目</div>
-            {STAGE_ORDER.map((stage) => (
-              <div key={stage} className="flow-matrix-cell flow-matrix-stage-head">{STAGE_LABELS[stage]}</div>
+            {stageOrder.map((stage) => (
+              <div key={stage} className="flow-matrix-cell flow-matrix-stage-head">{stageLabels[stage] || stage}</div>
             ))}
             <div className="flow-matrix-cell flow-matrix-health">健康度</div>
           </div>
@@ -84,12 +174,21 @@ function FlowPage() {
                   className={`flow-matrix-row ${isOpen ? 'flow-matrix-row-active' : ''}`}
                   onClick={() => setSelectedId(isOpen ? null : item.projectId)}
                 >
-                  <div className="flow-matrix-cell flow-matrix-project font-medium">{item.projectName}</div>
-                  {STAGE_ORDER.map((stage) => {
+                  <div className="flow-matrix-cell flow-matrix-project font-medium">
+                    {item.projectName}
+                    {item.workflow?.templateName ? (
+                      <div className="text-secondary" style={{ fontSize: 11 }}>{item.workflow.templateName}</div>
+                    ) : null}
+                  </div>
+                  {stageOrder.map((stage) => {
                     const gate = item.gates.find((entry) => entry.stage === stage);
                     return (
                       <div key={stage} className="flow-matrix-cell flow-matrix-stage">
-                        <span className="flow-matrix-dot" style={{ background: gate ? STATE_DOT[gate.state] : STATE_DOT.pending }} title={gate ? gate.state : ''} />
+                        <span
+                          className="flow-matrix-dot"
+                          style={{ background: gate ? STATE_DOT[gate.state] : STATE_DOT.pending }}
+                          title={gate ? `${gate.label || stage}: ${gate.state}` : stage}
+                        />
                       </div>
                     );
                   })}
@@ -106,52 +205,119 @@ function FlowPage() {
 }
 
 function WorkflowTemplatePanel({
-  template,
+  templates,
+  activeTemplate,
   loading,
   error,
+  canAdmin,
+  draftName,
+  creating,
+  publishingId,
+  actionError,
+  actionOk,
+  onDraftNameChange,
+  onSelectTemplate,
+  onCreateDraft,
+  onPublish,
   onRetry,
 }: {
-  template: WorkflowTemplate | null;
+  templates: WorkflowTemplate[];
+  activeTemplate: WorkflowTemplate | null;
   loading: boolean;
   error: string | null;
+  canAdmin: boolean;
+  draftName: string;
+  creating: boolean;
+  publishingId: string | null;
+  actionError: string | null;
+  actionOk: string | null;
+  onDraftNameChange: (value: string) => void;
+  onSelectTemplate: (id: string) => void;
+  onCreateDraft: () => void;
+  onPublish: (id: string) => void;
   onRetry: () => void;
 }) {
   if (loading) {
     return (
-      <Panel title="流程模板" subtitle="正在读取后端固定模板契约..." className="mt-12">
+      <Panel title="流程模板" subtitle="正在读取模板目录..." className="mt-12">
         <p className="text-secondary">加载中...</p>
       </Panel>
     );
   }
 
-  if (error || !template) {
+  if (error || !activeTemplate) {
     return (
-      <Panel
-        title="流程模板"
-        subtitle="模板目录加载失败，不影响项目阶段矩阵查看。"
-        className="mt-12"
-      >
+      <Panel title="流程模板" subtitle="模板目录加载失败，不影响项目阶段矩阵查看。" className="mt-12">
         <p className="form-error">{error ?? '暂无流程模板'}</p>
         <button className="btn btn-secondary btn-sm" onClick={onRetry}>重试</button>
       </Panel>
     );
   }
 
-  const visibleResources = template.resources.filter((item) => ['project', 'requirement', 'task', 'sprint'].includes(item.resource));
+  const visibleResources = (activeTemplate.resources || []).filter((item) =>
+    ['project', 'requirement', 'task', 'sprint'].includes(item.resource),
+  );
 
   return (
     <Panel
       title="流程模板"
-      subtitle={`${template.name} · ${template.mode === 'fixed' ? '固定模板' : template.mode} · v${template.version}`}
+      subtitle={`${activeTemplate.name} · ${activeTemplate.mode === 'fixed' ? '固定模板' : activeTemplate.mode || 'configurable'} · ${activeTemplate.version}${activeTemplate.status ? ` · ${activeTemplate.status}` : ''}`}
       className="mt-12"
     >
-      <p className="text-secondary" style={{ marginTop: 0 }}>{template.description}</p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+        <label className="text-secondary" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          查看模板
+          <select
+            className="form-input"
+            style={{ minWidth: 260 }}
+            value={activeTemplate.id}
+            onChange={(event) => onSelectTemplate(event.target.value)}
+          >
+            {templates.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.name}
+                {template.builtin ? '（内置）' : ''}
+                {template.status ? ` · ${template.status}` : ''}
+                {template.version ? ` · ${template.version}` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        {canAdmin && (
+          <>
+            <input
+              className="form-input"
+              style={{ minWidth: 180 }}
+              value={draftName}
+              onChange={(event) => onDraftNameChange(event.target.value)}
+              placeholder="新草稿名称"
+            />
+            <button className="btn btn-secondary btn-sm" disabled={creating} onClick={onCreateDraft}>
+              {creating ? '创建中...' : '新建草稿模板'}
+            </button>
+            {!activeTemplate.builtin && activeTemplate.status === 'draft' && (
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={publishingId === activeTemplate.id}
+                onClick={() => onPublish(activeTemplate.id)}
+              >
+                {publishingId === activeTemplate.id ? '发布中...' : '发布当前草稿'}
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      {actionError && <p className="form-error">{actionError}</p>}
+      {actionOk && <p className="text-secondary" style={{ color: 'var(--color-success, #16a34a)' }}>{actionOk}</p>}
+
+      <p className="text-secondary" style={{ marginTop: 0 }}>{activeTemplate.description}</p>
       <div className="flow-stepper" style={{ marginTop: 12 }}>
-        {template.stages.map((stage, index) => (
+        {activeTemplate.stages.map((stage, index) => (
           <div key={stage.id} className="flow-step">
             <span className="flow-step-node">{index + 1}</span>
             <span className="flow-step-label" title={stage.description}>{stage.label}</span>
-            {index < template.stages.length - 1 && <span className="flow-step-connector filled" />}
+            {index < activeTemplate.stages.length - 1 && <span className="flow-step-connector filled" />}
           </div>
         ))}
       </div>
@@ -159,14 +325,17 @@ function WorkflowTemplatePanel({
         <div>
           <div className="section-title">状态流转契约</div>
           <div className="mt-8" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {visibleResources.length === 0 && (
+              <p className="text-secondary">自定义模板可仅定义阶段目录；资源状态机默认沿用系统固定契约。</p>
+            )}
             {visibleResources.map((resource) => (
               <div key={resource.resource} className="panel-soft" style={{ padding: 10 }}>
                 <div className="font-medium">{resource.label}</div>
                 <p className="text-secondary" style={{ margin: '4px 0 0', fontSize: 12 }}>
-                  {Object.entries(resource.transitions)
+                  {Object.entries(resource.transitions || {})
                     .filter(([, next]) => next.length > 0)
                     .map(([from, next]) => `${from} → ${next.join('/')}`)
-                    .join('；')}
+                    .join('；') || '无显式流转配置'}
                 </p>
               </div>
             ))}
@@ -175,7 +344,8 @@ function WorkflowTemplatePanel({
         <div>
           <div className="section-title">治理边界</div>
           <ul className="text-secondary" style={{ margin: '8px 0 0', paddingLeft: 18 }}>
-            {template.guardrails.map((item) => <li key={item}>{item}</li>)}
+            {(activeTemplate.guardrails || []).map((item) => <li key={item}>{item}</li>)}
+            {!(activeTemplate.guardrails || []).length && <li>无附加治理说明</li>}
           </ul>
         </div>
       </div>
@@ -190,6 +360,13 @@ function ProjectFlowDetail({ projectId }: { projectId: string }) {
 
   return (
     <div className="flow-detail">
+      {data.workflow?.templateName && (
+        <p className="text-secondary" style={{ marginTop: 0 }}>
+          绑定模板：{data.workflow.templateName}
+          {data.workflow.templateVersion ? ` · ${data.workflow.templateVersion}` : ''}
+          {data.workflow.mode ? ` · ${data.workflow.mode}` : ''}
+        </p>
+      )}
       <FlowPipeline gates={data.gates} />
       <div className="grid-2 mt-12">
         <div>
