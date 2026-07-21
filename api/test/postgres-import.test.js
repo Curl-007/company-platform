@@ -393,3 +393,28 @@ test("fake-pool import streams rows by tableOrder and rolls back on mid-table fa
 	  assert.match(stmts[0], /CREATE TABLE t/);
 	  assert.match(stmts[1], /DEFAULT 'a;b'/);
 	});
+
+	test("splitSqlStatements keeps DDL that follows leading header comments", () => {
+	  // Regression: baseline.sql starts with `--` banners before schema_migrations.
+	  const statements = splitSqlStatements(`
+-- PostgreSQL baseline header
+-- second comment line
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  id TEXT PRIMARY KEY,
+  checksum TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY
+);
+`);
+	  assert.equal(statements.length, 2);
+	  assert.match(statements[0], /CREATE TABLE IF NOT EXISTS schema_migrations/);
+	  assert.match(statements[1], /CREATE TABLE IF NOT EXISTS users/);
+	  // Real baseline must still surface schema_migrations as first applied DDL.
+	  const baseline = fs.readFileSync(DEFAULT_BASELINE, "utf8");
+	  const baselineStatements = splitSqlStatements(baseline);
+	  assert.ok(baselineStatements.some((sql) => /schema_migrations/i.test(sql)));
+	  assert.match(baselineStatements[0], /schema_migrations/i);
+	});

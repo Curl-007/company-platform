@@ -99,9 +99,15 @@ function preflightDatabase(db, { expectedTables = CORE_TABLES } = {}) {
 
   for (const [childTable, childColumn, parentTable, parentColumn] of REFERENCE_RULES) {
     if (!tableNames.has(childTable) || !tableNames.has(parentTable) || !columns.get(childTable).has(childColumn) || !columns.get(parentTable).has(parentColumn)) continue;
+    // Synthetic system actors (e.g. migration repair) are intentional non-user ids.
+    const systemActorClause =
+      childTable === "audit_logs" && childColumn === "actor_id"
+        ? ` AND child.${quoted(childColumn)} NOT LIKE 'system:%' AND child.${quoted(childColumn)} != 'system'`
+        : "";
     const count = db.prepare(
       `SELECT COUNT(*) AS count FROM ${quoted(childTable)} child
        WHERE child.${quoted(childColumn)} IS NOT NULL AND child.${quoted(childColumn)} != ''
+         ${systemActorClause}
          AND NOT EXISTS (SELECT 1 FROM ${quoted(parentTable)} parent WHERE parent.${quoted(parentColumn)} = child.${quoted(childColumn)})`,
     ).get().count;
     if (count) referenceViolations.push({ childTable, childColumn, parentTable, parentColumn, count });

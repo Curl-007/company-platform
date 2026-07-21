@@ -84,6 +84,32 @@ npm run start -w api
 - Canonical DDL：`api/src/db/schema/postgres-baseline.sql`（无 SQL FK；JSON 列保持 TEXT；含 `leave_records`）。
 - SQLite 路径仍使用 `api/db.js` initDb + `api/migrations/*.js`（含 `20260720_17_leave_records`）。PG **不**跑逐条 JS migration 的 DDL。
 
+## 本地真库冒烟（W6 已验证路径）
+
+以下在开发机用独立数据目录起 PostgreSQL（示例端口 `55432`、库名 `pm_w6`，`trust` 仅限本机临时集群）已跑通：
+
+```powershell
+# 假设本机 PG 可连，且 POSTGRES_TARGET_URL 指向空库
+$env:POSTGRES_TARGET_URL = "postgres://postgres@127.0.0.1:55432/pm_w6"
+
+npm run preflight:database -w api -- --json
+npm run export:postgres -w api -- --out C:\tmp\pm-export
+npm run verify:postgres-export -w api -- --dir C:\tmp\pm-export --json
+npm run apply:postgres-schema -w api -- --connection $env:POSTGRES_TARGET_URL
+npm run import:postgres -w api -- --dir C:\tmp\pm-export --connection $env:POSTGRES_TARGET_URL
+npm run generate:postgres-target-report -w api -- --dir C:\tmp\pm-export --out C:\tmp\pm-report.json --connection $env:POSTGRES_TARGET_URL
+npm run reconcile:postgres-import -w api -- --dir C:\tmp\pm-export --target-report C:\tmp\pm-report.json --json
+
+$env:DATABASE_DIALECT = "postgres"
+$env:DATABASE_URL = $env:POSTGRES_TARGET_URL
+npm run start -w api
+# 使用已导入用户登录（demo 种子 admin@example.com / Admin@123，若库来自默认 seed）
+```
+
+**已知修复**：`apply-postgres-schema` 的 SQL 拆分须剥离语句前的 `--` 文件头注释，否则会丢掉第一条 `CREATE TABLE schema_migrations` 并导致整事务回滚。
+
+**预检说明**：`audit_logs.actor_id` 允许 `system` / `system:%` 合成主体（如 migration repair），不强制对应用户行。
+
 ## 导入与验收门禁
 
 > **注意**：以下步骤用于隔离目标库的数据迁移与对账。完成后再按上文「用 PostgreSQL 启动 API」切换读写。本地/CI 默认仍为 sqlite。

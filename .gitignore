@@ -13,6 +13,8 @@ api/uploads/
 api/app.db*
 api/storage/
 api/backups/
+api/.tmp-w6*/
+api/.tmp-w6*
 
 # Playwright / local smoke artifacts
 web/test-results/

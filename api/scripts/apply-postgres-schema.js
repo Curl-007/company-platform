@@ -5,7 +5,7 @@
  * PostgreSQL empty databases use the final-state baseline SQL, then bookkeeping rows
  * in schema_migrations so export manifest appliedMigrations can be reconciled.
  *
- * Runtime remains fail-closed (DATABASE_DIALECT=postgres not enabled).
+ * Wave 5+: DATABASE_DIALECT=postgres may start the API after schema apply.
  */
 const crypto = require("crypto");
 const fs = require("fs");
@@ -45,6 +45,19 @@ function listMigrationFiles(migrationsDir) {
     });
 }
 
+function stripLeadingSqlComments(sqlFragment) {
+  // Drop full-line `--` comments so a statement that follows a header
+  // (e.g. CREATE schema_migrations after baseline banners) is not discarded.
+  return String(sqlFragment || "")
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      return trimmed && !trimmed.startsWith("--");
+    })
+    .join("\n")
+    .trim();
+}
+
 function splitSqlStatements(sqlText) {
   const text = String(sqlText || "");
   const statements = [];
@@ -71,15 +84,15 @@ function splitSqlStatements(sqlText) {
       continue;
     }
     if (ch === ";" && !inSingle && !inDouble) {
-      const trimmed = current.trim();
-      if (trimmed && !trimmed.startsWith("--")) statements.push(trimmed);
+      const cleaned = stripLeadingSqlComments(current);
+      if (cleaned) statements.push(cleaned);
       current = "";
       continue;
     }
     current += ch;
   }
-  const tail = current.trim();
-  if (tail && !tail.startsWith("--")) statements.push(tail);
+  const tail = stripLeadingSqlComments(current);
+  if (tail) statements.push(tail);
   return statements;
 }
 

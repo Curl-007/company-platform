@@ -59,7 +59,7 @@ routes/services
 | W3 | PG baseline schema + dual migrations | **完成**（`postgres-baseline.sql` + SQLite `initDb`/JS migrations） |
 | W4 | import NDJSON | **完成**（`import-ndjson-to-postgres.js` + fake-pool 单测；真库集成验收待 W6） |
 | W5 | 全路径 async + 解除 fail-closed + schema 对齐 | **完成（代码）**（见下；真 PG 端到端仍归 W6） |
-| W6 | 门控 PG 集成 + 可选 CI service | **部分完成**（`postgres-gated-integration.test.js` 有 URL 时跑真库 smoke；无 URL 默认 skip 断言；CI service 仍可选） |
+| W6 | 门控 PG 集成 + 可选 CI service | **完成（本地真库）**：export→apply→import→reconcile 对账 PASS；`DATABASE_DIALECT=postgres` API 登录/列表 smoke PASS；门控单测有 URL 时跑真库；CI service 仍可选 |
 | W7 | runbook 生产切换/回滚演练 | 待办（runbook 已写启用步骤；生产演练待做） |
 
 粗估合计：**9–16 人日**（主风险在 W5；代码路径已落地）。
@@ -122,11 +122,12 @@ preflight → export:postgres → verify
 ## 8. 验收（DoD）
 
 - [x] 默认 SQLite：`npm run test -w api` 全绿（含 access-contract、sql-dialect、database-runtime、postgres-access）
-- [ ] 真 PG：init + import 对账 + smoke（本环境无 daemon 时 not_run；`RUN_PG_INTEGRATION`/`POSTGRES_TARGET_URL` 可门控）
+- [x] 真 PG：init + import 对账 + smoke（本地 PG 17 端口 55432 / `pm_w6`；40 表 359 行 reconcile ok；API login+projects 200）
 - [x] W5：`createDatabaseRuntime` 允许 postgres（需 URL；可注入 Pool 单测证明）
 - [x] 无 pgvector 蔓延；runbook 可回滚 SQLite（基线 SQL 确认无 JSONB/VECTOR/FK）
 - [x] `leave_records`：`initDb` / `CORE_TABLES` / migration `20260720_17_leave_records` + preflight 引用规则已对齐
-- [x] W6 门控测试骨架：`api/test/postgres-gated-integration.test.js`（有可达 URL 时真库 schema+CRUD）
+- [x] W6 门控测试：`api/test/postgres-gated-integration.test.js`（有可达 URL 时真库 schema+CRUD）
+- [x] `apply-postgres-schema` 修复：leading `--` 注释后的 `CREATE schema_migrations` 不再被丢弃
 
 ## 9. 建议 commit 切片
 
