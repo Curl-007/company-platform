@@ -7575,7 +7575,7 @@ html {
 }
 
 
-/* Products page: workbench + product list flush (almost stuck) */
+/* Products page: metrics + list flush inside one workbench panel */
 .products-page {
   gap: 2px !important;
 }
@@ -7601,17 +7601,81 @@ html {
   gap: 0 !important;
   min-width: 0;
 }
-.products-page-body > .panel,
 .products-page-body .product-workbench,
 .products-page-body .management-workbench {
   width: 100%;
-}
-.products-page-body .product-workbench,
-.products-page-body .management-workbench {
   gap: 0 !important;
 }
-/* Collapse the seam between 产品工作台 panel and 产品清单 row */
-.products-page-body .product-workbench > .panel,
+.products-page-body .product-workbench-main > .panel-header {
+  padding: 10px 14px !important;
+}
+.products-page-body .product-workbench-main > .panel-body {
+  padding: 0 !important;
+}
+.products-page-body .product-workbench-metrics {
+  padding: 8px 12px 6px !important;
+  margin: 0 !important;
+  border-bottom: 1px solid var(--border-divider);
+}
+.products-page-body .product-workbench-metrics .product-metric-strip,
+.products-page-body .product-workbench-metrics .metric-grid.product-metric-strip {
+  gap: 6px !important;
+  margin: 0 !important;
+}
+.products-page-body .product-workbench-metrics .metric-card {
+  padding: 8px 10px !important;
+  min-height: 0 !important;
+}
+.products-page-body .product-workbench-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 0 !important;
+  margin: 0 !important;
+  align-items: stretch;
+}
+.products-page-body .product-list-pane {
+  position: sticky;
+  top: 56px;
+  align-self: start;
+  margin: 0 !important;
+  border: none !important;
+  border-right: 1px solid var(--border-divider) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  overflow: hidden;
+}
+.products-page-body .product-list-pane::before {
+  display: none !important;
+}
+.products-page-body .product-list-pane-header {
+  padding: 8px 12px;
+  font-size: var(--fs-section-title);
+  font-weight: 700;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-divider);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent);
+}
+.products-page-body .product-list {
+  padding: 4px 6px 8px !important;
+  gap: 0 !important;
+}
+.products-page-body .product-detail-pane {
+  margin: 0 !important;
+  padding: 12px 14px 16px !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.products-page-body .product-detail-pane::before {
+  display: none !important;
+}
+/* management tabs keep previous tight spacing */
 .products-page-body .management-workbench > .panel {
   margin: 0 !important;
   border-bottom: none !important;
@@ -7619,59 +7683,30 @@ html {
   border-bottom-right-radius: 0 !important;
   box-shadow: none !important;
 }
-.products-page-body .product-workbench-grid,
 .products-page-body .management-grid {
   gap: 0 !important;
-  margin-top: -1px !important; /* overlap shared border with workbench panel */
-  column-gap: 0 !important;
-  row-gap: 0 !important;
+  margin-top: -1px !important;
 }
-.products-page-body .product-list-pane,
 .products-page-body .management-list-pane,
-.products-page-body .product-detail-pane,
 .products-page-body .management-detail-pane {
   margin: 0 !important;
   box-shadow: none !important;
-}
-.products-page-body .product-list-pane,
-.products-page-body .management-list-pane {
-  top: 56px;
   border-top-left-radius: 0 !important;
   border-top-right-radius: 0 !important;
+}
+.products-page-body .management-list-pane {
   border-right: none !important;
 }
-.products-page-body .product-detail-pane,
-.products-page-body .management-detail-pane {
-  border-top-left-radius: 0 !important;
-  border-top-right-radius: 0 !important;
-}
-.products-page-body .product-workbench > .panel .panel-header,
 .products-page-body .management-workbench > .panel .panel-header {
   padding: 8px 12px !important;
 }
-.products-page-body .product-workbench > .panel .panel-body,
 .products-page-body .management-workbench > .panel .panel-body {
   padding: 6px 12px 8px !important;
 }
-.products-page-body .product-list-pane .panel-header,
 .products-page-body .management-list-pane .panel-header {
   padding: 8px 12px !important;
 }
-.products-page-body .product-list-pane .panel-body,
-.products-page-body .management-list-pane .panel-body {
-  padding: 0 !important;
-}
-.products-page-body .product-list,
 .products-page-body .management-list {
   padding: 0 6px 6px !important;
   gap: 0 !important;
-}
-.products-page-body .product-metric-strip,
-.products-page-body .product-metric-strip.metric-bar,
-.products-page-body .metric-grid.product-metric-strip {
-  gap: 6px !important;
-  margin: 0 !important;
-}
-.products-page-body .product-metric-strip .metric-card {
-  padding: 8px 10px !important;
 }

@@ -95,40 +95,44 @@ export default function ProductsTab() {
           <PageState loading={false} error={null} isEmpty emptyTitle="暂无产品" emptyDescription="当前还没有录入任何产品信息。" />
         </Panel>
       ) : (
-        <div className="product-workbench">
+        <div className="product-workbench product-workbench-flush">
           <Panel
+            className="product-workbench-main"
             title="产品工作台"
             subtitle="把产品当成真实交付对象维护：图片、版本、负责人、能力模块、资产参数和后续路线图都在这里闭环。"
             toolbar={canManageProducts ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建产品</button> : undefined}
+            noPadding
           >
-            <ProductSummaryStrip products={products} />
-          </Panel>
+            <div className="product-workbench-metrics">
+              <ProductSummaryStrip products={products} />
+            </div>
 
-          <div className="product-workbench-grid">
-            <Panel className="product-list-pane" title="产品清单" noPadding>
-              <div className="product-list">
-                {products.map((product) => (
-                  <button
-                    key={product.id}
-                    className={`product-list-item ${selectedProduct?.id === product.id ? 'active' : ''}`}
-                    onClick={() => setSelectedId(product.id)}
-                  >
-                    <span className="product-list-thumb">
-                      {currentProductImage(product) ? <ProductImage src={currentProductImage(product)} alt={product.name} /> : product.name.slice(0, 1)}
-                    </span>
-                    <span className="product-list-main">
-                      <strong>{product.name}</strong>
-                      <small>{product.owner} · {product.version}</small>
-                    </span>
-                    <StatusBadge status={productStageTone(product.stage)} label={labelOf(PRODUCT_STAGE_LABELS, product.stage)} showDot={false} />
-                  </button>
-                ))}
+            <div className="product-workbench-grid">
+              <div className="product-list-pane">
+                <div className="product-list-pane-header">产品清单</div>
+                <div className="product-list">
+                  {products.map((product) => (
+                    <button
+                      key={product.id}
+                      className={`product-list-item ${selectedProduct?.id === product.id ? 'active' : ''}`}
+                      onClick={() => setSelectedId(product.id)}
+                    >
+                      <span className="product-list-thumb">
+                        {currentProductImage(product) ? <ProductImage src={currentProductImage(product)} alt={product.name} /> : product.name.slice(0, 1)}
+                      </span>
+                      <span className="product-list-main">
+                        <strong>{product.name}</strong>
+                        <small>{product.owner} · {product.version}</small>
+                      </span>
+                      <StatusBadge status={productStageTone(product.stage)} label={labelOf(PRODUCT_STAGE_LABELS, product.stage)} showDot={false} />
+                    </button>
+                  ))}
+                </div>
               </div>
-            </Panel>
 
-            {selectedProduct ? (
-              <Panel className="product-detail-pane">
-                <div className="product-hero">
+              {selectedProduct ? (
+                <div className="product-detail-pane">
+                  <div className="product-hero">
                   <div className="product-hero-media">
                     {currentProductImage(selectedProduct) ? (
                       <ProductImage src={currentProductImage(selectedProduct)} alt={selectedProduct.name} fallbackClassName="product-hero-empty" />
@@ -269,9 +273,10 @@ export default function ProductsTab() {
                     )}
                   </div>
                 </div>
-              </Panel>
+              </div>
             ) : null}
-          </div>
+            </div>
+          </Panel>
         </div>
       )}
 
