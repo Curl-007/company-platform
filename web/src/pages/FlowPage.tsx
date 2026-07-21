@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { fetchFlowOverview, fetchProjectFlow } from '../features/projects/api';
 import {
+  cloneWorkflowTemplate,
   createWorkflowTemplate,
   fetchWorkflowTemplates,
   publishWorkflowTemplate,
+  updateWorkflowTemplate,
 } from '../features/workflow/api';
 import { useAsync } from '../hooks/useAsync';
 import { getSessionUser } from '../services/auth';
@@ -13,7 +15,7 @@ import Panel from '../components/common/Panel';
 import PageState from '../components/common/PageState';
 import FlowPipeline from '../components/common/FlowPipeline';
 import DefectFunnel from '../components/common/DefectFunnel';
-import type { FlowOverviewItem, ProjectFlow, GateState, WorkflowTemplate } from '../types';
+import type { FlowOverviewItem, ProjectFlow, GateState, WorkflowStage, WorkflowTemplate } from '../types';
 
 const DEFAULT_STAGE_LABELS: Record<string, string> = {
   initiation: '立项',
@@ -35,6 +37,22 @@ const STATE_DOT: Record<GateState, string> = {
 
 const DEFAULT_STAGE_ORDER = ['initiation', 'requirement', 'design', 'development', 'testing', 'acceptance', 'release'];
 
+type EditableStage = {
+  key: string;
+  id: string;
+  label: string;
+  description: string;
+};
+
+function toEditableStages(stages: WorkflowStage[] | undefined): EditableStage[] {
+  return (stages || []).map((stage, index) => ({
+    key: `${stage.id || 'stage'}-${index}-${Math.random().toString(36).slice(2, 7)}`,
+    id: stage.id || `stage_${index + 1}`,
+    label: stage.label || stage.id || `阶段${index + 1}`,
+    description: stage.description || '',
+  }));
+}
+
 function FlowPage() {
   const sessionUser = getSessionUser();
   const canAdmin = canOperate(sessionUser, 'admin:*') || sessionUser?.role === 'admin';
@@ -49,11 +67,15 @@ function FlowPage() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
-  const [creating, setCreating] = useState(false);
-  const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionOk, setActionOk] = useState<string | null>(null);
-  const [draftName, setDraftName] = useState('自定义轻量交付');
+
+  // editable draft fields
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editStages, setEditStages] = useState<EditableStage[]>([]);
+  const [dirty, setDirty] = useState(false);
 
   const templates = templateCatalog?.templates ?? [];
   const activeTemplate = useMemo(() => {
@@ -62,56 +84,158 @@ function FlowPage() {
     return templates[0];
   }, [templates, selectedTemplateId]);
 
-  const stageOrder = activeTemplate?.stages?.map((stage) => stage.id) ?? DEFAULT_STAGE_ORDER;
+  useEffect(() => {
+    if (!activeTemplate) return;
+    setEditName(activeTemplate.name || '');
+    setEditDescription(activeTemplate.description || '');
+    setEditStages(toEditableStages(activeTemplate.stages));
+    setDirty(false);
+  }, [activeTemplate?.id, activeTemplate?.updatedAt, activeTemplate?.version, activeTemplate?.status]);
+
+  const stageOrder = (dirty ? editStages.map((s) => s.id) : activeTemplate?.stages?.map((stage) => stage.id))
+    ?? DEFAULT_STAGE_ORDER;
   const stageLabels = useMemo(() => {
     const map = { ...DEFAULT_STAGE_LABELS };
-    activeTemplate?.stages?.forEach((stage) => {
+    const source = dirty ? editStages : (activeTemplate?.stages || []);
+    source.forEach((stage) => {
       map[stage.id] = stage.label || stage.id;
     });
     return map;
-  }, [activeTemplate]);
+  }, [activeTemplate, editStages, dirty]);
 
-  async function handleCreateDraft() {
-    if (!canAdmin) return;
-    setCreating(true);
+  const canEditCurrent = Boolean(canAdmin && activeTemplate && !activeTemplate.builtin && activeTemplate.status === 'draft');
+
+  async function runAction(label: string, fn: () => Promise<void>) {
+    setBusy(true);
     setActionError(null);
     setActionOk(null);
     try {
-      const created = await createWorkflowTemplate({
-        name: draftName.trim() || '自定义流程模板',
-        description: '从流程页创建的可配置模板草稿，可再发布并绑定到项目。',
-        stages: [
-          { id: 'initiation', label: '启动' },
-          { id: 'development', label: '开发' },
-          { id: 'testing', label: '测试' },
-          { id: 'release', label: '发布' },
-        ],
-        guardrails: ['工作日志/工时/容量不用于个人绩效评价。'],
-      });
-      setActionOk(`已创建草稿 ${created.id}`);
-      setSelectedTemplateId(created.id);
+      await fn();
+      setActionOk(label);
       await reloadTemplates();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : '创建失败');
+      setActionError(err instanceof Error ? err.message : '操作失败');
     } finally {
-      setCreating(false);
+      setBusy(false);
     }
   }
 
-  async function handlePublish(templateId: string) {
+  async function handleCreateBlankDraft() {
     if (!canAdmin) return;
-    setPublishingId(templateId);
-    setActionError(null);
-    setActionOk(null);
-    try {
-      const published = await publishWorkflowTemplate(templateId);
-      setActionOk(`已发布 ${published.name}（${published.version}）`);
-      await reloadTemplates();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : '发布失败');
-    } finally {
-      setPublishingId(null);
+    await runAction('已创建空白草稿', async () => {
+      const created = await createWorkflowTemplate({
+        name: '新流程草稿',
+        description: '可编辑阶段名称、顺序与说明，保存后发布并绑定到项目。',
+        stages: [
+          { id: 'initiation', label: '启动', description: '' },
+          { id: 'development', label: '开发', description: '' },
+          { id: 'testing', label: '测试', description: '' },
+          { id: 'release', label: '发布', description: '' },
+        ],
+        guardrails: ['工作日志/工时/容量不用于个人绩效评价。'],
+      });
+      setSelectedTemplateId(created.id);
+      setDirty(false);
+    });
+  }
+
+  async function handleCloneCurrent() {
+    if (!canAdmin || !activeTemplate) return;
+    await runAction('已复制为可编辑草稿', async () => {
+      const cloned = await cloneWorkflowTemplate(activeTemplate.id, {
+        name: `${activeTemplate.name}（可编辑副本）`,
+        description: activeTemplate.description,
+        stages: activeTemplate.stages,
+        guardrails: activeTemplate.guardrails,
+        processModes: activeTemplate.processModes,
+      });
+      setSelectedTemplateId(cloned.id);
+      setDirty(false);
+    });
+  }
+
+  async function handleSaveDraft() {
+    if (!canEditCurrent || !activeTemplate) return;
+    const stages = editStages
+      .map((stage) => ({
+        id: stage.id.trim(),
+        label: stage.label.trim(),
+        description: stage.description.trim(),
+      }))
+      .filter((stage) => stage.id && stage.label);
+    if (!stages.length) {
+      setActionError('至少保留一个有效阶段（ID + 名称）');
+      return;
     }
+    const ids = stages.map((s) => s.id);
+    if (new Set(ids).size !== ids.length) {
+      setActionError('阶段 ID 不能重复');
+      return;
+    }
+    await runAction('草稿已保存', async () => {
+      await updateWorkflowTemplate(activeTemplate.id, {
+        name: editName.trim() || activeTemplate.name,
+        description: editDescription,
+        stages,
+        guardrails: activeTemplate.guardrails || [],
+        processModes: activeTemplate.processModes || [],
+      });
+      setDirty(false);
+    });
+  }
+
+  async function handlePublish() {
+    if (!canEditCurrent || !activeTemplate) return;
+    if (dirty) {
+      setActionError('请先保存草稿，再发布');
+      return;
+    }
+    await runAction(`已发布 ${activeTemplate.name}`, async () => {
+      const published = await publishWorkflowTemplate(activeTemplate.id);
+      setSelectedTemplateId(published.id);
+    });
+  }
+
+  function updateStage(key: string, patch: Partial<EditableStage>) {
+    setEditStages((prev) => prev.map((stage) => (stage.key === key ? { ...stage, ...patch } : stage)));
+    setDirty(true);
+    setActionOk(null);
+  }
+
+  function moveStage(key: string, direction: -1 | 1) {
+    setEditStages((prev) => {
+      const index = prev.findIndex((stage) => stage.key === key);
+      if (index < 0) return prev;
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      const [item] = next.splice(index, 1);
+      next.splice(target, 0, item);
+      return next;
+    });
+    setDirty(true);
+    setActionOk(null);
+  }
+
+  function removeStage(key: string) {
+    setEditStages((prev) => (prev.length <= 1 ? prev : prev.filter((stage) => stage.key !== key)));
+    setDirty(true);
+    setActionOk(null);
+  }
+
+  function addStage() {
+    const n = editStages.length + 1;
+    setEditStages((prev) => [
+      ...prev,
+      {
+        key: `new-${Date.now()}-${n}`,
+        id: `stage_${n}`,
+        label: `新阶段${n}`,
+        description: '',
+      },
+    ]);
+    setDirty(true);
+    setActionOk(null);
   }
 
   if (loading || error || !overview) {
@@ -138,25 +262,166 @@ function FlowPage() {
         <span className="flow-legend-item"><span className="flow-legend-dot" style={{ background: STATE_DOT.pending }} />未开始</span>
       </div>
 
-      <WorkflowTemplatePanel
-        templates={templates}
-        activeTemplate={activeTemplate}
-        loading={templateLoading}
-        error={templateError}
-        canAdmin={canAdmin}
-        draftName={draftName}
-        creating={creating}
-        publishingId={publishingId}
-        actionError={actionError}
-        actionOk={actionOk}
-        onDraftNameChange={setDraftName}
-        onSelectTemplate={setSelectedTemplateId}
-        onCreateDraft={handleCreateDraft}
-        onPublish={handlePublish}
-        onRetry={reloadTemplates}
-      />
+      <Panel
+        title="流程模板（可编辑）"
+        subtitle={activeTemplate
+          ? `${activeTemplate.name} · ${activeTemplate.builtin ? '内置' : (activeTemplate.status || 'custom')} · ${activeTemplate.version}${dirty ? ' · 未保存' : ''}`
+          : '加载模板中'}
+        className="mt-12"
+      >
+        {templateLoading && <p className="text-secondary">正在读取模板...</p>}
+        {templateError && <p className="form-error">{templateError}</p>}
 
-      <Panel title="项目阶段矩阵" subtitle="点击项目行可展开查看详细流程；列顺序跟随当前选中模板" className="mt-12">
+        {activeTemplate && (
+          <>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+              <label className="text-secondary" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                当前模板
+                <select
+                  className="form-input"
+                  style={{ minWidth: 280 }}
+                  value={activeTemplate.id}
+                  disabled={busy}
+                  onChange={(event) => {
+                    setSelectedTemplateId(event.target.value);
+                    setActionError(null);
+                    setActionOk(null);
+                  }}
+                >
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                      {template.builtin ? '（内置）' : ''}
+                      {template.status ? ` · ${template.status}` : ''}
+                      {template.version ? ` · ${template.version}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {canAdmin && (
+                <>
+                  <button className="btn btn-secondary btn-sm" disabled={busy} onClick={handleCreateBlankDraft}>新建空白草稿</button>
+                  <button className="btn btn-secondary btn-sm" disabled={busy} onClick={handleCloneCurrent}>复制为可编辑草稿</button>
+                  {canEditCurrent && (
+                    <>
+                      <button className="btn btn-primary btn-sm" disabled={busy || !dirty} onClick={handleSaveDraft}>
+                        {busy ? '处理中...' : '保存草稿'}
+                      </button>
+                      <button className="btn btn-primary btn-sm" disabled={busy || dirty} onClick={handlePublish}>
+                        发布草稿
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+              <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => reloadTemplates()}>刷新模板</button>
+            </div>
+
+            {actionError && <p className="form-error">{actionError}</p>}
+            {actionOk && <p className="text-secondary" style={{ color: 'var(--color-success, #16a34a)' }}>{actionOk}</p>}
+
+            {!canAdmin && (
+              <p className="text-secondary">当前账号只读。管理员可复制内置模板为草稿后，直接改阶段名称/顺序并发布。</p>
+            )}
+
+            {canAdmin && !canEditCurrent && (
+              <p className="text-secondary">
+                内置或已发布模板不可直接改。请点「复制为可编辑草稿」，改完再「保存草稿」并「发布草稿」，然后到项目详情绑定。
+              </p>
+            )}
+
+            <div className="grid-2" style={{ gap: 12 }}>
+              <label className="text-secondary" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                模板名称
+                <input
+                  className="form-input"
+                  value={editName}
+                  disabled={!canEditCurrent || busy}
+                  onChange={(e) => {
+                    setEditName(e.target.value);
+                    setDirty(true);
+                    setActionOk(null);
+                  }}
+                />
+              </label>
+              <label className="text-secondary" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                模板说明
+                <input
+                  className="form-input"
+                  value={editDescription}
+                  disabled={!canEditCurrent || busy}
+                  onChange={(e) => {
+                    setEditDescription(e.target.value);
+                    setDirty(true);
+                    setActionOk(null);
+                  }}
+                />
+              </label>
+            </div>
+
+            <div className="section-title" style={{ marginTop: 16 }}>阶段列表（可增删改排序）</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+              {editStages.map((stage, index) => (
+                <div key={stage.key} className="panel-soft" style={{ padding: 12 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                    <span className="text-mono" style={{ minWidth: 28 }}>{index + 1}</span>
+                    <input
+                      className="form-input"
+                      style={{ width: 140 }}
+                      placeholder="阶段ID"
+                      value={stage.id}
+                      disabled={!canEditCurrent || busy}
+                      onChange={(e) => updateStage(stage.key, { id: e.target.value })}
+                    />
+                    <input
+                      className="form-input"
+                      style={{ width: 160 }}
+                      placeholder="阶段名称"
+                      value={stage.label}
+                      disabled={!canEditCurrent || busy}
+                      onChange={(e) => updateStage(stage.key, { label: e.target.value })}
+                    />
+                    <input
+                      className="form-input"
+                      style={{ flex: 1, minWidth: 180 }}
+                      placeholder="阶段说明（可选）"
+                      value={stage.description}
+                      disabled={!canEditCurrent || busy}
+                      onChange={(e) => updateStage(stage.key, { description: e.target.value })}
+                    />
+                    {canEditCurrent && (
+                      <>
+                        <button className="btn btn-secondary btn-sm" disabled={busy || index === 0} onClick={() => moveStage(stage.key, -1)}>上移</button>
+                        <button className="btn btn-secondary btn-sm" disabled={busy || index === editStages.length - 1} onClick={() => moveStage(stage.key, 1)}>下移</button>
+                        <button className="btn btn-secondary btn-sm" disabled={busy || editStages.length <= 1} onClick={() => removeStage(stage.key)}>删除</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {canEditCurrent && (
+              <div style={{ marginTop: 10 }}>
+                <button className="btn btn-secondary btn-sm" disabled={busy} onClick={addStage}>新增阶段</button>
+              </div>
+            )}
+
+            <div className="flow-stepper" style={{ marginTop: 16 }}>
+              {editStages.map((stage, index) => (
+                <div key={`preview-${stage.key}`} className="flow-step">
+                  <span className="flow-step-node">{index + 1}</span>
+                  <span className="flow-step-label" title={stage.description}>{stage.label || stage.id}</span>
+                  {index < editStages.length - 1 && <span className="flow-step-connector filled" />}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </Panel>
+
+      <Panel title="项目阶段矩阵" subtitle="点击项目行可展开详情；列顺序跟随当前选中模板" className="mt-12">
         <div className="flow-matrix">
           <div className="flow-matrix-row flow-matrix-header">
             <div className="flow-matrix-cell flow-matrix-project">项目</div>
@@ -201,155 +466,6 @@ function FlowPage() {
         </div>
       </Panel>
     </div>
-  );
-}
-
-function WorkflowTemplatePanel({
-  templates,
-  activeTemplate,
-  loading,
-  error,
-  canAdmin,
-  draftName,
-  creating,
-  publishingId,
-  actionError,
-  actionOk,
-  onDraftNameChange,
-  onSelectTemplate,
-  onCreateDraft,
-  onPublish,
-  onRetry,
-}: {
-  templates: WorkflowTemplate[];
-  activeTemplate: WorkflowTemplate | null;
-  loading: boolean;
-  error: string | null;
-  canAdmin: boolean;
-  draftName: string;
-  creating: boolean;
-  publishingId: string | null;
-  actionError: string | null;
-  actionOk: string | null;
-  onDraftNameChange: (value: string) => void;
-  onSelectTemplate: (id: string) => void;
-  onCreateDraft: () => void;
-  onPublish: (id: string) => void;
-  onRetry: () => void;
-}) {
-  if (loading) {
-    return (
-      <Panel title="流程模板" subtitle="正在读取模板目录..." className="mt-12">
-        <p className="text-secondary">加载中...</p>
-      </Panel>
-    );
-  }
-
-  if (error || !activeTemplate) {
-    return (
-      <Panel title="流程模板" subtitle="模板目录加载失败，不影响项目阶段矩阵查看。" className="mt-12">
-        <p className="form-error">{error ?? '暂无流程模板'}</p>
-        <button className="btn btn-secondary btn-sm" onClick={onRetry}>重试</button>
-      </Panel>
-    );
-  }
-
-  const visibleResources = (activeTemplate.resources || []).filter((item) =>
-    ['project', 'requirement', 'task', 'sprint'].includes(item.resource),
-  );
-
-  return (
-    <Panel
-      title="流程模板"
-      subtitle={`${activeTemplate.name} · ${activeTemplate.mode === 'fixed' ? '固定模板' : activeTemplate.mode || 'configurable'} · ${activeTemplate.version}${activeTemplate.status ? ` · ${activeTemplate.status}` : ''}`}
-      className="mt-12"
-    >
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-        <label className="text-secondary" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          查看模板
-          <select
-            className="form-input"
-            style={{ minWidth: 260 }}
-            value={activeTemplate.id}
-            onChange={(event) => onSelectTemplate(event.target.value)}
-          >
-            {templates.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.name}
-                {template.builtin ? '（内置）' : ''}
-                {template.status ? ` · ${template.status}` : ''}
-                {template.version ? ` · ${template.version}` : ''}
-              </option>
-            ))}
-          </select>
-        </label>
-        {canAdmin && (
-          <>
-            <input
-              className="form-input"
-              style={{ minWidth: 180 }}
-              value={draftName}
-              onChange={(event) => onDraftNameChange(event.target.value)}
-              placeholder="新草稿名称"
-            />
-            <button className="btn btn-secondary btn-sm" disabled={creating} onClick={onCreateDraft}>
-              {creating ? '创建中...' : '新建草稿模板'}
-            </button>
-            {!activeTemplate.builtin && activeTemplate.status === 'draft' && (
-              <button
-                className="btn btn-primary btn-sm"
-                disabled={publishingId === activeTemplate.id}
-                onClick={() => onPublish(activeTemplate.id)}
-              >
-                {publishingId === activeTemplate.id ? '发布中...' : '发布当前草稿'}
-              </button>
-            )}
-          </>
-        )}
-      </div>
-
-      {actionError && <p className="form-error">{actionError}</p>}
-      {actionOk && <p className="text-secondary" style={{ color: 'var(--color-success, #16a34a)' }}>{actionOk}</p>}
-
-      <p className="text-secondary" style={{ marginTop: 0 }}>{activeTemplate.description}</p>
-      <div className="flow-stepper" style={{ marginTop: 12 }}>
-        {activeTemplate.stages.map((stage, index) => (
-          <div key={stage.id} className="flow-step">
-            <span className="flow-step-node">{index + 1}</span>
-            <span className="flow-step-label" title={stage.description}>{stage.label}</span>
-            {index < activeTemplate.stages.length - 1 && <span className="flow-step-connector filled" />}
-          </div>
-        ))}
-      </div>
-      <div className="grid-2 mt-12">
-        <div>
-          <div className="section-title">状态流转契约</div>
-          <div className="mt-8" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {visibleResources.length === 0 && (
-              <p className="text-secondary">自定义模板可仅定义阶段目录；资源状态机默认沿用系统固定契约。</p>
-            )}
-            {visibleResources.map((resource) => (
-              <div key={resource.resource} className="panel-soft" style={{ padding: 10 }}>
-                <div className="font-medium">{resource.label}</div>
-                <p className="text-secondary" style={{ margin: '4px 0 0', fontSize: 12 }}>
-                  {Object.entries(resource.transitions || {})
-                    .filter(([, next]) => next.length > 0)
-                    .map(([from, next]) => `${from} → ${next.join('/')}`)
-                    .join('；') || '无显式流转配置'}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div>
-          <div className="section-title">治理边界</div>
-          <ul className="text-secondary" style={{ margin: '8px 0 0', paddingLeft: 18 }}>
-            {(activeTemplate.guardrails || []).map((item) => <li key={item}>{item}</li>)}
-            {!(activeTemplate.guardrails || []).length && <li>无附加治理说明</li>}
-          </ul>
-        </div>
-      </div>
-    </Panel>
   );
 }
 

@@ -92,6 +92,23 @@ test("template store create/publish/bind against memory sqlite helpers", async (
 
   const defaultBinding = await store.getProjectBinding("PRJ-NONE");
   assert.equal(defaultBinding.templateId, "fixed-project-delivery-v1");
+
+  const cloned = await store.cloneAsDraft("fixed-project-delivery-v1", { id: "USR-ADMIN" }, {
+    name: "内置模板副本",
+  });
+  assert.equal(cloned.status, "draft");
+  assert.equal(cloned.name, "内置模板副本");
+  assert.ok(cloned.stages.length >= 3);
+
+  const updated = await store.updateDraft(cloned.id, {
+    name: "内置模板副本-改",
+    stages: [
+      { id: "initiation", label: "启动" },
+      { id: "release", label: "发布" },
+    ],
+  });
+  assert.equal(updated.stages.length, 2);
+  assert.equal(updated.stages[1].label, "发布");
 });
 
 test("evaluateProjectFlow includes workflow binding metadata and custom stage order", async () => {

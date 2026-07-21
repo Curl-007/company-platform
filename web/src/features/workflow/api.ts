@@ -34,6 +34,12 @@ export function publishWorkflowTemplate(id: string): Promise<WorkflowTemplate> {
   });
 }
 
+export function cloneWorkflowTemplate(id: string, input: Partial<WorkflowTemplateInput> = {}): Promise<WorkflowTemplate> {
+  return unwrapPost<WorkflowTemplate>(`/api/flow/templates/${encodeURIComponent(id)}/clone`, input, {
+    invalidatePrefixes: ['fetchWorkflowTemplates', 'fetchProjectFlow', 'fetchFlowOverview'],
+  });
+}
+
 export function fetchProjectWorkflowBinding(projectId: string): Promise<ProjectWorkflowBinding> {
   return unwrap<ProjectWorkflowBinding>(`/api/projects/${encodeURIComponent(projectId)}/workflow-binding`);
 }

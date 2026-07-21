@@ -100,6 +100,21 @@ function createWorkflowRouter({
     }
   });
 
+  router.post("/flow/templates/:id/clone", requirePermission("admin:*"), async (req, res) => {
+    try {
+      const cloned = await templateStore.cloneAsDraft(req.params.id, req.user, req.body || {});
+      await audit?.(req.user, "workflow.template_clone", "workflow_template", cloned.id, null, {
+        sourceTemplateId: req.params.id,
+        draft: cloned,
+      }, req.ip);
+      return res.status(201).json(ok(cloned));
+    } catch (error) {
+      const code = error.code || "INTERNAL_ERROR";
+      const status = code === "RESOURCE_NOT_FOUND" ? 404 : code === "VALIDATION_FAILED" ? 400 : 500;
+      return fail(res, status, code, error.message);
+    }
+  });
+
   router.get("/projects/:id/workflow-binding", async (req, res) => {
     const project = await repository.findProjectId(req.params.id);
     if (!project) return fail(res, 404, "RESOURCE_NOT_FOUND", "Project not found.");

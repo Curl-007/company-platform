@@ -171,7 +171,7 @@ function createWorkflowTemplateStore({
       throw error;
     }
     if (existing.status !== "draft") {
-      const error = new Error("Only draft templates can be edited.");
+      const error = new Error("Only draft templates can be edited. Clone a published/builtin template first.");
       error.code = "VALIDATION_FAILED";
       throw error;
     }
@@ -198,6 +198,22 @@ function createWorkflowTemplateStore({
       },
     );
     return getTemplate(templateId);
+  }
+
+  async function cloneAsDraft(templateId, actor, overrides = {}) {
+    const source = await getTemplate(templateId);
+    if (!source) {
+      const error = new Error("Template not found.");
+      error.code = "RESOURCE_NOT_FOUND";
+      throw error;
+    }
+    return createDraft({
+      name: String(overrides.name || `${source.name}（副本）`).trim().slice(0, 160),
+      description: overrides.description != null ? overrides.description : source.description,
+      processModes: overrides.processModes || source.processModes,
+      stages: overrides.stages || source.stages,
+      guardrails: overrides.guardrails || source.guardrails,
+    }, actor);
   }
 
   async function publishTemplate(templateId) {
@@ -298,6 +314,7 @@ function createWorkflowTemplateStore({
     getTemplate,
     createDraft,
     updateDraft,
+    cloneAsDraft,
     publishTemplate,
     getProjectBinding,
     bindProjectTemplate,
