@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Clock3, Code2, FolderTree, UserRound } from 'lucide-react';
+import { Clock3, FolderKanban, UserRound } from 'lucide-react';
 import { fetchProject, updateProjectStatus } from '../api';
 import {
   activationGateMissing,
@@ -13,7 +13,6 @@ import GovernanceTab from './GovernanceTab';
 import KanbanTab from './KanbanTab';
 import OverviewTab from './OverviewTab';
 import ProjectMembersForm from './ProjectMembersForm';
-import SourceTab from './SourceTab';
 import WbsTab from './WbsTab';
 import { useAsync } from '../../../hooks/useAsync';
 import { ApiError } from '../../../services/api';
@@ -37,7 +36,7 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
   const { data, loading, error, reload } = useAsync<ProjectDetail>(() => fetchProject(id), [id]);
   const [tab, setTab] = useState<DetailTab>(() => {
     const saved = window.localStorage.getItem(STORAGE_KEYS.detailTab);
-    return saved === 'wbs' || saved === 'kanban' || saved === 'flow' || saved === 'governance' || saved === 'source' ? saved : 'overview';
+    return saved === 'wbs' || saved === 'kanban' || saved === 'flow' || saved === 'governance' ? saved : 'overview';
   });
   const [status, setStatus] = useState('');
   const [saving, setSaving] = useState(false);
@@ -117,7 +116,7 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
         <div className="project-detail-main">
           <div className="project-detail-title-row">
             <div className="project-detail-icon">
-              <FolderTree size={20} />
+              <FolderKanban size={20} />
             </div>
             <div>
               <div className="project-detail-eyebrow">
@@ -139,7 +138,6 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
           <div className="project-detail-meta">
             <span><UserRound size={14} /> {project.owner}</span>
             <span><Clock3 size={14} /> {scheduleText}</span>
-            <span><Code2 size={14} /> {project.sourcePath || '未配置源码路径'}</span>
           </div>
         </div>
 
@@ -235,9 +233,9 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
       ) : null}
 
       <div className="project-detail-tabs nav-tabs">
-        {(['overview', 'wbs', 'kanban', 'flow', 'governance', 'source'] as DetailTab[]).map((key) => (
+        {(['overview', 'wbs', 'kanban', 'flow', 'governance'] as DetailTab[]).map((key) => (
           <button key={key} className={`nav-tab ${tab === key ? 'active' : ''}`} onClick={() => setTab(key)}>
-            {key === 'overview' ? '概览' : key === 'wbs' ? 'WBS' : key === 'kanban' ? '看板' : key === 'flow' ? '流程' : key === 'governance' ? '风险与决策' : '源码'}
+            {key === 'overview' ? '概览' : key === 'wbs' ? 'WBS' : key === 'kanban' ? '看板' : key === 'flow' ? '流程' : '风险与决策'}
           </button>
         ))}
       </div>
@@ -247,7 +245,6 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
       {tab === 'kanban' && <KanbanTab projectId={id} canManageProject={canUpdateProject} />}
       {tab === 'flow' && <FlowTab projectId={id} />}
       {tab === 'governance' && <GovernanceTab projectId={id} canManageProject={canUpdateProject} onProjectReload={reload} />}
-      {tab === 'source' && <SourceTab projectId={id} sourcePath={project.sourcePath ?? null} />}
       {editing && canUpdateProject && (
         <EditProjectForm
           project={project as unknown as Project}

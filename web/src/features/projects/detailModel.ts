@@ -13,7 +13,7 @@ import {
   labelOf,
 } from '../../constants/enums';
 
-export type DetailTab = 'overview' | 'wbs' | 'kanban' | 'flow' | 'governance' | 'source';
+export type DetailTab = 'overview' | 'wbs' | 'kanban' | 'flow' | 'governance';
 
 export const PROJECT_ACTIVATION_MISSING_LABELS: Record<string, string> = {
   projectObjective: '项目目标',
