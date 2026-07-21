@@ -60,7 +60,7 @@ routes/services
 | W4 | import NDJSON | **完成**（`import-ndjson-to-postgres.js` + fake-pool 单测；真库集成验收待 W6） |
 | W5 | 全路径 async + 解除 fail-closed + schema 对齐 | **完成（代码）**（见下；真 PG 端到端仍归 W6） |
 | W6 | 门控 PG 集成 + 可选 CI service | **完成（本地真库）**：export→apply→import→reconcile 对账 PASS；`DATABASE_DIALECT=postgres` API 登录/列表 smoke PASS；门控单测有 URL 时跑真库；CI service 仍可选 |
-| W7 | runbook 生产切换/回滚演练 | 待办（runbook 已写启用步骤；生产演练待做） |
+| W7 | runbook 生产切换/回滚演练 | **完成（开发机读路径演练）**：`npm run drill:postgres-switch` 覆盖 sqlite→postgres→回滚 sqlite；生产维护窗口演练仍按 runbook 人工执行 |
 
 粗估合计：**9–16 人日**（主风险在 W5；代码路径已落地）。
 

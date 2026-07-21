@@ -49,6 +49,25 @@ npm run start -w api
 
 切换后发现数据、权限或 API 契约不一致时，停止 PostgreSQL 写流量并恢复到冻结时的 SQLite 只读副本；根据 audit log 和导出 manifest 定位差异。不得通过覆盖源库或手工删除审计记录来回滚。
 
+### 自动化切换/回滚读路径演练（W7）
+
+在已导入数据的 PostgreSQL 目标库与本地 SQLite 文件均可用时：
+
+```powershell
+$env:POSTGRES_TARGET_URL = "postgres://USER:PASS@HOST:5432/DB"
+# 可选：冻结副本
+# $env:DATABASE_FILE = "C:\path\to\frozen\app.db"
+npm run drill:postgres-switch -w api
+```
+
+脚本会依次：
+
+1. 用 `DATABASE_DIALECT=sqlite` 起临时 API → 登录 + 列表  
+2. 停止后用 `DATABASE_DIALECT=postgres` 起临时 API → 登录 + 列表  
+3. 再切回 sqlite，确认仍可登录且项目数量一致  
+
+这是**读路径契约演练**，不替代生产维护窗口的写冻结与副本保留流程。
+
 ## 迁移前置条件
 
 1. 在维护窗口冻结写操作，并保留 SQLite 文件和本地对象存储目录的只读副本。

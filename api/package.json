@@ -15,7 +15,8 @@
     "apply:postgres-schema": "node scripts/apply-postgres-schema.js",
     "import:postgres": "node scripts/import-ndjson-to-postgres.js",
     "reconcile:postgres-import": "node scripts/reconcile-postgres-import.js",
-    "generate:postgres-target-report": "node scripts/generate-postgres-target-report.js"
+    "generate:postgres-target-report": "node scripts/generate-postgres-target-report.js",
+    "drill:postgres-switch": "node scripts/postgres-switch-rollback-drill.js"
   },
   "keywords": [
     "project-management",
