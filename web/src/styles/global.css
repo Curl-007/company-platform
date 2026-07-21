@@ -7575,13 +7575,13 @@ html {
 }
 
 
-/* Products page: near-flush stacking (workbench + list almost stuck) */
+/* Products page: workbench + product list flush (almost stuck) */
 .products-page {
-  gap: 4px !important;
+  gap: 2px !important;
 }
 .products-page > .page-header {
-  margin-bottom: 4px !important;
-  padding: 0 2px 4px !important;
+  margin-bottom: 2px !important;
+  padding: 0 2px 2px !important;
   border-bottom: none !important;
 }
 .products-page > .page-header .page-header-info h1,
@@ -7590,7 +7590,7 @@ html {
 }
 .products-page > .page-header .page-header-info p {
   margin: 0 !important;
-  line-height: 1.4 !important;
+  line-height: 1.35 !important;
 }
 .products-page-tabs {
   margin: 0 !important;
@@ -7608,26 +7608,41 @@ html {
 }
 .products-page-body .product-workbench,
 .products-page-body .management-workbench {
-  gap: 2px !important;
+  gap: 0 !important;
 }
+/* Collapse the seam between 产品工作台 panel and 产品清单 row */
 .products-page-body .product-workbench > .panel,
 .products-page-body .management-workbench > .panel {
   margin: 0 !important;
+  border-bottom: none !important;
   border-bottom-left-radius: 0 !important;
   border-bottom-right-radius: 0 !important;
+  box-shadow: none !important;
 }
 .products-page-body .product-workbench-grid,
 .products-page-body .management-grid {
-  gap: 2px !important;
-  margin-top: 0 !important;
+  gap: 0 !important;
+  margin-top: -1px !important; /* overlap shared border with workbench panel */
+  column-gap: 0 !important;
+  row-gap: 0 !important;
+}
+.products-page-body .product-list-pane,
+.products-page-body .management-list-pane,
+.products-page-body .product-detail-pane,
+.products-page-body .management-detail-pane {
+  margin: 0 !important;
+  box-shadow: none !important;
 }
 .products-page-body .product-list-pane,
 .products-page-body .management-list-pane {
   top: 56px;
   border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+  border-right: none !important;
 }
 .products-page-body .product-detail-pane,
 .products-page-body .management-detail-pane {
+  border-top-left-radius: 0 !important;
   border-top-right-radius: 0 !important;
 }
 .products-page-body .product-workbench > .panel .panel-header,
@@ -7636,22 +7651,27 @@ html {
 }
 .products-page-body .product-workbench > .panel .panel-body,
 .products-page-body .management-workbench > .panel .panel-body {
-  padding: 8px 12px !important;
+  padding: 6px 12px 8px !important;
 }
 .products-page-body .product-list-pane .panel-header,
 .products-page-body .management-list-pane .panel-header {
   padding: 8px 12px !important;
 }
+.products-page-body .product-list-pane .panel-body,
+.products-page-body .management-list-pane .panel-body {
+  padding: 0 !important;
+}
 .products-page-body .product-list,
 .products-page-body .management-list {
-  padding-top: 0 !important;
-  gap: 1px !important;
+  padding: 0 6px 6px !important;
+  gap: 0 !important;
 }
 .products-page-body .product-metric-strip,
-.products-page-body .product-metric-strip.metric-bar {
+.products-page-body .product-metric-strip.metric-bar,
+.products-page-body .metric-grid.product-metric-strip {
   gap: 6px !important;
   margin: 0 !important;
 }
 .products-page-body .product-metric-strip .metric-card {
-  padding: 10px 12px !important;
+  padding: 8px 10px !important;
 }
