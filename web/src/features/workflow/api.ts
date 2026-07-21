@@ -1,11 +1,9 @@
-import { unwrap, unwrapPatch, unwrapPost, unwrapPut } from '../../services/apiClient';
+import { unwrap, unwrapPut } from '../../services/apiClient';
 import type {
   GateRuleCatalog,
   ProjectWorkflowBinding,
   StatusHistoryEntry,
-  WorkflowTemplate,
   WorkflowTemplateCatalog,
-  WorkflowTemplateInput,
 } from '../../types';
 
 export function fetchTaskStatusHistory(taskId: string): Promise<StatusHistoryEntry[]> {
@@ -21,29 +19,9 @@ export function fetchGateRuleCatalog(): Promise<GateRuleCatalog> {
   return unwrap<GateRuleCatalog>('/api/flow/gate-rules');
 }
 
-export function createWorkflowTemplate(input: WorkflowTemplateInput): Promise<WorkflowTemplate> {
-  return unwrapPost<WorkflowTemplate>('/api/flow/templates', input, {
-    invalidatePrefixes: ['fetchWorkflowTemplates', 'fetchProjectFlow', 'fetchFlowOverview'],
-  });
-}
-
-export function updateWorkflowTemplate(id: string, input: WorkflowTemplateInput): Promise<WorkflowTemplate> {
-  return unwrapPatch<WorkflowTemplate>(`/api/flow/templates/${encodeURIComponent(id)}`, input, {
-    invalidatePrefixes: ['fetchWorkflowTemplates', 'fetchProjectFlow', 'fetchFlowOverview'],
-  });
-}
-
-export function publishWorkflowTemplate(id: string): Promise<WorkflowTemplate> {
-  return unwrapPost<WorkflowTemplate>(`/api/flow/templates/${encodeURIComponent(id)}/publish`, {}, {
-    invalidatePrefixes: ['fetchWorkflowTemplates', 'fetchProjectFlow', 'fetchFlowOverview'],
-  });
-}
-
-export function cloneWorkflowTemplate(id: string, input: Partial<WorkflowTemplateInput> = {}): Promise<WorkflowTemplate> {
-  return unwrapPost<WorkflowTemplate>(`/api/flow/templates/${encodeURIComponent(id)}/clone`, input, {
-    invalidatePrefixes: ['fetchWorkflowTemplates', 'fetchProjectFlow', 'fetchFlowOverview'],
-  });
-}
+// Custom template draft/publish/clone is intentionally closed server-side
+// (templateStore only exposes two builtins + project bind). Do not re-add write
+// wrappers unless the backend re-enables editable templates.
 
 export function fetchProjectWorkflowBinding(projectId: string): Promise<ProjectWorkflowBinding> {
   return unwrap<ProjectWorkflowBinding>(`/api/projects/${encodeURIComponent(projectId)}/workflow-binding`);

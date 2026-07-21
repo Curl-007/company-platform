@@ -39,15 +39,17 @@ test.describe('manual checklist automation', () => {
     await expect(page.locator('.page-title, .page-header, .panel, .data-table, .card').first()).toBeVisible();
   });
 
-  test('products page four tabs switch', async ({ page }) => {
+  test('products page three tabs switch', async ({ page }) => {
     await loginAsAdmin(page);
     await openNav(page, '产品管理');
     await expect(page.getByRole('heading', { name: '产品管理' })).toBeVisible({ timeout: 15_000 });
 
-    for (const tab of ['产品', '项目集', '组合', '公司目标'] as const) {
-      await page.locator('.nav-tabs').getByRole('button', { name: tab, exact: true }).click();
+    // As-built: 产品 / 项目集 / 组合 only（公司目标入口已从产品页移除；API /api/strategic-goals 仍保留）
+    for (const tab of ['产品', '项目集', '组合'] as const) {
+      await page.locator('.nav-tabs.products-page-tabs, .products-page-tabs, .nav-tabs').getByRole('button', { name: tab, exact: true }).click();
       await expect(page.locator('.nav-tabs .nav-tab.active')).toContainText(tab);
     }
+    await expect(page.locator('.nav-tabs').getByRole('button', { name: '公司目标', exact: true })).toHaveCount(0);
   });
 
   test('delivery center loads', async ({ page }) => {
