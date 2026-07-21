@@ -430,7 +430,23 @@ app.use(helmet({
 
 // CORS: only allow the configured web origins to carry credentials/tokens.
 app.use(cors({ origin: ALLOWED_ORIGINS, methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"] }));
-app.use(express.json({ limit: "32mb" }));
+// Ensure request/response JSON is interpreted as UTF-8 (Windows clients/tools may omit charset).
+app.use(express.json({ limit: "32mb", type: ["application/json", "application/*+json"] }));
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    if (!res.getHeader("Content-Type")) {
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+    } else {
+      const current = String(res.getHeader("Content-Type"));
+      if (current.includes("application/json") && !/charset=/i.test(current)) {
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+      }
+    }
+    return originalJson(body);
+  };
+  next();
+});
 
 const { createMulterFileFilter, MAX_UPLOAD_BYTES } = require("./src/security/uploadPolicy");
 const upload = multer({

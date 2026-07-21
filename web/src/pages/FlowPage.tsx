@@ -214,7 +214,6 @@ function FlowPage() {
     if (!canAdmin || !activeTemplate) return;
     await runAction('已复制为可编辑草稿', async () => {
       const cloned = await cloneWorkflowTemplate(activeTemplate.id, {
-        name: `${activeTemplate.name}（可编辑副本）`,
         description: activeTemplate.description,
         stages: activeTemplate.stages,
         guardrails: activeTemplate.guardrails,

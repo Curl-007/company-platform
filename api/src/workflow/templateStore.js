@@ -211,8 +211,10 @@ function createWorkflowTemplateStore({
       error.code = "RESOURCE_NOT_FOUND";
       throw error;
     }
+    // Prefer explicit override; otherwise keep source Chinese text as-is (UTF-8).
+    const fallbackName = source.name ? `${source.name}（可编辑副本）` : "可编辑流程副本";
     return createDraft({
-      name: String(overrides.name || `${source.name}（副本）`).trim().slice(0, 160),
+      name: String(overrides.name || fallbackName).trim().slice(0, 160),
       description: overrides.description != null ? overrides.description : source.description,
       processModes: overrides.processModes || source.processModes,
       stages: overrides.stages || source.stages,
