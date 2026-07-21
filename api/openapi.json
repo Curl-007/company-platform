@@ -934,34 +934,6 @@
             "$ref": "#/components/responses/Unauthorized"
           }
         }
-      },
-      "post": {
-        "summary": "Create draft workflow template",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WorkflowTemplateInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnvelopeWorkflowTemplate"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "validation failed"
-          }
-        }
       }
     },
     "/api/projects/{id}/wbs/tasks": {
@@ -5694,79 +5666,6 @@
         }
       }
     },
-    "/api/flow/templates/{id}": {
-      "patch": {
-        "summary": "Update draft workflow template",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WorkflowTemplateInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnvelopeWorkflowTemplate"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "validation failed"
-          },
-          "404": {
-            "description": "not found"
-          }
-        }
-      }
-    },
-    "/api/flow/templates/{id}/publish": {
-      "post": {
-        "summary": "Publish workflow template",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnvelopeWorkflowTemplate"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "not found"
-          }
-        }
-      }
-    },
     "/api/projects/{id}/workflow-binding": {
       "get": {
         "summary": "Get project workflow template binding",
@@ -5837,47 +5736,6 @@
           },
           "403": {
             "description": "forbidden"
-          },
-          "404": {
-            "description": "not found"
-          }
-        }
-      }
-    },
-    "/api/flow/templates/{id}/clone": {
-      "post": {
-        "summary": "Clone template as editable draft",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": true
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnvelopeWorkflowTemplate"
-                }
-              }
-            }
           },
           "404": {
             "description": "not found"

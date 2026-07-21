@@ -159,16 +159,32 @@ function buildAiSummarySignals(snapshot) {
 }
 
 function createAiSummaryService({ callModel, extractJsonPayload, getModelName, rows, setTimeoutImpl = setTimeout }) {
+  // Process-local TTL cache only (not shared across instances). Callers that
+  // mutate business data should invalidate via invalidateCache / clearCache.
   const cache = new Map();
+  const CACHE_TTL_MS = 90 * 1000;
+
   async function modelName() {
     if (typeof getModelName !== "function") return "local-rule-engine";
     return await getModelName() || "local-rule-engine";
   }
 
+  function invalidateCache(scope, cacheKey = "global") {
+    if (!scope) {
+      cache.clear();
+      return;
+    }
+    cache.delete(`${scope}:${cacheKey}`);
+  }
+
+  function clearCache() {
+    cache.clear();
+  }
+
   async function createSummary(scope, metrics, options = {}) {
     const cacheKey = `${scope || "dashboard"}:${options.cacheKey || "global"}`;
     const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.createdAt < 90 * 1000) return cached.value;
+    if (!options.skipCache && cached && Date.now() - cached.createdAt < CACHE_TTL_MS) return cached.value;
     const snapshot = options.snapshot || await collectAiBusinessSnapshot({ rows }, scope);
     const fallback = buildLocalAiSummary(scope, metrics, snapshot);
     const signals = buildAiSummarySignals(snapshot);
@@ -207,6 +223,8 @@ function createAiSummaryService({ callModel, extractJsonPayload, getModelName, r
 
   return {
     createSummary,
+    invalidateCache,
+    clearCache,
     collectSnapshot: (scope) => collectAiBusinessSnapshot({ rows }, scope),
   };
 }

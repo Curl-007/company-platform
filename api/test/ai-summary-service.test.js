@@ -62,6 +62,15 @@ test("AI summary service normalizes model JSON and caches generated summaries", 
   assert.equal(second.title, "模型摘要");
   assert.equal(calls, 1);
 
+  service.invalidateCache("dashboard", "same");
+  const third = await service.createSummary("dashboard", { awaitingReview: 0 }, { cacheKey: "same" });
+  assert.equal(third.title, "模型摘要");
+  assert.equal(calls, 2);
+
+  service.clearCache();
+  await service.createSummary("dashboard", { awaitingReview: 0 }, { cacheKey: "same" });
+  assert.equal(calls, 3);
+
   const normalized = normalizeAiSummaryPayload({ title: "x", risks: ["risk"] }, { title: "fallback", summary: "s", risks: [], recommendations: ["r"] }, "m");
   assert.deepEqual(normalized, {
     title: "x",

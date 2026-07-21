@@ -55,12 +55,8 @@ function createWorkflowRouter({
 
   router.get("/flow/templates", async (req, res) => {
     if (templateStore?.listTemplates) {
-      const includeDrafts = String(req.query.includeDrafts || "") === "1";
-      // Drafts are admin-facing; require manage permission when requested.
-      if (includeDrafts) {
-        // Fall through: permission middleware not available here; enforce via requirePermission route layer when mounted.
-      }
-      const templates = await templateStore.listTemplates({ includeDrafts });
+      // Custom drafts are closed; always return the two published builtins.
+      const templates = await templateStore.listTemplates({ includeDrafts: false });
       return res.json(ok({
         version: "2026-07-21",
         source: "builtin+database",
@@ -74,55 +70,8 @@ function createWorkflowRouter({
     }));
   });
 
-  router.post("/flow/templates", requirePermission("admin:*"), async (req, res) => {
-    try {
-      const created = await templateStore.createDraft(req.body || {}, req.user);
-      await audit?.(req.user, "workflow.template_create", "workflow_template", created.id, null, created, req.ip);
-      return res.status(201).json(ok(created));
-    } catch (error) {
-      const status = error.code === "VALIDATION_FAILED" ? 400 : 500;
-      return fail(res, status, error.code || "INTERNAL_ERROR", error.message);
-    }
-  });
-
-  router.patch("/flow/templates/:id", requirePermission("admin:*"), async (req, res) => {
-    try {
-      const updated = await templateStore.updateDraft(req.params.id, req.body || {});
-      await audit?.(req.user, "workflow.template_update", "workflow_template", updated.id, null, updated, req.ip);
-      return res.json(ok(updated));
-    } catch (error) {
-      const code = error.code || "INTERNAL_ERROR";
-      const status = code === "RESOURCE_NOT_FOUND" ? 404 : code === "VALIDATION_FAILED" ? 400 : 500;
-      return fail(res, status, code, error.message);
-    }
-  });
-
-  router.post("/flow/templates/:id/publish", requirePermission("admin:*"), async (req, res) => {
-    try {
-      const published = await templateStore.publishTemplate(req.params.id);
-      await audit?.(req.user, "workflow.template_publish", "workflow_template", published.id, null, published, req.ip);
-      return res.json(ok(published));
-    } catch (error) {
-      const code = error.code || "INTERNAL_ERROR";
-      const status = code === "RESOURCE_NOT_FOUND" ? 404 : code === "VALIDATION_FAILED" ? 400 : 500;
-      return fail(res, status, code, error.message);
-    }
-  });
-
-  router.post("/flow/templates/:id/clone", requirePermission("admin:*"), async (req, res) => {
-    try {
-      const cloned = await templateStore.cloneAsDraft(req.params.id, req.user, req.body || {});
-      await audit?.(req.user, "workflow.template_clone", "workflow_template", cloned.id, null, {
-        sourceTemplateId: req.params.id,
-        draft: cloned,
-      }, req.ip);
-      return res.status(201).json(ok(cloned));
-    } catch (error) {
-      const code = error.code || "INTERNAL_ERROR";
-      const status = code === "RESOURCE_NOT_FOUND" ? 404 : code === "VALIDATION_FAILED" ? 400 : 500;
-      return fail(res, status, code, error.message);
-    }
-  });
+  // Template draft/publish/clone write routes intentionally removed.
+  // As-built: only two builtins + project bind (see templateStore).
 
   router.get("/projects/:id/workflow-binding", async (req, res) => {
     const project = await repository.findProjectId(req.params.id);

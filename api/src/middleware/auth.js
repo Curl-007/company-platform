@@ -48,11 +48,16 @@ function createAuthMiddleware({ jwtSecret, fail, row }) {
     const jwtLike = protocols.find((part) => part !== "pm.jwt" && part.includes("."));
     if (jwtLike) return jwtLike;
 
+    // Query-string tokens are rejected in production to avoid JWT leakage via logs/proxies.
+    // Non-production still accepts them with a deprecation warning for local smoke/tests.
     const url = new URL(req.url, "http://localhost");
     const queryToken = url.searchParams.get("token") || "";
-    if (queryToken) {
-      console.warn("DEPRECATED: WebSocket auth via ?token= query is deprecated; use Sec-WebSocket-Protocol with ['pm.jwt', token].");
+    if (!queryToken) return "";
+    if (process.env.NODE_ENV === "production") {
+      console.warn("REJECTED: WebSocket auth via ?token= is disabled in production; use Sec-WebSocket-Protocol with ['pm.jwt', token].");
+      return "";
     }
+    console.warn("DEPRECATED: WebSocket auth via ?token= query is deprecated; use Sec-WebSocket-Protocol with ['pm.jwt', token].");
     return queryToken;
   }
 
