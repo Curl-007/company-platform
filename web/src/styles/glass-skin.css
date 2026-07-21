@@ -1455,13 +1455,57 @@ html[data-work-mode='light'] .metric-card-value {
   color: var(--text-primary);
 }
 
+.flow-matrix-template-tag {
+  color: var(--text-tertiary);
+}
+
 .flow-detail {
   border-top-color: var(--border-strong);
   background: rgba(255, 255, 255, 0.045);
 }
 
+.flow-detail-binding {
+  color: var(--text-secondary);
+}
+
 .flow-legend-bar .flow-legend-item {
   color: var(--text-secondary);
+}
+
+.flow-template-card {
+  border-color: var(--border-default);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
+  box-shadow: none;
+}
+
+.flow-template-card:hover,
+.flow-template-card.is-active {
+  border-color: rgba(var(--work-accent-rgb), 0.45);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+}
+
+.flow-template-card-head strong {
+  color: var(--text-primary);
+}
+
+.flow-template-card p {
+  color: var(--text-secondary);
+}
+
+.flow-template-badge {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+}
+
+.flow-template-card.is-active .flow-template-badge {
+  background: var(--gradient-holographic, var(--accent));
+  color: var(--accent-contrast, #fff);
+  border-color: transparent;
+}
+
+.flow-template-preview {
+  border-top-color: var(--border-divider);
 }
 
 .test-steps-table th,
