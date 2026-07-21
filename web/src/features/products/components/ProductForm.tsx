@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ClipboardEvent, type DragEvent } from 'react';
 import type { CreateProductInput } from '../api';
 import {
   EMPTY_MODULE,
@@ -32,6 +32,10 @@ import {
 } from '../../../constants/enums';
 import type { Product, ProductMetric, ProductModule, RoadmapItem } from '../../../types';
 
+function collectImageFiles(fileList?: FileList | null, extra: File[] = []) {
+  return [...Array.from(fileList ?? []), ...extra].filter((file) => file.type.startsWith('image/'));
+}
+
 export default function ProductForm({
   title,
   initial,
@@ -49,7 +53,6 @@ export default function ProductForm({
   const [stage, setStage] = useState(initial?.stage ?? 'design');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [imageUrls, setImageUrls] = useState<string[]>(productImages(initial));
-  const [imageUrlDraft, setImageUrlDraft] = useState('');
   const [systemName, setSystemName] = useState(initial?.systemName ?? '');
   const [systemVersion, setSystemVersion] = useState(initial?.systemVersion ?? '');
   const [applicationVersion, setApplicationVersion] = useState(initial?.applicationVersion ?? '');
@@ -63,6 +66,7 @@ export default function ProductForm({
   const [roadmap, setRoadmap] = useState<RoadmapItem[]>(toRoadmap(initial?.roadmap));
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
 
   async function readImageFile(file: File) {
     return new Promise<string>((resolve, reject) => {
@@ -73,8 +77,8 @@ export default function ProductForm({
     });
   }
 
-  async function handleImageFiles(files?: FileList | null) {
-    const selected = Array.from(files ?? []);
+  async function handleImageFiles(files?: FileList | File[] | null) {
+    const selected = Array.isArray(files) ? files : Array.from(files ?? []);
     if (!selected.length) return;
     const slots = PRODUCT_IMAGE_MAX_COUNT - imageUrls.length;
     if (slots <= 0) {
@@ -82,7 +86,7 @@ export default function ProductForm({
       return;
     }
     const accepted = selected.slice(0, slots);
-    const invalidType = accepted.find((file) => !PRODUCT_IMAGE_TYPES.includes(file.type));
+    const invalidType = accepted.find((file) => !PRODUCT_IMAGE_TYPES.includes(file.type) && !file.type.startsWith('image/'));
     if (invalidType) {
       setFormError('产品图片支持 PNG、JPG、WEBP、GIF、SVG。');
       return;
@@ -92,21 +96,36 @@ export default function ProductForm({
       setFormError('单张产品图片请控制在 5MB 以内。');
       return;
     }
-    const dataUrls = await Promise.all(accepted.map(readImageFile));
-    setImageUrls((prev) => [...prev, ...dataUrls].slice(0, PRODUCT_IMAGE_MAX_COUNT));
-    setFormError(null);
+    try {
+      const dataUrls = await Promise.all(accepted.map(readImageFile));
+      setImageUrls((prev) => [...prev, ...dataUrls].slice(0, PRODUCT_IMAGE_MAX_COUNT));
+      setFormError(null);
+    } catch {
+      setFormError('读取图片失败，请重试。');
+    }
   }
 
-  function addImageUrl() {
-    const value = imageUrlDraft.trim();
-    if (!value) return;
-    if (imageUrls.length >= PRODUCT_IMAGE_MAX_COUNT) {
-      setFormError(`最多维护 ${PRODUCT_IMAGE_MAX_COUNT} 张产品图片。`);
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragActive(false);
+    const dropped = collectImageFiles(event.dataTransfer.files);
+    if (!dropped.length) {
+      setFormError('请拖入图片文件。');
       return;
     }
-    setImageUrls((prev) => [...prev, value]);
-    setImageUrlDraft('');
-    setFormError(null);
+    void handleImageFiles(dropped);
+  }
+
+  function handlePaste(event: ClipboardEvent<HTMLDivElement>) {
+    const items = Array.from(event.clipboardData?.items ?? []);
+    const imageFiles = items
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => Boolean(file));
+    if (!imageFiles.length) return;
+    event.preventDefault();
+    void handleImageFiles(imageFiles);
   }
 
   function updateArrayItem<T>(items: T[], index: number, updater: (current: T) => T, setter: (next: T[]) => void) {
@@ -180,7 +199,28 @@ export default function ProductForm({
 
         <div className="form-group">
           <label className="form-label">展示图片</label>
-          <div className="product-image-picker">
+          <div
+            className={`product-image-picker ${dragActive ? 'is-dragover' : ''}`}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setDragActive(true);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setDragActive(true);
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+              setDragActive(false);
+            }}
+            onDrop={handleDrop}
+            onPaste={handlePaste}
+            tabIndex={0}
+          >
             {imageUrls.length ? (
               <div className="product-image-preview-grid">
                 {imageUrls.map((image, index) => (
@@ -193,21 +233,13 @@ export default function ProductForm({
                 ))}
               </div>
             ) : (
-              <div className="product-image-empty">暂无图片</div>
+              <label className="product-image-empty product-image-dropzone" htmlFor="product-image-upload">
+                <strong>拖拽图片到这里</strong>
+                <span>或点击上传 / 粘贴截图</span>
+              </label>
             )}
             <div className="product-image-controls">
-              <div className="flex items-center gap-2" style={{ alignItems: 'stretch' }}>
-                <input
-                  className="form-input"
-                  value={imageUrlDraft}
-                  onChange={(e) => setImageUrlDraft(e.target.value)}
-                  placeholder="粘贴图片 URL"
-                />
-                <button className="btn btn-secondary btn-sm" onClick={addImageUrl} disabled={!imageUrlDraft.trim() || imageUrls.length >= PRODUCT_IMAGE_MAX_COUNT}>
-                  添加
-                </button>
-              </div>
-              <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
+              <div className="product-image-actions">
                 <label className="btn btn-secondary btn-sm" htmlFor="product-image-upload">上传图片</label>
                 <input
                   id="product-image-upload"
@@ -216,13 +248,15 @@ export default function ProductForm({
                   accept=".png,.jpg,.jpeg,.webp,.gif,.svg,image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
                   style={{ display: 'none' }}
                   onChange={(e) => {
-                    handleImageFiles(e.target.files);
+                    void handleImageFiles(e.target.files);
                     e.currentTarget.value = '';
                   }}
                 />
                 <button className="btn btn-text btn-sm" onClick={() => setImageUrls([])} disabled={!imageUrls.length}>清空</button>
-                <span className="form-help-text">支持 PNG/JPG/WEBP/GIF/SVG，单张 5MB，最多 {PRODUCT_IMAGE_MAX_COUNT} 张；当前 {imageUrls.length} 张。</span>
               </div>
+              <span className="form-help-text">
+                支持拖拽、点击上传或粘贴截图；PNG/JPG/WEBP/GIF/SVG，单张 5MB，最多 {PRODUCT_IMAGE_MAX_COUNT} 张；当前 {imageUrls.length} 张。
+              </span>
             </div>
           </div>
         </div>
