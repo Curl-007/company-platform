@@ -6445,11 +6445,16 @@ html {
   gap: 8px;
   margin-bottom: 10px;
 }
-.mywork-panels {
+.mywork-panels,
+.mywork-split {
   display: grid;
   grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
   gap: 12px;
   align-items: stretch;
+}
+.mywork-split > .panel {
+  margin: 0;
+  min-width: 0;
 }
 .mywork-panel-left,
 .mywork-panel-center {
@@ -6543,7 +6548,8 @@ html {
   margin-top: 12px;
 }
 @media (max-width: 1100px) {
-  .mywork-panels {
+  .mywork-panels,
+  .mywork-split {
     grid-template-columns: 1fr;
   }
   .mywork-logs-layout {

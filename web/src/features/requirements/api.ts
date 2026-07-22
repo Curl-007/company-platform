@@ -12,6 +12,10 @@ export function fetchRequirements(filters: RequirementFilters = {}): Promise<Req
   return unwrap<Requirement[]>(`/api/requirements${buildQuery(filters as Record<string, string | undefined>)}`);
 }
 
+export function fetchRequirement(id: string): Promise<Requirement> {
+  return unwrap<Requirement>(`/api/requirements/${encodeURIComponent(id)}`);
+}
+
 export interface CreateRequirementInput {
   title: string;
   projectId: string;

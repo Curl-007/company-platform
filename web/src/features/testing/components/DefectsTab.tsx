@@ -48,9 +48,10 @@ export default function DefectsTab({
   const { data: projects } = useAsync<Project[]>(fetchProjects, []);
 
   useEffect(() => {
-    if (!canManageTesting || !focusId || defects.length === 0 || editing?.id === focusId) return;
+    if (!focusId || defects.length === 0 || editing?.id === focusId) return;
     const matched = defects.find((item) => item.id === focusId);
-    if (matched) setEditing(matched);
+    // Open detail/edit when focused from mywork/dynamic; edit form still gated by canManageTesting.
+    if (matched && canManageTesting) setEditing(matched);
   }, [canManageTesting, focusId, defects, editing]);
 
   function handleCloseEditing() {
@@ -142,7 +143,17 @@ export default function DefectsTab({
         </select>
       </FilterBar>
       <div className="filter-bar-divider" />
-      {loading || error ? <PageState loading={loading} error={error} onRetry={reload} /> : <DataTable columns={columns} data={defects} rowKey="id" emptyText="暂无缺陷。" />}
+      {loading || error ? (
+        <PageState loading={loading} error={error} onRetry={reload} />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={defects}
+          rowKey="id"
+          emptyText="暂无缺陷。"
+          onRowClick={canManageTesting ? (item) => setEditing(item) : undefined}
+        />
+      )}
       {creating && canManageTesting ? <DefectForm mode="create" onClose={() => setCreating(false)} onDone={() => { setCreating(false); reload(); }} /> : null}
       {editing && canManageTesting ? <DefectForm mode="edit" item={editing} onClose={handleCloseEditing} onDone={handleDoneEditing} canUseAi={canUseAi} /> : null}
     </Panel>

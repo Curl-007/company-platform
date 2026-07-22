@@ -7,6 +7,9 @@ import {
   USER_ROLE_LABELS,
   labelOf,
 } from '../../../constants/enums';
+import { canAccessPageForUser } from '../../../constants/roles';
+import { getSessionUser } from '../../../services/auth';
+import { navigateTo } from '../../team/components/teamMeta';
 import type { StatusHistoryEntry, Task } from '../../../types';
 
 export type TaskFilter = 'all' | 'requirement' | 'test_case' | 'defect';
@@ -30,6 +33,40 @@ export default function MyWorkTaskWorkspace({
   historyError: unknown;
   history: StatusHistoryEntry[] | undefined;
 }) {
+  const sessionUser = getSessionUser();
+
+  function openLinkedSource(task: Task) {
+    const sourceId = task.sourceId || task.requirementId;
+    if (!sourceId) return;
+    if (task.sourceType === 'defect' && canAccessPageForUser(sessionUser, 'testing')) {
+      navigateTo('testing', { tab: 'defects', focus: sourceId });
+      return;
+    }
+    if (task.sourceType === 'test_case' && canAccessPageForUser(sessionUser, 'testing')) {
+      navigateTo('testing', { tab: 'cases', focus: sourceId });
+      return;
+    }
+    if ((task.sourceType === 'requirement' || task.requirementId) && canAccessPageForUser(sessionUser, 'requirements')) {
+      navigateTo('requirements', { focus: sourceId });
+      return;
+    }
+    if (task.projectId && canAccessPageForUser(sessionUser, 'projects')) {
+      navigateTo('projects', { focus: task.projectId });
+    }
+  }
+
+  const canOpenLinked = (task: Task) => {
+    const sourceId = task.sourceId || task.requirementId;
+    if (!sourceId && !task.projectId) return false;
+    if (task.sourceType === 'defect' || task.sourceType === 'test_case') {
+      return canAccessPageForUser(sessionUser, 'testing');
+    }
+    if (task.sourceType === 'requirement' || task.requirementId) {
+      return canAccessPageForUser(sessionUser, 'requirements');
+    }
+    return canAccessPageForUser(sessionUser, 'projects');
+  };
+
   return (
     <div className="mywork-tasks">
       <div className="mywork-task-filters">
@@ -62,7 +99,17 @@ export default function MyWorkTaskWorkspace({
           </div>
         </Panel>
 
-        <Panel title="任务详情" className="mywork-panel-center">
+        <Panel
+          title="任务详情"
+          className="mywork-panel-center"
+          toolbar={
+            selectedTask && canOpenLinked(selectedTask) ? (
+              <button className="btn btn-secondary btn-sm" onClick={() => openLinkedSource(selectedTask)}>
+                打开关联详情
+              </button>
+            ) : undefined
+          }
+        >
           {selectedTask ? (
             <div className="mywork-detail">
               <div className="mywork-detail-header">
