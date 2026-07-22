@@ -4,12 +4,10 @@ import { confirmAiJob, fetchAiJob, fetchAiSummary, rejectAiJob, retryAiJob, send
 import { fetchProjects } from '../../projects/api';
 import { useAsync } from '../../../hooks/useAsync';
 import { ApiError } from '../../../services/api';
-import { getSessionUser } from '../../../services/auth';
 import PageHeader from '../../../components/common/PageHeader';
 import PageState from '../../../components/common/PageState';
 import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
-import { canOperate } from '../../../constants/roles';
 import type { AiChatAttachment, AiChatMessage, AiJob, Project } from '../../../types';
 import {
   MAX_ATTACHMENTS,
@@ -28,12 +26,8 @@ export default function AiView() {
   const projectsAsync = useAsync<Project[]>(fetchProjects, []);
   const toast = useToast();
   const confirm = useConfirm();
-  const sessionUser = getSessionUser();
-  const canManageRequirements = canOperate(sessionUser, 'requirements:manage');
-  const canManageTesting = canOperate(sessionUser, 'testing:manage');
-  const canManageProjects = canOperate(sessionUser, 'projects:manage');
   const [messages, setMessages] = useState<AiChatMessage[]>([
-    createWelcomeMessage('我是项目管理 AI 助手。可对话查询，也可说「新建/修改/删除/改状态」需求·缺陷·任务；确认后才写入正式接口。'),
+    createWelcomeMessage('我是项目管理 AI 助手。可对话查询，也可指令式写操作：需求/缺陷/任务/用例/项目/产品/构建/发布/文档/迭代/日报/工时/风险等；确认后才写入正式接口。'),
   ]);
   const [draft, setDraft] = useState('');
   const [attachments, setAttachments] = useState<AiChatAttachment[]>([]);
@@ -260,7 +254,7 @@ export default function AiView() {
     <div className="ai-chat-page">
       <PageHeader
         title="AI 助手"
-        description="对话分析 + 业务写操作草稿（需求/缺陷/任务的创建、修改、删除、改状态）；确认后走正式 API。"
+        description="对话分析 + 全业务写操作草稿（创建/修改/删除/改状态）；确认后走正式 API，从不静默写库。"
         actions={(
           <button className="btn btn-secondary btn-sm" onClick={resetChat}>
             <RefreshCw size={15} />
@@ -283,9 +277,6 @@ export default function AiView() {
           onFiles={handleFiles}
           onSend={() => { void handleSend(); }}
           projects={projectsAsync.data ?? []}
-          canManageRequirements={canManageRequirements}
-          canManageTesting={canManageTesting}
-          canManageProjects={canManageProjects}
           onActionDone={handleActionDone}
         />
 

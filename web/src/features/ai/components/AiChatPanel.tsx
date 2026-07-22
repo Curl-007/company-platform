@@ -25,9 +25,6 @@ export default function AiChatPanel({
   onFiles,
   onSend,
   projects = [],
-  canManageRequirements = false,
-  canManageTesting = false,
-  canManageProjects = false,
   onActionDone,
 }: {
   providerStatus: string;
@@ -42,9 +39,6 @@ export default function AiChatPanel({
   onFiles: (files: FileList | null) => void;
   onSend: () => void;
   projects?: Project[];
-  canManageRequirements?: boolean;
-  canManageTesting?: boolean;
-  canManageProjects?: boolean;
   onActionDone?: (result: { type: string; id: string; label: string }) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -96,9 +90,6 @@ export default function AiChatPanel({
                       key={`${message.id}-act-${index}-${action.type}-${action.resourceId || action.title || index}`}
                       action={action}
                       projects={projects}
-                      canManageRequirements={canManageRequirements}
-                      canManageTesting={canManageTesting}
-                      canManageProjects={canManageProjects}
                       onDone={onActionDone}
                     />
                   ))}
@@ -149,7 +140,7 @@ export default function AiChatPanel({
                 onSend();
               }
             }}
-            placeholder="例：新建需求/缺陷/任务；把 REQ-001 状态改为 testing；删除 BUG-002；修改 TASK-003 标题…"
+            placeholder="例：新建需求/缺陷/任务/用例/项目/产品/构建/发布/文档/迭代/日报/工时；改状态；删除…"
             disabled={sending}
           />
           <button className="btn btn-primary btn-sm" type="button" onClick={onSend} disabled={sending || (!draft.trim() && attachments.length === 0)}>
