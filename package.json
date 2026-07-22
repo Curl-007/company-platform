@@ -19,6 +19,7 @@
     "generate:enums": "npm run generate:enums -w web",
     "test": "npm run test -w api && npm run test -w web",
     "test:e2e": "npm run test:e2e -w web",
+    "smoke:roles": "npm run smoke:roles -w api",
     "typecheck": "npm run typecheck -w web",
     "check": "npm run test && npm run build"
   },
