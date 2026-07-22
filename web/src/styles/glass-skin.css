@@ -379,8 +379,8 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 12px;
+  gap: var(--kanban-card-gap);
+  padding: var(--kanban-card-padding);
   border: 1px solid var(--border-divider);
   border-radius: var(--radius-card);
   background:
@@ -388,6 +388,8 @@
     radial-gradient(circle at 100% 0%, rgba(var(--work-accent-rgb), 0.10), transparent 36%);
   color: var(--text-primary);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+  font-size: var(--fs-body);
+  line-height: var(--kanban-title-line-height);
 }
 
 .kanban-card:hover {
@@ -404,13 +406,14 @@
 
 .kanban-card-title {
   padding-right: 18px;
-  line-height: 1.42;
-  font-size: 13px;
+  line-height: var(--kanban-title-line-height);
+  font-size: var(--fs-body);
+  font-weight: 600;
 }
 
 .kanban-card-code {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--fs-helper);
 }
 
 .kanban-card-footer {
@@ -419,7 +422,8 @@
   gap: 7px;
   flex-wrap: wrap;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--fs-helper);
+  line-height: var(--table-line-height);
 }
 
 .kanban-card-footer span {
@@ -652,6 +656,14 @@ html[data-work-density='compact'] {
   --panel-body-padding: 14px;
   --filter-bar-padding: 10px;
   --metric-card-padding: 12px 14px;
+  --kpi-card-padding: 12px 14px;
+  --kpi-card-min-height: 92px;
+  --kpi-icon-size: 34px;
+  --fs-kpi-value: 24px;
+  --table-head-height: 32px;
+  --table-row-height: 40px;
+  --table-cell-padding-x: 12px;
+  --kanban-card-padding: 8px 10px;
 }
 
 html[data-work-density='compact'] .panel-body,
@@ -1537,7 +1549,7 @@ html[data-work-mode='light'] .metric-card-value {
 
 .flow-template-card.is-active .flow-template-badge {
   background: var(--gradient-holographic, var(--accent));
-  color: var(--accent-contrast, #fff);
+  color: var(--accent-contrast);
   border-color: transparent;
 }
 
