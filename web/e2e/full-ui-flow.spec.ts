@@ -286,6 +286,27 @@ test.describe('admin key interactions', () => {
     await expectShell(page);
   });
 
+  test('M2 AI chat can draft create test-case action card', async ({ page }) => {
+    test.setTimeout(120_000);
+    await loginAs(page, 'admin');
+    await openNav(page, 'AI 分析');
+    await expectHeading(page, /AI|分析|助手/);
+
+    const input = page.locator('textarea, input[type="text"]').filter({ hasNot: page.locator('[type="password"]') }).last();
+    // Prefer the chat composer by placeholder
+    const composer = page.getByPlaceholder(/新建需求|测试用例|缺陷|任务/);
+    const box = (await composer.count()) > 0 ? composer.first() : input;
+    await expect(box).toBeVisible({ timeout: 15_000 });
+    await box.fill('新建测试用例：标题：E2E AI冒烟用例，项目请选择当前可选项目');
+    await page.getByRole('button', { name: '发送', exact: true }).click();
+
+    // Draft card or assistant reply mentioning 测试用例 / 确认
+    const draftTitle = page.locator('.panel-title, .ai-action-draft, .card, .panel').filter({
+      hasText: /新建测试用例|测试用例|确认后才会写入|草稿/,
+    });
+    await expect(draftTitle.first()).toBeVisible({ timeout: 45_000 });
+  });
+
   test('N system settings account/api/ai region', async ({ page }) => {
     test.setTimeout(60_000);
     await loginAs(page, 'admin');

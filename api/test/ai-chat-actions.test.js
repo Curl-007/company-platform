@@ -96,3 +96,62 @@ test("local action builds drafts for expanded domains", () => {
   assert.equal(log.type, "create_work_log");
   assert.match(log.content || log.description || "", /支付联调|提测/);
 });
+
+test("local action builds test-case create/status/delete drafts", () => {
+  const context = {
+    projects: [{ id: "PRJ-001", name: "Portal" }],
+    requirements: [{ id: "REQ-001", title: "Checkout" }],
+    openDefects: [],
+    blockedTasks: [],
+  };
+
+  const created = buildLocalAction({
+    messages: [{
+      role: "user",
+      content: "新建测试用例：标题：登录成功路径，项目 Portal，指派给 测试工程师",
+    }],
+    attachments: [],
+    context,
+  });
+  assert.equal(created.type, "create_test_case");
+  assert.match(created.title || created.name || "", /登录成功路径/);
+  assert.equal(created.projectId, "PRJ-001");
+
+  const fromDoc = buildLocalAction({
+    messages: [{ role: "user", content: "请根据附件编写测试用例" }],
+    attachments: [{
+      kind: "document",
+      name: "case.md",
+      contentText: "标题：支付超时回归\n项目：Portal\n步骤：触发超时；断言重试",
+    }],
+    context,
+  });
+  assert.equal(fromDoc.type, "create_test_case");
+  assert.match(fromDoc.title || fromDoc.name || fromDoc.description || "", /支付超时|编写测试用例|附件/);
+
+  const status = buildLocalAction({
+    messages: [{ role: "user", content: "把 TC-001 状态改为失败" }],
+    attachments: [],
+    context,
+  });
+  assert.equal(status.type, "update_test_case_status");
+  assert.equal(status.resourceId, "TC-001");
+  assert.equal(status.status, "failed");
+
+  const del = buildLocalAction({
+    messages: [{ role: "user", content: "删除测试用例 TC-002" }],
+    attachments: [],
+    context,
+  });
+  assert.equal(del.type, "delete_test_case");
+  assert.equal(del.resourceId, "TC-002");
+});
+
+test("extracts create_test_case ACTION_JSON", () => {
+  const text = '草稿如下\nACTION_JSON:{"type":"create_test_case","title":"冒烟登录","projectId":"PRJ-001","assigneeRole":"qa"}';
+  const actions = extractProposedActions(text);
+  assert.equal(actions[0].type, "create_test_case");
+  assert.equal(actions[0].title, "冒烟登录");
+  assert.equal(actions[0].projectId, "PRJ-001");
+  assert.equal(actions[0].assigneeRole, "qa");
+});

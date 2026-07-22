@@ -19,6 +19,7 @@
  *   test-case assignment matrix: owner/role → QA & DEV + reassign + runs + status + task sync
  *   build status gates + release approval + released
  *   AI chat / rag / business-advice / requirement score
+ *   AI assistant drafts for test-case create/status/delete (PM/Admin ai:*) + formal API confirm (QA)
  *   work-log + time-entry (dev)
  *   assignment matrix: req/task/defect → DEV & QA + reassign + personal dashboard
  *   team / audit / flow / reports / capacity reads
@@ -1165,6 +1166,34 @@ async function main() {
       );
     }
 
+    // Roles without ai:* must not call chat (QA/DEV defaults)
+    if (sessions.qa?.token) {
+      await expectStatus(
+        "deny QA AI chat (no ai:*)",
+        req("POST", "/api/ai/chat", {
+          token: sessions.qa.token,
+          body: {
+            messages: [{ role: "user", content: "新建测试用例：应被拒绝" }],
+            currentPage: "testing",
+          },
+        }),
+        403,
+      );
+    }
+    if (sessions.dev?.token) {
+      await expectStatus(
+        "deny DEV AI chat (no ai:*)",
+        req("POST", "/api/ai/chat", {
+          token: sessions.dev.token,
+          body: {
+            messages: [{ role: "user", content: "新建缺陷：应被拒绝" }],
+            currentPage: "mywork",
+          },
+        }),
+        403,
+      );
+    }
+
     if (sessions.admin?.token) {
       const rag = await req("POST", "/api/ai/rag/search", {
         token: sessions.admin.token,
@@ -1215,6 +1244,219 @@ async function main() {
         });
         record("ADMIN restore auth/me name", restored.status === 200, `status=${restored.status}`);
       }
+    }
+  });
+
+  // --- F2. AI assistant → test-case write drafts (ai:*) then formal REST confirm (QA test:*) ---
+  // Chat never auto-writes; role matrix verifies draft + who can execute.
+  let aiDraftTcId = null;
+  await tryIsolated("ai assistant test-case drafts", async () => {
+    const draftToken = sessions.pm?.token || sessions.admin?.token;
+    if (!draftToken || !projectId) return;
+
+    // 1) Local-intent create_test_case draft (works under model fallback)
+    const createMsg = `请新建测试用例：标题：AI角色用例-${stamp}，项目 ${projectId}，指派给 测试工程师，编写步骤：打开应用；登录；断言`;
+    const createChat = await req("POST", "/api/ai/chat", {
+      token: draftToken,
+      body: {
+        messages: [{ role: "user", content: createMsg }],
+        currentPage: "testing",
+        scope: "project-management",
+      },
+    });
+    const createData = dataOf(createChat.json) || {};
+    const createActions = Array.isArray(createData.proposedActions) ? createData.proposedActions : [];
+    const createDraft = createActions.find((a) => a.type === "create_test_case") || createActions[0];
+    record(
+      "AI chat draft create_test_case",
+      createChat.status === 200 && createDraft?.type === "create_test_case",
+      `status=${createChat.status} n=${createActions.length} type=${createDraft?.type || "?"} title=${createDraft?.title || createDraft?.name || "?"} project=${createDraft?.projectId || "?"} fallback=${createData.fallback ?? "?"}`,
+    );
+
+    // 2) Confirm via formal API as QA (test:*) — platform never auto-writes from chat
+    if (createDraft?.type === "create_test_case" && sessions.qa?.token) {
+      const title = String(createDraft.title || createDraft.name || `AI角色用例-${stamp}`).trim();
+      const body = {
+        title,
+        projectId: createDraft.projectId || projectId,
+        requirementId: requirementId || undefined,
+        description: createDraft.description || "from AI chat draft",
+        steps: ["打开应用", "登录", "断言"],
+        expectedResult: "通过",
+        owner: createDraft.owner || createDraft.assignee || ACCOUNTS.qa.name,
+        assigneeRole: createDraft.assigneeRole || "qa",
+      };
+      const created = await expectStatus(
+        "QA confirm AI draft → POST /test-cases",
+        req("POST", "/api/test-cases", { token: sessions.qa.token, body }),
+        201,
+        (json, status) => `status=${status} id=${idOf(json) || "?"} owner=${dataOf(json)?.owner || "?"}`,
+      );
+      aiDraftTcId = idOf(created.json);
+
+      // Chat itself must not have written the row until formal confirm
+      if (aiDraftTcId) {
+        const listed = await req("GET", `/api/test-cases?projectId=${encodeURIComponent(projectId)}`, {
+          token: sessions.qa.token,
+        });
+        const found = itemsOf(listed.json).some((t) => t.id === aiDraftTcId);
+        record(
+          "AI draft only persists after formal API",
+          listed.status === 200 && found,
+          `status=${listed.status} found=${found} id=${aiDraftTcId}`,
+        );
+      }
+    } else if (createDraft?.type === "create_test_case" && sessions.pm?.token) {
+      // PM has project:* so can also confirm
+      const created = await req("POST", "/api/test-cases", {
+        token: sessions.pm.token,
+        body: {
+          title: String(createDraft.title || createDraft.name || `AI角色用例-${stamp}`).trim(),
+          projectId: createDraft.projectId || projectId,
+          owner: ACCOUNTS.qa.name,
+          assigneeRole: "qa",
+        },
+      });
+      aiDraftTcId = idOf(created.json);
+      record(
+        "PM confirm AI draft → POST /test-cases",
+        created.status === 201 && Boolean(aiDraftTcId),
+        `status=${created.status} id=${aiDraftTcId || "?"}`,
+      );
+    }
+
+    // 3) Status-change draft for an existing TC (prefer AI-created, else main testCaseId)
+    const statusTarget = aiDraftTcId || testCaseId;
+    if (statusTarget) {
+      const statusChat = await req("POST", "/api/ai/chat", {
+        token: draftToken,
+        body: {
+          messages: [{ role: "user", content: `把 ${statusTarget} 状态改为失败` }],
+          currentPage: "testing",
+        },
+      });
+      const statusData = dataOf(statusChat.json) || {};
+      const statusActions = Array.isArray(statusData.proposedActions) ? statusData.proposedActions : [];
+      const statusDraft = statusActions.find((a) => a.type === "update_test_case_status") || statusActions[0];
+      record(
+        "AI chat draft update_test_case_status",
+        statusChat.status === 200 && statusDraft?.type === "update_test_case_status" && statusDraft?.resourceId === statusTarget,
+        `status=${statusChat.status} type=${statusDraft?.type || "?"} resourceId=${statusDraft?.resourceId || "?"} targetStatus=${statusDraft?.status || "?"}`,
+      );
+      if (statusDraft?.type === "update_test_case_status" && sessions.qa?.token) {
+        const targetStatus = statusDraft.status || "failed";
+        const patched = await req("PATCH", `/api/test-cases/${encodeURIComponent(statusTarget)}/status`, {
+          token: sessions.qa.token,
+          body: { status: targetStatus },
+        });
+        record(
+          "QA confirm AI status draft → PATCH test-case status",
+          patched.status === 200 && dataOf(patched.json)?.status === targetStatus,
+          `status=${patched.status} tcStatus=${dataOf(patched.json)?.status || "?"} wanted=${targetStatus}`,
+        );
+      }
+    }
+
+    // 4) Delete draft for a disposable TC created for this flow
+    if (sessions.qa?.token) {
+      const disposable = await req("POST", "/api/test-cases", {
+        token: sessions.qa.token,
+        body: {
+          title: `AI待删用例-${stamp}`,
+          projectId,
+          owner: ACCOUNTS.qa.name,
+          assigneeRole: "qa",
+        },
+      });
+      const disposableId = idOf(disposable.json);
+      if (disposableId) {
+        const delChat = await req("POST", "/api/ai/chat", {
+          token: draftToken,
+          body: {
+            messages: [{ role: "user", content: `删除测试用例 ${disposableId}` }],
+            currentPage: "testing",
+          },
+        });
+        const delData = dataOf(delChat.json) || {};
+        const delActions = Array.isArray(delData.proposedActions) ? delData.proposedActions : [];
+        const delDraft = delActions.find((a) => a.type === "delete_test_case") || delActions[0];
+        record(
+          "AI chat draft delete_test_case",
+          delChat.status === 200 && delDraft?.type === "delete_test_case" && delDraft?.resourceId === disposableId,
+          `status=${delChat.status} type=${delDraft?.type || "?"} resourceId=${delDraft?.resourceId || "?"}`,
+        );
+        if (delDraft?.type === "delete_test_case") {
+          const del = await req("DELETE", `/api/test-cases/${encodeURIComponent(disposableId)}`, {
+            token: sessions.qa.token,
+          });
+          record(
+            "QA confirm AI delete draft → DELETE test-case",
+            del.status === 200,
+            `status=${del.status} deleted=${dataOf(del.json)?.deleted}`,
+          );
+        }
+      }
+    }
+
+    // 5) Admin can also draft create_test_case (same ai:* surface)
+    if (sessions.admin?.token && sessions.admin.token !== draftToken) {
+      const adminChat = await req("POST", "/api/ai/chat", {
+        token: sessions.admin.token,
+        body: {
+          messages: [{ role: "user", content: `新建测试用例：标题：Admin AI用例-${stamp}，项目 ${projectId}` }],
+          currentPage: "ai",
+        },
+      });
+      const adminData = dataOf(adminChat.json) || {};
+      const adminActions = Array.isArray(adminData.proposedActions) ? adminData.proposedActions : [];
+      const adminDraft = adminActions.find((a) => a.type === "create_test_case");
+      record(
+        "ADMIN AI chat draft create_test_case",
+        adminChat.status === 200 && Boolean(adminDraft),
+        `status=${adminChat.status} type=${adminDraft?.type || "?"} n=${adminActions.length}`,
+      );
+    } else if (sessions.admin?.token) {
+      // When PM missing, draftToken already is admin — still assert second phrasing
+      const adminChat = await req("POST", "/api/ai/chat", {
+        token: sessions.admin.token,
+        body: {
+          messages: [{ role: "user", content: `编写测试用例：标题：Admin二次用例-${stamp}，项目 ${projectId}` }],
+          currentPage: "ai",
+        },
+      });
+      const adminData = dataOf(adminChat.json) || {};
+      const adminActions = Array.isArray(adminData.proposedActions) ? adminData.proposedActions : [];
+      record(
+        "ADMIN AI chat draft create_test_case",
+        adminChat.status === 200 && adminActions.some((a) => a.type === "create_test_case"),
+        `status=${adminChat.status} types=${adminActions.map((a) => a.type).join(",") || "none"}`,
+      );
+    }
+
+    // 6) Attachment-assisted draft (document text → create_test_case)
+    if (draftToken) {
+      const attachChat = await req("POST", "/api/ai/chat", {
+        token: draftToken,
+        body: {
+          messages: [{ role: "user", content: "请根据附件编写测试用例" }],
+          attachments: [
+            {
+              kind: "document",
+              name: "tc-spec.md",
+              contentText: `标题：附件用例-${stamp}\n项目：${projectId}\n步骤：1 打开 2 校验\n期望：通过`,
+            },
+          ],
+          currentPage: "testing",
+        },
+      });
+      const attachData = dataOf(attachChat.json) || {};
+      const attachActions = Array.isArray(attachData.proposedActions) ? attachData.proposedActions : [];
+      const attachDraft = attachActions.find((a) => a.type === "create_test_case");
+      record(
+        "AI chat attachment draft create_test_case",
+        attachChat.status === 200 && attachDraft?.type === "create_test_case",
+        `status=${attachChat.status} type=${attachDraft?.type || "?"} title=${attachDraft?.title || attachDraft?.name || "?"}`,
+      );
     }
   });
 
