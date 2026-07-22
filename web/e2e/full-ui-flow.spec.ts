@@ -348,3 +348,64 @@ test.describe('multi-role permission probes', () => {
     await expectHeading(page, /流程|研发/);
   });
 });
+
+/**
+ * DEV / QA personal assignment surfaces.
+ * Relies on seed + full-flow assignment data when present; empty queues still pass as shell load.
+ */
+test.describe('assigned work surfaces for DEV and QA', () => {
+  test('DEV mywork shows task/defect/requirement tabs', async ({ page }) => {
+    test.setTimeout(90_000);
+    await loginAs(page, 'dev');
+    await openNav(page, '我的工作');
+    await expectHeading(page, /我的工作/);
+    await expect(page.locator('.mywork-page, .page-header').first()).toBeVisible();
+
+    for (const tab of ['我的任务', '我的缺陷', '我的需求', '日报周报'] as const) {
+      await page.locator('.tab-bar, .mywork-tab-bar').getByRole('button', { name: tab, exact: true }).click();
+      await expect(page.locator('.tab-bar .tab-item.active, .mywork-tab-bar .tab-item.active').first()).toContainText(tab);
+      await expect(
+        page.locator('.panel, .mywork-panels, .mywork-logs-layout, .body-text, .metric-card').first(),
+      ).toBeVisible();
+    }
+  });
+
+  test('QA mywork shows task/defect/requirement tabs', async ({ page }) => {
+    test.setTimeout(90_000);
+    await loginAs(page, 'qa');
+    await openNav(page, '我的工作');
+    await expectHeading(page, /我的工作/);
+
+    for (const tab of ['我的任务', '我的缺陷', '我的需求'] as const) {
+      await page.locator('.tab-bar, .mywork-tab-bar').getByRole('button', { name: tab, exact: true }).click();
+      await expect(page.locator('.tab-bar .tab-item.active, .mywork-tab-bar .tab-item.active').first()).toContainText(tab);
+      await expect(page.locator('.panel, .mywork-panels, .body-text, .metric-card, .card').first()).toBeVisible();
+    }
+  });
+
+  test('QA testing quality can open cases and defects', async ({ page }) => {
+    test.setTimeout(90_000);
+    await loginAs(page, 'qa');
+    await openNav(page, '测试质量');
+    await expectHeading(page, /测试|质量/);
+    const tabs = page.locator('.nav-tabs, .tab-bar');
+    for (const label of ['用例', '缺陷', '测试用例', '缺陷列表'] as const) {
+      const btn = tabs.getByRole('button', { name: new RegExp(label) }).first();
+      if ((await btn.count()) > 0) {
+        await btn.click();
+        await expect(page.locator('.panel, .data-table, .card, .body-text').first()).toBeVisible();
+      }
+    }
+  });
+
+  test('DEV delivery and project shells remain reachable after assignment', async ({ page }) => {
+    test.setTimeout(90_000);
+    await loginAs(page, 'dev');
+    await openNav(page, '项目执行');
+    await expectHeading(page, /项目/);
+    await openNav(page, '交付中心');
+    await expectHeading(page, /构建|发布|交付/);
+    await openNav(page, '我的工作');
+    await expect(page.locator('.mywork-metric-bar, .metric-bar, .metric-card').first()).toBeVisible({ timeout: 15_000 });
+  });
+});

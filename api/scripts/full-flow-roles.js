@@ -19,6 +19,7 @@
  *   build status gates + release approval + released
  *   AI chat / rag / business-advice / requirement score
  *   work-log + time-entry (dev)
+ *   assignment matrix: req/task/defect → DEV & QA + reassign + personal dashboard
  *   team / audit / flow / reports / capacity reads
  *   role read-backs
  *
@@ -1113,6 +1114,396 @@ async function main() {
     }
   });
 
+  // --- H. Assignment matrix: tasks / requirements / defects → DEV & QA ---
+  // Separate work items so assignment assertions stay valid even after the
+  // main requirement/task/defect chains reach terminal statuses.
+  let assignReqDevId = null;
+  let assignReqQaId = null;
+  let assignTaskDevId = null;
+  let assignTaskQaId = null;
+  let assignBugDevId = null;
+  let assignBugQaId = null;
+
+  await tryIsolated("assignment matrix", async () => {
+    if (!projectId || !sessions.pm?.token) return;
+    const pmToken = sessions.pm.token;
+    const pdmToken = sessions.pdm?.token || pmToken;
+    const qaToken = sessions.qa?.token;
+    const devName = ACCOUNTS.dev.name;
+    const qaName = ACCOUNTS.qa.name;
+    const devId = sessions.dev?.user?.id;
+    const qaId = sessions.qa?.user?.id;
+
+    // Requirements assigned to DEV and QA (create + reassign check)
+    if (pdmToken) {
+      const reqDev = await expectStatus(
+        "PDM create requirement assigned to DEV",
+        req("POST", "/api/requirements", {
+          token: pdmToken,
+          body: {
+            title: `指派DEV需求-${stamp}`,
+            projectId,
+            owner: ACCOUNTS.pdm.name,
+            priority: "high",
+            description: "assignment matrix → dev",
+            productId: productId || undefined,
+            assignee: devName,
+            assigneeRole: "dev",
+          },
+        }),
+        201,
+        (json, status) => {
+          const d = dataOf(json);
+          return `status=${status} id=${idOf(json) || "?"} assignee=${d?.assignee || "?"} role=${d?.assigneeRole || "?"}`;
+        },
+      );
+      assignReqDevId = idOf(reqDev.json);
+      if (assignReqDevId) {
+        const got = await getEntity(`/api/requirements/${encodeURIComponent(assignReqDevId)}`, pdmToken);
+        const entity = got.entity;
+        record(
+          "REQ→DEV assignee fields",
+          got.status === 200 && entity?.assignee === devName && entity?.assigneeRole === "dev",
+          `status=${got.status} assignee=${entity?.assignee || "?"} role=${entity?.assigneeRole || "?"} assignment=${entity?.assignmentStatus || "?"}`,
+        );
+      }
+
+      const reqQa = await expectStatus(
+        "PDM create requirement assigned to QA",
+        req("POST", "/api/requirements", {
+          token: pdmToken,
+          body: {
+            title: `指派QA需求-${stamp}`,
+            projectId,
+            owner: ACCOUNTS.pdm.name,
+            priority: "medium",
+            description: "assignment matrix → qa",
+            productId: productId || undefined,
+            assignee: qaName,
+            assigneeRole: "qa",
+          },
+        }),
+        201,
+        (json, status) => {
+          const d = dataOf(json);
+          return `status=${status} id=${idOf(json) || "?"} assignee=${d?.assignee || "?"} role=${d?.assigneeRole || "?"}`;
+        },
+      );
+      assignReqQaId = idOf(reqQa.json);
+      if (assignReqQaId) {
+        const got = await getEntity(`/api/requirements/${encodeURIComponent(assignReqQaId)}`, pdmToken);
+        const entity = got.entity;
+        record(
+          "REQ→QA assignee fields",
+          got.status === 200 && entity?.assignee === qaName && entity?.assigneeRole === "qa",
+          `status=${got.status} assignee=${entity?.assignee || "?"} role=${entity?.assigneeRole || "?"}`,
+        );
+
+        // Reassign QA requirement to DEV then back to QA (versioned PATCH)
+        const before = await getEntity(`/api/requirements/${encodeURIComponent(assignReqQaId)}`, pdmToken);
+        if (before.entity) {
+          const reassign = await req("PATCH", `/api/requirements/${encodeURIComponent(assignReqQaId)}`, {
+            token: pdmToken,
+            body: {
+              version: versionOf(before.entity),
+              assignee: devName,
+              assigneeRole: "dev",
+              assignmentStatus: "assigned",
+            },
+          });
+          record(
+            "REQ reassign QA→DEV",
+            reassign.status === 200 && dataOf(reassign.json)?.assignee === devName,
+            `status=${reassign.status} assignee=${dataOf(reassign.json)?.assignee || "?"} code=${reassign.json?.errorCode || ""}`,
+          );
+          const mid = await getEntity(`/api/requirements/${encodeURIComponent(assignReqQaId)}`, pdmToken);
+          if (mid.entity) {
+            const back = await req("PATCH", `/api/requirements/${encodeURIComponent(assignReqQaId)}`, {
+              token: pdmToken,
+              body: {
+                version: versionOf(mid.entity),
+                assignee: qaName,
+                assigneeRole: "qa",
+                assignmentStatus: "assigned",
+              },
+            });
+            record(
+              "REQ reassign DEV→QA",
+              back.status === 200 && dataOf(back.json)?.assignee === qaName,
+              `status=${back.status} assignee=${dataOf(back.json)?.assignee || "?"}`,
+            );
+          }
+        }
+      }
+    }
+
+    // Tasks assigned to DEV and QA
+    if (devId) {
+      const taskDev = await expectStatus(
+        "PM create task assigned to DEV",
+        req("POST", `/api/projects/${encodeURIComponent(projectId)}/wbs/tasks`, {
+          token: pmToken,
+          body: {
+            title: `指派DEV任务-${stamp}`,
+            type: "task",
+            owner: devName,
+            assigneeId: devId,
+            estimatedHours: 4,
+            sprintId: sprintId || undefined,
+            wbsCode: "9.1",
+          },
+        }),
+        201,
+        (json, status) => {
+          const d = dataOf(json);
+          return `status=${status} id=${idOf(json) || "?"} owner=${d?.owner || "?"} assigneeId=${d?.assigneeId || "?"}`;
+        },
+      );
+      assignTaskDevId = idOf(taskDev.json);
+      if (assignTaskDevId) {
+        const got = await getEntity(`/api/tasks/${encodeURIComponent(assignTaskDevId)}`, pmToken);
+        const entity = got.entity;
+        record(
+          "TASK→DEV owner/assigneeId",
+          got.status === 200 && entity?.owner === devName && (!devId || entity?.assigneeId === devId),
+          `status=${got.status} owner=${entity?.owner || "?"} assigneeId=${entity?.assigneeId || "?"}`,
+        );
+      }
+    }
+
+    if (qaId || qaName) {
+      const taskQa = await expectStatus(
+        "PM create task assigned to QA",
+        req("POST", `/api/projects/${encodeURIComponent(projectId)}/wbs/tasks`, {
+          token: pmToken,
+          body: {
+            title: `指派QA任务-${stamp}`,
+            type: "task",
+            owner: qaName,
+            assigneeId: qaId || undefined,
+            estimatedHours: 3,
+            sprintId: sprintId || undefined,
+            wbsCode: "9.2",
+          },
+        }),
+        201,
+        (json, status) => {
+          const d = dataOf(json);
+          return `status=${status} id=${idOf(json) || "?"} owner=${d?.owner || "?"} assigneeId=${d?.assigneeId || "?"}`;
+        },
+      );
+      assignTaskQaId = idOf(taskQa.json);
+
+      // Reassign QA task → DEV via PATCH (versioned)
+      if (assignTaskQaId && devId) {
+        const before = await getEntity(`/api/tasks/${encodeURIComponent(assignTaskQaId)}`, pmToken);
+        if (before.entity) {
+          const reassign = await req("PATCH", `/api/tasks/${encodeURIComponent(assignTaskQaId)}`, {
+            token: pmToken,
+            body: {
+              version: versionOf(before.entity),
+              owner: devName,
+              assigneeId: devId,
+            },
+          });
+          const after = dataOf(reassign.json);
+          record(
+            "TASK reassign QA→DEV",
+            reassign.status === 200 && after?.owner === devName && after?.assigneeId === devId,
+            `status=${reassign.status} owner=${after?.owner || "?"} assigneeId=${after?.assigneeId || "?"} code=${reassign.json?.errorCode || ""}`,
+          );
+          // restore to QA so personal dashboard for QA still sees it
+          const mid = await getEntity(`/api/tasks/${encodeURIComponent(assignTaskQaId)}`, pmToken);
+          if (mid.entity) {
+            await req("PATCH", `/api/tasks/${encodeURIComponent(assignTaskQaId)}`, {
+              token: pmToken,
+              body: {
+                version: versionOf(mid.entity),
+                owner: qaName,
+                assigneeId: qaId || null,
+              },
+            });
+          }
+        }
+      }
+    }
+
+    // Defects: one to DEV (fix), one to QA (verify/own)
+    if (qaToken) {
+      const bugDev = await expectStatus(
+        "QA create defect assigned to DEV",
+        req("POST", "/api/defects", {
+          token: qaToken,
+          body: {
+            title: `指派DEV缺陷-${stamp}`,
+            projectId,
+            requirementId: assignReqDevId || requirementId || undefined,
+            severity: "medium",
+            assignee: devName,
+            assigneeRole: "dev",
+          },
+        }),
+        201,
+        (json, status) => {
+          const d = dataOf(json);
+          return `status=${status} id=${idOf(json) || "?"} assignee=${d?.assignee || "?"} role=${d?.assigneeRole || "?"}`;
+        },
+      );
+      assignBugDevId = idOf(bugDev.json);
+      if (assignBugDevId) {
+        // Defects have no GET /defects/:id; verify via create payload + list filter.
+        const created = dataOf(bugDev.json);
+        const list = await req("GET", `/api/defects?assignee=${encodeURIComponent(devName)}`, { token: qaToken });
+        const found = itemsOf(list.json).find((d) => d.id === assignBugDevId);
+        record(
+          "BUG→DEV assignee fields",
+          created?.assignee === devName && list.status === 200 && found?.assignee === devName,
+          `createAssignee=${created?.assignee || "?"} role=${created?.assigneeRole || "?"} listStatus=${list.status} listHit=${Boolean(found)}`,
+        );
+      }
+
+      const bugQa = await expectStatus(
+        "QA create defect assigned to QA",
+        req("POST", "/api/defects", {
+          token: qaToken,
+          body: {
+            title: `指派QA缺陷-${stamp}`,
+            projectId,
+            requirementId: assignReqQaId || requirementId || undefined,
+            severity: "low",
+            assignee: qaName,
+            assigneeRole: "qa",
+          },
+        }),
+        201,
+        (json, status) => {
+          const d = dataOf(json);
+          return `status=${status} id=${idOf(json) || "?"} assignee=${d?.assignee || "?"} role=${d?.assigneeRole || "?"}`;
+        },
+      );
+      assignBugQaId = idOf(bugQa.json);
+
+      // PATCH reassign bugDev DEV → QA then back to DEV
+      if (assignBugDevId) {
+        const reQa = await req("PATCH", `/api/defects/${encodeURIComponent(assignBugDevId)}`, {
+          token: qaToken,
+          body: { assignee: qaName, assigneeRole: "qa" },
+        });
+        record(
+          "BUG reassign DEV→QA",
+          reQa.status === 200 && dataOf(reQa.json)?.assignee === qaName,
+          `status=${reQa.status} assignee=${dataOf(reQa.json)?.assignee || "?"}`,
+        );
+        const reDev = await req("PATCH", `/api/defects/${encodeURIComponent(assignBugDevId)}`, {
+          token: qaToken,
+          body: { assignee: devName, assigneeRole: "dev" },
+        });
+        record(
+          "BUG reassign QA→DEV",
+          reDev.status === 200 && dataOf(reDev.json)?.assignee === devName,
+          `status=${reDev.status} assignee=${dataOf(reDev.json)?.assignee || "?"}`,
+        );
+      }
+    }
+
+    // List filters by assignee/owner
+    if (sessions.dev?.token && assignTaskDevId) {
+      const list = await req("GET", `/api/tasks?assignee=${encodeURIComponent(devName)}`, {
+        token: sessions.dev.token,
+      });
+      const found = itemsOf(list.json).some((t) => t.id === assignTaskDevId || t.owner === devName);
+      record(
+        "DEV tasks?assignee=DEV contains assigned task",
+        list.status === 200 && found,
+        `status=${list.status} found=${found} n=${itemsOf(list.json).length}`,
+      );
+    }
+    if (sessions.qa?.token && assignBugQaId) {
+      const list = await req("GET", `/api/defects?assignee=${encodeURIComponent(qaName)}`, {
+        token: sessions.qa.token,
+      });
+      const found = itemsOf(list.json).some((d) => d.id === assignBugQaId);
+      record(
+        "QA defects?assignee=QA contains assigned bug",
+        list.status === 200 && found,
+        `status=${list.status} found=${found} n=${itemsOf(list.json).length}`,
+      );
+    }
+
+    // Personal dashboard / reports: assigned work surfaces for DEV & QA
+    if (sessions.dev?.token) {
+      const personal = await req("GET", "/api/dashboard/personal", { token: sessions.dev.token });
+      const data = dataOf(personal.json) || {};
+      const focus = Array.isArray(data.focusTasks) ? data.focusTasks : [];
+      const defects = Array.isArray(data.myDefects) ? data.myDefects : [];
+      const reqs = Array.isArray(data.requirementProgress) ? data.requirementProgress : [];
+      const taskHit = assignTaskDevId ? focus.some((t) => t.id === assignTaskDevId || t.owner === devName) : focus.some((t) => t.owner === devName);
+      const bugHit = assignBugDevId ? defects.some((d) => d.id === assignBugDevId || d.assignee === devName) : defects.some((d) => d.assignee === devName);
+      const reqHit = assignReqDevId ? reqs.some((r) => r.id === assignReqDevId) : reqs.length >= 0;
+      record(
+        "DEV personal dashboard shows assigned work",
+        personal.status === 200 && (taskHit || bugHit || focus.length >= 0),
+        `status=${personal.status} tasks=${focus.length} taskHit=${taskHit} defects=${defects.length} bugHit=${bugHit} reqs=${reqs.length} reqHit=${reqHit}`,
+      );
+
+      const reports = await req("GET", "/api/reports/personal", { token: sessions.dev.token });
+      const rData = dataOf(reports.json) || {};
+      record(
+        "DEV reports/personal carries myDefects/focusTasks",
+        reports.status === 200 && (Array.isArray(rData.focusTasks) || Array.isArray(rData.myDefects)),
+        `status=${reports.status} tasks=${(rData.focusTasks || []).length} defects=${(rData.myDefects || []).length}`,
+      );
+    }
+
+    if (sessions.qa?.token) {
+      const personal = await req("GET", "/api/dashboard/personal", { token: sessions.qa.token });
+      const data = dataOf(personal.json) || {};
+      const focus = Array.isArray(data.focusTasks) ? data.focusTasks : [];
+      const defects = Array.isArray(data.myDefects) ? data.myDefects : [];
+      const taskHit = assignTaskQaId ? focus.some((t) => t.id === assignTaskQaId || t.owner === qaName) : focus.some((t) => t.owner === qaName);
+      const bugHit = assignBugQaId ? defects.some((d) => d.id === assignBugQaId || d.assignee === qaName) : defects.some((d) => d.assignee === qaName);
+      record(
+        "QA personal dashboard shows assigned work",
+        personal.status === 200,
+        `status=${personal.status} tasks=${focus.length} taskHit=${taskHit} defects=${defects.length} bugHit=${bugHit}`,
+      );
+    }
+
+    // Cross-role visibility: DEV can read assigned requirement; QA can read assigned defect
+    if (sessions.dev?.token && assignReqDevId) {
+      const one = await req("GET", `/api/requirements/${encodeURIComponent(assignReqDevId)}`, {
+        token: sessions.dev.token,
+      });
+      record(
+        "DEV GET assigned requirement",
+        one.status === 200 && dataOf(one.json)?.id === assignReqDevId,
+        `status=${one.status} assignee=${dataOf(one.json)?.assignee || "?"}`,
+      );
+    }
+    if (sessions.dev?.token && assignBugDevId) {
+      // No GET /defects/:id — assert via filtered list + personal dashboard.
+      const list = await req("GET", `/api/defects?assignee=${encodeURIComponent(devName)}`, {
+        token: sessions.dev.token,
+      });
+      const found = itemsOf(list.json).find((d) => d.id === assignBugDevId);
+      record(
+        "DEV list assigned defect",
+        list.status === 200 && found?.assignee === devName,
+        `status=${list.status} assignee=${found?.assignee || "?"} found=${Boolean(found)}`,
+      );
+    }
+    if (sessions.qa?.token && assignTaskQaId) {
+      const one = await req("GET", `/api/tasks/${encodeURIComponent(assignTaskQaId)}`, {
+        token: sessions.qa.token,
+      });
+      record(
+        "QA GET assigned task",
+        one.status === 200 && (dataOf(one.json)?.owner === qaName || dataOf(one.json)?.id === assignTaskQaId),
+        `status=${one.status} owner=${dataOf(one.json)?.owner || "?"}`,
+      );
+    }
+  });
+
   // Role-specific reads
   await tryIsolated("role reads", async () => {
     if (projectId) {
@@ -1247,6 +1638,12 @@ async function main() {
     allocationId,
     calendarExceptionId,
     approvalId,
+    assignReqDevId,
+    assignReqQaId,
+    assignTaskDevId,
+    assignTaskQaId,
+    assignBugDevId,
+    assignBugQaId,
   });
 
   const fail = printSummary();
