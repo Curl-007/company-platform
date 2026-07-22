@@ -2287,6 +2287,9 @@ h1, h2, h3, h4, h5, h6 {
   padding: 12px;
   background: color-mix(in srgb, var(--bg-elevated, var(--bg-panel)) 92%, transparent);
 }
+.ai-action-card-danger {
+  border-color: color-mix(in srgb, var(--color-risk) 45%, var(--border-divider));
+}
 .ai-action-card-success {
   border-color: color-mix(in srgb, var(--color-success) 45%, var(--border-divider));
 }

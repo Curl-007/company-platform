@@ -1,8 +1,8 @@
 const express = require("express");
 const { buildChatPayload, buildSummary, validateAdviceTarget } = require("./interactionsService");
 const {
-  appendLocalRequirementDraft,
-  buildLocalRequirementAction,
+  appendLocalActionDraft,
+  buildLocalAction,
   extractProposedActions,
   stripActionJson,
 } = require("./chatService");
@@ -84,10 +84,10 @@ function createAiInteractionsRouter({
       let content = stripActionJson(rawContent);
       if (!proposedActions.length) {
         const context = typeof buildAiChatContext === "function" ? await buildAiChatContext() : null;
-        const localAction = buildLocalRequirementAction({ messages, attachments, context });
+        const localAction = buildLocalAction({ messages, attachments, context });
         if (localAction) {
           proposedActions = [localAction];
-          content = appendLocalRequirementDraft(content, localAction);
+          content = appendLocalActionDraft(content, localAction);
         }
       }
 

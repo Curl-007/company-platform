@@ -10,7 +10,7 @@ import {
   messageSource,
 } from '../aiChatModel';
 import AiChatContent from './AiChatContent';
-import AiRequirementDraftCard from './AiRequirementDraftCard';
+import AiActionDraftCard from './AiActionDraftCard';
 
 export default function AiChatPanel({
   providerStatus,
@@ -25,8 +25,10 @@ export default function AiChatPanel({
   onFiles,
   onSend,
   projects = [],
-  canCreateRequirement = false,
-  onRequirementCreated,
+  canManageRequirements = false,
+  canManageTesting = false,
+  canManageProjects = false,
+  onActionDone,
 }: {
   providerStatus: string;
   providerConfigured?: boolean;
@@ -40,8 +42,10 @@ export default function AiChatPanel({
   onFiles: (files: FileList | null) => void;
   onSend: () => void;
   projects?: Project[];
-  canCreateRequirement?: boolean;
-  onRequirementCreated?: (requirementId: string) => void;
+  canManageRequirements?: boolean;
+  canManageTesting?: boolean;
+  canManageProjects?: boolean;
+  onActionDone?: (result: { type: string; id: string; label: string }) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -87,17 +91,17 @@ export default function AiChatPanel({
               ) : null}
               {message.role === 'assistant' && message.proposedActions?.length ? (
                 <div className="ai-chat-actions">
-                  {message.proposedActions
-                    .filter((action) => action.type === 'create_requirement')
-                    .map((action, index) => (
-                      <AiRequirementDraftCard
-                        key={`${message.id}-req-${index}-${action.title}`}
-                        action={action}
-                        projects={projects}
-                        canCreate={canCreateRequirement}
-                        onCreated={onRequirementCreated}
-                      />
-                    ))}
+                  {message.proposedActions.map((action, index) => (
+                    <AiActionDraftCard
+                      key={`${message.id}-act-${index}-${action.type}-${action.resourceId || action.title || index}`}
+                      action={action}
+                      projects={projects}
+                      canManageRequirements={canManageRequirements}
+                      canManageTesting={canManageTesting}
+                      canManageProjects={canManageProjects}
+                      onDone={onActionDone}
+                    />
+                  ))}
                 </div>
               ) : null}
             </div>
@@ -145,7 +149,7 @@ export default function AiChatPanel({
                 onSend();
               }
             }}
-            placeholder="例如：帮我在 PRJ-001 新建需求「登录页改版」；也可上传需求文档后说「根据附件生成需求」。"
+            placeholder="例：新建需求/缺陷/任务；把 REQ-001 状态改为 testing；删除 BUG-002；修改 TASK-003 标题…"
             disabled={sending}
           />
           <button className="btn btn-primary btn-sm" type="button" onClick={onSend} disabled={sending || (!draft.trim() && attachments.length === 0)}>

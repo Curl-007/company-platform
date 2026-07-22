@@ -138,12 +138,7 @@ function createAiChatService({
       "3. 如果用户上传图片，识别画面或界面问题，并给出改进建议。",
       "4. 不要输出固定的摘要/风险/建议三段模板，按对话自然回答。",
       "5. 数据不足时说明缺口，并给下一步需要补充的信息。",
-      "6. 若用户意图是新建/创建需求（含「帮我建需求」「根据文档生成需求」「登记需求」），先用自然语言说明拟建内容，",
-      "   然后在回答末尾单独追加一行 JSON（不要用代码块包裹），格式必须为：",
-      '   ACTION_JSON:{"type":"create_requirement","title":"...","description":"...","priority":"high|medium|low","projectId":"PRJ-xxx或空字符串","acceptanceCriteria":["..."],"assignee":"","assigneeRole":"dev|qa|"}',
-      "   规则：title 必填；priority 仅 high/medium/low；projectId 尽量从平台上下文匹配；无把握则留空；",
-      "   acceptanceCriteria 从对话/文档提取，无则 []；不要编造不存在的项目 id。",
-      "   非新建需求意图时禁止输出 ACTION_JSON。平台只会把 ACTION_JSON 作为「待确认草稿」，不会自动写库。",
+      ...require("./chatActions").chatActionPromptRules(),
       `当前页面：${currentPage || "未知"}`,
       `对话范围：${scope || "project-management"}`,
       `平台上下文：${JSON.stringify(context)}`,
@@ -203,187 +198,21 @@ function createAiChatService({
   };
 }
 
-const CREATE_REQUIREMENT_INTENT =
-  /(新建|创建|登记|录入|起草|生成).{0,12}(需求|story|requirement)|(帮我).{0,8}(建|写|录).{0,8}(需求)|(需求).{0,8}(帮我|直接).{0,8}(建|写|创建)/i;
-
-function wantsCreateRequirement(messages = [], attachments = []) {
-  const latest = String(messages[messages.length - 1]?.content || "");
-  if (CREATE_REQUIREMENT_INTENT.test(latest)) return true;
-  // Document + create-ish verb nearby in last 2 user turns
-  const recent = messages
-    .filter((item) => item.role === "user")
-    .slice(-2)
-    .map((item) => item.content)
-    .join("\n");
-  if (attachments.some((item) => item.kind === "document") && /(需求|requirement|验收|功能点)/i.test(recent) && /(建|创建|生成|提炼|整理)/i.test(recent)) {
-    return true;
-  }
-  return false;
-}
-
-function stripActionJson(content) {
-  return String(content || "")
-    .replace(/\n?ACTION_JSON\s*:\s*\{[\s\S]*\}\s*$/i, "")
-    .replace(/\n?```(?:json)?\s*\{[\s\S]*?"type"\s*:\s*"create_requirement"[\s\S]*?\}\s*```\s*$/i, "")
-    .trim();
-}
-
-function normalizePriority(value) {
-  const raw = String(value || "").trim().toLowerCase();
-  if (["high", "高", "p0", "p1"].includes(raw)) return "high";
-  if (["low", "低", "p3"].includes(raw)) return "low";
-  if (["medium", "中", "p2", "mid"].includes(raw)) return "medium";
-  return "medium";
-}
-
-function normalizeAssigneeRole(value) {
-  const raw = String(value || "").trim().toLowerCase();
-  if (raw === "qa" || raw === "测试") return "qa";
-  if (raw === "dev" || raw === "开发") return "dev";
-  return "";
-}
-
-function normalizeAcceptanceCriteria(value) {
-  if (Array.isArray(value)) {
-    return value.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 20);
-  }
-  if (typeof value === "string") {
-    return value
-      .split(/\n+|；|;|。/)
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .slice(0, 20);
-  }
-  return [];
-}
-
-function parseJsonObject(raw) {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    // tolerate trailing commas / single quotes lightly
-    try {
-      return JSON.parse(raw.replace(/,\s*([}\]])/g, "$1").replace(/'/g, '"'));
-    } catch {
-      return null;
-    }
-  }
-}
-
-function extractProposedActions(content) {
-  const text = String(content || "");
-  const actions = [];
-  const patterns = [
-    /ACTION_JSON\s*:\s*(\{[\s\S]*\})\s*$/im,
-    /```(?:json)?\s*(\{[\s\S]*?"type"\s*:\s*"create_requirement"[\s\S]*?\})\s*```/im,
-  ];
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (!match) continue;
-    const parsed = parseJsonObject(match[1]);
-    if (!parsed || parsed.type !== "create_requirement") continue;
-    const title = String(parsed.title || "").trim().slice(0, 200);
-    if (!title) continue;
-    actions.push({
-      type: "create_requirement",
-      title,
-      description: String(parsed.description || "").trim().slice(0, 8000),
-      priority: normalizePriority(parsed.priority),
-      projectId: String(parsed.projectId || "").trim().slice(0, 64),
-      acceptanceCriteria: normalizeAcceptanceCriteria(parsed.acceptanceCriteria),
-      assignee: String(parsed.assignee || "").trim().slice(0, 80),
-      assigneeRole: normalizeAssigneeRole(parsed.assigneeRole),
-    });
-    break;
-  }
-  return actions;
-}
-
-function guessTitleFromText(text) {
-  const lines = String(text || "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  for (const line of lines) {
-    const cleaned = line
-      .replace(/^#+\s*/, "")
-      .replace(/^(标题|需求|名称)[:：]\s*/i, "")
-      .trim();
-    if (cleaned.length >= 4 && cleaned.length <= 80 && !/^(背景|描述|验收|目标)/i.test(cleaned)) {
-      return cleaned.slice(0, 80);
-    }
-  }
-  const compact = String(text || "").replace(/\s+/g, " ").trim();
-  if (!compact) return "未命名需求草稿";
-  return compact.slice(0, 48);
-}
-
-function buildLocalRequirementAction({ messages = [], attachments = [], context = null }) {
-  if (!wantsCreateRequirement(messages, attachments)) return null;
-  const latest = String(messages[messages.length - 1]?.content || "");
-  const docText = attachments
-    .filter((item) => item.kind === "document")
-    .map((item) => item.contentText || "")
-    .join("\n")
-    .slice(0, 6000);
-  const source = [latest, docText].filter(Boolean).join("\n");
-  const titleMatch = source.match(/(?:标题|需求名称|名称)[:：]\s*([^\n，,；;]+)/i);
-  const title = (titleMatch?.[1] || guessTitleFromText(source)).trim().slice(0, 80);
-  const priorityMatch = source.match(/(?:优先级|priority)[:：]?\s*(high|medium|low|高|中|低)/i);
-  const criteria = [];
-  const criteriaBlock = source.match(/(?:验收标准|验收条件|acceptance)[:：]?\s*([\s\S]{0,1200})/i);
-  if (criteriaBlock) {
-    criteria.push(...normalizeAcceptanceCriteria(criteriaBlock[1]));
-  }
-  const projects = context?.projects || [];
-  let projectId = "";
-  for (const project of projects) {
-    if (project?.id && source.includes(project.id)) {
-      projectId = project.id;
-      break;
-    }
-    if (project?.name && source.includes(project.name)) {
-      projectId = project.id;
-      break;
-    }
-  }
-  if (!projectId && projects.length === 1) projectId = projects[0].id;
-  const descriptionParts = [];
-  if (docText) descriptionParts.push(`【来自附件】\n${docText.slice(0, 2500)}`);
-  if (latest) descriptionParts.push(`【对话说明】\n${latest.slice(0, 1500)}`);
-  return {
-    type: "create_requirement",
-    title,
-    description: descriptionParts.join("\n\n").slice(0, 8000),
-    priority: normalizePriority(priorityMatch?.[1]),
-    projectId,
-    acceptanceCriteria: criteria,
-    assignee: "",
-    assigneeRole: "",
-  };
-}
-
-function appendLocalRequirementDraft(content, action) {
-  if (!action) return content;
-  const lines = [
-    String(content || "").trim(),
-    "",
-    "我已根据对话/附件整理出一份「新建需求」草稿，请在下方确认后才会写入系统（不会自动创建）。",
-    `标题：${action.title}`,
-    `项目：${action.projectId || "（待选择）"}`,
-    `优先级：${action.priority}`,
-    action.acceptanceCriteria?.length ? `验收要点：${action.acceptanceCriteria.join("；")}` : "验收要点：（可确认时补充）",
-  ];
-  return lines.filter((line) => line !== undefined).join("\n");
-}
+const chatActions = require('./chatActions');
 
 module.exports = {
   createAiChatService,
   dataUrlForAttachment,
   normalizeAiChatMessages,
-  wantsCreateRequirement,
-  extractProposedActions,
-  stripActionJson,
-  buildLocalRequirementAction,
-  appendLocalRequirementDraft,
+  ACTION_TYPES: chatActions.ACTION_TYPES,
+  wantsCreateRequirement: chatActions.wantsCreateRequirement,
+  detectIntentType: chatActions.detectIntentType,
+  extractProposedActions: chatActions.extractProposedActions,
+  stripActionJson: chatActions.stripActionJson,
+  buildLocalAction: chatActions.buildLocalAction,
+  buildLocalRequirementAction: chatActions.buildLocalRequirementAction,
+  appendLocalActionDraft: chatActions.appendLocalActionDraft,
+  appendLocalRequirementDraft: chatActions.appendLocalRequirementDraft,
+  actionLabel: chatActions.actionLabel,
+  normalizeAction: chatActions.normalizeAction,
 };

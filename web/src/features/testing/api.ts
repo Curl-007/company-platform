@@ -126,6 +126,7 @@ export interface CreateDefectInput {
   requirementId?: string;
   assignee?: string;
   assigneeRole?: string;
+  description?: string;
 }
 
 export function createDefect(input: CreateDefectInput): Promise<Defect> {

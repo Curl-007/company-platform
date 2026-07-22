@@ -5,8 +5,20 @@ export function fetchProjectWbs(id: string): Promise<Task[]> {
   return unwrap<Task[]>(`/api/projects/${id}/wbs`);
 }
 
+export function fetchTask(id: string): Promise<Task> {
+  return unwrap<Task>(`/api/tasks/${encodeURIComponent(id)}`);
+}
+
+export function updateTaskStatus(
+  id: string,
+  input: { status: string; version: number; progress?: number; statusReason?: string },
+): Promise<Task> {
+  return unwrapPatch<Task>(`/api/tasks/${encodeURIComponent(id)}/status`, input);
+}
+
 export interface CreateWbsTaskInput {
   title: string;
+  owner?: string;
   assigneeId?: string;
   requirementId?: string;
   type?: string;

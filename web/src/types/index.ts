@@ -831,15 +831,36 @@ export interface AiChatAttachment {
   contentBase64?: string;
 }
 
+export type AiProposedActionType =
+  | 'create_requirement'
+  | 'update_requirement'
+  | 'update_requirement_status'
+  | 'delete_requirement'
+  | 'create_defect'
+  | 'update_defect'
+  | 'update_defect_status'
+  | 'delete_defect'
+  | 'create_task'
+  | 'update_task'
+  | 'update_task_status'
+  | 'delete_task';
+
 export interface AiProposedAction {
-  type: 'create_requirement';
-  title: string;
+  type: AiProposedActionType | string;
+  title?: string;
   description?: string;
   priority?: 'high' | 'medium' | 'low' | string;
+  severity?: string;
   projectId?: string;
+  resourceId?: string;
+  status?: string;
   acceptanceCriteria?: string[];
   assignee?: string;
   assigneeRole?: string;
+  owner?: string;
+  taskType?: string;
+  estimatedHours?: number;
+  reason?: string;
 }
 
 export interface AiChatMessage {

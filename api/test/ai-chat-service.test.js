@@ -131,5 +131,5 @@ test("AI chat extracts create_requirement ACTION_JSON and builds local drafts", 
   assert.equal(local.type, "create_requirement");
   assert.match(local.title, /对账导出|未命名/);
   const drafted = appendLocalRequirementDraft("规则兜底说明", local);
-  assert.match(drafted, /拟建需求|确认后才会写入|标题：/);
+  assert.match(drafted, /新建需求|确认后才会写入|标题：/);
 });

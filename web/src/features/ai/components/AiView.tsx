@@ -29,9 +29,11 @@ export default function AiView() {
   const toast = useToast();
   const confirm = useConfirm();
   const sessionUser = getSessionUser();
-  const canCreateRequirement = canOperate(sessionUser, 'requirements:manage');
+  const canManageRequirements = canOperate(sessionUser, 'requirements:manage');
+  const canManageTesting = canOperate(sessionUser, 'testing:manage');
+  const canManageProjects = canOperate(sessionUser, 'projects:manage');
   const [messages, setMessages] = useState<AiChatMessage[]>([
-    createWelcomeMessage('我是项目管理 AI 助手。可以直接问进度/风险，也可以说「帮我新建需求…」或上传文档让我生成需求草稿（确认后才写入）。'),
+    createWelcomeMessage('我是项目管理 AI 助手。可对话查询，也可说「新建/修改/删除/改状态」需求·缺陷·任务；确认后才写入正式接口。'),
   ]);
   const [draft, setDraft] = useState('');
   const [attachments, setAttachments] = useState<AiChatAttachment[]>([]);
@@ -138,14 +140,14 @@ export default function AiView() {
     setFileError(null);
   }
 
-  function handleRequirementCreated(requirementId: string) {
-    toast.success(`需求已创建：${requirementId}`);
+  function handleActionDone(result: { type: string; id: string; label: string }) {
+    toast.success(`${result.label}成功：${result.id}`);
     setMessages((prev) => [
       ...prev,
       {
         id: `SYS-${Date.now()}`,
         role: 'assistant',
-        content: `已确认创建需求 ${requirementId}。可在「需求管理」查看详情，或继续告诉我下一步（例如指派给开发/补验收标准）。`,
+        content: `已确认执行「${result.label}」→ ${result.id}。可继续下一条指令（创建/修改/删除/改状态）。`,
         createdAt: nowIso(),
         generatedBy: 'system',
       },
@@ -258,7 +260,7 @@ export default function AiView() {
     <div className="ai-chat-page">
       <PageHeader
         title="AI 助手"
-        description="对话分析项目数据；也可根据描述/附件生成需求草稿，确认后走正式创建接口。"
+        description="对话分析 + 业务写操作草稿（需求/缺陷/任务的创建、修改、删除、改状态）；确认后走正式 API。"
         actions={(
           <button className="btn btn-secondary btn-sm" onClick={resetChat}>
             <RefreshCw size={15} />
@@ -281,8 +283,10 @@ export default function AiView() {
           onFiles={handleFiles}
           onSend={() => { void handleSend(); }}
           projects={projectsAsync.data ?? []}
-          canCreateRequirement={canCreateRequirement}
-          onRequirementCreated={handleRequirementCreated}
+          canManageRequirements={canManageRequirements}
+          canManageTesting={canManageTesting}
+          canManageProjects={canManageProjects}
+          onActionDone={handleActionDone}
         />
 
         <AiSidePanel
