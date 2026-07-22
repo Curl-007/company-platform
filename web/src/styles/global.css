@@ -1748,7 +1748,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .ai-provider-status {
@@ -2750,13 +2750,13 @@ h1, h2, h3, h4, h5, h6 {
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .login-card form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .login-input-wrap {
@@ -3024,8 +3024,8 @@ h1, h2, h3, h4, h5, h6 {
 .gap-4 { gap: 4px; }
 .gap-8 { gap: 8px; }
 .gap-12 { gap: 12px; }
-.gap-16 { gap: 16px; }
-.gap-20 { gap: 20px; }
+.gap-16 { gap: var(--space-4); }
+.gap-20 { gap: var(--space-5); }
 .gap-24 { gap: 24px; }
 .min-w-0 { min-width: 0; }
 .flex-grow { flex-grow: 1; }
@@ -3034,13 +3034,13 @@ h1, h2, h3, h4, h5, h6 {
 .grid-2-1 {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  gap: 20px;
+  gap: var(--space-5);
   align-items: start;
 }
 .grid-2 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 20px;
+  gap: var(--space-5);
   align-items: start;
 }
 
@@ -3239,7 +3239,7 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .testing-ai-stats,
@@ -3666,7 +3666,7 @@ h1, h2, h3, h4, h5, h6 {
 .account-info-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
+  gap: var(--space-4);
 }
 .account-info-item {
   display: flex;
@@ -3927,7 +3927,7 @@ h1, h2, h3, h4, h5, h6 {
 .management-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
-  gap: 16px;
+  gap: var(--space-4);
   align-items: stretch;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--border-divider);
@@ -4038,7 +4038,7 @@ h1, h2, h3, h4, h5, h6 {
 .management-empty {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: 18px;
+  gap: var(--space-5);
   padding: 20px;
 }
 
@@ -4189,7 +4189,7 @@ h1, h2, h3, h4, h5, h6 {
 .product-hero {
   display: grid;
   grid-template-columns: minmax(220px, 34%) minmax(0, 1fr);
-  gap: 16px;
+  gap: var(--space-4);
   align-items: stretch;
 }
 
@@ -4712,7 +4712,7 @@ h1, h2, h3, h4, h5, h6 {
 .notif-item-time { font-size: 11px; }
 
 /* Flow pipeline */
-.flow-pipeline { display: flex; flex-direction: column; gap: 16px; }
+.flow-pipeline { display: flex; flex-direction: column; gap: var(--space-4); }
 .flow-track {
   display: flex;
   align-items: flex-start;
@@ -4806,7 +4806,7 @@ h1, h2, h3, h4, h5, h6 {
 .funnel-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: var(--space-4);
   margin-top: 12px;
 }
 .funnel-legend-item { display: flex; align-items: center; gap: 5px; }
@@ -5397,7 +5397,7 @@ h1, h2, h3, h4, h5, h6 {
 .org-layout {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
-  gap: 20px;
+  gap: var(--space-5);
   align-items: start;
 }
 
@@ -5953,7 +5953,7 @@ html {
 .edit-form-blocks {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
   padding: 4px 0;
 }
 .edit-form-block {
@@ -6846,13 +6846,13 @@ html {
 .team-detail-panel .panel-body {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .team-detail-hero {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-4);
   padding: 14px;
   border: 1px solid var(--border-divider);
   border-radius: var(--radius-card);
@@ -7108,7 +7108,7 @@ html {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .delivery-ai-stats,
@@ -7181,7 +7181,7 @@ html {
 .delivery-overview-grid {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(300px, 0.9fr);
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .delivery-pipeline {
@@ -7517,7 +7517,7 @@ html {
 .delivery-detail-panel .panel-body {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .delivery-detail-grid {
