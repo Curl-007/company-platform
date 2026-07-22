@@ -327,8 +327,8 @@ function buildLocalRequirementAction({ messages = [], attachments = [], context 
     .join("\n")
     .slice(0, 6000);
   const source = [latest, docText].filter(Boolean).join("\n");
-  const titleMatch = source.match(/(?:标题|需求名称|名称)[:：]\s*(.+)/i);
-  const title = (titleMatch?.[1] || guessTitleFromText(source)).slice(0, 80);
+  const titleMatch = source.match(/(?:标题|需求名称|名称)[:：]\s*([^\n，,；;]+)/i);
+  const title = (titleMatch?.[1] || guessTitleFromText(source)).trim().slice(0, 80);
   const priorityMatch = source.match(/(?:优先级|priority)[:：]?\s*(high|medium|low|高|中|低)/i);
   const criteria = [];
   const criteriaBlock = source.match(/(?:验收标准|验收条件|acceptance)[:：]?\s*([\s\S]{0,1200})/i);
