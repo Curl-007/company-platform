@@ -6445,6 +6445,19 @@ html {
   gap: 8px;
   margin-bottom: 10px;
 }
+.mywork-filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
 .mywork-panels,
 .mywork-split {
   display: grid;

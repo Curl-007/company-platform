@@ -12,11 +12,20 @@ import { getSessionUser } from '../../../services/auth';
 import { navigateTo } from '../../team/components/teamMeta';
 import type { StatusHistoryEntry, Task } from '../../../types';
 
-export type TaskFilter = 'all' | 'requirement' | 'test_case' | 'defect';
+export type TaskFilter = 'all' | 'requirement' | 'test_case' | 'defect' | 'general';
+
+export type TaskFilterCounts = {
+  all: number;
+  requirement: number;
+  test_case: number;
+  defect: number;
+  general: number;
+};
 
 export default function MyWorkTaskWorkspace({
   taskFilter,
   onTaskFilterChange,
+  filterCounts,
   visibleTasks,
   selectedTask,
   onSelectTask,
@@ -26,6 +35,7 @@ export default function MyWorkTaskWorkspace({
 }: {
   taskFilter: TaskFilter;
   onTaskFilterChange: (filter: TaskFilter) => void;
+  filterCounts: TaskFilterCounts;
   visibleTasks: Task[];
   selectedTask: Task | null;
   onSelectTask: (id: string) => void;
@@ -67,17 +77,44 @@ export default function MyWorkTaskWorkspace({
     return canAccessPageForUser(sessionUser, 'projects');
   };
 
+  function sourceLabel(task: Task) {
+    if (task.sourceType === 'requirement') return '需求';
+    if (task.sourceType === 'test_case') return '测试';
+    if (task.sourceType === 'defect') return '缺陷';
+    return '一般';
+  }
+
+  const filterButtons: Array<{ key: TaskFilter; label: string; count: number }> = [
+    { key: 'all', label: '全部', count: filterCounts.all },
+    { key: 'requirement', label: '需求任务', count: filterCounts.requirement },
+    { key: 'test_case', label: '测试任务', count: filterCounts.test_case },
+    { key: 'defect', label: '缺陷修复', count: filterCounts.defect },
+    { key: 'general', label: '一般任务', count: filterCounts.general },
+  ];
+
+  const queueSubtitle =
+    taskFilter === 'all'
+      ? `共 ${visibleTasks.length} 条（需求 ${filterCounts.requirement} · 测试 ${filterCounts.test_case} · 缺陷 ${filterCounts.defect} · 一般 ${filterCounts.general}）`
+      : `当前筛选 ${visibleTasks.length} 条`;
+
   return (
     <div className="mywork-tasks">
       <div className="mywork-task-filters">
-        <button className={`btn btn-sm ${taskFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => onTaskFilterChange('all')}>全部</button>
-        <button className={`btn btn-sm ${taskFilter === 'requirement' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => onTaskFilterChange('requirement')}>需求任务</button>
-        <button className={`btn btn-sm ${taskFilter === 'test_case' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => onTaskFilterChange('test_case')}>测试任务</button>
-        <button className={`btn btn-sm ${taskFilter === 'defect' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => onTaskFilterChange('defect')}>缺陷修复</button>
+        {filterButtons.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            className={`btn btn-sm ${taskFilter === item.key ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => onTaskFilterChange(item.key)}
+          >
+            {item.label}
+            <span className="mywork-filter-count">{item.count}</span>
+          </button>
+        ))}
       </div>
 
       <div className="mywork-panels">
-        <Panel title="任务队列" subtitle={`当前共 ${visibleTasks.length} 条任务`} className="mywork-panel-left">
+        <Panel title="任务队列" subtitle={queueSubtitle} className="mywork-panel-left">
           <div className="mywork-queue">
             {visibleTasks.map((task) => (
               <div
@@ -90,7 +127,7 @@ export default function MyWorkTaskWorkspace({
                   <StatusBadge status={task.status} label={labelOf(TASK_STATUS_LABELS, task.status)} showDot={false} />
                 </div>
                 <div className="mywork-queue-item-meta">
-                  <span>{task.sourceType ? labelOf({ requirement: '需求', test_case: '测试', defect: '缺陷' }, task.sourceType) : labelOf(TASK_TYPE_LABELS, task.type)}</span>
+                  <span>{sourceLabel(task)} · {labelOf(TASK_TYPE_LABELS, task.type)}</span>
                   <span>{task.assigneeRole ? labelOf(USER_ROLE_LABELS, task.assigneeRole) : '未设角色'}</span>
                 </div>
               </div>
@@ -116,7 +153,10 @@ export default function MyWorkTaskWorkspace({
                 <div>
                   <h3>{selectedTask.title}</h3>
                   <div className="text-secondary" style={{ fontSize: 13, marginTop: 4 }}>
-                    来源：{selectedTask.sourceType ? labelOf({ requirement: '需求', test_case: '测试', defect: '缺陷' }, selectedTask.sourceType) : labelOf(TASK_TYPE_LABELS, selectedTask.type)}
+                    来源：{sourceLabel(selectedTask)}
+                    {selectedTask.sourceId ? ` · ${selectedTask.sourceId}` : ''}
+                    {' · '}
+                    {labelOf(TASK_TYPE_LABELS, selectedTask.type)}
                   </div>
                 </div>
                 <StatusBadge status={selectedTask.status} label={labelOf(TASK_STATUS_LABELS, selectedTask.status)} />

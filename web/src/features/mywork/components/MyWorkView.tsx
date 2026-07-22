@@ -15,7 +15,7 @@ import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { ApiError } from '../../../services/api';
 import type { DashboardData, SessionUser, TimeEntry, WeeklyWorkSummary } from '../../../types';
 import MyWorkCapacityPanel from './MyWorkCapacityPanel';
-import MyWorkTaskWorkspace, { type TaskFilter } from './MyWorkTaskWorkspace';
+import MyWorkTaskWorkspace, { type TaskFilter, type TaskFilterCounts } from './MyWorkTaskWorkspace';
 import MyWorkDefectsPanel from './MyWorkDefectsPanel';
 import MyWorkRequirementsPanel from './MyWorkRequirementsPanel';
 import MyWorkLogsTab from './MyWorkLogsTab';
@@ -36,7 +36,7 @@ export default function MyWorkView({ user }: { user?: SessionUser | null }) {
   });
   const [taskFilter, setTaskFilter] = useState<TaskFilter>(() => {
     const saved = window.localStorage.getItem(STORAGE_KEYS.filter);
-    return saved === 'requirement' || saved === 'test_case' || saved === 'defect' ? saved : 'all';
+    return saved === 'requirement' || saved === 'test_case' || saved === 'defect' || saved === 'general' ? saved : 'all';
   });
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showLogForm, setShowLogForm] = useState(false);
@@ -72,15 +72,36 @@ export default function MyWorkView({ user }: { user?: SessionUser | null }) {
     window.localStorage.setItem(STORAGE_KEYS.filter, taskFilter);
   }, [taskFilter]);
 
+  // sourceType 粒度：
+  // - requirement / test_case / defect：业务对象同步出的关联任务
+  // - general：PM 手工 WBS/指派任务（无 sourceType），原先只落在「全部」里导致 2+0+2 ≠ 6
   const taskGroups = useMemo(() => {
     const tasks = data?.focusTasks ?? [];
+    const requirement = tasks.filter((item) => item.sourceType === 'requirement');
+    const test_case = tasks.filter((item) => item.sourceType === 'test_case');
+    const defect = tasks.filter((item) => item.sourceType === 'defect');
+    const general = tasks.filter(
+      (item) => item.sourceType !== 'requirement' && item.sourceType !== 'test_case' && item.sourceType !== 'defect',
+    );
     return {
       all: tasks,
-      requirement: tasks.filter((item) => item.sourceType === 'requirement'),
-      test_case: tasks.filter((item) => item.sourceType === 'test_case'),
-      defect: tasks.filter((item) => item.sourceType === 'defect'),
+      requirement,
+      test_case,
+      defect,
+      general,
     };
   }, [data?.focusTasks]);
+
+  const filterCounts: TaskFilterCounts = useMemo(
+    () => ({
+      all: taskGroups.all.length,
+      requirement: taskGroups.requirement.length,
+      test_case: taskGroups.test_case.length,
+      defect: taskGroups.defect.length,
+      general: taskGroups.general.length,
+    }),
+    [taskGroups],
+  );
 
   const visibleTasks = taskGroups[taskFilter];
   const selectedTask = visibleTasks.find((item) => item.id === selectedTaskId) ?? visibleTasks[0] ?? null;
@@ -140,6 +161,7 @@ export default function MyWorkView({ user }: { user?: SessionUser | null }) {
         <MyWorkTaskWorkspace
           taskFilter={taskFilter}
           onTaskFilterChange={setTaskFilter}
+          filterCounts={filterCounts}
           visibleTasks={visibleTasks}
           selectedTask={selectedTask}
           onSelectTask={setSelectedTaskId}
