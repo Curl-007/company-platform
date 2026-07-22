@@ -645,6 +645,13 @@ html[data-work-ambient='off'] body::before {
 
 html[data-work-density='compact'] {
   --content-padding: 16px;
+  --page-stack-gap: 12px;
+  --page-header-margin: 14px;
+  --panel-header-padding-y: 10px;
+  --panel-header-padding-x: 14px;
+  --panel-body-padding: 14px;
+  --filter-bar-padding: 10px;
+  --metric-card-padding: 12px 14px;
 }
 
 html[data-work-density='compact'] .panel-body,

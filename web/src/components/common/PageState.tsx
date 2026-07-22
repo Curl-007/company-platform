@@ -23,7 +23,7 @@ const PageState: React.FC<PageStateProps> = ({
         <div className="panel-body">
           <div className="data-table-loading">
             <div className="spinner" />
-            <div style={{ marginTop: 8 }}>加载中...</div>
+            <div className="page-state-loading-text">加载中...</div>
           </div>
         </div>
       </div>
@@ -38,7 +38,7 @@ const PageState: React.FC<PageStateProps> = ({
             <div className="empty-state-title">数据加载失败</div>
             <p className="empty-state-desc">{error}</p>
             {onRetry && (
-              <button className="btn btn-secondary btn-sm" onClick={onRetry} style={{ marginTop: 12 }}>
+              <button className="btn btn-secondary btn-sm page-state-retry" onClick={onRetry}>
                 重试
               </button>
             )}
