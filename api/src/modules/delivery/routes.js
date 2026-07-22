@@ -207,7 +207,7 @@ function createDeliveryRouter({
     if (!buildStatuses.includes(status)) {
       return fail(res, 400, "VALIDATION_FAILED", `Build status must be one of: ${buildStatuses.join(", ")}`);
     }
-    const gate = validateBuildStatusTransition(before, status);
+    const gate = await validateBuildStatusTransition(before, status);
     if (!gate.ok) return fail(res, 400, "DELIVERY_GATE_BLOCKED", gate.message);
     const response = await write(async () => {
       await repository.updateBuildStatus(req.params.id, status);
@@ -337,7 +337,7 @@ function createDeliveryRouter({
     if (!releaseStatuses.includes(status)) {
       return fail(res, 400, "VALIDATION_FAILED", `Release status must be one of: ${releaseStatuses.join(", ")}`);
     }
-    const gate = validateReleaseStatusTransition(before, status);
+    const gate = await validateReleaseStatusTransition(before, status);
     if (!gate.ok) return fail(res, 400, "DELIVERY_GATE_BLOCKED", gate.message);
     const response = await write(async () => {
       await repository.updateReleaseStatus(req.params.id, status);
@@ -371,7 +371,7 @@ function createDeliveryRouter({
     }
 
     if (decision === "approve") {
-      const gate = validateReleaseStatusTransition(before, "staging");
+      const gate = await validateReleaseStatusTransition(before, "staging");
       if (!gate.ok) return fail(res, 400, "DELIVERY_GATE_BLOCKED", gate.message);
     }
 
@@ -416,7 +416,7 @@ function createDeliveryRouter({
     const before = await repository.findRelease(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Release not found.");
     if (!(await ensureReleaseWrite(req, res, before, "Cannot record a rollback in an archived or inaccessible project."))) return;
-    const transition = validateReleaseStatusTransition(before, "rollback");
+    const transition = await validateReleaseStatusTransition(before, "rollback");
     if (!transition.ok) return fail(res, 409, "STATE_TRANSITION_NOT_ALLOWED", transition.message, transition.details);
     const { reason, impact, plan } = req.body || {};
     if (!String(reason || "").trim()) {

@@ -1,0 +1,350 @@
+import { expect, test, type Page } from '@playwright/test';
+
+/**
+ * Near-full UI tour (admin interactions + multi-role permission probes).
+ * Compatible with empty DB: list shells, optional detail/form open-close only.
+ *
+ * Seed accounts (api/db.js bootstrap):
+ *   admin@example.com / Admin@123
+ *   pm@example.com    / Pm@12345
+ *   pdm@example.com   / Pdm@12345
+ *   dev@example.com   / Dev@12345
+ *   qa@example.com    / Qa@12345
+ */
+
+type RoleKey = 'admin' | 'pm' | 'pdm' | 'dev' | 'qa';
+
+const ACCOUNTS: Record<RoleKey, { email: string; password: string }> = {
+  admin: { email: 'admin@example.com', password: 'Admin@123' },
+  pm: { email: 'pm@example.com', password: 'Pm@12345' },
+  pdm: { email: 'pdm@example.com', password: 'Pdm@12345' },
+  dev: { email: 'dev@example.com', password: 'Dev@12345' },
+  qa: { email: 'qa@example.com', password: 'Qa@12345' },
+};
+
+/** Full sidebar labels from pageRegistry NAV_GROUPS */
+const ADMIN_NAV_WALK: Array<[string, RegExp | string]> = [
+  ['工作台', /工作台/],
+  ['我的工作', /我的工作/],
+  ['团队管理', /团队/],
+  ['团队日报', /日报|团队/],
+  ['团队容量', /容量/],
+  ['动态中心', /动态/],
+  ['项目执行', '项目管理'],
+  ['需求管理', /需求/],
+  ['测试质量', '测试管理'],
+  ['交付中心', '构建发布中心'],
+  ['文档中心', /文档/],
+  ['AI 分析', /AI|分析|助手/],
+  ['报表中心', /报表/],
+  ['产品管理', '产品管理'],
+  ['研发流程', /流程|研发/],
+  ['系统设置', /设置|系统/],
+];
+
+async function loginAs(page: Page, role: RoleKey) {
+  const account = ACCOUNTS[role];
+  await page.goto('/');
+  await page.locator('#login-email').fill(account.email);
+  await page.locator('#login-password').fill(account.password);
+  await page.getByRole('button', { name: '登录', exact: true }).click();
+  await expect(page.locator('.sidebar-nav')).toBeVisible({ timeout: 20_000 });
+}
+
+async function openNav(page: Page, label: string) {
+  await page.locator('.sidebar-nav').getByRole('button', { name: label, exact: true }).click();
+}
+
+async function expectHeading(page: Page, heading: RegExp | string) {
+  await expect(page.getByRole('heading', { name: heading }).first()).toBeVisible({ timeout: 15_000 });
+}
+
+async function expectShell(page: Page) {
+  await expect(
+    page.locator('.page-header, .panel, .page-title, .card, .metric-card, .data-table').first(),
+  ).toBeVisible({ timeout: 15_000 });
+}
+
+test.describe('admin full navigation walk', () => {
+  test('admin walks every pageRegistry sidebar page', async ({ page }) => {
+    test.setTimeout(120_000);
+    await loginAs(page, 'admin');
+
+    for (const [nav, heading] of ADMIN_NAV_WALK) {
+      const navBtn = page.locator('.sidebar-nav').getByRole('button', { name: nav, exact: true });
+      await expect(navBtn).toBeVisible();
+      await openNav(page, nav);
+      await expectHeading(page, heading);
+      await expectShell(page);
+    }
+  });
+});
+
+test.describe('admin key interactions', () => {
+  test('A products tabs and company goals entry', async ({ page }) => {
+    test.setTimeout(120_000);
+    await loginAs(page, 'admin');
+    await openNav(page, '产品管理');
+    await expectHeading(page, '产品管理');
+
+    for (const tab of ['产品', '项目集', '组合'] as const) {
+      await page
+        .locator('.nav-tabs.products-page-tabs, .products-page-tabs, .nav-tabs')
+        .getByRole('button', { name: tab, exact: true })
+        .click();
+      await expect(page.locator('.nav-tabs .nav-tab.active')).toContainText(tab);
+    }
+
+    await page.getByRole('button', { name: '公司目标 / OKR', exact: true }).click();
+    await expect(page.getByRole('button', { name: '返回产品工作台', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '返回产品工作台', exact: true }).click();
+    await expect(page.locator('.nav-tabs .nav-tab')).toHaveCount(3);
+  });
+
+  test('B project list shell and optional detail', async ({ page }) => {
+    test.setTimeout(120_000);
+    await loginAs(page, 'admin');
+    await openNav(page, '项目执行');
+    await expectHeading(page, '项目管理');
+    await expect(page.getByRole('heading', { name: /项目驾驶舱|项目管理/ }).first()).toBeVisible();
+    await expectShell(page);
+
+    const viewBtn = page.getByRole('button', { name: '查看', exact: true }).first();
+    if ((await viewBtn.count()) > 0) {
+      await viewBtn.click();
+      await expect(
+        page.locator('.page-header, .project-detail-tabs, .nav-tabs, .panel').first(),
+      ).toBeVisible({ timeout: 15_000 });
+    }
+  });
+
+  test('C requirements list or empty and optional create cancel', async ({ page }) => {
+    test.setTimeout(120_000);
+    await loginAs(page, 'admin');
+    await openNav(page, '需求管理');
+    await expectHeading(page, /需求/);
+    await expect(
+      page.locator('.panel, .data-table, .tree-table, .page-header').first(),
+    ).toBeVisible();
+
+    const createBtn = page.getByRole('button', { name: '新建需求', exact: true });
+    if ((await createBtn.count()) > 0) {
+      await createBtn.click();
+      // Panel titles are div.panel-title (not ARIA heading)
+      await expect(page.locator('.panel-title').filter({ hasText: '新建需求' })).toBeVisible({
+        timeout: 10_000,
+      });
+      await page.getByRole('button', { name: '取消', exact: true }).click();
+      await expect(page.locator('.panel-title').filter({ hasText: '新建需求' })).toHaveCount(0);
+    }
+  });
+
+  test('D testing quality cases/defects tabs', async ({ page }) => {
+    test.setTimeout(120_000);
+    await loginAs(page, 'admin');
+    await openNav(page, '测试质量');
+    await expectHeading(page, '测试管理');
+
+    const casesTab = page.locator('.nav-tabs').getByRole('button', { name: '测试用例', exact: true });
+    const defectsTab = page.locator('.nav-tabs').getByRole('button', { name: '缺陷列表', exact: true });
+    await expect(casesTab).toBeVisible();
+    await expect(defectsTab).toBeVisible();
+
+    await casesTab.click();
+    await expect(page.locator('.nav-tabs .nav-tab.active')).toContainText('测试用例');
+    await expect(page.locator('.panel-title').filter({ hasText: /测试用例/ }).first()).toBeVisible();
+
+    await defectsTab.click();
+    await expect(page.locator('.nav-tabs .nav-tab.active')).toContainText('缺陷列表');
+    await expect(page.locator('.panel-title').filter({ hasText: /缺陷/ }).first()).toBeVisible();
+  });
+
+  test('E delivery center build/release/gate tabs', async ({ page }) => {
+    test.setTimeout(120_000);
+    await loginAs(page, 'admin');
+    await openNav(page, '交付中心');
+    await expectHeading(page, '构建发布中心');
+
+    for (const tab of ['全链路', '构建', '发布', '质量门禁'] as const) {
+      const tabBtn = page.locator('.delivery-tabs .delivery-tab, .delivery-tab').filter({ hasText: tab });
+      await expect(tabBtn.first()).toBeVisible();
+      await tabBtn.first().click();
+      await expect(page.locator('.delivery-tab.active').first()).toContainText(tab);
+    }
+    await expectShell(page);
+  });
+
+  test('F documents list shell and optional upload cancel', async ({ page }) => {
+    test.setTimeout(120_000);
+    await loginAs(page, 'admin');
+    await openNav(page, '文档中心');
+    await expectHeading(page, /文档/);
+    await expect(
+      page.locator('.panel, .page-header, .data-table, .documents-list').first(),
+    ).toBeVisible();
+
+    const uploadBtn = page.getByRole('button', { name: '上传文档', exact: true });
+    if ((await uploadBtn.count()) > 0) {
+      await uploadBtn.click();
+      await expect(page.locator('.panel-title').filter({ hasText: '上传文档' })).toBeVisible({
+        timeout: 10_000,
+      });
+      await page.getByRole('button', { name: '取消', exact: true }).click();
+      await expect(page.locator('.panel-title').filter({ hasText: '上传文档' })).toHaveCount(0);
+    }
+  });
+
+  test('G my work four tabs', async ({ page }) => {
+    test.setTimeout(120_000);
+    await loginAs(page, 'admin');
+    await openNav(page, '我的工作');
+    await expectHeading(page, /我的工作/);
+
+    // Tabs may appear after dashboard data loads
+    const tabBar = page.locator('.mywork-tab-bar, .tab-bar.mywork-tab-bar');
+    await expect(tabBar).toBeVisible({ timeout: 20_000 });
+
+    // Panel titles are div.panel-title; assert active tab + related panel/shell content
+    const tabs: Array<{ name: string; panel: RegExp }> = [
+      { name: '我的任务', panel: /任务队列|任务详情|任务/ },
+      { name: '我的缺陷', panel: /我的缺陷|缺陷/ },
+      { name: '我的需求', panel: /我的需求|需求/ },
+      { name: '日报周报', panel: /每日日报|AI 周报|实际工时|日报|周报/ },
+    ];
+
+    for (const { name, panel } of tabs) {
+      const tab = tabBar.locator('.tab-item').filter({ hasText: name });
+      await expect(tab).toBeVisible();
+      await tab.click();
+      await expect(tabBar.locator('.tab-item.active')).toContainText(name);
+      await expect(page.locator('.panel-title').filter({ hasText: panel }).first()).toBeVisible({
+        timeout: 15_000,
+      });
+    }
+  });
+
+  test('H team management loads', async ({ page }) => {
+    test.setTimeout(60_000);
+    await loginAs(page, 'admin');
+    await openNav(page, '团队管理');
+    await expectHeading(page, /团队/);
+    await expectShell(page);
+  });
+
+  test('I team capacity loads', async ({ page }) => {
+    test.setTimeout(60_000);
+    await loginAs(page, 'admin');
+    await openNav(page, '团队容量');
+    await expectHeading(page, /容量/);
+    await expectShell(page);
+  });
+
+  test('J dynamic center loads and optional filter', async ({ page }) => {
+    test.setTimeout(120_000);
+    await loginAs(page, 'admin');
+    await openNav(page, '动态中心');
+    await expectHeading(page, /动态/);
+    await expectShell(page);
+
+    const focusFilter = page.getByRole('button', { name: /只看重点|已只看重点/ });
+    if ((await focusFilter.count()) > 0) {
+      await focusFilter.first().click();
+      await expect(focusFilter.first()).toBeVisible();
+    }
+
+    const search = page.locator('input[placeholder*="搜索人员"], input[placeholder*="搜索"]').first();
+    if ((await search.count()) > 0) {
+      await search.fill('登录');
+      await expect(search).toHaveValue('登录');
+    }
+  });
+
+  test('K flow templates cards visible', async ({ page }) => {
+    test.setTimeout(60_000);
+    await loginAs(page, 'admin');
+    await openNav(page, '研发流程');
+    await expectHeading(page, /流程|研发/);
+    await expect(page.locator('.panel-title').filter({ hasText: /流程模板/ }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.locator('.flow-template-card').first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('L reports center loads', async ({ page }) => {
+    test.setTimeout(60_000);
+    await loginAs(page, 'admin');
+    await openNav(page, '报表中心');
+    await expectHeading(page, /报表/);
+    await expectShell(page);
+  });
+
+  test('M AI analysis loads', async ({ page }) => {
+    test.setTimeout(60_000);
+    await loginAs(page, 'admin');
+    await openNav(page, 'AI 分析');
+    await expectHeading(page, /AI|分析|助手/);
+    await expectShell(page);
+  });
+
+  test('N system settings account/api/ai region', async ({ page }) => {
+    test.setTimeout(60_000);
+    await loginAs(page, 'admin');
+    await openNav(page, '系统设置');
+    await expectHeading(page, /设置|系统/);
+
+    // Settings panels use .panel-title (当前账号 / API 配置 / AI 模型配置 ...)
+    const region = page
+      .locator('.panel-title')
+      .filter({ hasText: /当前账号|API|AI/ })
+      .first();
+    await expect(region).toBeVisible({ timeout: 15_000 });
+  });
+});
+
+test.describe('multi-role permission probes', () => {
+  test('QA cannot see settings/products/delivery', async ({ page }) => {
+    await loginAs(page, 'qa');
+    const nav = page.locator('.sidebar-nav');
+    await expect(nav.getByRole('button', { name: '系统设置', exact: true })).toHaveCount(0);
+    await expect(nav.getByRole('button', { name: '产品管理', exact: true })).toHaveCount(0);
+    await expect(nav.getByRole('button', { name: '交付中心', exact: true })).toHaveCount(0);
+    await expect(nav.getByRole('button', { name: '测试质量', exact: true })).toBeVisible();
+  });
+
+  test('DEV cannot see settings/products', async ({ page }) => {
+    await loginAs(page, 'dev');
+    const nav = page.locator('.sidebar-nav');
+    await expect(nav.getByRole('button', { name: '系统设置', exact: true })).toHaveCount(0);
+    await expect(nav.getByRole('button', { name: '产品管理', exact: true })).toHaveCount(0);
+    await expect(nav.getByRole('button', { name: '项目执行', exact: true })).toBeVisible();
+  });
+
+  test('PDM can open products and requirements', async ({ page }) => {
+    test.setTimeout(90_000);
+    await loginAs(page, 'pdm');
+    const nav = page.locator('.sidebar-nav');
+    await expect(nav.getByRole('button', { name: '产品管理', exact: true })).toBeVisible();
+    await expect(nav.getByRole('button', { name: '需求管理', exact: true })).toBeVisible();
+
+    await openNav(page, '产品管理');
+    await expectHeading(page, '产品管理');
+    await openNav(page, '需求管理');
+    await expectHeading(page, /需求/);
+  });
+
+  test('PM can open delivery reports and flow', async ({ page }) => {
+    test.setTimeout(90_000);
+    await loginAs(page, 'pm');
+    const nav = page.locator('.sidebar-nav');
+    await expect(nav.getByRole('button', { name: '交付中心', exact: true })).toBeVisible();
+    await expect(nav.getByRole('button', { name: '报表中心', exact: true })).toBeVisible();
+    await expect(nav.getByRole('button', { name: '研发流程', exact: true })).toBeVisible();
+
+    await openNav(page, '交付中心');
+    await expectHeading(page, '构建发布中心');
+    await openNav(page, '报表中心');
+    await expectHeading(page, /报表/);
+    await openNav(page, '研发流程');
+    await expectHeading(page, /流程|研发/);
+  });
+});
