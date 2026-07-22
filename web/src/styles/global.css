@@ -6368,6 +6368,77 @@ html {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px 14px;
 }
+
+/* 日报 / 工时 / 周报：左栏叠放日报+工时，右栏 AI 周报，避免工时落到页面底部 */
+.mywork-logs-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: stretch;
+}
+.mywork-logs-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+.mywork-logs-main > .panel,
+.mywork-weekly-panel {
+  margin: 0;
+  min-width: 0;
+}
+.mywork-time-panel {
+  flex: 1 1 auto;
+}
+.mywork-time-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.mywork-time-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-divider);
+}
+.mywork-time-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.mywork-time-row-main {
+  min-width: 0;
+  flex: 1 1 180px;
+  font-size: var(--fs-body);
+}
+.mywork-time-row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.mywork-weekly-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.mywork-weekly-panel > .panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.mywork-weekly-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mywork-weekly-markdown {
+  white-space: pre-wrap;
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+}
 .mywork-task-filters {
   display: flex;
   flex-wrap: wrap;
@@ -6473,6 +6544,9 @@ html {
 }
 @media (max-width: 1100px) {
   .mywork-panels {
+    grid-template-columns: 1fr;
+  }
+  .mywork-logs-layout {
     grid-template-columns: 1fr;
   }
   .mywork-capacity-grid,
