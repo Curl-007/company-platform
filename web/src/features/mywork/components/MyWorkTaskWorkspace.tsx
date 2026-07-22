@@ -116,22 +116,66 @@ export default function MyWorkTaskWorkspace({
       <div className="mywork-panels">
         <Panel title="任务队列" subtitle={queueSubtitle} className="mywork-panel-left">
           <div className="mywork-queue">
-            {visibleTasks.map((task) => (
-              <div
-                key={task.id}
-                className={`mywork-queue-item ${selectedTask?.id === task.id ? 'selected' : ''}`}
-                onClick={() => onSelectTask(task.id)}
-              >
-                <div className="mywork-queue-item-main">
-                  <span className="mywork-queue-item-title">{task.title}</span>
-                  <StatusBadge status={task.status} label={labelOf(TASK_STATUS_LABELS, task.status)} showDot={false} />
+            {taskFilter === 'all' ? (
+              (['requirement', 'test_case', 'defect', 'general'] as const).map((bucket) => {
+                const bucketTasks = visibleTasks.filter((task) => {
+                  if (bucket === 'requirement') return task.sourceType === 'requirement';
+                  if (bucket === 'test_case') return task.sourceType === 'test_case';
+                  if (bucket === 'defect') return task.sourceType === 'defect';
+                  return task.sourceType !== 'requirement' && task.sourceType !== 'test_case' && task.sourceType !== 'defect';
+                });
+                if (bucketTasks.length === 0) return null;
+                const headerLabel =
+                  bucket === 'requirement' ? '需求任务' :
+                  bucket === 'test_case' ? '测试任务' :
+                  bucket === 'defect' ? '缺陷修复' : '一般任务';
+                const headerTone =
+                  bucket === 'requirement' ? 'accent' :
+                  bucket === 'test_case' ? 'info' :
+                  bucket === 'defect' ? 'risk' : 'done';
+                return (
+                  <div key={bucket} className="mywork-queue-group">
+                    <div className={`mywork-queue-group-header ${headerTone}`}>
+                      <span>{headerLabel}</span>
+                      <span>{bucketTasks.length}</span>
+                    </div>
+                    {bucketTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className={`mywork-queue-item ${selectedTask?.id === task.id ? 'selected' : ''}`}
+                        onClick={() => onSelectTask(task.id)}
+                      >
+                        <div className="mywork-queue-item-main">
+                          <span className="mywork-queue-item-title">{task.title}</span>
+                          <StatusBadge status={task.status} label={labelOf(TASK_STATUS_LABELS, task.status)} showDot={false} />
+                        </div>
+                        <div className="mywork-queue-item-meta">
+                          <span>{sourceLabel(task)} · {labelOf(TASK_TYPE_LABELS, task.type)}</span>
+                          <span>{task.assigneeRole ? labelOf(USER_ROLE_LABELS, task.assigneeRole) : '未设角色'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })
+            ) : (
+              visibleTasks.map((task) => (
+                <div
+                  key={task.id}
+                  className={`mywork-queue-item ${selectedTask?.id === task.id ? 'selected' : ''}`}
+                  onClick={() => onSelectTask(task.id)}
+                >
+                  <div className="mywork-queue-item-main">
+                    <span className="mywork-queue-item-title">{task.title}</span>
+                    <StatusBadge status={task.status} label={labelOf(TASK_STATUS_LABELS, task.status)} showDot={false} />
+                  </div>
+                  <div className="mywork-queue-item-meta">
+                    <span>{sourceLabel(task)} · {labelOf(TASK_TYPE_LABELS, task.type)}</span>
+                    <span>{task.assigneeRole ? labelOf(USER_ROLE_LABELS, task.assigneeRole) : '未设角色'}</span>
+                  </div>
                 </div>
-                <div className="mywork-queue-item-meta">
-                  <span>{sourceLabel(task)} · {labelOf(TASK_TYPE_LABELS, task.type)}</span>
-                  <span>{task.assigneeRole ? labelOf(USER_ROLE_LABELS, task.assigneeRole) : '未设角色'}</span>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
             {visibleTasks.length === 0 ? <div className="empty-state-desc">当前筛选下暂无任务。</div> : null}
           </div>
         </Panel>

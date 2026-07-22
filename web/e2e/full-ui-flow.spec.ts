@@ -370,6 +370,45 @@ test.describe('assigned work surfaces for DEV and QA', () => {
     }
   });
 
+  test('DEV mywork task filters align all = requirement + test + defect + general', async ({ page }) => {
+    test.setTimeout(90_000);
+    await loginAs(page, 'dev');
+    await openNav(page, '我的工作');
+    await expectHeading(page, /我的工作/);
+    await page.locator('.mywork-tab-bar, .tab-bar').getByRole('button', { name: '我的任务', exact: true }).click();
+
+    const filters = page.locator('.mywork-task-filters');
+    await expect(filters).toBeVisible({ timeout: 20_000 });
+    for (const label of ['全部', '需求任务', '测试任务', '缺陷修复', '一般任务'] as const) {
+      await expect(filters.getByRole('button', { name: new RegExp(label) })).toBeVisible();
+    }
+
+    async function filterCount(label: string): Promise<number> {
+      const btn = filters.getByRole('button', { name: new RegExp(label) });
+      const text = (await btn.locator('.mywork-filter-count').textContent())?.trim() ?? '0';
+      return Number(text) || 0;
+    }
+
+    const all = await filterCount('全部');
+    const requirement = await filterCount('需求任务');
+    const testCase = await filterCount('测试任务');
+    const defect = await filterCount('缺陷修复');
+    const general = await filterCount('一般任务');
+    expect(requirement + testCase + defect + general).toBe(all);
+
+    // Queue subtitle also exposes the same breakdown when on 全部
+    await filters.getByRole('button', { name: /全部/ }).click();
+    await expect(page.locator('.mywork-panel-left .panel-subtitle, .panel.mywork-panel-left .panel-subtitle').first()).toContainText(
+      new RegExp(`共\\s*${all}\\s*条`),
+    );
+
+    // Switching to 一般任务 should show only that bucket's count in queue subtitle
+    await filters.getByRole('button', { name: /一般任务/ }).click();
+    await expect(page.locator('.mywork-panel-left, .panel.mywork-panel-left').first()).toContainText(
+      new RegExp(`当前筛选\\s*${general}\\s*条`),
+    );
+  });
+
   test('QA mywork shows task/defect/requirement tabs', async ({ page }) => {
     test.setTimeout(90_000);
     await loginAs(page, 'qa');
