@@ -3436,6 +3436,42 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-secondary);
 }
 
+/* Dynamic summary host class on MetricCard (keep surface + important semantics) */
+.dynamic-summary-card.metric-card,
+.metric-card.dynamic-summary-card {
+  padding: var(--metric-card-padding);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--surface-summary);
+  box-shadow: var(--shadow-panel);
+}
+
+.dynamic-summary-card-important.metric-card,
+.metric-card.dynamic-summary-card-important {
+  border-color: color-mix(in srgb, var(--color-risk) 28%, var(--border-default));
+  background: var(--surface-summary-important);
+}
+
+.dynamic-summary-card .metric-card-label {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+}
+
+.dynamic-summary-card .metric-card-value {
+  margin-top: 0;
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dynamic-summary-card .metric-card-caption {
+  margin-top: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .dynamic-timeline {
   margin-top: 4px;
 }
@@ -6654,6 +6690,50 @@ html {
 
 .team-summary-meta {
   margin-top: 6px;
+}
+
+/* Team summary host class on MetricCard (column MetricCard + legacy tone borders) */
+.team-summary-card.metric-card,
+.metric-card.team-summary-card {
+  min-height: var(--kpi-card-min-height);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--kpi-card-padding);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--bg-content);
+  box-shadow: var(--shadow-panel);
+}
+
+.team-summary-card.risk,
+.team-summary-card.tone-risk {
+  border-color: color-mix(in srgb, var(--color-risk) 36%, var(--border-default));
+}
+
+.team-summary-card.success,
+.team-summary-card.tone-success {
+  border-color: color-mix(in srgb, var(--color-success) 34%, var(--border-default));
+}
+
+.team-summary-card .metric-card-icon {
+  width: var(--kpi-icon-size);
+  height: var(--kpi-icon-size);
+  border-radius: var(--radius-card);
+}
+
+.team-summary-card .metric-card-value {
+  font-size: var(--fs-kpi-value);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.team-summary-card .metric-card-caption {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-helper);
 }
 
 .team-governance-strip {

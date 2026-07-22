@@ -7,6 +7,7 @@ import Panel from '../components/common/Panel';
 import PageState from '../components/common/PageState';
 import StatusBadge from '../components/common/StatusBadge';
 import FilterBar from '../components/common/FilterBar';
+import MetricStrip from '../components/common/MetricStrip';
 import type { AuditLogRecord } from '../types';
 
 interface TimelineEntry {
@@ -664,28 +665,40 @@ function DynamicPage() {
         actions={<button className="btn btn-secondary btn-sm" onClick={reload}><RefreshCw size={14} /> 刷新</button>}
       />
 
-      <div className="dynamic-summary-grid">
-        <div className="dynamic-summary-card">
-          <div className="dynamic-summary-label"><Activity size={14} /> 当前动态</div>
-          <div className="dynamic-summary-value">{timeline.length}</div>
-          <div className="dynamic-summary-tip">{timeRange === 'week' ? '最近 7 天' : timeRange === 'today' ? '今日范围' : '全部范围'}操作轨迹</div>
-        </div>
-        <div className="dynamic-summary-card dynamic-summary-card-important">
-          <div className="dynamic-summary-label"><AlertTriangle size={14} /> 重点关注</div>
-          <div className="dynamic-summary-value">{stats.importantCount}</div>
-          <div className="dynamic-summary-tip">登录失败、删改、状态变更</div>
-        </div>
-        <div className="dynamic-summary-card">
-          <div className="dynamic-summary-label"><Clock3 size={14} /> 今日动态</div>
-          <div className="dynamic-summary-value">{stats.todayCount}</div>
-          <div className="dynamic-summary-tip">当天新增的审计记录</div>
-        </div>
-        <div className="dynamic-summary-card">
-          <div className="dynamic-summary-label"><Radar size={14} /> 风险信号</div>
-          <div className="dynamic-summary-value">{stats.riskCount}</div>
-          <div className="dynamic-summary-tip">账号、测试、删除、发布风险</div>
-        </div>
-      </div>
+      <MetricStrip
+        className="dynamic-summary-grid"
+        items={[
+          {
+            icon: <Activity size={14} />,
+            label: '当前动态',
+            value: timeline.length,
+            caption: `${timeRange === 'week' ? '最近 7 天' : timeRange === 'today' ? '今日范围' : '全部范围'}操作轨迹`,
+            className: 'dynamic-summary-card',
+          },
+          {
+            icon: <AlertTriangle size={14} />,
+            label: '重点关注',
+            value: stats.importantCount,
+            caption: '登录失败、删改、状态变更',
+            tone: 'risk',
+            className: 'dynamic-summary-card dynamic-summary-card-important',
+          },
+          {
+            icon: <Clock3 size={14} />,
+            label: '今日动态',
+            value: stats.todayCount,
+            caption: '当天新增的审计记录',
+            className: 'dynamic-summary-card',
+          },
+          {
+            icon: <Radar size={14} />,
+            label: '风险信号',
+            value: stats.riskCount,
+            caption: '账号、测试、删除、发布风险',
+            className: 'dynamic-summary-card',
+          },
+        ]}
+      />
 
       <div className="dynamic-workbench dynamic-command-center">
         <aside className="dynamic-rail">

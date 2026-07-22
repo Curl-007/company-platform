@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import {
   Activity,
   Ban,
@@ -24,6 +24,7 @@ import PageState from '../components/common/PageState';
 import StatusBadge from '../components/common/StatusBadge';
 import Overlay from '../components/common/Overlay';
 import ProgressBar from '../components/common/ProgressBar';
+import MetricStrip from '../components/common/MetricStrip';
 import { useAsync } from '../hooks/useAsync';
 import {
   createDepartment,
@@ -259,12 +260,43 @@ function TeamPage() {
         ) : null}
       />
 
-      <div className="team-summary-grid">
-        <TeamSummaryCard icon={<Users size={18} />} label="团队成员" value={summary.total} meta={`${summary.active} 个可用账号`} />
-        <TeamSummaryCard icon={<Activity size={18} />} label="在线/活跃" value={summary.online} meta="最近 30 分钟有操作" />
-        <TeamSummaryCard icon={<BriefcaseBusiness size={18} />} label="参与项目" value={summary.projects} meta={`${summary.activeTaskMembers} 人有进行中任务`} />
-        <TeamSummaryCard icon={<ShieldCheck size={18} />} label="风险阻塞" value={summary.blockers} meta="阻塞任务、缺陷与日报阻塞" tone={summary.blockers > 0 ? 'risk' : 'success'} />
-      </div>
+      <MetricStrip
+        className="team-summary-grid"
+        items={[
+          {
+            icon: <Users size={18} />,
+            label: '团队成员',
+            value: summary.total,
+            caption: `${summary.active} 个可用账号`,
+            tone: 'info',
+            className: 'team-summary-card info',
+          },
+          {
+            icon: <Activity size={18} />,
+            label: '在线/活跃',
+            value: summary.online,
+            caption: '最近 30 分钟有操作',
+            tone: 'info',
+            className: 'team-summary-card info',
+          },
+          {
+            icon: <BriefcaseBusiness size={18} />,
+            label: '参与项目',
+            value: summary.projects,
+            caption: `${summary.activeTaskMembers} 人有进行中任务`,
+            tone: 'info',
+            className: 'team-summary-card info',
+          },
+          {
+            icon: <ShieldCheck size={18} />,
+            label: '风险阻塞',
+            value: summary.blockers,
+            caption: '阻塞任务、缺陷与日报阻塞',
+            tone: summary.blockers > 0 ? 'risk' : 'success',
+            className: `team-summary-card ${summary.blockers > 0 ? 'risk' : 'success'}`,
+          },
+        ]}
+      />
 
       <div className="team-governance-strip">
         <div className="team-governance-item">
@@ -393,19 +425,6 @@ function TeamPage() {
           onChanged={handleDepartmentChange}
         />
       )}
-    </div>
-  );
-}
-
-function TeamSummaryCard({ icon, label, value, meta, tone = 'info' }: { icon: ReactNode; label: string; value: number; meta: string; tone?: 'info' | 'risk' | 'success' }) {
-  return (
-    <div className={`team-summary-card ${tone}`}>
-      <div className="team-summary-icon">{icon}</div>
-      <div>
-        <div className="team-summary-label">{label}</div>
-        <div className="team-summary-value">{value}</div>
-        <div className="team-summary-meta">{meta}</div>
-      </div>
     </div>
   );
 }
