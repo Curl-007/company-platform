@@ -608,79 +608,79 @@ function initDbSqlite() {
       created_at TEXT NOT NULL
     );
   `);
-  try { exec("ALTER TABLE test_cases ADD COLUMN description TEXT DEFAULT ''"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE test_cases ADD COLUMN steps TEXT DEFAULT ''"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE test_cases ADD COLUMN expected_result TEXT DEFAULT ''"); } catch (e) { /* column already exists */ }
+  try { exec("ALTER TABLE test_cases ADD COLUMN description TEXT DEFAULT ''"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE test_cases ADD COLUMN steps TEXT DEFAULT ''"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE test_cases ADD COLUMN expected_result TEXT DEFAULT ''"); } catch { /* column already exists */ }
   // G-1/G-2: sprint & assignment fields — nullable for backward compat with existing rows.
-  try { exec("ALTER TABLE tasks ADD COLUMN sprint_id TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE tasks ADD COLUMN assignee_id TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE tasks ADD COLUMN dependency_ids TEXT DEFAULT '[]'"); } catch (e) { /* column already exists */ }
+  try { exec("ALTER TABLE tasks ADD COLUMN sprint_id TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE tasks ADD COLUMN assignee_id TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE tasks ADD COLUMN dependency_ids TEXT DEFAULT '[]'"); } catch { /* column already exists */ }
   // Burndown: remaining (left) hours — completes the estimate/consumed/left trio.
-  try { exec("ALTER TABLE tasks ADD COLUMN remaining_hours REAL DEFAULT 0"); } catch (e) { /* column already exists */ }
+  try { exec("ALTER TABLE tasks ADD COLUMN remaining_hours REAL DEFAULT 0"); } catch { /* column already exists */ }
   // Requirement hierarchy: parent_id for epic → story decomposition.
-  try { exec("ALTER TABLE requirements ADD COLUMN parent_id TEXT"); } catch (e) { /* column already exists */ }
+  try { exec("ALTER TABLE requirements ADD COLUMN parent_id TEXT"); } catch { /* column already exists */ }
   // G-4: status column for existing users databases created before the column was added to CREATE TABLE.
-  try { exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE users ADD COLUMN phone TEXT DEFAULT ''"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE users ADD COLUMN position TEXT DEFAULT ''"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE users ADD COLUMN department TEXT DEFAULT ''"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''"); } catch (e) { /* column already exists */ }
+  try { exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE users ADD COLUMN phone TEXT DEFAULT ''"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE users ADD COLUMN position TEXT DEFAULT ''"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE users ADD COLUMN department TEXT DEFAULT ''"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''"); } catch { /* column already exists */ }
   // G-10/G-12: AI Job state machine fields — nullable for backward compat with existing rows.
-  try { exec("ALTER TABLE ai_jobs ADD COLUMN error_message TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE ai_jobs ADD COLUMN retry_count INTEGER DEFAULT 0"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE ai_jobs ADD COLUMN started_at TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE ai_jobs ADD COLUMN failed_at TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE ai_jobs ADD COLUMN rejected_at TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE ai_jobs ADD COLUMN rejected_reason TEXT"); } catch (e) { /* column already exists */ }
+  try { exec("ALTER TABLE ai_jobs ADD COLUMN error_message TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE ai_jobs ADD COLUMN retry_count INTEGER DEFAULT 0"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE ai_jobs ADD COLUMN started_at TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE ai_jobs ADD COLUMN failed_at TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE ai_jobs ADD COLUMN rejected_at TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE ai_jobs ADD COLUMN rejected_reason TEXT"); } catch { /* column already exists */ }
   // Build/release traceability: which build a task belongs to, which build a defect was found in.
-  try { exec("ALTER TABLE tasks ADD COLUMN build_id TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE defects ADD COLUMN found_in_build TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE defects ADD COLUMN affected_version TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE defects ADD COLUMN reporter TEXT"); } catch (e) { /* column already exists */ }
+  try { exec("ALTER TABLE tasks ADD COLUMN build_id TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE defects ADD COLUMN found_in_build TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE defects ADD COLUMN affected_version TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE defects ADD COLUMN reporter TEXT"); } catch { /* column already exists */ }
   // Project edit enhancement: 5 new columns for project detail (12-综合升级设计方案 §3.1)
-  try { exec("ALTER TABLE projects ADD COLUMN code TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE projects ADD COLUMN description TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE projects ADD COLUMN start_date TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE projects ADD COLUMN end_date TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE projects ADD COLUMN source_path TEXT"); } catch (e) { /* column already exists */ }
+  try { exec("ALTER TABLE projects ADD COLUMN code TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE projects ADD COLUMN description TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE projects ADD COLUMN start_date TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE projects ADD COLUMN end_date TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE projects ADD COLUMN source_path TEXT"); } catch { /* column already exists */ }
   // Test management enhancement: description column for defects (§3.5)
-  try { exec("ALTER TABLE defects ADD COLUMN description TEXT DEFAULT ''"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE defects ADD COLUMN version INTEGER NOT NULL DEFAULT 1"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN description TEXT DEFAULT ''"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN image_url TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN system_name TEXT DEFAULT ''"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN system_version TEXT DEFAULT ''"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN application_version TEXT DEFAULT ''"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN hardware_info TEXT DEFAULT '{}'"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN system_info TEXT DEFAULT '{}'"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN application_info TEXT DEFAULT '{}'"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN hardware_metrics TEXT DEFAULT '[]'"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN system_metrics TEXT DEFAULT '[]'"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN app_metrics TEXT DEFAULT '[]'"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN log_date TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN source_document_id TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN file_name TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN file_type TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN week_key TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN weekly_summary TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN role TEXT DEFAULT 'dev'"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN project_id TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN author_id TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE requirements ADD COLUMN assignee TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE requirements ADD COLUMN assignee_role TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE requirements ADD COLUMN assignment_status TEXT DEFAULT 'unassigned'"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE tasks ADD COLUMN description TEXT DEFAULT ''"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE tasks ADD COLUMN assignee_role TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE tasks ADD COLUMN source_type TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE tasks ADD COLUMN source_id TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE test_cases ADD COLUMN assignee_role TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE documents ADD COLUMN category TEXT NOT NULL DEFAULT 'project'"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE documents ADD COLUMN owner_role TEXT DEFAULT 'pm'"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE documents ADD COLUMN project_id TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE documents ADD COLUMN collab_revision INTEGER NOT NULL DEFAULT 0"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE defects ADD COLUMN assignee_role TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE project_members ADD COLUMN user_id TEXT"); } catch (e) { /* column already exists */ }
-  try { exec("ALTER TABLE releases ADD COLUMN creator_id TEXT"); } catch (e) { /* column already exists */ }
+  try { exec("ALTER TABLE defects ADD COLUMN description TEXT DEFAULT ''"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE defects ADD COLUMN version INTEGER NOT NULL DEFAULT 1"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE products ADD COLUMN description TEXT DEFAULT ''"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE products ADD COLUMN image_url TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE products ADD COLUMN system_name TEXT DEFAULT ''"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE products ADD COLUMN system_version TEXT DEFAULT ''"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE products ADD COLUMN application_version TEXT DEFAULT ''"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE products ADD COLUMN hardware_info TEXT DEFAULT '{}'"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE products ADD COLUMN system_info TEXT DEFAULT '{}'"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE products ADD COLUMN application_info TEXT DEFAULT '{}'"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE products ADD COLUMN hardware_metrics TEXT DEFAULT '[]'"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE products ADD COLUMN system_metrics TEXT DEFAULT '[]'"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE products ADD COLUMN app_metrics TEXT DEFAULT '[]'"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE work_logs ADD COLUMN log_date TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE work_logs ADD COLUMN source_document_id TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE work_logs ADD COLUMN file_name TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE work_logs ADD COLUMN file_type TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE work_logs ADD COLUMN week_key TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE work_logs ADD COLUMN weekly_summary TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE work_logs ADD COLUMN role TEXT DEFAULT 'dev'"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE work_logs ADD COLUMN project_id TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE work_logs ADD COLUMN author_id TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE requirements ADD COLUMN assignee TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE requirements ADD COLUMN assignee_role TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE requirements ADD COLUMN assignment_status TEXT DEFAULT 'unassigned'"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE tasks ADD COLUMN description TEXT DEFAULT ''"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE tasks ADD COLUMN assignee_role TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE tasks ADD COLUMN source_type TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE tasks ADD COLUMN source_id TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE test_cases ADD COLUMN assignee_role TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE documents ADD COLUMN category TEXT NOT NULL DEFAULT 'project'"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE documents ADD COLUMN owner_role TEXT DEFAULT 'pm'"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE documents ADD COLUMN project_id TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE documents ADD COLUMN collab_revision INTEGER NOT NULL DEFAULT 0"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE defects ADD COLUMN assignee_role TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE project_members ADD COLUMN user_id TEXT"); } catch { /* column already exists */ }
+  try { exec("ALTER TABLE releases ADD COLUMN creator_id TEXT"); } catch { /* column already exists */ }
   runSync(
     `UPDATE project_members
      SET user_id = (SELECT id FROM users WHERE users.name = project_members.user_name)
@@ -693,7 +693,7 @@ function initDbSqlite() {
   exec("CREATE INDEX IF NOT EXISTS idx_status_histories_resource_created ON status_histories(resource_type, resource_id, created_at DESC)");
   exec("CREATE INDEX IF NOT EXISTS idx_status_histories_project_created ON status_histories(project_id, created_at DESC)");
   exec("CREATE INDEX IF NOT EXISTS idx_sprint_scope_changes_sprint_created ON sprint_scope_changes(sprint_id, created_at DESC)");
-  try { exec("ALTER TABLE capacity_plans ADD COLUMN leave_hours REAL NOT NULL DEFAULT 0"); } catch (e) { /* column already exists */ }
+  try { exec("ALTER TABLE capacity_plans ADD COLUMN leave_hours REAL NOT NULL DEFAULT 0"); } catch { /* column already exists */ }
   exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_capacity_plans_user_period ON capacity_plans(user_id, period_start, period_end)");
   exec("CREATE INDEX IF NOT EXISTS idx_leave_records_status_date ON leave_records(status, leave_date)");
   exec("CREATE INDEX IF NOT EXISTS idx_leave_records_user_date ON leave_records(user_id, leave_date DESC)");

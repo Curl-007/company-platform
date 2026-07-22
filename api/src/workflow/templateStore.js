@@ -118,12 +118,8 @@ function mapStoredTemplate(row, parse) {
 function createWorkflowTemplateStore({
   insert,
   row,
-  rows,
   run,
-  json,
-  parse,
   now,
-  nextId,
 }) {
   async function listTemplates() {
     // Only the two builtin templates are exposed.

@@ -1,5 +1,5 @@
 const express = require("express");
-const { filterAsync, mapAsync, forEachAsync } = require("../../lib/asyncIter");
+const { filterAsync, mapAsync } = require("../../lib/asyncIter");
 
 const PROGRAM_STATUSES = new Set(["planning", "active", "on_hold", "done", "archived"]);
 const PORTFOLIO_STATUSES = new Set(["planned", "design", "development", "evaluating", "released", "done"]);

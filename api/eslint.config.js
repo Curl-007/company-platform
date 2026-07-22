@@ -1,12 +1,9 @@
-const js = require("@eslint/js");
 const globals = require("globals");
 
 /**
- * Practical lint gate:
- * - Whole API: catch real bugs (undef, constant binary, misused await patterns)
+ * RC lint gate:
+ * - Whole API: correctness rules, zero warnings budget
  * - Permission/handoff core: stricter async surface
- * - Legacy unused imports/vars are warnings so the gate stays green while
- *   still surfacing cleanup work; critical modules promote unused to error.
  */
 
 /** @type {import("eslint").Linter.Config[]} */
@@ -33,7 +30,7 @@ module.exports = [
     rules: {
       // Base correctness without drowning CI in historical unused-import debt.
       "no-undef": "error",
-      "no-unused-vars": ["warn", {
+      "no-unused-vars": ["error", {
         argsIgnorePattern: "^_",
         varsIgnorePattern: "^_",
         caughtErrorsIgnorePattern: "^_",

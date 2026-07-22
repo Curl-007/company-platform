@@ -1,6 +1,6 @@
 const express = require("express");
 
-function createDashboardRouter({ fail, ok, service }) {
+function createDashboardRouter({ ok, service }) {
   const router = express.Router();
 
   router.get("/dashboard", async (req, res, next) => {

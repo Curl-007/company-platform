@@ -19,11 +19,15 @@
     "generate:enums": "npm run generate:enums -w web",
     "test": "npm run test -w api && npm run test -w web",
     "test:e2e": "npm run test:e2e -w web",
+    "test:rc-e2e": "node scripts/rc-e2e.js",
     "smoke:roles": "npm run smoke:roles -w api",
     "typecheck": "npm run typecheck -w web",
     "lint": "npm run lint -w api && npm run lint -w web",
     "audit:prod": "npm audit --omit=dev --audit-level=low",
-    "check": "npm run audit:prod && npm run lint && npm run test && npm run build"
+    "preflight:env": "npm run preflight:env -w api",
+    "drill:sqlite-backup": "npm run drill:sqlite-backup -w api",
+    "check": "npm run audit:prod && npm run lint && npm run test && npm run build && npm run preflight:env && npm run drill:sqlite-backup",
+    "check:rc": "npm run check && npm run test:rc-e2e"
   },
   "overrides": {
     "body-parser": "1.20.6"

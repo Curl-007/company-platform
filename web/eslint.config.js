@@ -38,7 +38,7 @@ export default tseslint.config(
       ...js.configs.recommended.rules,
       'no-undef': 'off', // TypeScript handles this
       'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': ['warn', {
+      '@typescript-eslint/no-unused-vars': ['error', {
         argsIgnorePattern: '^_',
         varsIgnorePattern: '^_',
         caughtErrorsIgnorePattern: '^_',

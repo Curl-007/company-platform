@@ -1,5 +1,5 @@
 const express = require("express");
-const { filterAsync, mapAsync, forEachAsync } = require("../../lib/asyncIter");
+const { filterAsync } = require("../../lib/asyncIter");
 
 function normalizeProductImageUrls(body) {
   if (Array.isArray(body?.imageUrls)) {
@@ -22,7 +22,6 @@ function createProductsRouter({
   nextId,
   now,
   ok,
-  parse,
   requireAnyPermission,
   requirePermission,
   row,

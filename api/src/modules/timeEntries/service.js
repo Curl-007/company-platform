@@ -1,4 +1,4 @@
-const { filterAsync, mapAsync } = require("../../lib/asyncIter");
+const { filterAsync } = require("../../lib/asyncIter");
 const CATEGORIES = ["delivery", "support", "meeting", "training", "other"];
 const WORK_NATURES = ["planned", "unplanned", "unspecified"];
 

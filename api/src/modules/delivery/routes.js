@@ -1,5 +1,5 @@
 const express = require("express");
-const { filterAsync, mapAsync, forEachAsync } = require("../../lib/asyncIter");
+const { filterAsync } = require("../../lib/asyncIter");
 const { buildBuildCreate, buildReleaseApproval, buildReleaseCreate, buildRollbackCreate } = require("./service");
 
 function createDeliveryRouter({
@@ -99,12 +99,6 @@ function createDeliveryRouter({
     if (!release) return false;
     const build = await loadReleaseBuild(release);
     return build ? await canWriteBuild(user, build) : isOrganizationProjectManager(user);
-  }
-
-  async function ensureBuildAccess(req, res, build, message = "无权访问该构建。") {
-    if (await canAccessBuild(req.user, build)) return true;
-    fail(res, 403, "PERMISSION_DENIED", message);
-    return false;
   }
 
   async function ensureBuildWrite(req, res, build, message = "无权修改该构建。") {

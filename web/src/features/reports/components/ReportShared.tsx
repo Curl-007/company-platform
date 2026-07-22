@@ -1,6 +1,6 @@
 import StatusBadge from '../../../components/common/StatusBadge';
 import ProgressBar from '../../../components/common/ProgressBar';
-import DataTable, { type DataTableColumn } from '../../../components/common/DataTable';
+import { type DataTableColumn } from '../../../components/common/DataTable';
 import Panel from '../../../components/common/Panel';
 import type { Project, RequirementProgress } from '../../../types';
 import { PROJECT_STATUS_LABELS, healthVariant, labelOf } from '../../../constants/enums';

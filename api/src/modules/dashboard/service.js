@@ -1,4 +1,4 @@
-const { filterAsync, mapAsync, forEachAsync } = require("../../lib/asyncIter");
+const { filterAsync, mapAsync } = require("../../lib/asyncIter");
 function createDashboardService({
   createAiSummary,
   mapBuild,

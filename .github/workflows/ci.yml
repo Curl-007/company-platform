@@ -29,11 +29,20 @@ jobs:
       - name: Production dependency audit
         run: npm run audit:prod
 
+      - name: Environment preflight
+        run: npm run preflight:env
+        env:
+          JWT_SECRET: ci-jwt-secret-not-for-prod
+          AI_CONFIG_ENCRYPTION_KEY: ci-ai-key-16chars
+
       - name: Lint API and web
         run: npm run lint
 
       - name: Backend integration and unit tests
         run: npm run test -w api
+
+      - name: SQLite backup and restore drill
+        run: npm run drill:sqlite-backup
 
       - name: Initialize disposable migration verification database
         run: DATABASE_FILE="$RUNNER_TEMP/project-management.db" node -e "require('./api/db').initDb()"
@@ -66,37 +75,13 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: web
 
-      - name: Start API for browser smoke
-        run: |
-          DATABASE_FILE="$RUNNER_TEMP/e2e-api.db" node -e "require('./api/db').initDb()"
-          DATABASE_FILE="$RUNNER_TEMP/e2e-api.db" \
-            JWT_SECRET="ci-jwt-secret-not-for-prod" \
-            AI_CONFIG_ENCRYPTION_KEY="ci-ai-key-16chars" \
-            PORT=4010 \
-            node api/server.js > "$RUNNER_TEMP/api-e2e.log" 2>&1 &
-          echo $! > "$RUNNER_TEMP/api-e2e.pid"
-          for i in $(seq 1 60); do
-            if curl -sf http://127.0.0.1:4010/api/health >/dev/null; then
-              echo "API healthy"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "API failed to become healthy" >&2
-          cat "$RUNNER_TEMP/api-e2e.log" >&2 || true
-          exit 1
-
-      - name: Frontend Playwright smoke
-        run: npm run test:e2e -w web
+      - name: Isolated disposable-SQLite browser E2E (smoke + roles)
+        run: npm run test:rc-e2e
         env:
           CI: true
-
-      - name: Stop API smoke server
-        if: always()
-        run: |
-          if [ -f "$RUNNER_TEMP/api-e2e.pid" ]; then
-            kill "$(cat "$RUNNER_TEMP/api-e2e.pid")" || true
-          fi
+          JWT_SECRET: ci-jwt-secret-not-for-prod
+          AI_CONFIG_ENCRYPTION_KEY: ci-ai-key-16chars
+          PORT: 4010
 
       - name: Reject whitespace errors
         run: git diff --check HEAD^ HEAD || test "$(git rev-list --count HEAD)" -eq 1

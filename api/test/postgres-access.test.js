@@ -119,7 +119,7 @@ function createFakePostgresRuntime() {
       // naive: if row existed with same id, rowCount 0
       const m = text.match(/INSERT\s+INTO\s+([A-Za-z_][A-Za-z0-9_]*)/i);
       if (m && params?.length) {
-        const store = ensureTable(m[1]);
+        ensureTable(m[1]);
         const id = params[0];
         // parseInsert already wrote; approximate idempotency for second call by checking log
         const prior = log.filter((e) => e !== log[log.length - 1] && /INSERT/i.test(e.sql) && e.params?.[0] === id);
@@ -297,7 +297,7 @@ test("createPostgresRuntime + createPostgresAccess integration with FakePool", a
 
     async connect() {
       return {
-        async query(sql) {
+        async query(_sql) {
           return { rows: [], rowCount: 0 };
         },
         release() {},

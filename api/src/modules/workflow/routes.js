@@ -10,7 +10,6 @@ function createWorkflowRouter({
   fail,
   ok,
   repository,
-  requirePermission,
   templateStore,
   workflowTemplates,
 }) {

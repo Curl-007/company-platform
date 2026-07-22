@@ -1,5 +1,5 @@
 const express = require("express");
-const { filterAsync, mapAsync, forEachAsync } = require("../../lib/asyncIter");
+const { filterAsync, mapAsync } = require("../../lib/asyncIter");
 
 function createTestingRouter({
   audit,

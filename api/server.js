@@ -11,6 +11,7 @@ const { WebSocketServer } = require("ws");
 const {
   audit: writeAuditLog,
   initDb,
+  closeDatabase,
   insert,
   json,
   mapDefect,
@@ -36,6 +37,7 @@ const {
   dialect,
   STORAGE_DIR,
 } = require("./db");
+const { formatPreflightReport, preflightEnv } = require("./src/ops/envPreflight");
 const {
   SYSTEM_ROLES,
   buildCapabilities,
@@ -149,6 +151,21 @@ const server = http.createServer(app);
 const PORT = Number(process.env.PORT) || 4010;
 const NODE_ENV = process.env.NODE_ENV || "development";
 const IS_PROD = NODE_ENV === "production";
+
+// Fail closed in production before opening sockets or loading secrets deeply.
+{
+  const envReport = preflightEnv(process.env);
+  for (const issue of envReport.issues) {
+    const line = `[env] ${issue.code}: ${issue.message}`;
+    if (issue.level === "error") console.error(line);
+    else console.warn(line);
+  }
+  if (!envReport.ok) {
+    console.error(formatPreflightReport(envReport));
+    process.exit(1);
+  }
+}
+
 const DEFAULT_AI_PROVIDER = {
   provider: process.env.AI_PROVIDER || "openai-compatible",
   baseUrl: process.env.AI_BASE_URL || "https://api.openai.com/v1",
@@ -396,12 +413,8 @@ const sprintCommitment = createSprintCommitment({ insert, nextId, now, row, rows
 const workflowTemplateStore = createWorkflowTemplateStore({
   insert,
   row,
-  rows,
   run,
-  json,
-  parse,
   now,
-  nextId,
 });
 const projectFlowService = createProjectFlowService({
   row,
@@ -1090,6 +1103,58 @@ function startServer(port) {
     console.log(`Company project management API listening on http://localhost:${port}`);
   });
 }
+
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`Received ${signal}, shutting down gracefully...`);
+
+  if (aiJobTimeoutTimer) {
+    clearInterval(aiJobTimeoutTimer);
+    aiJobTimeoutTimer = null;
+  }
+
+  try {
+    for (const client of wss.clients || []) {
+      try {
+        client.close(1001, "Server shutting down");
+      } catch {
+        /* ignore */
+      }
+    }
+    await new Promise((resolve) => {
+      try {
+        wss.close(() => resolve());
+      } catch {
+        resolve();
+      }
+    });
+  } catch (error) {
+    console.warn("WebSocket shutdown warning:", error && error.message ? error.message : error);
+  }
+
+  await new Promise((resolve) => {
+    server.close(() => resolve());
+    // Force-complete if keep-alive sockets hang.
+    setTimeout(resolve, 8_000).unref?.();
+  });
+
+  try {
+    await closeDatabase();
+  } catch (error) {
+    console.error("Database close failed:", error && error.message ? error.message : error);
+  }
+
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => {
+  void shutdown("SIGTERM");
+});
+process.on("SIGINT", () => {
+  void shutdown("SIGINT");
+});
 
 // Wait for dialect-specific init (sync sqlite / async postgres ping+schema check).
 _dbInitPromise
