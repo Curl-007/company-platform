@@ -161,7 +161,18 @@ export default function DeliveryCenterView() {
 
   function openRecord(record: DeliveryRecord | null) {
     setStatusError(null);
-    setSelected(record);
+    // Normalize arrays so detail panels never crash on missing linked fields
+    if (record) {
+      setSelected({
+        ...record,
+        linkedStories: Array.isArray(record.linkedStories) ? record.linkedStories : [],
+        linkedBugs: Array.isArray(record.linkedBugs) ? record.linkedBugs : [],
+        title: record.title || record.id,
+        ownerLabel: record.ownerLabel || (record.kind === 'build' ? '未关联项目' : '未关联产品'),
+      });
+      return;
+    }
+    setSelected(null);
   }
 
   async function handleStatus(record: DeliveryRecord, status: string) {

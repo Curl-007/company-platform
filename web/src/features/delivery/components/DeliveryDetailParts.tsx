@@ -12,8 +12,9 @@ export function DetailItem({ label, value }: { label: string; value: string }) {
 }
 
 export function TagList({ items, empty }: { items: string[]; empty: string }) {
-  if (items.length === 0) return <div className="delivery-empty-inline">{empty}</div>;
-  return <div className="delivery-tag-list">{items.map((item) => <span key={item}>{item}</span>)}</div>;
+  const list = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (list.length === 0) return <div className="delivery-empty-inline">{empty}</div>;
+  return <div className="delivery-tag-list">{list.map((item) => <span key={item}>{item}</span>)}</div>;
 }
 
 export function RecordList({
@@ -58,42 +59,57 @@ export function ReleaseReportSection({ report, loading, error }: { report?: Rele
     );
   }
   if (!report) return null;
+
+  const metrics = report.metrics ?? {
+    requirementCount: 0,
+    defectCount: 0,
+    openDefectCount: 0,
+    approvalCount: 0,
+    rollbackCount: 0,
+    auditCount: 0,
+    readyScore: 0,
+  };
+  const gateReady = Boolean(report.gate?.ready);
+  const readyScore = metrics.readyScore ?? report.gate?.score ?? 0;
+  const recommendations = Array.isArray(report.recommendations) ? report.recommendations : [];
+  const auditTrail = Array.isArray(report.auditTrail) ? report.auditTrail : [];
+
   return (
     <section className="delivery-report-section">
       <div className="delivery-report-head">
         <div>
           <h3>发布报告</h3>
-          <p>{report.summary}</p>
+          <p>{report.summary || '暂无发布报告摘要。'}</p>
         </div>
-        <StatusBadge status={report.gate.ready ? 'passed' : 'blocked'} label={`${report.metrics.readyScore}%`} showDot={false} />
+        <StatusBadge status={gateReady ? 'passed' : 'blocked'} label={`${readyScore}%`} showDot={false} />
       </div>
       <div className="delivery-report-metrics">
-        <DetailItem label="覆盖需求" value={`${report.metrics.requirementCount}`} />
-        <DetailItem label="关联缺陷" value={`${report.metrics.defectCount}`} />
-        <DetailItem label="未关闭缺陷" value={`${report.metrics.openDefectCount}`} />
-        <DetailItem label="审批记录" value={`${report.metrics.approvalCount}`} />
-        <DetailItem label="回滚记录" value={`${report.metrics.rollbackCount}`} />
-        <DetailItem label="审计记录" value={`${report.metrics.auditCount}`} />
+        <DetailItem label="覆盖需求" value={`${metrics.requirementCount ?? 0}`} />
+        <DetailItem label="关联缺陷" value={`${metrics.defectCount ?? 0}`} />
+        <DetailItem label="未关闭缺陷" value={`${metrics.openDefectCount ?? 0}`} />
+        <DetailItem label="审批记录" value={`${metrics.approvalCount ?? 0}`} />
+        <DetailItem label="回滚记录" value={`${metrics.rollbackCount ?? 0}`} />
+        <DetailItem label="审计记录" value={`${metrics.auditCount ?? 0}`} />
       </div>
       {report.build ? (
         <div className="delivery-report-linked">
           <span>关联构建</span>
-          <strong>{report.build.id} · {report.build.name}</strong>
-          <StatusBadge status={report.build.status} label={statusLabel('build', report.build.status)} showDot={false} />
+          <strong>{report.build.id} · {report.build.name || '未命名构建'}</strong>
+          <StatusBadge status={report.build.status || 'building'} label={statusLabel('build', report.build.status || 'building')} showDot={false} />
         </div>
       ) : null}
-      {report.recommendations.length ? (
+      {recommendations.length ? (
         <div className="delivery-report-list">
           <strong>复盘建议</strong>
-          {report.recommendations.map((item) => <span key={item}>{item}</span>)}
+          {recommendations.map((item) => <span key={item}>{item}</span>)}
         </div>
       ) : null}
       <div className="delivery-report-list">
         <strong>最近审计</strong>
-        {report.auditTrail.slice(0, 6).map((item) => (
+        {auditTrail.slice(0, 6).map((item) => (
           <span key={item.id}>{item.action} · {item.actorName || '未知'} · {formatDate(item.createdAt)}</span>
         ))}
-        {report.auditTrail.length === 0 ? <span>暂无审计记录</span> : null}
+        {auditTrail.length === 0 ? <span>暂无审计记录</span> : null}
       </div>
     </section>
   );

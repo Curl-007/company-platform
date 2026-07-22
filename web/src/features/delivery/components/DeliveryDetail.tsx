@@ -47,19 +47,22 @@ export default function DeliveryDetail({
   canManageDelivery: boolean;
   canUseAi: boolean;
 }) {
-  const readiness = gate?.score ?? releaseReadiness(record);
+  const readiness = Number(gate?.score ?? releaseReadiness(record)) || 0;
   const toast = useToast();
   const releaseId = record.kind === 'release' ? record.id : '';
+  const gateLines = Array.isArray(gate?.gates) ? gate.gates : [];
+  const linkedStories = Array.isArray(record.linkedStories) ? record.linkedStories : [];
+  const linkedBugs = Array.isArray(record.linkedBugs) ? record.linkedBugs : [];
   const approvalsState = useAsync<ReleaseApproval[]>(
-    () => releaseId ? fetchReleaseApprovals(releaseId) : Promise.resolve([]),
+    () => (releaseId ? fetchReleaseApprovals(releaseId) : Promise.resolve([])),
     [releaseId],
   );
   const rollbacksState = useAsync<RollbackRecord[]>(
-    () => releaseId ? fetchRollbackRecords(releaseId) : Promise.resolve([]),
+    () => (releaseId ? fetchRollbackRecords(releaseId) : Promise.resolve([])),
     [releaseId],
   );
   const reportState = useAsync<ReleaseReport | null>(
-    () => releaseId ? fetchReleaseReport(releaseId) : Promise.resolve(null),
+    () => (releaseId ? fetchReleaseReport(releaseId).catch(() => null) : Promise.resolve(null)),
     [releaseId],
   );
   const [approvalComment, setApprovalComment] = useState('');
@@ -170,20 +173,27 @@ export default function DeliveryDetail({
             <StatusBadge status={gate?.ready ? 'passed' : 'blocked'} label={gate?.ready ? '可发布' : '需处理'} showDot={false} />
           </div>
           <div className="delivery-detail-gate-list">
-            {(gate?.gates ?? []).map((line) => (
-              <GateLine key={line.id} label={line.label} passed={line.passed} value={line.message} />
+            {gateLines.map((line, index) => (
+              <GateLine
+                key={line.id || `${line.label || 'gate'}-${index}`}
+                label={line.label || '门禁项'}
+                passed={Boolean(line.passed)}
+                value={line.message || (line.passed ? '通过' : '未通过')}
+              />
             ))}
-            {!gate ? <GateLine label="门禁预检" passed={false} value="后端预检结果暂不可用" /> : null}
+            {!gate || gateLines.length === 0 ? (
+              <GateLine label="门禁预检" passed={false} value="后端预检结果暂不可用" />
+            ) : null}
           </div>
         </section>
         <div className="delivery-detail-sections">
           <section>
             <h3>关联需求</h3>
-            <TagList items={record.linkedStories} empty="暂无关联需求" />
+            <TagList items={linkedStories} empty="暂无关联需求" />
           </section>
           <section>
             <h3>关联缺陷</h3>
-            <TagList items={record.linkedBugs} empty="暂无关联缺陷" />
+            <TagList items={linkedBugs} empty="暂无关联缺陷" />
           </section>
           <section className="wide">
             <h3>{record.kind === 'build' ? '构建备注' : '发布说明'}</h3>
@@ -278,12 +288,27 @@ export default function DeliveryDetail({
         {statusError ? <div className="form-error">{statusError}</div> : null}
         {canManageDelivery ? (
           <div className="delivery-detail-actions">
-            <select className="form-select" value={record.status} onChange={(event) => onStatus(record, event.target.value)}>
-              {statusOptions(record.kind).map((status) => <option value={status} key={status}>{statusLabel(record.kind, status)}</option>)}
+            <select
+              className="form-select"
+              value={statusOptions(record.kind).includes(record.status) ? record.status : statusOptions(record.kind)[0]}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (!next || next === record.status) return;
+                onStatus(record, next);
+              }}
+            >
+              {statusOptions(record.kind).map((status) => (
+                <option value={status} key={status}>{statusLabel(record.kind, status)}</option>
+              ))}
             </select>
-            <button className="btn btn-danger btn-sm" onClick={() => onDelete(record)}>删除</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>关闭</button>
+            <button type="button" className="btn btn-danger btn-sm" onClick={() => onDelete(record)}>删除</button>
           </div>
-        ) : null}
+        ) : (
+          <div className="delivery-detail-actions">
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>关闭</button>
+          </div>
+        )}
       </Panel>
     </Overlay>
   );

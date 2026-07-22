@@ -445,11 +445,17 @@ function createDeliveryRouter({
     }
   });
 
-  router.get("/releases/:id/report", async (req, res) => {
-    const release = await repository.findRelease(req.params.id);
-    if (!release) return fail(res, 404, "RESOURCE_NOT_FOUND", "Release not found.");
-    if (!(await ensureReleaseAccess(req, res, release))) return;
-    res.json(ok(buildReleaseReport(release)));
+  router.get("/releases/:id/report", async (req, res, next) => {
+    try {
+      const release = await repository.findRelease(req.params.id);
+      if (!release) return fail(res, 404, "RESOURCE_NOT_FOUND", "Release not found.");
+      if (!(await ensureReleaseAccess(req, res, release))) return;
+      // buildReleaseReport is async — must await or JSON serializes Promise as {}
+      const report = await buildReleaseReport(release);
+      res.json(ok(report));
+    } catch (error) {
+      return next(error);
+    }
   });
 
   router.delete("/releases/:id", requirePermission("project:*"), async (req, res) => {
