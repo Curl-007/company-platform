@@ -7489,9 +7489,11 @@ html {
   gap: 10px;
   min-height: 42px;
   margin-bottom: 12px;
+  padding-right: 8px;
 }
 
 .delivery-stage-icon {
+  flex: 0 0 34px;
   width: 34px;
   height: 34px;
   display: inline-flex;
@@ -7500,28 +7502,84 @@ html {
   border-radius: var(--radius-card);
   color: var(--accent);
   background: var(--bg-hover);
+  line-height: 0;
 }
 
-.delivery-stage-head strong,
-.delivery-stage-head span {
+.delivery-stage-icon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+  flex-shrink: 0;
+}
+
+.delivery-stage.done .delivery-stage-icon {
+  color: var(--color-success, #22c55e);
+  background: color-mix(in srgb, var(--color-success, #22c55e) 16%, var(--bg-hover));
+}
+
+.delivery-stage.running .delivery-stage-icon {
+  color: var(--color-info, #38bdf8);
+  background: color-mix(in srgb, var(--color-info, #38bdf8) 16%, var(--bg-hover));
+}
+
+.delivery-stage.risk .delivery-stage-icon {
+  color: var(--color-risk, #f87171);
+  background: color-mix(in srgb, var(--color-risk, #f87171) 16%, var(--bg-hover));
+}
+
+.delivery-stage.idle .delivery-stage-icon {
+  color: var(--text-tertiary);
+  background: var(--bg-hover);
+}
+
+/* Only title/meta text — do NOT force display:block on .delivery-stage-icon (breaks lucide SVG) */
+.delivery-stage-meta {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.delivery-stage-meta strong,
+.delivery-stage-meta span {
   display: block;
 }
 
-.delivery-stage-head strong {
+.delivery-stage-meta strong {
   color: var(--text-primary);
   font-size: var(--fs-body);
+  line-height: 1.25;
 }
 
-.delivery-stage-head span {
+.delivery-stage-meta span {
   color: var(--text-tertiary);
   font-size: var(--fs-helper);
+  line-height: 1.3;
+  margin-top: 2px;
 }
 
+/* Arrow sits between stage cards, not clipped inside the head flex row */
 .delivery-stage-arrow {
   position: absolute;
-  right: -20px;
-  z-index: 1;
+  top: 50%;
+  right: -14px;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.delivery-stage-arrow svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+  stroke: currentColor;
+  fill: none;
 }
 
 .delivery-stage-list {

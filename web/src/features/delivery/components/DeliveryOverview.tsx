@@ -1,4 +1,12 @@
-import { AlertTriangle, ArrowRight, CheckCircle2, CircleDot } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  FlaskConical,
+  Hammer,
+  Package,
+  type LucideIcon,
+} from 'lucide-react';
 import Panel from '../../../components/common/Panel';
 import StatusBadge from '../../../components/common/StatusBadge';
 import type { Build, Product, Project } from '../../../types';
@@ -9,6 +17,21 @@ import {
   type DeliveryRecord,
   type StageTone,
 } from '../deliveryPageModel';
+
+const STAGE_ICONS: Record<string, LucideIcon> = {
+  building: Hammer,
+  testing: FlaskConical,
+  candidate: Package,
+  released: CheckCircle2,
+  risk: AlertTriangle,
+};
+
+function StageIcon({ stageId, tone }: { stageId: string; tone: StageTone }) {
+  if (tone === 'done') return <CheckCircle2 size={16} strokeWidth={2} aria-hidden />;
+  if (tone === 'risk') return <AlertTriangle size={16} strokeWidth={2} aria-hidden />;
+  const Icon = STAGE_ICONS[stageId] || Package;
+  return <Icon size={16} strokeWidth={2} aria-hidden />;
+}
 
 export default function DeliveryOverview({
   pipelineStages,
@@ -38,14 +61,18 @@ export default function DeliveryOverview({
           {pipelineStages.map((stage, index) => (
             <div className={`delivery-stage ${stage.tone}`} key={stage.id}>
               <div className="delivery-stage-head">
-                <span className="delivery-stage-icon">
-                  {stage.tone === 'done' ? <CheckCircle2 size={16} /> : stage.tone === 'risk' ? <AlertTriangle size={16} /> : <CircleDot size={16} />}
+                <span className="delivery-stage-icon" aria-hidden>
+                  <StageIcon stageId={stage.id} tone={stage.tone} />
                 </span>
-                <div>
+                <div className="delivery-stage-meta">
                   <strong>{stage.label}</strong>
                   <span>{stage.records.length} 条记录</span>
                 </div>
-                {index < pipelineStages.length - 1 ? <ArrowRight className="delivery-stage-arrow" size={16} /> : null}
+                {index < pipelineStages.length - 1 ? (
+                  <span className="delivery-stage-arrow" aria-hidden>
+                    <ArrowRight size={16} strokeWidth={2} />
+                  </span>
+                ) : null}
               </div>
               <div className="delivery-stage-list">
                 {stage.records.slice(0, 4).map((record) => (
