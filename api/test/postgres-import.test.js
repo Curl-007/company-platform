@@ -89,11 +89,11 @@ test("splitSqlStatements keeps defaults with semicolons inside strings out of sp
   assert.match(statements[1], /DEFAULT 'a;b'/);
 });
 
-test("listMigrationFiles discovers 18 migrations with stable checksums", () => {
+test("listMigrationFiles discovers 19 migrations with stable checksums", () => {
   const migrations = listMigrationFiles(path.resolve(__dirname, "..", "migrations"));
-  assert.equal(migrations.length, 18);
+  assert.equal(migrations.length, 19);
   assert.equal(migrations[0].id, "20260713_01_work_calendar");
-  assert.equal(migrations[migrations.length - 1].id, "20260721_18_workflow_templates");
+  assert.equal(migrations[migrations.length - 1].id, "20260722_19_defect_version");
   assert.match(migrations[0].checksum, /^[a-f0-9]{64}$/);
 });
 

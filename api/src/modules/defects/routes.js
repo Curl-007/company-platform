@@ -1,6 +1,28 @@
 const express = require("express");
-const { filterAsync, mapAsync, forEachAsync } = require("../../lib/asyncIter");
-const { buildDefectCreate } = require("./service");
+const { filterAsync } = require("../../lib/asyncIter");
+const { resolveProjectHandoffTarget } = require("../../lib/projectHandoff");
+const {
+  buildDefectCreate,
+  buildDefectHandoffUpdate,
+  resolveDefectHandoffAction,
+} = require("./service");
+
+function expectedDefectVersion(req, res, defect, fail) {
+  const version = Number(req.body?.version);
+  if (!Number.isInteger(version) || version < 1) {
+    fail(res, 400, "VERSION_REQUIRED", "A positive integer version is required when handing off a defect.");
+    return null;
+  }
+  return version;
+}
+
+async function defectVersionConflict(res, defect, expectedVersion, repository, fail) {
+  const current = await repository.findDefectVersion(defect.id);
+  return fail(res, 409, "VERSION_CONFLICT", "Defect was changed by another user. Refresh and retry your handoff.", {
+    expectedVersion,
+    currentVersion: Number(current?.version) || null,
+  });
+}
 
 function createDefectsRouter({
   audit,
@@ -133,6 +155,7 @@ function createDefectsRouter({
    * - assign_to_dev: QA/PM → developer fix (status → in_fix when appropriate)
    * - assign_to_qa: DEV/PM → tester verify (status → resolved when fixing)
    * Allowed for: defect:*, project:*, or current assignee.
+   * Status is server-derived; free-form status is rejected. Optimistic version required.
    */
   router.post("/defects/:id/handoff", async (req, res) => {
     const before = await repository.findDefect(req.params.id);
@@ -151,30 +174,58 @@ function createDefectsRouter({
       return fail(res, 403, "PERMISSION_DENIED", "仅缺陷处理人或具备缺陷/项目管理权限的用户可交接。");
     }
 
-    const action = String(req.body?.action || "").trim();
-    if (!["assign_to_dev", "assign_to_qa"].includes(action)) {
+    if (req.body?.status !== undefined) {
+      return fail(res, 400, "VALIDATION_FAILED", "status is not accepted on handoff; status is derived from action.");
+    }
+
+    const actionSpec = resolveDefectHandoffAction(req.body?.action);
+    if (!actionSpec) {
       return fail(res, 400, "VALIDATION_FAILED", "action must be assign_to_dev or assign_to_qa");
     }
-    const assignee = String(req.body?.assignee || "").trim();
-    if (!assignee) return fail(res, 400, "VALIDATION_FAILED", "assignee is required.");
-
-    const targetRole = action === "assign_to_dev" ? "dev" : "qa";
-    let nextStatus = before.status;
-    if (action === "assign_to_dev") {
-      if (["new", "confirmed", "resolved", "verified"].includes(before.status)) nextStatus = "in_fix";
-    } else if (action === "assign_to_qa") {
-      if (["new", "confirmed", "in_fix"].includes(before.status)) nextStatus = "resolved";
-    }
-    if (req.body?.status && defectStatuses.includes(req.body.status)) {
-      nextStatus = req.body.status;
+    if (!actionSpec.fromStatuses.includes(before.status)) {
+      return fail(
+        res,
+        409,
+        "STATE_TRANSITION_NOT_ALLOWED",
+        `Cannot ${actionSpec.label} from status ${before.status}. Allowed from: ${actionSpec.fromStatuses.join(", ")}`,
+      );
     }
 
-    await repository.updateDefectAssignee(req.params.id, assignee);
-    await repository.updateDefectAssigneeRole(req.params.id, targetRole);
-    if (nextStatus !== before.status) await repository.updateDefectStatus(req.params.id, nextStatus);
+    const actorRole = String(req.user?.role || "").toLowerCase();
+    if (!isPrivileged) {
+      if (actionSpec.targetRole === "dev" && actorRole === "dev") {
+        return fail(res, 403, "PERMISSION_DENIED", "开发工程师请使用「指派测试验证」；指派开发由测试工程师发起。");
+      }
+      if (actionSpec.targetRole === "qa" && actorRole === "qa") {
+        return fail(res, 403, "PERMISSION_DENIED", "测试工程师请使用「指派开发修复」；指派测试由开发工程师发起。");
+      }
+    }
+
+    const expectedVersion = expectedDefectVersion(req, res, before, fail);
+    if (expectedVersion === null) return;
+
+    const target = await resolveProjectHandoffTarget(repository, before.project_id, {
+      assigneeId: req.body?.assigneeId,
+      assigneeName: req.body?.assignee,
+      targetRole: actionSpec.targetRole,
+    });
+    if (!target.ok) {
+      return fail(res, 400, "VALIDATION_FAILED", target.message);
+    }
+
+    const nextStatus = actionSpec.deriveStatus(before.status);
+    const next = buildDefectHandoffUpdate(before, {
+      expectedVersion,
+      assignee: target.user.name,
+      assigneeRole: actionSpec.targetRole,
+      status: nextStatus,
+    });
+    const updateResult = await repository.handoffDefect(next);
+    if (updateResult.changes === 0) return await defectVersionConflict(res, before, expectedVersion, repository, fail);
+
     const after = await repository.findDefect(req.params.id);
     await syncDefectTask(after);
-    await audit(req.user, `defect.handoff.${action}`, "defect", req.params.id, before, after, req.ip);
+    await audit(req.user, `defect.handoff.${req.body?.action}`, "defect", req.params.id, before, after, req.ip);
     res.json(ok(mapDefect(after)));
   });
 

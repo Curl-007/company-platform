@@ -155,7 +155,7 @@ export type DefectHandoffAction = 'assign_to_dev' | 'assign_to_qa';
 
 export function handoffDefect(
   id: string,
-  input: { action: DefectHandoffAction; assignee: string; status?: string },
+  input: { action: DefectHandoffAction; assignee?: string; assigneeId?: string; version: number },
 ): Promise<Defect> {
   return unwrapPost<Defect>(`/api/defects/${encodeURIComponent(id)}/handoff`, input);
 }

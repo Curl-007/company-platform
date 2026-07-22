@@ -1,5 +1,6 @@
 const express = require("express");
-const { filterAsync, mapAsync, forEachAsync } = require("../../lib/asyncIter");
+const { filterAsync, mapAsync } = require("../../lib/asyncIter");
+const { resolveProjectHandoffTarget } = require("../../lib/projectHandoff");
 const { canTransition } = require("../../workflow/stateMachine");
 const {
   buildSprintCreate,
@@ -95,22 +96,6 @@ function createTasksRouter({
     if (task.owner && user.name && task.owner === user.name) return true;
     if (task.assignee_id && user.id && task.assignee_id === user.id) return true;
     return false;
-  }
-
-  async function resolveHandoffTarget(projectId, { assigneeId, assigneeName, targetRole }) {
-    let user = null;
-    if (assigneeId) user = await repository.findActiveUserById(assigneeId);
-    if (!user && assigneeName) user = await repository.findActiveUserByName(String(assigneeName).trim());
-    if (!user) {
-      const members = await repository.listProjectMembers(projectId);
-      const roleMembers = members.filter((m) => String(m.role || "").toLowerCase() === targetRole);
-      if (roleMembers.length === 1) {
-        const m = roleMembers[0];
-        if (m.user_id) user = await repository.findActiveUserById(m.user_id);
-        if (!user && m.user_name) user = await repository.findActiveUserByName(m.user_name);
-      }
-    }
-    return user;
   }
 
   function scopeChangeReason(body) {
@@ -591,26 +576,19 @@ function createTasksRouter({
       const expectedVersion = expectedTaskVersion(req, res, before, fail);
       if (expectedVersion === null) return;
 
-      const targetUser = await resolveHandoffTarget(before.project_id, {
+      const target = await resolveProjectHandoffTarget(repository, before.project_id, {
         assigneeId: req.body?.assigneeId,
         assigneeName: req.body?.assignee || req.body?.owner,
         targetRole: actionSpec.targetRole,
       });
-      if (!targetUser) {
-        return fail(
-          res,
-          400,
-          "VALIDATION_FAILED",
-          actionSpec.targetRole === "qa"
-            ? "请指定测试工程师（assignee/assigneeId），或确保项目中仅有一名测试成员。"
-            : "请指定开发工程师（assignee/assigneeId），或确保项目中仅有一名开发成员。",
-        );
+      if (!target.ok) {
+        return fail(res, 400, "VALIDATION_FAILED", target.message);
       }
 
       const next = buildTaskHandoffUpdate(before, {
         expectedVersion,
-        owner: targetUser.name,
-        assigneeId: targetUser.id,
+        owner: target.user.name,
+        assigneeId: target.user.id,
         assigneeRole: actionSpec.targetRole,
         status: actionSpec.targetStatus,
         progress: req.body?.progress === undefined

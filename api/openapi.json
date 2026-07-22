@@ -3703,6 +3703,56 @@
         }
       }
     },
+    "/api/defects/{id}/handoff": {
+      "post": {
+        "summary": "Cross-role defect handoff with server-derived status",
+        "description": "Reassign a defect to dev or qa. Status is derived from the action; free-form status is rejected. Requires optimistic version.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DefectHandoffInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Handed-off defect",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeDefect"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
     "/api/products": {
       "get": {
         "summary": "List products visible to the caller",
@@ -7306,10 +7356,12 @@
         ],
         "properties": {
           "title": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "projectId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "owner": {
             "type": "string"
@@ -7364,7 +7416,8 @@
             "minimum": 1
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "description": {
             "type": "string",
@@ -7394,13 +7447,21 @@
           },
           "assigneeRole": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "enum": [
+              "dev",
+              "qa"
+            ]
           },
           "assignmentStatus": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "unassigned",
+              "assigned"
+            ]
           },
           "completion": {
-            "type": "number",
+            "type": "integer",
             "minimum": 0,
             "maximum": 100
           }
@@ -8782,6 +8843,40 @@
           "reporter": {
             "type": "string",
             "nullable": true
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "DefectHandoffInput": {
+        "type": "object",
+        "required": [
+          "action",
+          "version"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "assign_to_dev",
+              "assign_to_qa"
+            ]
+          },
+          "assignee": {
+            "type": "string",
+            "description": "Target user display name. Optional when the project has exactly one member for the target role."
+          },
+          "assigneeId": {
+            "type": "string",
+            "description": "Target user id (preferred when known)."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Optimistic concurrency token from the current defect."
           }
         },
         "additionalProperties": false

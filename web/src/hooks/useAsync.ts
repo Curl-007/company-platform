@@ -1,13 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../services/api';
+import {
+  ASYNC_CACHE_FRESH_MS,
+  buildAsyncCacheKey,
+  clearAsyncCache,
+  deleteAsyncCacheEntry,
+  getAsyncCacheEntry,
+  invalidateAsyncCache,
+  setAsyncCacheEntry,
+  setAsyncCacheUser,
+} from '../services/asyncCache';
 
 // ---------------------------------------------------------------------------
 // useAsync: run an async loader on mount (and on dependency change), exposing
 // loading / error / data / reload. Keeps every page's fetch lifecycle uniform.
 //
-// Includes a module-level stale-while-revalidate cache so navigating away from
-// a page and back shows the previous data instantly, then refreshes in the
-// background (no blank spinner). The cache key is derived from `deps`.
+// Cache storage lives in services/asyncCache.ts so session expiry can clear
+// and re-scope entries without a circular import with the HTTP client.
 // ---------------------------------------------------------------------------
 
 interface AsyncState<T> {
@@ -15,34 +24,6 @@ interface AsyncState<T> {
   loading: boolean;
   error: string | null;
   reload: () => void;
-}
-
-interface CacheEntry<T> {
-  data: T;
-  at: number;
-}
-
-// Module-level cache shared across all useAsync calls in the session.
-const cache = new Map<string, CacheEntry<unknown>>();
-// TTL: cached data is "fresh" for this long; after that it's stale (shown
-// immediately but re-fetched in the background).
-const FRESH_MS = 20_000;
-
-function cacheKey(loader: () => Promise<unknown>, deps: unknown[]): string {
-  // Prefer a stable function name; for anonymous loaders include a short body
-  // fingerprint so two different () => fetchX() closures don't collide.
-  const named = loader.name && loader.name !== 'anonymous' ? loader.name : '';
-  let bodyHint = '';
-  if (!named) {
-    try {
-      const src = loader.toString().replace(/\s+/g, ' ').slice(0, 120);
-      bodyHint = `anon:${src}`;
-    } catch {
-      bodyHint = 'anon';
-    }
-  }
-  const name = named || bodyHint;
-  try { return name + ':' + JSON.stringify(deps); } catch { return name + ':' + deps.length; }
 }
 
 function messageFromError(error: unknown): string {
@@ -60,9 +41,9 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): Asy
   // on top of it during the background revalidation.
   const servedStale = useRef(false);
 
-  const key = cacheKey(loader, deps);
+  const key = buildAsyncCacheKey(loader, deps);
   const reload = useCallback(() => {
-    cache.delete(key);
+    deleteAsyncCacheEntry(key);
     servedStale.current = false;
     setNonce((value) => value + 1);
   }, [key]);
@@ -72,8 +53,8 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): Asy
 
     // Stale-while-revalidate: if we have cached (possibly stale) data, show it
     // immediately without a loading spinner, then refresh in the background.
-    const cached = cache.get(key) as CacheEntry<T> | undefined;
-    const isFresh = cached ? Date.now() - cached.at < FRESH_MS : false;
+    const cached = getAsyncCacheEntry<T>(key);
+    const isFresh = cached ? Date.now() - cached.at < ASYNC_CACHE_FRESH_MS : false;
     if (cached) {
       setData(cached.data);
       setError(null);
@@ -95,7 +76,7 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): Asy
       .then((result) => {
         if (active) {
           setData(result);
-          cache.set(key, { data: result, at: Date.now() });
+          setAsyncCacheEntry(key, result);
         }
       })
       .catch((err: unknown) => {
@@ -108,38 +89,11 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): Asy
     return () => {
       active = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // deps is intentionally the caller's dependency list plus reload nonce
   }, [...deps, nonce]);
 
   return { data, loading, error, reload };
 }
 
-/** Invalidate every cached entry (e.g. on logout). */
-export function clearAsyncCache(): void {
-  cache.clear();
-}
-
-/**
- * Invalidate selected cache entries.
- * - string: case-insensitive substring match against the cache key
- * - RegExp: tested against the cache key
- * - function: predicate over the cache key
- */
-export function invalidateAsyncCache(
-  match: string | RegExp | ((key: string) => boolean),
-): number {
-  let removed = 0;
-  for (const key of [...cache.keys()]) {
-    const hit =
-      typeof match === 'function'
-        ? match(key)
-        : match instanceof RegExp
-          ? match.test(key)
-          : key.toLowerCase().includes(String(match).toLowerCase());
-    if (hit) {
-      cache.delete(key);
-      removed += 1;
-    }
-  }
-  return removed;
-}
+// Re-export registry helpers so existing imports from hooks/useAsync keep working.
+export { clearAsyncCache, invalidateAsyncCache, setAsyncCacheUser };

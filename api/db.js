@@ -519,7 +519,8 @@ function initDbSqlite() {
       project_id TEXT NOT NULL,
       requirement_id TEXT,
       assignee TEXT,
-      assignee_role TEXT
+      assignee_role TEXT,
+      version INTEGER NOT NULL DEFAULT 1
     );
     CREATE TABLE IF NOT EXISTS audit_logs (
       id TEXT PRIMARY KEY,
@@ -644,6 +645,7 @@ function initDbSqlite() {
   try { exec("ALTER TABLE projects ADD COLUMN source_path TEXT"); } catch (e) { /* column already exists */ }
   // Test management enhancement: description column for defects (§3.5)
   try { exec("ALTER TABLE defects ADD COLUMN description TEXT DEFAULT ''"); } catch (e) { /* column already exists */ }
+  try { exec("ALTER TABLE defects ADD COLUMN version INTEGER NOT NULL DEFAULT 1"); } catch (e) { /* column already exists */ }
   try { exec("ALTER TABLE products ADD COLUMN description TEXT DEFAULT ''"); } catch (e) { /* column already exists */ }
   try { exec("ALTER TABLE products ADD COLUMN image_url TEXT"); } catch (e) { /* column already exists */ }
   try { exec("ALTER TABLE products ADD COLUMN system_name TEXT DEFAULT ''"); } catch (e) { /* column already exists */ }
@@ -1243,6 +1245,7 @@ function mapDefect(item) {
     foundInBuild: item.found_in_build || null,
     affectedVersion: item.affected_version || null,
     reporter: item.reporter || null,
+    version: Number(item.version) > 0 ? Number(item.version) : 1,
   };
 }
 

@@ -1,4 +1,5 @@
 import type { ApiResponse } from '../types';
+import { clearAsyncCache, setAsyncCacheUser } from './asyncCache';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -16,6 +17,31 @@ const BASE_URL = '';
 // ---------------------------------------------------------------------------
 
 const TOKEN_STORAGE_KEY = 'pm.token';
+const USER_STORAGE_KEY = 'pm.user';
+
+/** Optional hook so auth can clear its in-memory user snapshot on auto-expiry. */
+let onSessionExpired: (() => void) | null = null;
+
+/** Register a callback invoked when the session is force-expired (e.g. 401). */
+export function setOnSessionExpired(handler: (() => void) | null): void {
+  onSessionExpired = handler;
+}
+
+/**
+ * Clear token, async cache namespace, and persisted user snapshot.
+ * Does not navigate; callers decide whether to redirect.
+ */
+export function clearAuthArtifacts(): void {
+  setToken(null);
+  clearAsyncCache();
+  setAsyncCacheUser(null);
+  try {
+    sessionStorage.removeItem(USER_STORAGE_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+  onSessionExpired?.();
+}
 
 let token: string | null = readToken();
 
@@ -116,9 +142,9 @@ async function request<T>(
     window.clearTimeout(timeout);
   }
 
-  // Auto-redirect on 401
+  // Auto-expire session on 401 (token, user snapshot, and useAsync cache).
   if (response.status === 401) {
-    setToken(null);
+    clearAuthArtifacts();
     window.location.hash = '#/login';
     throw new ApiError('未授权 - 登录已过期', 401);
   }

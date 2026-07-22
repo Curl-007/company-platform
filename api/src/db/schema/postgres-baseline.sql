@@ -488,7 +488,8 @@ CREATE TABLE IF NOT EXISTS defects (
   found_in_build TEXT,
   affected_version TEXT,
   reporter TEXT,
-  description TEXT DEFAULT ''
+  description TEXT DEFAULT '',
+  version INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS audit_logs (

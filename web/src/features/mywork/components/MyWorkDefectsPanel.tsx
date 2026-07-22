@@ -119,6 +119,7 @@ export default function MyWorkDefectsPanel({
       await handoffDefect(selected.id, {
         action: toRole === 'dev' ? 'assign_to_dev' : 'assign_to_qa',
         assignee: targetName.trim(),
+        version: Number(selected.version) > 0 ? Number(selected.version) : 1,
       });
       toast.success(toRole === 'dev' ? '已指派开发工程师修复' : '已指派测试工程师验证');
       onChanged?.();

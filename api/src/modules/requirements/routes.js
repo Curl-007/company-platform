@@ -1,7 +1,12 @@
 const express = require("express");
-const { filterAsync, mapAsync, forEachAsync } = require("../../lib/asyncIter");
+const { filterAsync } = require("../../lib/asyncIter");
 const { canTransition } = require("../../workflow/stateMachine");
-const { buildRequirementCreate, buildRequirementUpdate } = require("./service");
+const {
+  buildRequirementCreate,
+  buildRequirementUpdate,
+  validateRequirementCreate,
+  validateRequirementUpdate,
+} = require("./service");
 
 function expectedRequirementVersion(req, res, requirement, fail) {
   const version = Number(req.body?.version);
@@ -26,7 +31,6 @@ function createRequirementsRouter({
   canAccessProject,
   canWriteProject,
   canOperateRequirement,
-  ensureRoleAllowed,
   fail,
   json,
   mapRequirement,
@@ -79,15 +83,26 @@ function createRequirementsRouter({
   });
 
   router.post("/requirements", requirePermission("requirement:*"), async (req, res) => {
-    const { title, projectId, owner, priority, description, acceptanceCriteria, productId, portfolioId, parentId, assignee, assigneeRole } = req.body || {};
-    if (!title || !projectId) return fail(res, 400, "VALIDATION_FAILED", "Requirement title and projectId are required.");
+    const parsed = validateRequirementCreate(req.body || {}, { priorities: requirementPriorities });
+    if (!parsed.ok) {
+      return fail(res, 400, "VALIDATION_FAILED", parsed.message, parsed.field ? { field: parsed.field } : undefined);
+    }
+    const {
+      title,
+      projectId,
+      owner,
+      priority,
+      description,
+      acceptanceCriteria,
+      productId,
+      portfolioId,
+      parentId,
+      assignee,
+      assigneeRole,
+    } = parsed.data;
     if (!(await canWriteProject(req.user, projectId))) return fail(res, 403, "PROJECT_ARCHIVED_OR_ACCESS_DENIED", "Cannot create a requirement in an archived or inaccessible project.");
     if (!(await canAccessProject(req.user, projectId))) return fail(res, 403, "PERMISSION_DENIED", "无权在该项目中创建需求。");
     if (!(await validateParentRequirement(res, { parentId, projectId }))) return;
-    if (assigneeRole) {
-      const roleError = ensureRoleAllowed(assigneeRole, ["dev", "qa"], "assigneeRole");
-      if (roleError) return fail(res, 400, "VALIDATION_FAILED", roleError);
-    }
     const idempotency = await beginIdempotentRequest(req, res, "requirement.create");
     if (!idempotency) return;
     try {
@@ -144,19 +159,29 @@ function createRequirementsRouter({
   router.patch("/requirements/:id", async (req, res) => {
     const before = await repository.findRequirement(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Requirement not found.");
-    if (!canOperateRequirement(req.user, before)) {
+    if (!(await canOperateRequirement(req.user, before))) {
       return fail(res, 403, "PERMISSION_DENIED", "无权执行该操作。");
     }
-    const expectedVersion = expectedRequirementVersion(req, res, before, fail);
-    if (expectedVersion === null) return;
-    const { title, description, priority, acceptanceCriteria, parentId, assignee, assigneeRole, assignmentStatus, completion } = req.body || {};
-    if (priority !== undefined && !requirementPriorities.includes(priority)) {
-      return fail(res, 400, "VALIDATION_FAILED", `Priority must be one of: ${requirementPriorities.join(", ")}`);
+    const parsed = validateRequirementUpdate(req.body || {}, { priorities: requirementPriorities });
+    if (!parsed.ok) {
+      // Keep VERSION_REQUIRED for missing/invalid version so existing clients and tests stay consistent.
+      if (parsed.field === "version") {
+        return fail(res, 400, "VERSION_REQUIRED", parsed.message, { field: "version" });
+      }
+      return fail(res, 400, "VALIDATION_FAILED", parsed.message, parsed.field ? { field: parsed.field } : undefined);
     }
-    if (assigneeRole !== undefined && assigneeRole !== null && assigneeRole !== "") {
-      const roleError = ensureRoleAllowed(assigneeRole, ["dev", "qa"], "assigneeRole");
-      if (roleError) return fail(res, 400, "VALIDATION_FAILED", roleError);
-    }
+    const expectedVersion = parsed.data.version;
+    const {
+      title,
+      description,
+      priority,
+      acceptanceCriteria,
+      parentId,
+      assignee,
+      assigneeRole,
+      assignmentStatus,
+      completion,
+    } = parsed.data;
     if (parentId !== undefined && parentId === req.params.id) {
       return fail(res, 400, "VALIDATION_FAILED", "A requirement cannot be its own parent.");
     }
@@ -196,7 +221,7 @@ function createRequirementsRouter({
     const before = await repository.findRequirement(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Requirement not found.");
     if (!(await canAccessProject(req.user, before.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权变更该需求状态。");
-    if (!canOperateRequirement(req.user, before)) {
+    if (!(await canOperateRequirement(req.user, before))) {
       return fail(res, 403, "PERMISSION_DENIED", "无权执行该操作。");
     }
     const expectedVersion = expectedRequirementVersion(req, res, before, fail);

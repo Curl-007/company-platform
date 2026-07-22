@@ -1,5 +1,13 @@
-import { get, post, patch, getToken, setToken } from './api';
-import { clearAsyncCache } from '../hooks/useAsync';
+import {
+  get,
+  post,
+  patch,
+  getToken,
+  setToken,
+  clearAuthArtifacts,
+  setOnSessionExpired,
+} from './api';
+import { clearAsyncCache, setAsyncCacheUser } from './asyncCache';
 import type { SessionUser, UserCapabilities, ApiResponse } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -41,6 +49,10 @@ let currentUser: SessionUser | null = readUser();
  * Stores the JWT token in the api module and caches the user object.
  */
 export async function login(email: string, password: string): Promise<SessionUser> {
+  // Drop any residual cache/snapshot before binding a new principal.
+  clearAsyncCache();
+  setAsyncCacheUser(null);
+
   const res = await post<ApiResponse<{ token: string; user: SessionUser }>>(
     '/api/auth/login',
     { email, password },
@@ -49,6 +61,7 @@ export async function login(email: string, password: string): Promise<SessionUse
   setToken(jwt);
   currentUser = user;
   writeUser(user);
+  setAsyncCacheUser(user?.id ?? null);
   return user;
 }
 
@@ -60,6 +73,7 @@ export async function getMe(): Promise<SessionUser> {
   const res = await get<ApiResponse<SessionUser>>('/api/auth/me');
   currentUser = res.data;
   writeUser(res.data);
+  setAsyncCacheUser(res.data?.id ?? null);
   return res.data;
 }
 
@@ -90,16 +104,29 @@ export async function updateMyProfile(input: UpdateProfileInput): Promise<Sessio
 }
 
 /**
+ * Clear token, user snapshot, and async data cache.
+ * Used by explicit logout and automatic 401 session expiry.
+ */
+export function expireSession(options: { redirect?: boolean } = {}): void {
+  currentUser = null;
+  writeUser(null);
+  clearAuthArtifacts();
+  if (options.redirect !== false) {
+    window.location.hash = '#/login';
+  }
+}
+
+/**
  * Clear authentication state and redirect to login.
  */
 export function logout(): void {
-  setToken(null);
-  currentUser = null;
-  writeUser(null);
-  // Clear any cached API responses so a different user doesn't see stale data.
-  clearAsyncCache();
-  window.location.hash = '#/login';
+  expireSession({ redirect: true });
 }
+
+// Keep in-memory user in sync when api auto-expires on 401.
+setOnSessionExpired(() => {
+  currentUser = null;
+});
 
 /**
  * Return the cached user object, or null if not authenticated.
@@ -114,7 +141,11 @@ export function getSessionUser(): SessionUser | null {
 export function setSessionUser(user: SessionUser | null): void {
   currentUser = user;
   writeUser(user);
+  setAsyncCacheUser(user?.id ?? null);
 }
+
+// Keep cache namespace aligned with restored session on first load.
+setAsyncCacheUser(currentUser?.id ?? null);
 
 /**
  * Re-export token helpers from api.ts for convenience.

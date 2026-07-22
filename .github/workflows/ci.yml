@@ -26,6 +26,12 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Production dependency audit
+        run: npm run audit:prod
+
+      - name: Lint API and web
+        run: npm run lint
+
       - name: Backend integration and unit tests
         run: npm run test -w api
 
@@ -50,8 +56,8 @@ jobs:
       - name: Reconcile PostgreSQL import target report
         run: npm run reconcile:postgres-import -w api -- --dir "$RUNNER_TEMP/postgres-export" --target-report "$RUNNER_TEMP/postgres-target-report.json" --json
 
-      - name: Frontend type check
-        run: npm run typecheck -w web
+      - name: Frontend type check and unit tests
+        run: npm run test -w web
 
       - name: Frontend production build
         run: npm run build -w web

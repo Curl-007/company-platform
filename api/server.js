@@ -9,7 +9,6 @@ const crypto = require("crypto");
 const multer = require("multer");
 const { WebSocketServer } = require("ws");
 const {
-  aiSummaries,
   audit: writeAuditLog,
   initDb,
   insert,
@@ -142,7 +141,6 @@ const {
   TASK_STATUSES,
   TASK_TYPES,
   TEST_CASE_STATUSES,
-  WORK_ITEM_ROLES,
   publicEnums,
 } = require("./src/domain/enums");
 
@@ -521,9 +519,9 @@ function ensureRoleAllowed(targetRole, allowedRoles, fieldName = "role") {
   return null;
 }
 
-function canOperateRequirement(user, requirementRow) {
+async function canOperateRequirement(user, requirementRow) {
   if (!user || !requirementRow) return false;
-  if (!projectAccess.canWriteProject(user, requirementRow.project_id)) return false;
+  if (!(await projectAccess.canWriteProject(user, requirementRow.project_id))) return false;
   if (hasPermission(user, "requirement:*")) return true;
   const role = normalizeRole(user.role);
   if (!["dev", "qa"].includes(role)) return false;
@@ -616,7 +614,7 @@ function extractJsonPayload(text) {
   return null;
 }
 
-async function callRealModel(prompt, options = {}) {
+function callRealModel(prompt, options = {}) {
   return aiModelClient.callModel(prompt, options);
 }
 
@@ -733,7 +731,6 @@ app.use("/api", createRequirementsRouter({
   canAccessProject: projectAccess.canAccessProject,
   canWriteProject: projectAccess.canWriteProject,
   canOperateRequirement,
-  ensureRoleAllowed,
   fail,
   json,
   mapRequirement,
@@ -1027,7 +1024,7 @@ app.use("/api", createAiInteractionsRouter({
   rows,
 }));
 
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   if (err && (err.code === "LIMIT_FILE_SIZE" || err.code === "UPLOAD_TOO_LARGE" || err.code === "UPLOAD_TYPE_NOT_ALLOWED" || err.status === 400)) {
     const errorCode = err.code === "LIMIT_FILE_SIZE" ? "UPLOAD_TOO_LARGE" : (err.code || "VALIDATION_FAILED");
     const message = err.code === "LIMIT_FILE_SIZE"

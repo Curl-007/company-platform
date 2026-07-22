@@ -1,5 +1,5 @@
 import { get, post, patch, put, del } from './api';
-import { clearAsyncCache, invalidateAsyncCache } from '../hooks/useAsync';
+import { clearAsyncCache, invalidateAsyncCache } from './asyncCache';
 import type { ApiResponse } from '../types';
 
 export interface MutationOptions {

@@ -1979,9 +1979,14 @@ async function main() {
     );
     const handoffBugId = idOf(bug.json);
     if (handoffBugId) {
+      const bugCreated = dataOf(bug.json);
       const toDev = await req("POST", `/api/defects/${encodeURIComponent(handoffBugId)}/handoff`, {
         token: qaToken,
-        body: { action: "assign_to_dev", assignee: devName },
+        body: {
+          action: "assign_to_dev",
+          assignee: devName,
+          version: Number(bugCreated?.version) > 0 ? Number(bugCreated.version) : 1,
+        },
       });
       const d1 = dataOf(toDev.json);
       record(
@@ -1992,7 +1997,11 @@ async function main() {
 
       const toQa = await req("POST", `/api/defects/${encodeURIComponent(handoffBugId)}/handoff`, {
         token: devToken,
-        body: { action: "assign_to_qa", assignee: qaName },
+        body: {
+          action: "assign_to_qa",
+          assignee: qaName,
+          version: Number(d1?.version) > 0 ? Number(d1.version) : 1,
+        },
       });
       const d2 = dataOf(toQa.json);
       record(
