@@ -16,6 +16,7 @@
  *   strategy (programs/portfolios/strategic-goals)
  *   capacity plans/allocations/calendar exception
  *   test-case + test-run + defect status chain
+ *   test-case assignment matrix: owner/role → QA & DEV + reassign + runs + status + task sync
  *   build status gates + release approval + released
  *   AI chat / rag / business-advice / requirement score
  *   work-log + time-entry (dev)
@@ -713,6 +714,23 @@ async function main() {
   await tryIsolated("testing and defects", async () => {
     if (!sessions.qa?.token || !projectId) return;
 
+    // DEV without test:* must not create test cases
+    if (sessions.dev?.token) {
+      await expectStatus(
+        "deny DEV create test-case",
+        req("POST", "/api/test-cases", {
+          token: sessions.dev.token,
+          body: {
+            title: `DEV-Denied-TC-${stamp}`,
+            projectId,
+            owner: ACCOUNTS.dev.name,
+            assigneeRole: "dev",
+          },
+        }),
+        403,
+      );
+    }
+
     const tc = await expectStatus(
       "QA create test-case",
       req("POST", "/api/test-cases", {
@@ -729,11 +747,44 @@ async function main() {
         },
       }),
       201,
-      (json, status) => `status=${status} id=${idOf(json) || "?"}`,
+      (json, status) => {
+        const d = dataOf(json);
+        return `status=${status} id=${idOf(json) || "?"} owner=${d?.owner || "?"} role=${d?.assigneeRole || "?"}`;
+      },
     );
     testCaseId = idOf(tc.json);
+    const createdTc = dataOf(tc.json);
+    record(
+      "QA create test-case owner/role fields",
+      Boolean(testCaseId) && createdTc?.owner === ACCOUNTS.qa.name && (createdTc?.assigneeRole === "qa" || !createdTc?.assigneeRole),
+      `owner=${createdTc?.owner || "?"} role=${createdTc?.assigneeRole || "?"}`,
+    );
 
     if (testCaseId) {
+      // Patch description / steps / expected result
+      const updated = await req("PATCH", `/api/test-cases/${encodeURIComponent(testCaseId)}`, {
+        token: sessions.qa.token,
+        body: {
+          description: "happy path (updated)",
+          steps: ["打开", "登录", "操作", "断言"],
+          expectedResult: "关键成功并通过",
+        },
+      });
+      record(
+        "QA update test-case content",
+        updated.status === 200,
+        `status=${updated.status} code=${updated.json?.errorCode || ""}`,
+      );
+
+      // failed run path then passed (coverage of multiple results)
+      await expectStatus(
+        "QA create test-run failed",
+        req("POST", "/api/test-runs", {
+          token: sessions.qa.token,
+          body: { testCaseId, result: "failed", notes: "first fail for matrix" },
+        }),
+        201,
+      );
       await expectStatus(
         "QA create test-run passed",
         req("POST", "/api/test-runs", {
@@ -759,9 +810,62 @@ async function main() {
       const runItems = itemsOf(runs.json);
       record(
         "QA list test-case runs",
-        runs.status === 200 && runItems.length >= 1,
+        runs.status === 200 && runItems.length >= 2,
         `status=${runs.status} n=${runItems.length}`,
       );
+
+      // Project-scoped list must include the case
+      const byProject = await req("GET", `/api/test-cases?projectId=${encodeURIComponent(projectId)}`, {
+        token: sessions.qa.token,
+      });
+      const inProject = itemsOf(byProject.json).some((t) => t.id === testCaseId);
+      record(
+        "QA list test-cases by project",
+        byProject.status === 200 && inProject,
+        `status=${byProject.status} found=${inProject} n=${itemsOf(byProject.json).length}`,
+      );
+
+      // Synced task (source_type=test_case) should appear in project tasks for QA owner
+      if (sessions.pm?.token) {
+        const tasks = await req("GET", `/api/projects/${encodeURIComponent(projectId)}/tasks`, {
+          token: sessions.pm.token,
+        });
+        const synced = itemsOf(tasks.json).find(
+          (t) => t.sourceType === "test_case" && t.sourceId === testCaseId,
+        ) || itemsOf(tasks.json).find(
+          (t) => String(t.title || "").includes("测试执行") && t.owner === ACCOUNTS.qa.name,
+        );
+        record(
+          "test-case syncs WBS task",
+          tasks.status === 200 && Boolean(synced),
+          `status=${tasks.status} hit=${Boolean(synced)} source=${synced?.sourceType || "?"} owner=${synced?.owner || "?"}`,
+        );
+      }
+    }
+
+    // Disposable TC for delete lifecycle (do not use primary testCaseId)
+    const disposable = await req("POST", "/api/test-cases", {
+      token: sessions.qa.token,
+      body: {
+        title: `可删除用例-${stamp}`,
+        projectId,
+        owner: ACCOUNTS.qa.name,
+        assigneeRole: "qa",
+        description: "delete lifecycle",
+      },
+    });
+    const disposableId = idOf(disposable.json);
+    if (disposableId) {
+      const del = await req("DELETE", `/api/test-cases/${encodeURIComponent(disposableId)}`, {
+        token: sessions.qa.token,
+      });
+      record(
+        "QA delete disposable test-case",
+        del.status === 200 && (dataOf(del.json)?.deleted === true || del.json?.data?.deleted === true),
+        `status=${del.status} deleted=${dataOf(del.json)?.deleted}`,
+      );
+    } else {
+      record("QA delete disposable test-case", false, `createStatus=${disposable.status}`);
     }
 
     const bug = await expectStatus(
@@ -1123,6 +1227,8 @@ async function main() {
   let assignTaskQaId = null;
   let assignBugDevId = null;
   let assignBugQaId = null;
+  let assignTcQaId = null;
+  let assignTcDevId = null;
 
   await tryIsolated("assignment matrix", async () => {
     if (!projectId || !sessions.pm?.token) return;
@@ -1504,6 +1610,233 @@ async function main() {
     }
   });
 
+  // --- H2. Test-case assignment matrix: owner/role → QA & DEV + reassign + runs + task sync ---
+  await tryIsolated("test-case assignment matrix", async () => {
+    if (!projectId || !sessions.qa?.token) return;
+    const qaToken = sessions.qa.token;
+    const qaName = ACCOUNTS.qa.name;
+    const devName = ACCOUNTS.dev.name;
+    const reqId = assignReqQaId || requirementId || undefined;
+
+    const tcQa = await expectStatus(
+      "QA create test-case assigned to QA",
+      req("POST", "/api/test-cases", {
+        token: qaToken,
+        body: {
+          title: `指派QA用例-${stamp}`,
+          projectId,
+          requirementId: reqId,
+          description: "assignment matrix test-case → qa",
+          steps: ["准备", "执行", "校验"],
+          expectedResult: "符合预期",
+          owner: qaName,
+          assigneeRole: "qa",
+        },
+      }),
+      201,
+      (json, status) => {
+        const d = dataOf(json);
+        return `status=${status} id=${idOf(json) || "?"} owner=${d?.owner || "?"} role=${d?.assigneeRole || "?"}`;
+      },
+    );
+    assignTcQaId = idOf(tcQa.json);
+    if (assignTcQaId) {
+      const created = dataOf(tcQa.json);
+      record(
+        "TC→QA owner/role fields",
+        created?.owner === qaName && created?.assigneeRole === "qa",
+        `owner=${created?.owner || "?"} role=${created?.assigneeRole || "?"}`,
+      );
+
+      // blocked run + status blocked (exercise full result set beyond happy path)
+      await expectStatus(
+        "QA run assigned TC blocked",
+        req("POST", "/api/test-runs", {
+          token: qaToken,
+          body: { testCaseId: assignTcQaId, result: "blocked", notes: "env not ready" },
+        }),
+        201,
+      );
+      const blockedStatus = await req("PATCH", `/api/test-cases/${encodeURIComponent(assignTcQaId)}/status`, {
+        token: qaToken,
+        body: { status: "blocked" },
+      });
+      record(
+        "QA status assigned TC → blocked",
+        blockedStatus.status === 200 && dataOf(blockedStatus.json)?.status === "blocked",
+        `status=${blockedStatus.status} tcStatus=${dataOf(blockedStatus.json)?.status || "?"}`,
+      );
+
+      // Reassign owner QA → DEV (dev role allowed on assigneeRole)
+      const reDev = await req("PATCH", `/api/test-cases/${encodeURIComponent(assignTcQaId)}`, {
+        token: qaToken,
+        body: { owner: devName, assigneeRole: "dev" },
+      });
+      const reDevData = dataOf(reDev.json);
+      record(
+        "TC reassign QA→DEV",
+        reDev.status === 200 && reDevData?.owner === devName && reDevData?.assigneeRole === "dev",
+        `status=${reDev.status} owner=${reDevData?.owner || "?"} role=${reDevData?.assigneeRole || "?"}`,
+      );
+      // restore to QA for list/dashboard consistency
+      const back = await req("PATCH", `/api/test-cases/${encodeURIComponent(assignTcQaId)}`, {
+        token: qaToken,
+        body: { owner: qaName, assigneeRole: "qa" },
+      });
+      record(
+        "TC reassign DEV→QA",
+        back.status === 200 && dataOf(back.json)?.owner === qaName,
+        `status=${back.status} owner=${dataOf(back.json)?.owner || "?"}`,
+      );
+    }
+
+    const tcDev = await expectStatus(
+      "QA create test-case assigned to DEV",
+      req("POST", "/api/test-cases", {
+        token: qaToken,
+        body: {
+          title: `指派DEV用例-${stamp}`,
+          projectId,
+          requirementId: assignReqDevId || requirementId || undefined,
+          description: "assignment matrix test-case → dev (joint verification)",
+          steps: ["联调", "回归"],
+          expectedResult: "开发侧自测通过",
+          owner: devName,
+          assigneeRole: "dev",
+        },
+      }),
+      201,
+      (json, status) => {
+        const d = dataOf(json);
+        return `status=${status} id=${idOf(json) || "?"} owner=${d?.owner || "?"} role=${d?.assigneeRole || "?"}`;
+      },
+    );
+    assignTcDevId = idOf(tcDev.json);
+    if (assignTcDevId) {
+      const created = dataOf(tcDev.json);
+      record(
+        "TC→DEV owner/role fields",
+        created?.owner === devName && created?.assigneeRole === "dev",
+        `owner=${created?.owner || "?"} role=${created?.assigneeRole || "?"}`,
+      );
+    }
+
+    // List filters: project + requirement coverage
+    if (assignTcQaId) {
+      const list = await req("GET", `/api/test-cases?projectId=${encodeURIComponent(projectId)}`, {
+        token: qaToken,
+      });
+      const items = itemsOf(list.json);
+      const qaHit = items.some((t) => t.id === assignTcQaId);
+      const devHit = assignTcDevId ? items.some((t) => t.id === assignTcDevId) : true;
+      record(
+        "QA list project test-cases contains assigned TCs",
+        list.status === 200 && qaHit && devHit,
+        `status=${list.status} n=${items.length} qaHit=${qaHit} devHit=${devHit}`,
+      );
+    }
+    if (reqId && assignTcQaId) {
+      const byReq = await req("GET", `/api/test-cases?requirementId=${encodeURIComponent(reqId)}`, {
+        token: qaToken,
+      });
+      const found = itemsOf(byReq.json).some((t) => t.id === assignTcQaId);
+      record(
+        "QA list test-cases by requirement",
+        byReq.status === 200 && found,
+        `status=${byReq.status} found=${found} n=${itemsOf(byReq.json).length}`,
+      );
+    }
+
+    // Invalid assigneeRole rejected
+    const badRole = await req("POST", "/api/test-cases", {
+      token: qaToken,
+      body: {
+        title: `非法角色用例-${stamp}`,
+        projectId,
+        owner: qaName,
+        assigneeRole: "admin",
+      },
+    });
+    record(
+      "reject test-case assigneeRole=admin",
+      badRole.status === 400,
+      `status=${badRole.status} code=${badRole.json?.errorCode || ""}`,
+    );
+
+    // Synced tasks for assigned TCs (source_type=test_case)
+    if (sessions.pm?.token && (assignTcQaId || assignTcDevId)) {
+      const tasks = await req("GET", `/api/projects/${encodeURIComponent(projectId)}/tasks`, {
+        token: sessions.pm.token,
+      });
+      const all = itemsOf(tasks.json);
+      const qaTask = assignTcQaId
+        ? all.find((t) => t.sourceType === "test_case" && t.sourceId === assignTcQaId)
+          || all.find((t) => t.owner === qaName && String(t.title || "").includes("测试执行"))
+        : null;
+      const devTask = assignTcDevId
+        ? all.find((t) => t.sourceType === "test_case" && t.sourceId === assignTcDevId)
+          || all.find((t) => t.owner === devName && String(t.title || "").includes("测试执行"))
+        : null;
+      record(
+        "assigned TCs sync tasks for QA/DEV owners",
+        tasks.status === 200 && (!assignTcQaId || Boolean(qaTask)) && (!assignTcDevId || Boolean(devTask)),
+        `status=${tasks.status} qaTask=${qaTask?.id || "?"} devTask=${devTask?.id || "?"}`,
+      );
+    }
+
+    // QA personal dashboard after TC ownership (soft: focus tasks may include synced TC tasks)
+    if (sessions.qa?.token) {
+      const personal = await req("GET", "/api/dashboard/personal", { token: sessions.qa.token });
+      const data = dataOf(personal.json) || {};
+      const focus = Array.isArray(data.focusTasks) ? data.focusTasks : [];
+      record(
+        "QA personal dashboard after TC assignment",
+        personal.status === 200,
+        `status=${personal.status} focus=${focus.length}`,
+      );
+    }
+
+    // Cross-role: DEV can list project test-cases (read via project access) even without test:* write
+    if (sessions.dev?.token && assignTcDevId) {
+      const list = await req("GET", `/api/test-cases?projectId=${encodeURIComponent(projectId)}`, {
+        token: sessions.dev.token,
+      });
+      const found = itemsOf(list.json).find((t) => t.id === assignTcDevId);
+      record(
+        "DEV list assigned test-case (read)",
+        list.status === 200 && found?.owner === devName,
+        `status=${list.status} owner=${found?.owner || "?"} found=${Boolean(found)}`,
+      );
+      await expectStatus(
+        "deny DEV create test-run",
+        req("POST", "/api/test-runs", {
+          token: sessions.dev.token,
+          body: { testCaseId: assignTcDevId, result: "passed", notes: "dev should not run" },
+        }),
+        403,
+      );
+    }
+
+    // PM (project:*) can also create/list test cases when needed
+    if (sessions.pm?.token) {
+      const pmTc = await req("POST", "/api/test-cases", {
+        token: sessions.pm.token,
+        body: {
+          title: `PM创建用例-${stamp}`,
+          projectId,
+          owner: qaName,
+          assigneeRole: "qa",
+          description: "pm has project:* so can create",
+        },
+      });
+      record(
+        "PM create test-case via project:*",
+        pmTc.status === 201,
+        `status=${pmTc.status} id=${idOf(pmTc.json) || "?"}`,
+      );
+    }
+  });
+
   // Role-specific reads
   await tryIsolated("role reads", async () => {
     if (projectId) {
@@ -1563,6 +1896,24 @@ async function main() {
       const list = await req("GET", "/api/test-cases", { token: sessions.qa.token });
       const found = itemsOf(list.json).some((t) => t.id === testCaseId);
       record("QA list test-cases contains created", list.status === 200 && found, `status=${list.status} found=${found}`);
+    }
+    if (assignTcQaId && sessions.qa?.token) {
+      const list = await req("GET", "/api/test-cases", { token: sessions.qa.token });
+      const found = itemsOf(list.json).some((t) => t.id === assignTcQaId && t.owner === ACCOUNTS.qa.name);
+      record(
+        "QA list contains assigned test-case",
+        list.status === 200 && found,
+        `status=${list.status} found=${found}`,
+      );
+    }
+    if (assignTcDevId && sessions.dev?.token) {
+      const list = await req("GET", "/api/test-cases", { token: sessions.dev.token });
+      const found = itemsOf(list.json).some((t) => t.id === assignTcDevId);
+      record(
+        "DEV list contains DEV-owned test-case",
+        list.status === 200 && found,
+        `status=${list.status} found=${found}`,
+      );
     }
     if (buildId && sessions.dev?.token) {
       const list = await req("GET", "/api/builds", { token: sessions.dev.token });
@@ -1644,6 +1995,8 @@ async function main() {
     assignTaskQaId,
     assignBugDevId,
     assignBugQaId,
+    assignTcQaId,
+    assignTcDevId,
   });
 
   const fail = printSummary();

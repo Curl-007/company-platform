@@ -437,6 +437,53 @@ test.describe('assigned work surfaces for DEV and QA', () => {
     }
   });
 
+  test('QA can open create test-case form and cancel', async ({ page }) => {
+    test.setTimeout(120_000);
+    await loginAs(page, 'qa');
+    await openNav(page, '测试质量');
+    await expectHeading(page, /测试|质量/);
+
+    const casesTab = page.locator('.nav-tabs').getByRole('button', { name: /测试用例|用例/ }).first();
+    if ((await casesTab.count()) > 0) {
+      await casesTab.click();
+    }
+    await expect(page.locator('.panel-title').filter({ hasText: /测试用例/ }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const createBtn = page.getByRole('button', { name: '新建测试用例', exact: true });
+    await expect(createBtn).toBeVisible({ timeout: 15_000 });
+    await createBtn.click();
+    await expect(page.locator('.panel-title').filter({ hasText: '新建测试用例' })).toBeVisible({
+      timeout: 10_000,
+    });
+    // Form should expose project + role assignment fields for multi-role ownership
+    await expect(page.locator('.form-label').filter({ hasText: /所属项目|项目/ }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /取消|关闭/ }).first()).toBeVisible();
+    await page.getByRole('button', { name: '取消', exact: true }).click().catch(async () => {
+      await page.locator('.overlay, .modal-backdrop').first().click({ position: { x: 4, y: 4 } }).catch(() => undefined);
+    });
+    // After cancel, create panel should go away or at least table shell remain
+    await expect(page.locator('.panel-title').filter({ hasText: /测试用例/ }).first()).toBeVisible();
+  });
+
+  test('QA mywork can reach testing surface for assigned cases', async ({ page }) => {
+    test.setTimeout(90_000);
+    await loginAs(page, 'qa');
+    await openNav(page, '我的工作');
+    await expectHeading(page, /我的工作/);
+    await page.locator('.tab-bar, .mywork-tab-bar').getByRole('button', { name: '我的任务', exact: true }).click();
+    await expect(page.locator('.panel, .mywork-panels, .body-text, .metric-card').first()).toBeVisible();
+    // Jump to testing quality and assert case table shell
+    await openNav(page, '测试质量');
+    await expectHeading(page, /测试|质量/);
+    const casesTab = page.locator('.nav-tabs').getByRole('button', { name: /测试用例|用例/ }).first();
+    if ((await casesTab.count()) > 0) await casesTab.click();
+    await expect(page.locator('.panel-title, .data-table, .panel').filter({ hasText: /测试用例|暂无/ }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
   test('DEV delivery and project shells remain reachable after assignment', async ({ page }) => {
     test.setTimeout(90_000);
     await loginAs(page, 'dev');
