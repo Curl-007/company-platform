@@ -831,6 +831,17 @@ export interface AiChatAttachment {
   contentBase64?: string;
 }
 
+export interface AiProposedAction {
+  type: 'create_requirement';
+  title: string;
+  description?: string;
+  priority?: 'high' | 'medium' | 'low' | string;
+  projectId?: string;
+  acceptanceCriteria?: string[];
+  assignee?: string;
+  assigneeRole?: string;
+}
+
 export interface AiChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -841,6 +852,8 @@ export interface AiChatMessage {
   generatedBy?: string;
   fallback?: boolean;
   provider?: AiProviderConfig;
+  /** Model/local intent drafts; never auto-written — UI must confirm then call business APIs. */
+  proposedActions?: AiProposedAction[];
 }
 
 export interface AiChatInput {

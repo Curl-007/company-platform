@@ -1,9 +1,14 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
+  appendLocalRequirementDraft,
+  buildLocalRequirementAction,
   createAiChatService,
   dataUrlForAttachment,
+  extractProposedActions,
   normalizeAiChatMessages,
+  stripActionJson,
+  wantsCreateRequirement,
 } = require("../src/modules/ai/chatService");
 
 function createService() {
@@ -95,4 +100,36 @@ test("AI chat service builds project context and fallback replies without perfor
   const reply = await service.localReplyV2({ messages, attachments });
   assert.match(reply, /平台快照：2 个项目、1 条需求、1 个阻塞任务、1 个未关闭缺陷/);
   assert.doesNotMatch(reply, /绩效|评分|排名|薪酬|晋升|淘汰/);
+});
+
+test("AI chat extracts create_requirement ACTION_JSON and builds local drafts", async () => {
+  const service = createService();
+  const modelText = [
+    "可以帮你起草需求。",
+    'ACTION_JSON:{"type":"create_requirement","title":"登录页改版","description":"支持 SSO","priority":"high","projectId":"PRJ-001","acceptanceCriteria":["可登录","可登出"],"assignee":"开发工程师","assigneeRole":"dev"}',
+  ].join("\n");
+  const actions = extractProposedActions(modelText);
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].type, "create_requirement");
+  assert.equal(actions[0].title, "登录页改版");
+  assert.equal(actions[0].projectId, "PRJ-001");
+  assert.equal(actions[0].priority, "high");
+  assert.deepEqual(actions[0].acceptanceCriteria, ["可登录", "可登出"]);
+  assert.match(stripActionJson(modelText), /可以帮你起草需求/);
+  assert.doesNotMatch(stripActionJson(modelText), /ACTION_JSON/);
+
+  assert.equal(wantsCreateRequirement([{ role: "user", content: "帮我新建一个需求：支付回调重试" }], []), true);
+  assert.equal(wantsCreateRequirement([{ role: "user", content: "这个版本有什么风险？" }], []), false);
+
+  const context = await service.buildContext();
+  const local = buildLocalRequirementAction({
+    messages: [{ role: "user", content: "请根据附件新建需求：标题：对账导出\n优先级：高\n验收标准：导出 Excel；权限校验" }],
+    attachments: [{ kind: "document", name: "spec.md", contentText: "对账导出需求说明" }],
+    context,
+  });
+  assert.ok(local);
+  assert.equal(local.type, "create_requirement");
+  assert.match(local.title, /对账导出|未命名/);
+  const drafted = appendLocalRequirementDraft("规则兜底说明", local);
+  assert.match(drafted, /拟建需求|确认后才会写入|标题：/);
 });

@@ -12,7 +12,7 @@ function validateAdviceTarget(input = {}) {
   return { targetType, targetId };
 }
 
-function buildChatPayload({ attachments, config, content, fallback, now }) {
+function buildChatPayload({ attachments, config, content, fallback, now, proposedActions = [] }) {
   return {
     id: `CHAT-${Date.now()}`,
     role: "assistant",
@@ -23,6 +23,7 @@ function buildChatPayload({ attachments, config, content, fallback, now }) {
     fallback,
     attachments: attachments.map((item) => ({ name: item.name, mimeType: item.mimeType, size: item.size, kind: item.kind })),
     provider: config,
+    proposedActions: Array.isArray(proposedActions) ? proposedActions : [],
   };
 }
 

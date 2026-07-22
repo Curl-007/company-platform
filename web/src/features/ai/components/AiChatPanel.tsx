@@ -1,6 +1,6 @@
 import { useRef, type Dispatch, type SetStateAction } from 'react';
 import { Bot, FileText, Image as ImageIcon, Paperclip, Send, X } from 'lucide-react';
-import type { AiChatAttachment, AiChatMessage } from '../../../types';
+import type { AiChatAttachment, AiChatMessage, Project } from '../../../types';
 import Panel from '../../../components/common/Panel';
 import StatusBadge from '../../../components/common/StatusBadge';
 import {
@@ -10,6 +10,7 @@ import {
   messageSource,
 } from '../aiChatModel';
 import AiChatContent from './AiChatContent';
+import AiRequirementDraftCard from './AiRequirementDraftCard';
 
 export default function AiChatPanel({
   providerStatus,
@@ -23,6 +24,9 @@ export default function AiChatPanel({
   fileError,
   onFiles,
   onSend,
+  projects = [],
+  canCreateRequirement = false,
+  onRequirementCreated,
 }: {
   providerStatus: string;
   providerConfigured?: boolean;
@@ -35,6 +39,9 @@ export default function AiChatPanel({
   fileError: string | null;
   onFiles: (files: FileList | null) => void;
   onSend: () => void;
+  projects?: Project[];
+  canCreateRequirement?: boolean;
+  onRequirementCreated?: (requirementId: string) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,6 +83,21 @@ export default function AiChatPanel({
                       <small>{attachmentReadState(item, message.role)}</small>
                     </span>
                   ))}
+                </div>
+              ) : null}
+              {message.role === 'assistant' && message.proposedActions?.length ? (
+                <div className="ai-chat-actions">
+                  {message.proposedActions
+                    .filter((action) => action.type === 'create_requirement')
+                    .map((action, index) => (
+                      <AiRequirementDraftCard
+                        key={`${message.id}-req-${index}-${action.title}`}
+                        action={action}
+                        projects={projects}
+                        canCreate={canCreateRequirement}
+                        onCreated={onRequirementCreated}
+                      />
+                    ))}
                 </div>
               ) : null}
             </div>
@@ -123,7 +145,7 @@ export default function AiChatPanel({
                 onSend();
               }
             }}
-            placeholder="直接输入问题，或上传截图、TXT/Markdown/PDF 等文档后提问。"
+            placeholder="例如：帮我在 PRJ-001 新建需求「登录页改版」；也可上传需求文档后说「根据附件生成需求」。"
             disabled={sending}
           />
           <button className="btn btn-primary btn-sm" type="button" onClick={onSend} disabled={sending || (!draft.trim() && attachments.length === 0)}>

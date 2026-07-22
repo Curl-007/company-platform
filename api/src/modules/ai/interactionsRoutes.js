@@ -1,9 +1,16 @@
 const express = require("express");
 const { buildChatPayload, buildSummary, validateAdviceTarget } = require("./interactionsService");
+const {
+  appendLocalRequirementDraft,
+  buildLocalRequirementAction,
+  extractProposedActions,
+  stripActionJson,
+} = require("./chatService");
 
 function createAiInteractionsRouter({
   audit,
   buildAiChatPrompt,
+  buildAiChatContext,
   callRealModel,
   createAiRequirementRecommendation,
   createAiSummary,
@@ -56,10 +63,10 @@ function createAiInteractionsRouter({
       const scope = String(req.body?.scope || "project-management").slice(0, 80);
       const currentPage = String(req.body?.currentPage || "").slice(0, 120);
       if (!messages.length && !attachments.length) return fail(res, 400, "VALIDATION_FAILED", "请输入问题或上传附件。");
-      const prompt = buildAiChatPrompt({ messages, attachments, scope, currentPage });
+      const prompt = await buildAiChatPrompt({ messages, attachments, scope, currentPage });
       let fallback = false;
-      let content = await callRealModel(prompt, {
-        system: "你是公司项目管理平台的 AI 对话助手，能阅读项目数据、用户上传文档和图片，并给出务实的项目管理建议。",
+      let rawContent = await callRealModel(prompt, {
+        system: "你是公司项目管理平台的 AI 对话助手，能阅读项目数据、用户上传文档和图片，并给出务实的项目管理建议。需要新建需求时在文末输出 ACTION_JSON。",
         attachments,
         temperature: 0.25,
         maxTokens: 1800,
@@ -68,12 +75,36 @@ function createAiInteractionsRouter({
         console.warn("AI chat fallback:", error.message);
         return null;
       });
-      if (!content) {
+      if (!rawContent) {
         fallback = true;
-        content = localAiChatReply({ messages, attachments });
+        rawContent = await localAiChatReply({ messages, attachments });
       }
-      const payload = buildChatPayload({ attachments, config: await publicAiProviderConfig(), content, fallback, now });
-      await audit(req.user, "ai.chat", "ai_chat", payload.id, null, { scope, currentPage, attachments: payload.attachments }, req.ip);
+
+      let proposedActions = extractProposedActions(rawContent);
+      let content = stripActionJson(rawContent);
+      if (!proposedActions.length) {
+        const context = typeof buildAiChatContext === "function" ? await buildAiChatContext() : null;
+        const localAction = buildLocalRequirementAction({ messages, attachments, context });
+        if (localAction) {
+          proposedActions = [localAction];
+          content = appendLocalRequirementDraft(content, localAction);
+        }
+      }
+
+      const payload = buildChatPayload({
+        attachments,
+        config: await publicAiProviderConfig(),
+        content,
+        fallback,
+        now,
+        proposedActions,
+      });
+      await audit(req.user, "ai.chat", "ai_chat", payload.id, null, {
+        scope,
+        currentPage,
+        attachments: payload.attachments,
+        proposedActions: proposedActions.map((item) => item.type),
+      }, req.ip);
       return res.json(ok(payload));
     } catch (error) { return next(error); }
   });

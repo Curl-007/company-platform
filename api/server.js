@@ -1005,6 +1005,7 @@ app.use("/api", createAiProviderAdminRouter({
 app.use("/api", createAiInteractionsRouter({
   audit,
   buildAiChatPrompt: aiChatService.buildPrompt,
+  buildAiChatContext: aiChatService.buildContext,
   callRealModel,
   createAiRequirementRecommendation: aiAdviceService.createRequirementRecommendation,
   createAiSummary: aiSummaryService.createSummary,
