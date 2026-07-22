@@ -6276,7 +6276,7 @@ html {
 .metric-bar {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--space-3);
 }
 .metric-bar .metric-card {
   min-width: 0;
@@ -6285,18 +6285,25 @@ html {
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
+/* MetricCard structure + legacy value/label nodes */
+.metric-bar .metric-card-value,
 .metric-bar .metric-value {
   font-size: 24px;
   font-weight: 700;
   font-family: var(--font-mono);
   line-height: 1;
+  order: -1;
 }
+.metric-bar .metric-card-label,
 .metric-bar .metric-label {
   font-size: var(--fs-helper);
   color: var(--text-secondary);
   font-weight: 500;
+}
+.metric-bar .metric-card-head {
+  gap: 0;
 }
 .metric-bar .metric-card.accent { border-left: 3px solid var(--accent); }
 .metric-bar .metric-card.info { border-left: 3px solid var(--color-info); }
@@ -7085,11 +7092,15 @@ html {
   gap: var(--space-3);
 }
 
-.delivery-kpi-card {
+/* Delivery KPI host class on MetricCard (row-ish density + tone borders) */
+.delivery-kpi-card.metric-card,
+.metric-card.delivery-kpi-card {
   min-height: var(--kpi-card-min-height);
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-2);
   padding: var(--kpi-card-padding);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-card);
@@ -7097,18 +7108,40 @@ html {
   box-shadow: var(--shadow-panel);
 }
 
-.delivery-kpi-card.success {
+.delivery-kpi-card.success,
+.delivery-kpi-card.tone-success {
   border-color: color-mix(in srgb, var(--color-success) 34%, var(--border-default));
 }
 
-.delivery-kpi-card.info {
+.delivery-kpi-card.info,
+.delivery-kpi-card.tone-info {
   border-color: color-mix(in srgb, var(--color-info) 34%, var(--border-default));
 }
 
-.delivery-kpi-card.risk {
+.delivery-kpi-card.risk,
+.delivery-kpi-card.tone-risk {
   border-color: color-mix(in srgb, var(--color-risk) 34%, var(--border-default));
 }
 
+.delivery-kpi-card .metric-card-icon {
+  width: var(--kpi-icon-size);
+  height: var(--kpi-icon-size);
+  border-radius: var(--radius-card);
+}
+
+.delivery-kpi-card .metric-card-value {
+  font-size: var(--fs-kpi-value);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.delivery-kpi-card .metric-card-caption {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-helper);
+}
+
+/* Legacy delivery-kpi nodes (pre-MetricCard) */
 .delivery-kpi-icon {
   width: var(--kpi-icon-size);
   height: var(--kpi-icon-size);
@@ -7119,23 +7152,6 @@ html {
   border-radius: var(--radius-card);
   color: var(--accent);
   background: var(--bg-hover);
-}
-
-.delivery-kpi-card span,
-.delivery-kpi-card p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--fs-helper);
-}
-
-.delivery-kpi-card strong {
-  display: block;
-  margin: var(--space-1) 0;
-  color: var(--text-primary);
-  font-size: var(--fs-kpi-value);
-  line-height: 1;
-  font-family: var(--font-mono);
-  font-weight: 700;
 }
 
 .delivery-ai-panel {

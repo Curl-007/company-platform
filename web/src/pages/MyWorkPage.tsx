@@ -8,6 +8,7 @@ import { useAsync } from '../hooks/useAsync';
 import PageHeader from '../components/common/PageHeader';
 import Panel from '../components/common/Panel';
 import PageState from '../components/common/PageState';
+import MetricStrip from '../components/common/MetricStrip';
 import StatusBadge from '../components/common/StatusBadge';
 import ProgressBar from '../components/common/ProgressBar';
 import { useToast } from '../components/common/Toast';
@@ -127,14 +128,7 @@ function MyWorkPage({ user }: { user?: SessionUser | null }) {
         description={`${user?.name ?? ''} 的任务、缺陷、需求与日报入口`}
       />
 
-      <div className="metric-bar mywork-metric-bar">
-        {metricCards.map((item) => (
-          <div key={item.label} className="metric-card">
-            <div className="metric-value">{item.value}</div>
-            <div className="metric-label">{item.label}</div>
-          </div>
-        ))}
-      </div>
+      <MetricStrip variant="bar" className="mywork-metric-bar" items={metricCards} />
 
       <Panel title="我的本期容量" subtitle="用于协调任务安排，不作为个人绩效评分。" className="mywork-capacity-panel">
         {personalCapacityAsync.loading ? (

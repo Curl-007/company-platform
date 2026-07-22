@@ -1,3 +1,6 @@
+import type { ReactNode } from 'react';
+import MetricCard, { type MetricCardTone } from '../../../components/common/MetricCard';
+
 export default function DeliveryKpi({
   icon,
   label,
@@ -5,20 +8,21 @@ export default function DeliveryKpi({
   meta,
   tone = 'info',
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: number;
   meta: string;
-  tone?: 'info' | 'success' | 'risk';
+  tone?: Extract<MetricCardTone, 'info' | 'success' | 'risk'>;
 }) {
+  // Keep host class for existing delivery-kpi-* layout tokens.
   return (
-    <div className={`delivery-kpi-card ${tone}`}>
-      <div className="delivery-kpi-icon">{icon}</div>
-      <div>
-        <span>{label}</span>
-        <strong>{value}</strong>
-        <p>{meta}</p>
-      </div>
-    </div>
+    <MetricCard
+      icon={icon}
+      label={label}
+      value={value}
+      caption={meta}
+      tone={tone}
+      className={`delivery-kpi-card ${tone}`}
+    />
   );
 }
