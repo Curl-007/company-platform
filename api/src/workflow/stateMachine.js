@@ -26,9 +26,11 @@ const TRANSITIONS = Object.freeze({
   }),
   task: Object.freeze({
     todo: Object.freeze(["in_progress", "cancelled"]),
-    in_progress: Object.freeze(["blocked", "code_review", "cancelled"]),
+    // in_progress → testing：开发完成后直接提交测试（可跳过 code_review）
+    in_progress: Object.freeze(["blocked", "code_review", "testing", "cancelled"]),
     blocked: Object.freeze(["in_progress", "cancelled"]),
     code_review: Object.freeze(["in_progress", "testing", "cancelled"]),
+    // testing → in_progress：测试打回开发返工
     testing: Object.freeze(["in_progress", "acceptance", "cancelled"]),
     acceptance: Object.freeze(["testing", "done", "cancelled"]),
     done: Object.freeze([]),

@@ -76,6 +76,26 @@ function createTasksRepository({ insert, row, rows, run }) {
        WHERE id = @id AND version = @expectedVersion`,
       next,
     ),
+    /** Handoff: reassign owner/role + transition status in one optimistic write. */
+    handoffTask: (next) => run(
+      `UPDATE tasks SET owner = @owner, assignee_id = @assigneeId, assignee_role = @assigneeRole,
+       status = @status, status_text = @statusText, kanban_column = @status,
+       progress = @progress, remaining_hours = @remainingHours, version = version + 1
+       WHERE id = @id AND version = @expectedVersion`,
+      next,
+    ),
+    findActiveUserByName: (name) => row(
+      "SELECT id, name, role FROM users WHERE name = @name AND status = 'active'",
+      { name },
+    ),
+    findActiveUserById: (id) => row(
+      "SELECT id, name, role FROM users WHERE id = @id AND status = 'active'",
+      { id },
+    ),
+    listProjectMembers: (projectId) => rows(
+      "SELECT * FROM project_members WHERE project_id = @projectId ORDER BY created_at DESC",
+      { projectId },
+    ),
   };
 }
 

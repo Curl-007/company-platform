@@ -151,6 +151,15 @@ export function updateDefect(id: string, input: UpdateDefectInput): Promise<Defe
   return unwrapPatch<Defect>(`/api/defects/${id}`, input);
 }
 
+export type DefectHandoffAction = 'assign_to_dev' | 'assign_to_qa';
+
+export function handoffDefect(
+  id: string,
+  input: { action: DefectHandoffAction; assignee: string; status?: string },
+): Promise<Defect> {
+  return unwrapPost<Defect>(`/api/defects/${encodeURIComponent(id)}/handoff`, input);
+}
+
 export function deleteDefect(id: string): Promise<{ deleted: boolean }> {
   return unwrapDel<{ deleted: boolean }>(`/api/defects/${id}`);
 }

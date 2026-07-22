@@ -391,6 +391,22 @@ test.describe('assigned work surfaces for DEV and QA', () => {
     }
   });
 
+  test('DEV mywork task detail exposes handoff controls when applicable', async ({ page }) => {
+    test.setTimeout(90_000);
+    await loginAs(page, 'dev');
+    await openNav(page, '我的工作');
+    await expectHeading(page, /我的工作/);
+    await page.locator('.tab-bar, .mywork-tab-bar').getByRole('button', { name: '我的任务', exact: true }).click();
+    await expect(page.locator('.mywork-panel-left, .panel').filter({ hasText: /任务队列|任务/ }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.locator('.mywork-panel-center, .panel').filter({ hasText: /任务详情|请选择/ }).first()).toBeVisible();
+    const handoff = page.locator('.mywork-handoff');
+    if ((await handoff.count()) > 0) {
+      await expect(handoff.getByRole('button', { name: /提交测试|打回开发修复/ }).first()).toBeVisible();
+    }
+  });
+
   test('DEV mywork task filters align all = requirement + test + defect + general', async ({ page }) => {
     test.setTimeout(90_000);
     await loginAs(page, 'dev');
@@ -440,6 +456,18 @@ test.describe('assigned work surfaces for DEV and QA', () => {
       await page.locator('.tab-bar, .mywork-tab-bar').getByRole('button', { name: tab, exact: true }).click();
       await expect(page.locator('.tab-bar .tab-item.active, .mywork-tab-bar .tab-item.active').first()).toContainText(tab);
       await expect(page.locator('.panel, .mywork-panels, .body-text, .metric-card, .card').first()).toBeVisible();
+    }
+  });
+
+  test('QA mywork defect detail can show assign-to-dev control', async ({ page }) => {
+    test.setTimeout(90_000);
+    await loginAs(page, 'qa');
+    await openNav(page, '我的工作');
+    await page.locator('.tab-bar, .mywork-tab-bar').getByRole('button', { name: '我的缺陷', exact: true }).click();
+    await expect(page.locator('.panel').filter({ hasText: /我的缺陷|缺陷详情/ }).first()).toBeVisible({ timeout: 15_000 });
+    const handoff = page.locator('.mywork-handoff');
+    if ((await handoff.count()) > 0) {
+      await expect(handoff.getByRole('button', { name: /指派开发修复|指派测试验证/ }).first()).toBeVisible();
     }
   });
 

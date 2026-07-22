@@ -128,6 +128,56 @@ function createDefectsRouter({
     res.json(ok({ deleted: true, id: req.params.id }));
   });
 
+  /**
+   * Cross-role defect handoff for assignees without full defect:* write on every field:
+   * - assign_to_dev: QA/PM → developer fix (status → in_fix when appropriate)
+   * - assign_to_qa: DEV/PM → tester verify (status → resolved when fixing)
+   * Allowed for: defect:*, project:*, or current assignee.
+   */
+  router.post("/defects/:id/handoff", async (req, res) => {
+    const before = await repository.findDefect(req.params.id);
+    if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Defect not found.");
+    if (!(await canAccessProject(req.user, before.project_id))) {
+      return fail(res, 403, "PERMISSION_DENIED", "无权访问该缺陷。");
+    }
+    if (!(await canWriteProject(req.user, before.project_id))) {
+      return fail(res, 403, "PROJECT_ARCHIVED_OR_ACCESS_DENIED", "Cannot handoff a defect in an archived or inaccessible project.");
+    }
+
+    const perms = req.user?.permissions || [];
+    const isPrivileged = perms.includes("*") || perms.includes("project:*") || perms.includes("defect:*");
+    const isAssignee = before.assignee && req.user?.name && before.assignee === req.user.name;
+    if (!isPrivileged && !isAssignee) {
+      return fail(res, 403, "PERMISSION_DENIED", "仅缺陷处理人或具备缺陷/项目管理权限的用户可交接。");
+    }
+
+    const action = String(req.body?.action || "").trim();
+    if (!["assign_to_dev", "assign_to_qa"].includes(action)) {
+      return fail(res, 400, "VALIDATION_FAILED", "action must be assign_to_dev or assign_to_qa");
+    }
+    const assignee = String(req.body?.assignee || "").trim();
+    if (!assignee) return fail(res, 400, "VALIDATION_FAILED", "assignee is required.");
+
+    const targetRole = action === "assign_to_dev" ? "dev" : "qa";
+    let nextStatus = before.status;
+    if (action === "assign_to_dev") {
+      if (["new", "confirmed", "resolved", "verified"].includes(before.status)) nextStatus = "in_fix";
+    } else if (action === "assign_to_qa") {
+      if (["new", "confirmed", "in_fix"].includes(before.status)) nextStatus = "resolved";
+    }
+    if (req.body?.status && defectStatuses.includes(req.body.status)) {
+      nextStatus = req.body.status;
+    }
+
+    await repository.updateDefectAssignee(req.params.id, assignee);
+    await repository.updateDefectAssigneeRole(req.params.id, targetRole);
+    if (nextStatus !== before.status) await repository.updateDefectStatus(req.params.id, nextStatus);
+    const after = await repository.findDefect(req.params.id);
+    await syncDefectTask(after);
+    await audit(req.user, `defect.handoff.${action}`, "defect", req.params.id, before, after, req.ip);
+    res.json(ok(mapDefect(after)));
+  });
+
   return router;
 }
 

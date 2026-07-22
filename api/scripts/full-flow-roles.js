@@ -22,6 +22,7 @@
  *   AI assistant drafts for test-case create/status/delete (PM/Admin ai:*) + formal API confirm (QA)
  *   work-log + time-entry (dev)
  *   assignment matrix: req/task/defect → DEV & QA + reassign + personal dashboard
+ *   handoff: DEV submit task for testing → QA; QA return task for fix → DEV; defect DEV↔QA
  *   team / audit / flow / reports / capacity reads
  *   role read-backs
  *
@@ -1849,6 +1850,193 @@ async function main() {
         one.status === 200 && (dataOf(one.json)?.owner === qaName || dataOf(one.json)?.id === assignTaskQaId),
         `status=${one.status} owner=${dataOf(one.json)?.owner || "?"}`,
       );
+    }
+  });
+
+  // --- H1b. Dev↔QA handoff: task submit-for-testing / return-for-fix + defect handoff ---
+  await tryIsolated("dev qa handoff loop", async () => {
+    if (!projectId || !sessions.pm?.token || !sessions.dev?.token || !sessions.qa?.token) return;
+    const pmToken = sessions.pm.token;
+    const devToken = sessions.dev.token;
+    const qaToken = sessions.qa.token;
+    const devName = ACCOUNTS.dev.name;
+    const qaName = ACCOUNTS.qa.name;
+    const devId = sessions.dev?.user?.id;
+    const qaId = sessions.qa?.user?.id;
+
+    // Dedicated task owned by DEV
+    const handoffTask = await expectStatus(
+      "PM create handoff task for DEV",
+      req("POST", `/api/projects/${encodeURIComponent(projectId)}/wbs/tasks`, {
+        token: pmToken,
+        body: {
+          title: `交接任务-${stamp}`,
+          type: "task",
+          owner: devName,
+          assigneeId: devId,
+          estimatedHours: 5,
+          sprintId: sprintId || undefined,
+          wbsCode: "9.9",
+        },
+      }),
+      201,
+      (json, status) => `status=${status} id=${idOf(json) || "?"}`,
+    );
+    const handoffTaskId = idOf(handoffTask.json);
+    if (!handoffTaskId) return;
+
+    // DEV starts work (PM may need to set status if DEV lacks project:* — use PM to move to in_progress first)
+    let entity = (await getEntity(`/api/tasks/${encodeURIComponent(handoffTaskId)}`, pmToken)).entity;
+    if (entity && entity.status === "todo") {
+      const start = await req("PATCH", `/api/tasks/${encodeURIComponent(handoffTaskId)}/status`, {
+        token: pmToken,
+        body: { status: "in_progress", version: versionOf(entity) },
+      });
+      record("PM start handoff task → in_progress", start.status === 200, `status=${start.status}`);
+      entity = dataOf(start.json) || (await getEntity(`/api/tasks/${encodeURIComponent(handoffTaskId)}`, pmToken)).entity;
+    }
+
+    // DEV submits for testing → QA
+    if (entity) {
+      const submit = await req("POST", `/api/tasks/${encodeURIComponent(handoffTaskId)}/handoff`, {
+        token: devToken,
+        body: {
+          action: "submit_for_testing",
+          version: versionOf(entity),
+          assignee: qaName,
+          assigneeId: qaId,
+          reason: "开发完成请测试",
+        },
+      });
+      const after = dataOf(submit.json);
+      record(
+        "DEV handoff submit_for_testing → QA",
+        submit.status === 200 && after?.status === "testing" && after?.owner === qaName,
+        `status=${submit.status} taskStatus=${after?.status || "?"} owner=${after?.owner || "?"} role=${after?.assigneeRole || "?"} code=${submit.json?.errorCode || ""}`,
+      );
+      entity = after || entity;
+    }
+
+    // QA personal dashboard should pick up testing task after ownership change
+    if (entity?.owner === qaName) {
+      const personal = await req("GET", "/api/dashboard/personal", { token: qaToken });
+      const focus = Array.isArray(dataOf(personal.json)?.focusTasks) ? dataOf(personal.json).focusTasks : [];
+      const hit = focus.some((t) => t.id === handoffTaskId);
+      record(
+        "QA personal sees testing handoff task",
+        personal.status === 200 && hit,
+        `status=${personal.status} hit=${hit} focus=${focus.length}`,
+      );
+    }
+
+    // QA returns for fix → DEV
+    if (entity?.status === "testing") {
+      const ret = await req("POST", `/api/tasks/${encodeURIComponent(handoffTaskId)}/handoff`, {
+        token: qaToken,
+        body: {
+          action: "return_for_fix",
+          version: versionOf(entity),
+          assignee: devName,
+          assigneeId: devId,
+          reason: "用例失败，请修复",
+        },
+      });
+      const after = dataOf(ret.json);
+      record(
+        "QA handoff return_for_fix → DEV",
+        ret.status === 200 && after?.status === "in_progress" && after?.owner === devName,
+        `status=${ret.status} taskStatus=${after?.status || "?"} owner=${after?.owner || "?"} role=${after?.assigneeRole || "?"} code=${ret.json?.errorCode || ""}`,
+      );
+      entity = after || entity;
+    }
+
+    // DEV sees task again
+    if (entity?.owner === devName) {
+      const personal = await req("GET", "/api/dashboard/personal", { token: devToken });
+      const focus = Array.isArray(dataOf(personal.json)?.focusTasks) ? dataOf(personal.json).focusTasks : [];
+      const hit = focus.some((t) => t.id === handoffTaskId);
+      record(
+        "DEV personal sees returned handoff task",
+        personal.status === 200 && hit,
+        `status=${personal.status} hit=${hit}`,
+      );
+    }
+
+    // Defect handoff: QA assigns to DEV, DEV returns to QA
+    const bug = await expectStatus(
+      "QA create defect for handoff",
+      req("POST", "/api/defects", {
+        token: qaToken,
+        body: {
+          title: `交接缺陷-${stamp}`,
+          projectId,
+          severity: "medium",
+          assignee: qaName,
+          assigneeRole: "qa",
+        },
+      }),
+      201,
+    );
+    const handoffBugId = idOf(bug.json);
+    if (handoffBugId) {
+      const toDev = await req("POST", `/api/defects/${encodeURIComponent(handoffBugId)}/handoff`, {
+        token: qaToken,
+        body: { action: "assign_to_dev", assignee: devName },
+      });
+      const d1 = dataOf(toDev.json);
+      record(
+        "QA defect handoff assign_to_dev",
+        toDev.status === 200 && d1?.assignee === devName && d1?.assigneeRole === "dev",
+        `status=${toDev.status} assignee=${d1?.assignee || "?"} role=${d1?.assigneeRole || "?"} bugStatus=${d1?.status || "?"}`,
+      );
+
+      const toQa = await req("POST", `/api/defects/${encodeURIComponent(handoffBugId)}/handoff`, {
+        token: devToken,
+        body: { action: "assign_to_qa", assignee: qaName },
+      });
+      const d2 = dataOf(toQa.json);
+      record(
+        "DEV defect handoff assign_to_qa",
+        toQa.status === 200 && d2?.assignee === qaName && d2?.assigneeRole === "qa",
+        `status=${toQa.status} assignee=${d2?.assignee || "?"} role=${d2?.assigneeRole || "?"} bugStatus=${d2?.status || "?"}`,
+      );
+    }
+
+    // Deny: DEV cannot submit when not owner (use QA-owned task if still exists after return — re-submit after fix path ok; create foreign)
+    const foreign = await req("POST", `/api/projects/${encodeURIComponent(projectId)}/wbs/tasks`, {
+      token: pmToken,
+      body: {
+        title: `他人任务-${stamp}`,
+        type: "task",
+        owner: qaName,
+        assigneeId: qaId,
+        estimatedHours: 1,
+        wbsCode: "9.8",
+      },
+    });
+    const foreignId = idOf(foreign.json);
+    if (foreignId) {
+      const got = await getEntity(`/api/tasks/${encodeURIComponent(foreignId)}`, pmToken);
+      if (got.entity) {
+        await req("PATCH", `/api/tasks/${encodeURIComponent(foreignId)}/status`, {
+          token: pmToken,
+          body: { status: "in_progress", version: versionOf(got.entity) },
+        });
+        const mid = await getEntity(`/api/tasks/${encodeURIComponent(foreignId)}`, pmToken);
+        const deny = await req("POST", `/api/tasks/${encodeURIComponent(foreignId)}/handoff`, {
+          token: devToken,
+          body: {
+            action: "submit_for_testing",
+            version: versionOf(mid.entity),
+            assignee: qaName,
+          },
+        });
+        record(
+          "deny DEV handoff on non-owned task",
+          deny.status === 403,
+          `status=${deny.status} code=${deny.json?.errorCode || ""}`,
+        );
+      }
     }
   });
 

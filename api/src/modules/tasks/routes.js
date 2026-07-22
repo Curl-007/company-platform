@@ -1,7 +1,15 @@
 const express = require("express");
 const { filterAsync, mapAsync, forEachAsync } = require("../../lib/asyncIter");
 const { canTransition } = require("../../workflow/stateMachine");
-const { buildSprintCreate, buildTaskCreate, buildTaskUpdate, dependencyIdsFor, normalizeDependencyIds } = require("./service");
+const {
+  buildSprintCreate,
+  buildTaskCreate,
+  buildTaskUpdate,
+  buildTaskHandoffUpdate,
+  dependencyIdsFor,
+  normalizeDependencyIds,
+  resolveHandoffAction,
+} = require("./service");
 
 const KANBAN_COLUMNS = ["todo", "in_progress", "blocked", "code_review", "testing", "acceptance", "done", "cancelled"];
 
@@ -56,6 +64,7 @@ function createTasksRouter({
   beginIdempotentRequest,
   canAccessProject,
   canManageProject,
+  canWriteProject,
   buildSprintBurndown,
   closedTaskStatuses,
   fail,
@@ -69,6 +78,7 @@ function createTasksRouter({
   parse,
   recordBurndownSnapshot,
   requirePermission,
+  requireAnyPermission,
   repository,
   sprintCommitment,
   statusHistory,
@@ -79,6 +89,29 @@ function createTasksRouter({
   weekKeyOf,
 }) {
   const router = express.Router();
+
+  function isTaskOwner(user, task) {
+    if (!user || !task) return false;
+    if (task.owner && user.name && task.owner === user.name) return true;
+    if (task.assignee_id && user.id && task.assignee_id === user.id) return true;
+    return false;
+  }
+
+  async function resolveHandoffTarget(projectId, { assigneeId, assigneeName, targetRole }) {
+    let user = null;
+    if (assigneeId) user = await repository.findActiveUserById(assigneeId);
+    if (!user && assigneeName) user = await repository.findActiveUserByName(String(assigneeName).trim());
+    if (!user) {
+      const members = await repository.listProjectMembers(projectId);
+      const roleMembers = members.filter((m) => String(m.role || "").toLowerCase() === targetRole);
+      if (roleMembers.length === 1) {
+        const m = roleMembers[0];
+        if (m.user_id) user = await repository.findActiveUserById(m.user_id);
+        if (!user && m.user_name) user = await repository.findActiveUserByName(m.user_name);
+      }
+    }
+    return user;
+  }
 
   function scopeChangeReason(body) {
     return String(body?.scopeChangeReason || body?.reason || "").trim();
@@ -497,6 +530,111 @@ function createTasksRouter({
     await audit(req.user, "task.status_update", "task", req.params.id, before, after, req.ip);
     res.json(ok(mapTask(after)));
   });
+
+  /**
+   * Cross-role handoff without project:*:
+   * - submit_for_testing: owner/dev → testing + assign QA
+   * - return_for_fix: owner/qa → in_progress + assign DEV
+   * PM/admin (project:*) can also handoff any accessible task.
+   */
+  router.post(
+    "/tasks/:id/handoff",
+    requireAnyPermission ? requireAnyPermission(["project:*", "project:read", "test:*", "defect:*"]) : requirePermission("project:*"),
+    async (req, res) => {
+      const before = await repository.findTask(req.params.id);
+      if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Task not found.");
+      if (!(await canAccessProject(req.user, before.project_id))) {
+        return fail(res, 403, "PERMISSION_DENIED", "无权访问该任务。");
+      }
+      if (typeof canWriteProject === "function" && !(await canWriteProject(req.user, before.project_id))) {
+        return fail(res, 403, "PROJECT_ARCHIVED_OR_ACCESS_DENIED", "Cannot handoff a task in an archived or inaccessible project.");
+      }
+
+      const actionSpec = resolveHandoffAction(req.body?.action);
+      if (!actionSpec) {
+        return fail(res, 400, "VALIDATION_FAILED", "action must be one of: submit_for_testing, return_for_fix");
+      }
+      if (!actionSpec.fromStatuses.includes(before.status)) {
+        return fail(
+          res,
+          409,
+          "STATE_TRANSITION_NOT_ALLOWED",
+          `Cannot ${actionSpec.label} from status ${before.status}. Allowed from: ${actionSpec.fromStatuses.join(", ")}`,
+        );
+      }
+      if (!canTransition("task", before.status, actionSpec.targetStatus)) {
+        return fail(
+          res,
+          409,
+          "STATE_TRANSITION_NOT_ALLOWED",
+          `Task cannot transition from ${before.status} to ${actionSpec.targetStatus}.`,
+        );
+      }
+
+      const isManager = await canManageProject(req.user, before.project_id);
+      const ownsTask = isTaskOwner(req.user, before);
+      if (!isManager && !ownsTask) {
+        return fail(res, 403, "PERMISSION_DENIED", "仅任务负责人或项目管理员可交接该任务。");
+      }
+
+      // Soft role check for non-managers: prefer matching workflow direction
+      const actorRole = String(req.user?.role || "").toLowerCase();
+      if (!isManager) {
+        if (actionSpec.targetRole === "qa" && actorRole === "qa") {
+          return fail(res, 403, "PERMISSION_DENIED", "测试工程师请使用「打回开发修复」；提交测试由开发工程师发起。");
+        }
+        if (actionSpec.targetRole === "dev" && actorRole === "dev") {
+          return fail(res, 403, "PERMISSION_DENIED", "开发工程师请使用「提交测试」；打回修复由测试工程师发起。");
+        }
+      }
+
+      const expectedVersion = expectedTaskVersion(req, res, before, fail);
+      if (expectedVersion === null) return;
+
+      const targetUser = await resolveHandoffTarget(before.project_id, {
+        assigneeId: req.body?.assigneeId,
+        assigneeName: req.body?.assignee || req.body?.owner,
+        targetRole: actionSpec.targetRole,
+      });
+      if (!targetUser) {
+        return fail(
+          res,
+          400,
+          "VALIDATION_FAILED",
+          actionSpec.targetRole === "qa"
+            ? "请指定测试工程师（assignee/assigneeId），或确保项目中仅有一名测试成员。"
+            : "请指定开发工程师（assignee/assigneeId），或确保项目中仅有一名开发成员。",
+        );
+      }
+
+      const next = buildTaskHandoffUpdate(before, {
+        expectedVersion,
+        owner: targetUser.name,
+        assigneeId: targetUser.id,
+        assigneeRole: actionSpec.targetRole,
+        status: actionSpec.targetStatus,
+        progress: req.body?.progress === undefined
+          ? (actionSpec.targetStatus === "testing" ? Math.max(Number(before.progress) || 0, 80) : before.progress)
+          : Number(req.body.progress),
+      });
+      const updateResult = await repository.handoffTask(next);
+      if (updateResult.changes === 0) return await taskVersionConflict(res, before, expectedVersion, repository, fail);
+
+      const after = await repository.findTask(req.params.id);
+      const reason = String(req.body?.reason || req.body?.statusReason || actionSpec.label).trim().slice(0, 500);
+      await statusHistory.record({
+        resourceType: "task",
+        resourceId: after.id,
+        projectId: after.project_id,
+        fromStatus: before.status,
+        toStatus: after.status,
+        reason,
+        actor: req.user,
+      });
+      await audit(req.user, `task.handoff.${req.body?.action}`, "task", req.params.id, before, after, req.ip);
+      res.json(ok(mapTask(after)));
+    },
+  );
 
   router.delete("/tasks/:id", requirePermission("project:*"), async (req, res) => {
     const before = await repository.findTask(req.params.id);

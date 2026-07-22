@@ -72,10 +72,47 @@ function buildTaskUpdate(before, input = {}, { expectedVersion, json }) {
   };
 }
 
+const HANDOFF_ACTIONS = Object.freeze({
+  submit_for_testing: Object.freeze({
+    targetStatus: "testing",
+    targetRole: "qa",
+    fromStatuses: Object.freeze(["in_progress", "code_review"]),
+    label: "提交测试",
+  }),
+  return_for_fix: Object.freeze({
+    targetStatus: "in_progress",
+    targetRole: "dev",
+    fromStatuses: Object.freeze(["testing", "acceptance"]),
+    label: "打回开发修复",
+  }),
+});
+
+function resolveHandoffAction(action) {
+  const key = String(action || "").trim();
+  return HANDOFF_ACTIONS[key] || null;
+}
+
+function buildTaskHandoffUpdate(before, { expectedVersion, owner, assigneeId, assigneeRole, status, progress }) {
+  return {
+    id: before.id,
+    expectedVersion,
+    owner: String(owner || before.owner || "").trim(),
+    assigneeId: assigneeId || null,
+    assigneeRole: assigneeRole || null,
+    status,
+    statusText: String(status).replace(/_/g, " "),
+    progress: progress === undefined ? before.progress : Number(progress),
+    remainingHours: status === "done" || status === "cancelled" ? 0 : before.remaining_hours,
+  };
+}
+
 module.exports = {
+  HANDOFF_ACTIONS,
   buildSprintCreate,
   buildTaskCreate,
   buildTaskUpdate,
+  buildTaskHandoffUpdate,
   dependencyIdsFor,
   normalizeDependencyIds,
+  resolveHandoffAction,
 };

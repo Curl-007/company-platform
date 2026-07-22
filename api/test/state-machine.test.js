@@ -13,6 +13,9 @@ test("state machine accepts only known statuses and configured transitions", () 
   assert.equal(canTransition("requirement", "testing", "accepted"), true);
   assert.equal(canTransition("task", "todo", "done"), false);
   assert.equal(canTransition("task", "in_progress", "code_review"), true);
+  // DEV submit for testing / QA return for fix
+  assert.equal(canTransition("task", "in_progress", "testing"), true);
+  assert.equal(canTransition("task", "testing", "in_progress"), true);
   assert.equal(canTransition("sprint", "planned", "active"), true);
   assert.equal(canTransition("sprint", "closed", "active"), false);
   assert.equal(canTransition("aiJob", "queued", "running"), true);

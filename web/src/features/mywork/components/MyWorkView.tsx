@@ -168,11 +168,12 @@ export default function MyWorkView({ user }: { user?: SessionUser | null }) {
           historyLoading={taskHistoryAsync.loading}
           historyError={taskHistoryAsync.error}
           history={taskHistoryAsync.data ?? undefined}
+          onHandoffDone={() => { void reload(); void taskHistoryAsync.reload(); }}
         />
       ) : null}
 
       {tab === 'bugs' ? (
-        <MyWorkDefectsPanel defects={data.myDefects ?? []} />
+        <MyWorkDefectsPanel defects={data.myDefects ?? []} onChanged={() => { void reload(); }} />
       ) : null}
 
       {tab === 'requirements' ? (

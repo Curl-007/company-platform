@@ -16,6 +16,23 @@ export function updateTaskStatus(
   return unwrapPatch<Task>(`/api/tasks/${encodeURIComponent(id)}/status`, input);
 }
 
+export type TaskHandoffAction = 'submit_for_testing' | 'return_for_fix';
+
+export interface TaskHandoffInput {
+  action: TaskHandoffAction;
+  version: number;
+  /** Target person name (QA for submit, DEV for return). */
+  assignee?: string;
+  assigneeId?: string;
+  reason?: string;
+  progress?: number;
+}
+
+/** Cross-role handoff: DEV → QA (submit testing) or QA → DEV (return for fix). */
+export function handoffTask(id: string, input: TaskHandoffInput): Promise<Task> {
+  return unwrapPost<Task>(`/api/tasks/${encodeURIComponent(id)}/handoff`, input);
+}
+
 export interface CreateWbsTaskInput {
   title: string;
   owner?: string;

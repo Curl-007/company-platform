@@ -217,7 +217,11 @@ export interface Task {
   actualHours: number;
   remainingHours?: number;
   version: number;
+  sprintId?: string | null;
+  assigneeId?: string | null;
   assigneeRole?: string | null;
+  dependencyIds?: string[];
+  buildId?: string | null;
   sourceType?: string | null;
   sourceId?: string | null;
 }
