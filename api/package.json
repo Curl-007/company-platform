@@ -16,6 +16,7 @@
     "backup:sqlite": "node scripts/sqlite-backup.js",
     "restore:sqlite": "node scripts/sqlite-restore.js",
     "drill:sqlite-backup": "node scripts/sqlite-backup-restore-drill.js",
+    "drill:graceful-shutdown": "node scripts/graceful-shutdown-drill.js",
     "verify:project-objective-migration": "node scripts/verify-project-objective-migration.js",
     "repair:project-objective-migration": "node scripts/repair-project-objective-migration.js --acknowledge",
     "export:postgres": "node scripts/export-sqlite-for-postgres.js",

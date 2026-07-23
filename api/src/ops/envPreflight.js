@@ -85,6 +85,14 @@ function preflightEnv(env = process.env) {
     });
   }
 
+  if (isProd && String(env.ENABLE_HTTP_SHUTDOWN || "") === "1") {
+    issues.push({
+      level: "error",
+      code: "HTTP_SHUTDOWN_IN_PROD",
+      message: "ENABLE_HTTP_SHUTDOWN=1 is not allowed in production (Windows-only ops drill aid).",
+    });
+  }
+
   const errors = issues.filter((item) => item.level === "error");
   return {
     ok: errors.length === 0,

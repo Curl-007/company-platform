@@ -4,6 +4,14 @@ const { hasPermission, publicUser } = require("../security/accessControl");
 function createAuthMiddleware({ jwtSecret, fail, row }) {
   async function authenticate(req, res, next) {
     if (req.path === "/api/health" || req.path === "/api/auth/login") return next();
+    // Non-production ops drill only: same gate as server.js route registration.
+    if (
+      req.path === "/api/ops/shutdown" &&
+      process.env.NODE_ENV !== "production" &&
+      String(process.env.ENABLE_HTTP_SHUTDOWN || "") === "1"
+    ) {
+      return next();
+    }
     const header = req.headers.authorization || "";
     const token = header.startsWith("Bearer ") ? header.slice(7) : "";
     if (!token) return fail(res, 401, "UNAUTHENTICATED", "请先登录。");

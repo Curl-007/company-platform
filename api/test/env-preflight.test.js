@@ -42,3 +42,14 @@ test("env preflight warns but allows weak secrets outside production", () => {
   assert.equal(report.ok, true);
   assert.ok(report.issues.some((item) => item.level === "warn" && item.code === "JWT_SECRET_WEAK"));
 });
+
+test("env preflight rejects HTTP shutdown opt-in in production", () => {
+  const report = preflightEnv({
+    NODE_ENV: "production",
+    JWT_SECRET: "production-jwt-secret-16",
+    AI_CONFIG_ENCRYPTION_KEY: "production-ai-key-16ch",
+    ENABLE_HTTP_SHUTDOWN: "1",
+  });
+  assert.equal(report.ok, false);
+  assert.ok(report.issues.some((item) => item.code === "HTTP_SHUTDOWN_IN_PROD" && item.level === "error"));
+});

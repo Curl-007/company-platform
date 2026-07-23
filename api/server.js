@@ -1037,6 +1037,23 @@ app.use("/api", createAiInteractionsRouter({
   rows,
 }));
 
+// Windows child_process.kill('SIGTERM') terminates without running handlers.
+// Non-production opt-in lets ops drills invoke the same shutdown() path over HTTP.
+// Registered before the 404 catch-all; handler body references shutdown() defined later.
+if (!IS_PROD && String(process.env.ENABLE_HTTP_SHUTDOWN || "") === "1") {
+  app.post("/api/ops/shutdown", (req, res) => {
+    const expected = String(process.env.HTTP_SHUTDOWN_TOKEN || process.env.JWT_SECRET || "").trim();
+    const provided = String(req.get("x-shutdown-token") || req.body?.token || "").trim();
+    if (!expected || provided !== expected) {
+      return fail(res, 403, "PERMISSION_DENIED", "Invalid shutdown token.");
+    }
+    res.status(202).json(ok({ shuttingDown: true, via: "http" }));
+    setImmediate(() => {
+      void shutdown("HTTP_SHUTDOWN");
+    });
+  });
+}
+
 app.use((err, req, res, _next) => {
   if (err && (err.code === "LIMIT_FILE_SIZE" || err.code === "UPLOAD_TOO_LARGE" || err.code === "UPLOAD_TYPE_NOT_ALLOWED" || err.status === 400)) {
     const errorCode = err.code === "LIMIT_FILE_SIZE" ? "UPLOAD_TOO_LARGE" : (err.code || "VALIDATION_FAILED");
