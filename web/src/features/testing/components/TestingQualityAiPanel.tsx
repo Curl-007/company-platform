@@ -15,6 +15,7 @@ export default function TestingQualityAiPanel() {
       projects,
     })),
     [],
+    { cacheKey: 'testing-quality:snapshot' },
   );
   const [aiAdvice, setAiAdvice] = useState('');
   const [aiLoading, setAiLoading] = useState(false);

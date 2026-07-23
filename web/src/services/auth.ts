@@ -4,6 +4,7 @@ import {
   patch,
   getToken,
   setToken,
+  getSessionGeneration,
   clearAuthArtifacts,
   setOnSessionExpired,
 } from './api';
@@ -49,9 +50,12 @@ let currentUser: SessionUser | null = readUser();
  * Stores the JWT token in the api module and caches the user object.
  */
 export async function login(email: string, password: string): Promise<SessionUser> {
-  // Drop any residual cache/snapshot before binding a new principal.
+  // Drop residual cache/snapshot; setToken later bumps session generation so
+  // in-flight 401/getMe from a previous session cannot clobber the new one.
   clearAsyncCache();
   setAsyncCacheUser(null);
+  currentUser = null;
+  writeUser(null);
 
   const res = await post<ApiResponse<{ token: string; user: SessionUser }>>(
     '/api/auth/login',
@@ -67,10 +71,16 @@ export async function login(email: string, password: string): Promise<SessionUse
 
 /**
  * Fetch the currently authenticated user from the server.
- * Also updates the cached user reference.
+ * Also updates the cached user reference (skipped if session generation changed mid-flight).
  */
 export async function getMe(): Promise<SessionUser> {
+  const generation = getSessionGeneration();
+  const tokenAtStart = getToken();
   const res = await get<ApiResponse<SessionUser>>('/api/auth/me');
+  if (getSessionGeneration() !== generation || getToken() !== tokenAtStart) {
+    // A concurrent login/logout won; do not clobber the newer session snapshot.
+    return res.data;
+  }
   currentUser = res.data;
   writeUser(res.data);
   setAsyncCacheUser(res.data?.id ?? null);

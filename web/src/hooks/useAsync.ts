@@ -17,6 +17,9 @@ import {
 //
 // Cache storage lives in services/asyncCache.ts so session expiry can clear
 // and re-scope entries without a circular import with the HTTP client.
+//
+// P0-5: callers should pass an explicit `cacheKey` so different loaders with
+// identical dependency arrays (or similar anon bodies) never collide.
 // ---------------------------------------------------------------------------
 
 interface AsyncState<T> {
@@ -26,13 +29,22 @@ interface AsyncState<T> {
   reload: () => void;
 }
 
+export interface UseAsyncOptions {
+  /** Stable cache namespace (required for collision-free caching). */
+  cacheKey?: string;
+}
+
 function messageFromError(error: unknown): string {
   if (error instanceof ApiError) return error.message;
   if (error instanceof Error) return error.message;
   return '数据加载时发生意外错误';
 }
 
-export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): AsyncState<T> {
+export function useAsync<T>(
+  loader: () => Promise<T>,
+  deps: unknown[] = [],
+  options: UseAsyncOptions = {},
+): AsyncState<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +53,9 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): Asy
   // on top of it during the background revalidation.
   const servedStale = useRef(false);
 
-  const key = buildAsyncCacheKey(loader, deps);
+  const key = options.cacheKey
+    ? buildAsyncCacheKey(options.cacheKey, deps)
+    : buildAsyncCacheKey(loader, deps);
   const reload = useCallback(() => {
     deleteAsyncCacheEntry(key);
     servedStale.current = false;

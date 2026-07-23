@@ -47,9 +47,13 @@ export default function CapacityView({ user }: { user?: SessionUser | null }) {
   const toast = useToast();
   const confirm = useConfirm();
   const canManageProjectAllocations = canOperate(user, 'projects:manage');
-  const overviewAsync = useAsync(() => fetchCapacityOverview({ periodStart, periodEnd }), [periodStart, periodEnd]);
-  const membersAsync = useAsync<TeamMemberOverview[]>(fetchTeamMembers, []);
-  const projectsAsync = useAsync<Project[]>(fetchProjects, []);
+  const overviewAsync = useAsync(
+    () => fetchCapacityOverview({ periodStart, periodEnd }),
+    [periodStart, periodEnd],
+    { cacheKey: 'capacity:overview' },
+  );
+  const membersAsync = useAsync<TeamMemberOverview[]>(fetchTeamMembers, [], { cacheKey: 'capacity:team-members' });
+  const projectsAsync = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'capacity:projects' });
   const overview = overviewAsync.data;
 
   useEffect(() => {

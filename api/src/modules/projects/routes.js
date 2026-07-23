@@ -1,6 +1,10 @@
 const express = require("express");
 const { filterAsync } = require("../../lib/asyncIter");
 const { buildProjectCreate, buildProjectUpdate } = require("./service");
+const {
+  assertConfigurableSourcePath,
+  canConfigureSourcePath,
+} = require("./sourcePathPolicy");
 
 function createProjectsRouter({
   audit,
@@ -30,6 +34,28 @@ function createProjectsRouter({
 }) {
   const router = express.Router();
 
+  function resolveSourcePathForWrite(user, sourcePath, { fieldPresent }) {
+    if (!fieldPresent) return { ok: true, value: undefined };
+    if (!canConfigureSourcePath(user)) {
+      return {
+        ok: false,
+        status: 403,
+        code: "PERMISSION_DENIED",
+        message: "Only administrators can configure project sourcePath.",
+      };
+    }
+    try {
+      return { ok: true, value: assertConfigurableSourcePath(sourcePath) };
+    } catch (error) {
+      return {
+        ok: false,
+        status: error.status || 400,
+        code: error.code || "VALIDATION_FAILED",
+        message: error.message || "Invalid sourcePath.",
+      };
+    }
+  }
+
   function mapMember(item) {
     return {
       id: item.id,
@@ -53,12 +79,29 @@ function createProjectsRouter({
     const { name, owner, status, progress, programId, productId, processMode, code, objective, description, startDate, endDate, sourcePath } = req.body || {};
     if (!name || !owner) return fail(res, 400, "VALIDATION_FAILED", "Project name and owner are required.");
     if (status !== undefined && status !== "planning") return fail(res, 400, "VALIDATION_FAILED", "New projects must start in planning status.");
+    const sourcePathFieldPresent = Object.prototype.hasOwnProperty.call(req.body || {}, "sourcePath");
+    const sourcePathResolved = resolveSourcePathForWrite(req.user, sourcePath, { fieldPresent: sourcePathFieldPresent });
+    if (!sourcePathResolved.ok) return fail(res, sourcePathResolved.status, sourcePathResolved.code, sourcePathResolved.message);
     const idempotency = await beginIdempotentRequest(req, res, "project.create");
     if (!idempotency) return;
     try {
       const response = await transaction(async () => {
         const project = buildProjectCreate(
-          { name, owner, status, progress, programId, productId, processMode, code, objective, description, startDate, endDate, sourcePath },
+          {
+            name,
+            owner,
+            status,
+            progress,
+            programId,
+            productId,
+            processMode,
+            code,
+            objective,
+            description,
+            startDate,
+            endDate,
+            sourcePath: sourcePathFieldPresent ? sourcePathResolved.value : undefined,
+          },
           { id: await nextId("PRJ", "projects"), now: now(), json },
         );
         await repository.createProject(project);
@@ -112,9 +155,27 @@ function createProjectsRouter({
     const expectedVersion = expectedProjectVersion(req, res, before);
     if (expectedVersion === null) return;
     const { name, code, objective, description, owner, status, progress, processMode, programId, productId, milestones, startDate, endDate, sourcePath } = req.body || {};
+    const sourcePathFieldPresent = Object.prototype.hasOwnProperty.call(req.body || {}, "sourcePath");
+    const sourcePathResolved = resolveSourcePathForWrite(req.user, sourcePath, { fieldPresent: sourcePathFieldPresent });
+    if (!sourcePathResolved.ok) return fail(res, sourcePathResolved.status, sourcePathResolved.code, sourcePathResolved.message);
     const next = buildProjectUpdate(
       { ...before },
-      { name, code, objective, description, owner, status, progress, processMode, programId, productId, milestones, startDate, endDate, sourcePath },
+      {
+        name,
+        code,
+        objective,
+        description,
+        owner,
+        status,
+        progress,
+        processMode,
+        programId,
+        productId,
+        milestones,
+        startDate,
+        endDate,
+        sourcePath: sourcePathFieldPresent ? sourcePathResolved.value : undefined,
+      },
       { expectedVersion, now: now() },
     );
     if (status !== undefined) {

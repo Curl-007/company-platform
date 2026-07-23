@@ -192,17 +192,17 @@ function createAiJobsRouter({
     }
   });
 
-  router.get("/ai/jobs/:id", async (req, res) => {
+  router.get("/ai/jobs/:id", requirePermission("ai:*"), async (req, res) => {
     const job = await repository.findJob(req.params.id);
     if (!job) return fail(res, 404, "RESOURCE_NOT_FOUND", "AI Job not found.");
-    if (!sourceDocumentForJob(req, res, job)) return;
+    if (!(await sourceDocumentForJob(req, res, job))) return;
     respond(res, job);
   });
 
   router.post("/ai/jobs/:id/confirm", requirePermission("ai:*"), async (req, res) => {
     const job = await repository.findJob(req.params.id);
     if (!job) return fail(res, 404, "RESOURCE_NOT_FOUND", "AI Job not found.");
-    const sourceDocument = sourceDocumentForJob(req, res, job);
+    const sourceDocument = await sourceDocumentForJob(req, res, job);
     if (!sourceDocument) return;
     if (job.status !== "awaiting_review") return fail(res, 400, "STATE_NOT_ALLOWED", `Cannot confirm job in status "${job.status}". Expected "awaiting_review".`);
     const { requirementDraft, edited } = buildRequirementDraft({ job, body: req.body, parse });
@@ -262,7 +262,7 @@ function createAiJobsRouter({
   router.post("/ai/jobs/:id/reject", requirePermission("ai:*"), async (req, res) => {
     const job = await repository.findJob(req.params.id);
     if (!job) return fail(res, 404, "RESOURCE_NOT_FOUND", "AI Job not found.");
-    if (!sourceDocumentForJob(req, res, job)) return;
+    if (!(await sourceDocumentForJob(req, res, job))) return;
     if (job.status !== "awaiting_review") return fail(res, 400, "STATE_NOT_ALLOWED", `Cannot reject job in status "${job.status}". Expected "awaiting_review".`);
     const reason = req.body?.reason || "未说明驳回原因";
     try {
@@ -277,7 +277,7 @@ function createAiJobsRouter({
   router.post("/ai/jobs/:id/retry", requirePermission("ai:*"), async (req, res, next) => {
     const job = await repository.findJob(req.params.id);
     if (!job) return fail(res, 404, "RESOURCE_NOT_FOUND", "AI Job not found.");
-    const sourceDocument = sourceDocumentForJob(req, res, job);
+    const sourceDocument = await sourceDocumentForJob(req, res, job);
     if (!sourceDocument) return;
     if (!isRetryable(job)) return fail(res, 400, "STATE_NOT_ALLOWED", `Cannot retry job in status "${job.status}". Expected one of: ${[...RETRYABLE_STATUSES].join(", ")}.`);
     try {

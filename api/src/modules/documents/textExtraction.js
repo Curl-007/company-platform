@@ -1,6 +1,11 @@
 const path = require("node:path");
 const zlib = require("node:zlib");
 
+const DOCX_MAX_COMPRESSED_ENTRY = 8 * 1024 * 1024;
+const DOCX_MAX_UNCOMPRESSED_ENTRY = 16 * 1024 * 1024;
+const DOCX_MAX_ENTRIES_SCANNED = 2000;
+const DOCX_MAX_TOTAL_COMPRESSED = 32 * 1024 * 1024;
+
 function cleanText(value) {
   return String(value || "")
     .replace(/\u0000/g, " ")
@@ -19,16 +24,26 @@ function decodeXmlEntities(value) {
     .replace(/&apos;/g, "'");
 }
 
-function readZipEntry(buffer, targetName) {
+function readZipEntry(buffer, targetName, options = {}) {
+  const maxCompressedEntry = options.maxCompressedEntry || DOCX_MAX_COMPRESSED_ENTRY;
+  const maxUncompressedEntry = options.maxUncompressedEntry || DOCX_MAX_UNCOMPRESSED_ENTRY;
+  const maxEntries = options.maxEntriesScanned || DOCX_MAX_ENTRIES_SCANNED;
+  const maxTotalCompressed = options.maxTotalCompressed || DOCX_MAX_TOTAL_COMPRESSED;
+
   let offset = 0;
+  let entries = 0;
+  let totalCompressed = 0;
   while (offset + 30 < buffer.length) {
     const signature = buffer.readUInt32LE(offset);
     if (signature !== 0x04034b50) {
       offset += 1;
       continue;
     }
+    entries += 1;
+    if (entries > maxEntries) return "";
     const compression = buffer.readUInt16LE(offset + 8);
     const compressedSize = buffer.readUInt32LE(offset + 18);
+    const uncompressedSize = buffer.readUInt32LE(offset + 22);
     const fileNameLength = buffer.readUInt16LE(offset + 26);
     const extraLength = buffer.readUInt16LE(offset + 28);
     const nameStart = offset + 30;
@@ -37,10 +52,26 @@ function readZipEntry(buffer, targetName) {
     const dataStart = nameEnd + extraLength;
     const dataEnd = dataStart + compressedSize;
     if (dataEnd > buffer.length) return "";
+    if (compressedSize > maxCompressedEntry) return "";
+    totalCompressed += compressedSize;
+    if (totalCompressed > maxTotalCompressed) return "";
+    // ZIP bomb guard: declared uncompressed size or inflate expansion.
+    if (uncompressedSize > maxUncompressedEntry && uncompressedSize !== 0xffffffff) return "";
     if (fileName === targetName) {
       const data = buffer.slice(dataStart, dataEnd);
-      if (compression === 0) return data.toString("utf8");
-      if (compression === 8) return zlib.inflateRawSync(data).toString("utf8");
+      if (compression === 0) {
+        if (data.length > maxUncompressedEntry) return "";
+        return data.toString("utf8");
+      }
+      if (compression === 8) {
+        try {
+          const inflated = zlib.inflateRawSync(data, { maxOutputLength: maxUncompressedEntry });
+          if (inflated.length > maxUncompressedEntry) return "";
+          return inflated.toString("utf8");
+        } catch {
+          return "";
+        }
+      }
       return "";
     }
     offset = dataEnd;
@@ -121,4 +152,6 @@ module.exports = {
   extractDocxText,
   extractTextFromUpload,
   readZipEntry,
+  DOCX_MAX_COMPRESSED_ENTRY,
+  DOCX_MAX_UNCOMPRESSED_ENTRY,
 };

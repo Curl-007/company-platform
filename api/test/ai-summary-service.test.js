@@ -9,14 +9,72 @@ const {
   normalizeAiSummaryPayload,
 } = require("../src/modules/ai/summaryService");
 
-function rows(sql) {
-  if (sql.includes("FROM projects")) return [{ id: "PRJ-001", name: "Portal", status: "active", health_score: 65, progress: 50, risk_count: 2, owner: "PM" }];
-  if (sql.includes("FROM requirements")) return [{ id: "REQ-001", title: "Checkout", status: "testing", priority: "high", completion: 60, project_id: "PRJ-001", owner: "PDM", assignee: "PDM" }];
-  if (sql.includes("FROM tasks")) return [{ id: "TASK-001", title: "Payment", status: "blocked", project_id: "PRJ-001", requirement_id: "REQ-001", owner: "Dev", progress: 40, blocker: "API waiting", due_date: "2026-07-20" }];
-  if (sql.includes("FROM defects")) return [{ id: "BUG-001", title: "Timeout", severity: "high", status: "confirmed", project_id: "PRJ-001", requirement_id: "REQ-001", assignee: "QA" }];
-  if (sql.includes("FROM work_logs")) return [{ author: "Dev", project: "Portal", content: "完成联调", blockers: "等待 API", next_plan: "继续回归", created_at: "2026-07-15T00:00:00.000Z" }];
+function rows(sql, params = {}) {
+  if (sql.includes("FROM projects")) {
+    const all = [{ id: "PRJ-001", name: "Portal", status: "active", health_score: 65, progress: 50, risk_count: 2, owner: "PM" },
+      { id: "PRJ-002", name: "Secret", status: "active", health_score: 90, progress: 80, risk_count: 0, owner: "Other" }];
+    if (sql.includes("IN (")) {
+      const allowed = new Set(Object.values(params));
+      return all.filter((item) => allowed.has(item.id));
+    }
+    return all;
+  }
+  if (sql.includes("FROM requirements")) {
+    const all = [
+      { id: "REQ-001", title: "Checkout", status: "testing", priority: "high", completion: 60, project_id: "PRJ-001", owner: "PDM", assignee: "PDM" },
+      { id: "REQ-002", title: "Hidden", status: "draft", priority: "high", completion: 10, project_id: "PRJ-002", owner: "X", assignee: "X" },
+    ];
+    if (sql.includes("project_id IN")) {
+      const allowed = new Set(Object.values(params));
+      return all.filter((item) => allowed.has(item.project_id));
+    }
+    return all;
+  }
+  if (sql.includes("FROM tasks")) {
+    const all = [
+      { id: "TASK-001", title: "Payment", status: "blocked", project_id: "PRJ-001", requirement_id: "REQ-001", owner: "Dev", progress: 40, blocker: "API waiting", due_date: "2026-07-20" },
+      { id: "TASK-002", title: "Secret task", status: "todo", project_id: "PRJ-002", requirement_id: "REQ-002", owner: "X", progress: 0, blocker: "", due_date: null },
+    ];
+    if (sql.includes("project_id IN")) {
+      const allowed = new Set(Object.values(params));
+      return all.filter((item) => allowed.has(item.project_id));
+    }
+    return all;
+  }
+  if (sql.includes("FROM defects")) {
+    const all = [
+      { id: "BUG-001", title: "Timeout", severity: "high", status: "confirmed", project_id: "PRJ-001", requirement_id: "REQ-001", assignee: "QA" },
+      { id: "BUG-002", title: "Hidden bug", severity: "high", status: "open", project_id: "PRJ-002", requirement_id: "REQ-002", assignee: "QA" },
+    ];
+    if (sql.includes("project_id IN")) {
+      const allowed = new Set(Object.values(params));
+      return all.filter((item) => allowed.has(item.project_id));
+    }
+    return all;
+  }
+  if (sql.includes("FROM work_logs")) {
+    const all = [
+      { author: "Dev", project: "Portal", content: "完成联调", blockers: "等待 API", next_plan: "继续回归", created_at: "2026-07-15T00:00:00.000Z" },
+      { author: "X", project: "Secret", content: "secret log", blockers: "", next_plan: "", created_at: "2026-07-15T00:00:00.000Z" },
+    ];
+    if (sql.includes("project IN")) {
+      const allowed = new Set(Object.values(params));
+      return all.filter((item) => allowed.has(item.project));
+    }
+    return all;
+  }
   if (sql.includes("FROM ai_jobs")) return [{ job_id: "JOB-001", scene: "document_analysis", status: "awaiting_review", progress: 80, current_step: "review", error_message: "", created_at: "2026-07-15T00:00:00.000Z" }];
-  if (sql.includes("FROM builds")) return [{ id: "BLD-001", name: "Build", version: "1.0.0", status: "testing", project_id: "PRJ-001", build_date: "2026-07-15", notes: "needs regression", created_at: "2026-07-15T00:00:00.000Z" }];
+  if (sql.includes("FROM builds")) {
+    const all = [
+      { id: "BLD-001", name: "Build", version: "1.0.0", status: "testing", project_id: "PRJ-001", build_date: "2026-07-15", notes: "needs regression", created_at: "2026-07-15T00:00:00.000Z" },
+      { id: "BLD-002", name: "SecretBuild", version: "9.0.0", status: "ready", project_id: "PRJ-002", build_date: "2026-07-15", notes: "no", created_at: "2026-07-15T00:00:00.000Z" },
+    ];
+    if (sql.includes("project_id IN")) {
+      const allowed = new Set(Object.values(params));
+      return all.filter((item) => allowed.has(item.project_id));
+    }
+    return all;
+  }
   if (sql.includes("FROM releases")) return [{ id: "REL-001", name: "Release", version: "1.0.0", status: "draft", product_id: "PROD-001", release_date: "2026-07-16", release_notes: "pending", created_at: "2026-07-15T00:00:00.000Z" }];
   return [];
 }
@@ -35,6 +93,21 @@ test("AI summary service builds auditable snapshots and local operational summar
   assert.equal(fallback.modelUsed, "local-rule-engine");
   assert.ok(fallback.risks.length > 0);
   assert.doesNotMatch([...fallback.risks, ...fallback.recommendations].join(" "), /绩效|排名|薪酬|晋升|淘汰/);
+});
+
+test("AI summary snapshot respects projectIds scope isolation", async () => {
+  const scoped = await collectAiBusinessSnapshot({ rows }, "dashboard", { projectIds: ["PRJ-001"] });
+  assert.deepEqual(scoped.projects.map((item) => item.id), ["PRJ-001"]);
+  assert.equal(scoped.tasks.every((item) => item.projectId === "PRJ-001"), true);
+  assert.equal(scoped.defects.every((item) => item.projectId === "PRJ-001"), true);
+  assert.equal(scoped.builds.every((item) => item.projectId === "PRJ-001"), true);
+  assert.equal(scoped.workLogs.every((item) => item.project === "Portal"), true);
+  assert.equal(scoped.releases.length, 0);
+  assert.equal(scoped.aiJobs.length, 0);
+
+  const empty = await collectAiBusinessSnapshot({ rows }, "dashboard", { projectIds: [] });
+  assert.equal(empty.projects.length, 0);
+  assert.equal(empty.tasks.length, 0);
 });
 
 test("AI summary service normalizes model JSON and caches generated summaries", async () => {

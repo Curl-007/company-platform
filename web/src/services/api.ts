@@ -32,6 +32,7 @@ export function setOnSessionExpired(handler: (() => void) | null): void {
  * Does not navigate; callers decide whether to redirect.
  */
 export function clearAuthArtifacts(): void {
+  // setToken bumps sessionGeneration so in-flight 401s from the old session are ignored.
   setToken(null);
   clearAsyncCache();
   setAsyncCacheUser(null);
@@ -44,6 +45,8 @@ export function clearAuthArtifacts(): void {
 }
 
 let token: string | null = readToken();
+/** Monotonic session generation — bumped on login/logout so stale 401 cannot wipe a newer session. */
+let sessionGeneration = 0;
 
 function readToken(): string | null {
   try {
@@ -66,9 +69,15 @@ export function getToken(): string | null {
   return token;
 }
 
+/** Current session generation for race guards (getMe / stale 401). */
+export function getSessionGeneration(): number {
+  return sessionGeneration;
+}
+
 export function setToken(value: string | null): void {
   token = value;
   writeToken(value);
+  sessionGeneration += 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -98,13 +107,17 @@ async function request<T>(
   options?: { headers?: Record<string, string>; timeoutMs?: number },
 ): Promise<T> {
   const url = `${BASE_URL}${path}`;
+  // Capture generation + token used for this request so a late 401 cannot
+  // clear a session established by a concurrent login.
+  const requestGeneration = sessionGeneration;
+  const requestToken = token;
 
   const headers: Record<string, string> = {
     ...options?.headers,
   };
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  if (requestToken) {
+    headers['Authorization'] = `Bearer ${requestToken}`;
   }
 
   if (body !== undefined && !(body instanceof FormData)) {
@@ -142,10 +155,12 @@ async function request<T>(
     window.clearTimeout(timeout);
   }
 
-  // Auto-expire session on 401 (token, user snapshot, and useAsync cache).
+  // Auto-expire session on 401 only when the failing request still matches the active session.
   if (response.status === 401) {
-    clearAuthArtifacts();
-    window.location.hash = '#/login';
+    if (sessionGeneration === requestGeneration && token === requestToken) {
+      clearAuthArtifacts();
+      window.location.hash = '#/login';
+    }
     throw new ApiError('未授权 - 登录已过期', 401);
   }
 

@@ -39,8 +39,8 @@ export default function EditProjectForm({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const { data: programs } = useAsync(fetchPrograms, []);
-  const { data: products } = useAsync(fetchProducts, []);
+  const { data: programs } = useAsync(fetchPrograms, [], { cacheKey: 'programs:list' });
+  const { data: products } = useAsync(fetchProducts, [], { cacheKey: 'products:list' });
 
   async function handleSubmit() {
     setFormError(null);

@@ -26,3 +26,13 @@ test("audit repository applies audit filters and excludes page views by default"
   assert.equal(captured.params.dateFrom, "2026-07-13T00:00:00.000Z");
   assert.equal(captured.params.keyword, "%PRJ%");
 });
+
+test("audit repository scopes by actorId and resourceIds for non-admin isolation", async () => {
+  let captured;
+  const repository = createAuditRepository({ rows: async (sql, params) => { captured = { sql, params }; return []; } });
+  await repository.listAuditLogs({ actorId: "U-1", resourceIds: ["PRJ-1", "PRJ-2"] });
+  assert.match(captured.sql, /actor_id = @actorId/);
+  assert.match(captured.sql, /resource_id IN \(@resourceIds0, @resourceIds1\)/);
+  assert.equal(captured.params.actorId, "U-1");
+  assert.equal(captured.params.resourceIds0, "PRJ-1");
+});

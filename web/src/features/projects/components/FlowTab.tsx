@@ -24,19 +24,23 @@ export default function FlowTab({ projectId }: { projectId: string }) {
     || sessionUser?.role === 'admin'
     || sessionUser?.role === 'pm';
 
-  const { data, loading, error, reload } = useAsync<ProjectFlow>(() => fetchProjectFlow(projectId), [projectId]);
+  const { data, loading, error, reload } = useAsync<ProjectFlow>(
+    () => fetchProjectFlow(projectId),
+    [projectId],
+    { cacheKey: 'project:flow' },
+  );
   const {
     data: binding,
     loading: bindingLoading,
     error: bindingError,
     reload: reloadBinding,
-  } = useAsync(() => fetchProjectWorkflowBinding(projectId), [projectId]);
+  } = useAsync(() => fetchProjectWorkflowBinding(projectId), [projectId], { cacheKey: 'project:workflow-binding' });
   const {
     data: catalog,
     loading: catalogLoading,
     error: catalogError,
     reload: reloadCatalog,
-  } = useAsync(() => fetchWorkflowTemplates(false), []);
+  } = useAsync(() => fetchWorkflowTemplates(false), [], { cacheKey: 'workflow:templates' });
 
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [saving, setSaving] = useState(false);

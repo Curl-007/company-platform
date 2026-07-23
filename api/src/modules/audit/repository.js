@@ -1,10 +1,47 @@
 function createAuditRepository({ rows }) {
-  async function listAuditLogs({ keyword, actor, action, resourceType, dateFrom, dateTo, includePageViews } = {}) {
+  async function listAuditLogs({
+    keyword,
+    actor,
+    action,
+    resourceType,
+    dateFrom,
+    dateTo,
+    includePageViews,
+    actorId,
+    actorIds,
+    resourceIds,
+  } = {}) {
     const clauses = [];
     const params = {};
     if (actor) {
       clauses.push("actor_name = @actor");
       params.actor = String(actor);
+    }
+    if (actorId) {
+      clauses.push("actor_id = @actorId");
+      params.actorId = String(actorId);
+    }
+    if (Array.isArray(actorIds)) {
+      if (actorIds.length === 0) {
+        clauses.push("1 = 0");
+      } else {
+        const keys = actorIds.map((_, index) => `@actorIds${index}`);
+        actorIds.forEach((id, index) => {
+          params[`actorIds${index}`] = String(id);
+        });
+        clauses.push(`actor_id IN (${keys.join(", ")})`);
+      }
+    }
+    if (Array.isArray(resourceIds)) {
+      if (resourceIds.length === 0) {
+        clauses.push("1 = 0");
+      } else {
+        const keys = resourceIds.map((_, index) => `@resourceIds${index}`);
+        resourceIds.forEach((id, index) => {
+          params[`resourceIds${index}`] = String(id);
+        });
+        clauses.push(`resource_id IN (${keys.join(", ")})`);
+      }
     }
     if (action) {
       clauses.push("action LIKE @action");

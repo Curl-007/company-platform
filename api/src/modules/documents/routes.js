@@ -75,6 +75,16 @@ function createDocumentsRouter({
     res.json(ok(data));
   });
 
+  function safeUnlink(storageKey) {
+    if (!storageKey) return;
+    try { fs.unlinkSync(path.join(storageDir, storageKey)); } catch { /* may not exist */ }
+  }
+
+  async function deleteObjectRow(storageKey) {
+    if (!storageKey) return;
+    try { await run("DELETE FROM objects WHERE storage_key = @key", { key: storageKey }); } catch { /* best effort */ }
+  }
+
   router.post("/documents", requirePermission("document:*"), async (req, res) => {
     const { title, type, category, owner, ownerRole, projectId, fileName, fileSize, fileType, contentBase64 } = req.body || {};
     if (!title || !type || !owner || !fileName) return fail(res, 400, "VALIDATION_FAILED", "Document title, type, owner, and fileName are required.");
@@ -102,36 +112,46 @@ function createDocumentsRouter({
     const id = await nextId("DOC", "documents");
     const storageKey = `${id}_${String(fileName).replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")}`;
     let content = "";
-    if (contentBase64) {
-      const base64 = String(contentBase64).includes(",") ? String(contentBase64).split(",").pop() : String(contentBase64);
-      const buffer = Buffer.from(base64, "base64");
-      fs.writeFileSync(path.join(storageDir, storageKey), buffer);
-      content = extractTextFromUpload(fileName, fileType, contentBase64);
-      await insert("objects", { id: `OBJ-${id}`, bucket: "documents", storage_key: storageKey, original_name: fileName, mime_type: fileType || "application/octet-stream", size: buffer.length, created_by: req.user.id, created_at: now() });
+    let wroteFile = false;
+    try {
+      if (contentBase64) {
+        const base64 = String(contentBase64).includes(",") ? String(contentBase64).split(",").pop() : String(contentBase64);
+        const buffer = Buffer.from(base64, "base64");
+        fs.writeFileSync(path.join(storageDir, storageKey), buffer);
+        wroteFile = true;
+        content = extractTextFromUpload(fileName, fileType, contentBase64);
+        await insert("objects", { id: `OBJ-${id}`, bucket: "documents", storage_key: storageKey, original_name: fileName, mime_type: fileType || "application/octet-stream", size: buffer.length, created_by: req.user.id, created_at: now() });
+      }
+      const document = {
+        id,
+        title,
+        type,
+        category: category || "project",
+        version: "v1.0",
+        ai_status: "uploaded",
+        owner,
+        owner_role: ownerRole || normalizeRole(req.user.role),
+        project_id: projectId || null,
+        updated_at: now(),
+        linked_requirements: json([]),
+        risks: json([]),
+        file_name: fileName,
+        file_size: Number(fileSize) || 0,
+        file_type: fileType || "application/octet-stream",
+        storage_key: storageKey,
+        content,
+      };
+      await insert("documents", document);
+      reindexDocument?.(document);
+      await audit(req.user, "document.upload", "document", id, null, document, req.ip);
+      res.status(201).json(ok(mapDocument(await row("SELECT * FROM documents WHERE id = @id", { id }))));
+    } catch (error) {
+      if (wroteFile) {
+        safeUnlink(storageKey);
+        await deleteObjectRows(storageKey);
+      }
+      throw error;
     }
-    const document = {
-      id,
-      title,
-      type,
-      category: category || "project",
-      version: "v1.0",
-      ai_status: "uploaded",
-      owner,
-      owner_role: ownerRole || normalizeRole(req.user.role),
-      project_id: projectId || null,
-      updated_at: now(),
-      linked_requirements: json([]),
-      risks: json([]),
-      file_name: fileName,
-      file_size: Number(fileSize) || 0,
-      file_type: fileType || "application/octet-stream",
-      storage_key: storageKey,
-      content,
-    };
-    await insert("documents", document);
-    reindexDocument?.(document);
-    await audit(req.user, "document.upload", "document", id, null, document, req.ip);
-    res.status(201).json(ok(mapDocument(await row("SELECT * FROM documents WHERE id = @id", { id }))));
   });
 
   router.get("/documents/:id", async (req, res) => {
@@ -173,19 +193,36 @@ function createDocumentsRouter({
 
   router.post("/documents/:id/object", requirePermission("document:*"), upload.single("file"), async (req, res) => {
     const document = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
-    if (!document) return fail(res, 404, "RESOURCE_NOT_FOUND", "Document not found.");
+    if (!document) {
+      if (req.file?.filename) safeUnlink(req.file.filename);
+      return fail(res, 404, "RESOURCE_NOT_FOUND", "Document not found.");
+    }
     if (!(await canManage(req.user, document))) {
+      if (req.file?.filename) safeUnlink(req.file.filename);
       return fail(res, 403, "PERMISSION_DENIED", "You can only manage documents for allowed roles.");
     }
-    await insert("objects", { id: `OBJ-${Date.now()}`, bucket: "documents", storage_key: req.file.filename, original_name: req.file.originalname, mime_type: req.file.mimetype, size: req.file.size, created_by: req.user.id, created_at: now() });
-    const buffer = fs.readFileSync(req.file.path);
-    const contentBase64 = `data:${req.file.mimetype};base64,${buffer.toString("base64")}`;
-    const content = extractTextFromUpload(req.file.originalname, req.file.mimetype, contentBase64);
-    await run("UPDATE documents SET storage_key = @key, file_name = @name, file_size = @size, file_type = @type, content = @content, updated_at = @updated WHERE id = @id", { id: req.params.id, key: req.file.filename, name: req.file.originalname, size: req.file.size, type: req.file.mimetype, content, updated: now() });
-    const after = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
-    reindexDocument?.(after);
-    await audit(req.user, "object.upload", "document", req.params.id, null, req.file, req.ip);
-    res.json(ok({ objectKey: req.file.filename }));
+    if (!req.file) return fail(res, 400, "VALIDATION_FAILED", "File is required.");
+    const previousKey = document.storage_key || null;
+    const newKey = req.file.filename;
+    try {
+      await insert("objects", { id: `OBJ-${Date.now()}`, bucket: "documents", storage_key: newKey, original_name: req.file.originalname, mime_type: req.file.mimetype, size: req.file.size, created_by: req.user.id, created_at: now() });
+      const buffer = fs.readFileSync(req.file.path);
+      const contentBase64 = `data:${req.file.mimetype};base64,${buffer.toString("base64")}`;
+      const content = extractTextFromUpload(req.file.originalname, req.file.mimetype, contentBase64);
+      await run("UPDATE documents SET storage_key = @key, file_name = @name, file_size = @size, file_type = @type, content = @content, updated_at = @updated WHERE id = @id", { id: req.params.id, key: newKey, name: req.file.originalname, size: req.file.size, type: req.file.mimetype, content, updated: now() });
+      if (previousKey && previousKey !== newKey) {
+        safeUnlink(previousKey);
+        await deleteObjectRows(previousKey);
+      }
+      const after = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
+      reindexDocument?.(after);
+      await audit(req.user, "object.upload", "document", req.params.id, null, { filename: req.file.filename, size: req.file.size, mimetype: req.file.mimetype }, req.ip);
+      res.json(ok({ objectKey: newKey }));
+    } catch (error) {
+      safeUnlink(newKey);
+      await deleteObjectRows(newKey);
+      throw error;
+    }
   });
 
   router.patch("/documents/:id", requirePermission("document:*"), async (req, res) => {
@@ -229,7 +266,8 @@ function createDocumentsRouter({
     deleteDocumentRagIndex?.(req.params.id);
     await run("DELETE FROM documents WHERE id = @id", { id: req.params.id });
     if (before.storage_key) {
-      try { fs.unlinkSync(path.join(storageDir, before.storage_key)); } catch { /* file may not exist */ }
+      safeUnlink(before.storage_key);
+      await deleteObjectRows(before.storage_key);
     }
     await audit(req.user, "document.delete", "document", req.params.id, before, null, req.ip);
     res.json(ok({ deleted: true, id: req.params.id }));

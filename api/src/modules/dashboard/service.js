@@ -72,7 +72,12 @@ function createDashboardService({
         ...metrics,
         totalJobs: await repository.countAiJobs(),
         logAnalysis: await repository.countWorkLogs(),
-      }, { cacheKey: owner || user?.role || "dashboard", backgroundRefresh: true, timeoutMs: 14000 }),
+      }, {
+        cacheKey: `${user?.id || owner || user?.role || "dashboard"}:${[...accessibleProjectIds].sort().join(",") || "none"}`,
+        projectIds: [...accessibleProjectIds],
+        backgroundRefresh: true,
+        timeoutMs: 14000,
+      }),
     };
     if (owner) {
       result.myDefects = myDefects;

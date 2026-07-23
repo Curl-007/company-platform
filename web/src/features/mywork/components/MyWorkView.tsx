@@ -44,7 +44,7 @@ export default function MyWorkView({ user }: { user?: SessionUser | null }) {
   const [editingTimeEntry, setEditingTimeEntry] = useState<TimeEntry | null>(null);
   const { data, loading, error, reload } = useAsync<DashboardData>(fetchPersonalDashboard, []);
   const weeklySummaryAsync = useAsync<WeeklyWorkSummary>(() => fetchWeeklyWorkSummary(), []);
-  const personalCapacityAsync = useAsync(() => fetchMyCapacity(), []);
+  const personalCapacityAsync = useAsync(() => fetchMyCapacity(), [], { cacheKey: 'mywork:capacity' });
   const timeEntriesAsync = useAsync<TimeEntry[]>(() => fetchTimeEntries(), []);
 
   async function removeTimeEntry(entry: TimeEntry) {
@@ -108,6 +108,7 @@ export default function MyWorkView({ user }: { user?: SessionUser | null }) {
   const taskHistoryAsync = useAsync(
     () => selectedTask ? fetchTaskStatusHistory(selectedTask.id) : Promise.resolve([]),
     [selectedTask?.id],
+    { cacheKey: 'mywork:task-history' },
   );
 
   useEffect(() => {

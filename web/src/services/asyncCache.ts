@@ -31,20 +31,31 @@ export function getAsyncCacheUser(): string {
   return cacheUserKey;
 }
 
-export function buildAsyncCacheKey(loader: () => Promise<unknown>, deps: unknown[]): string {
-  // Prefer a stable function name; for anonymous loaders include a short body
-  // fingerprint so two different () => fetchX() closures don't collide.
-  const named = loader.name && loader.name !== 'anonymous' ? loader.name : '';
-  let bodyHint = '';
-  if (!named) {
-    try {
-      const src = loader.toString().replace(/\s+/g, ' ').slice(0, 120);
-      bodyHint = `anon:${src}`;
-    } catch {
-      bodyHint = 'anon';
+/**
+ * Build a namespaced cache key.
+ * - Prefer an explicit string `cacheKey` (P0-5).
+ * - Fallback: named function or short body fingerprint of an anonymous loader.
+ */
+export function buildAsyncCacheKey(
+  loaderOrKey: (() => Promise<unknown>) | string,
+  deps: unknown[] = [],
+): string {
+  let name: string;
+  if (typeof loaderOrKey === 'string') {
+    name = loaderOrKey.trim() || 'key';
+  } else {
+    const named = loaderOrKey.name && loaderOrKey.name !== 'anonymous' ? loaderOrKey.name : '';
+    let bodyHint = '';
+    if (!named) {
+      try {
+        const src = loaderOrKey.toString().replace(/\s+/g, ' ').slice(0, 120);
+        bodyHint = `anon:${src}`;
+      } catch {
+        bodyHint = 'anon';
+      }
     }
+    name = named || bodyHint;
   }
-  const name = named || bodyHint;
   try {
     return `${cacheUserKey}:${name}:${JSON.stringify(deps)}`;
   } catch {

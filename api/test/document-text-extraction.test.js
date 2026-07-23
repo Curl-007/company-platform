@@ -47,3 +47,18 @@ test("document text extraction handles simple PDF text and bounded unknown fallb
   assert.equal(typeof fallback, "string");
   assert.ok(fallback.length > 0);
 });
+
+test("docx zip reader refuses oversized compressed entries (zip-bomb guard)", () => {
+  // Craft a local-file header claiming a huge compressed size beyond the hard limit.
+  const name = Buffer.from("word/document.xml", "utf8");
+  const header = Buffer.alloc(30);
+  header.writeUInt32LE(0x04034b50, 0);
+  header.writeUInt16LE(0, 8); // store
+  header.writeUInt32LE(20 * 1024 * 1024, 18); // compressed size > 8MB limit
+  header.writeUInt32LE(20 * 1024 * 1024, 22);
+  header.writeUInt16LE(name.length, 26);
+  header.writeUInt16LE(0, 28);
+  const bomb = Buffer.concat([header, name, Buffer.alloc(100)]);
+  assert.equal(readZipEntry(bomb, "word/document.xml"), "");
+  assert.equal(extractDocxText(bomb), "");
+});

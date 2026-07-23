@@ -1,4 +1,5 @@
 const express = require("express");
+const { wrapRouterAsync } = require("../../lib/asyncHandler");
 
 function mapAuditLog(item, parse) {
   return {
@@ -14,6 +15,12 @@ function mapAuditLog(item, parse) {
   };
 }
 
+/**
+ * Visibility:
+ * - admin: global
+ * - others with audit:read: own actions only (actor_id), plus optional resourceId filter
+ * Default decision from RC checklist: admin-global / role-scoped for others.
+ */
 function createAuditRouter({
   audit,
   fail,
@@ -26,8 +33,15 @@ function createAuditRouter({
   const router = express.Router();
 
   router.get("/audit-logs", requirePermission("audit:read"), async (req, res) => {
-    const allItems = (await repository.listAuditLogs(req.query))
-      .map((item) => mapAuditLog(item, parse));
+    const isAdmin = req.user?.role === "admin" || (Array.isArray(req.user?.permissions) && req.user.permissions.includes("*"));
+    const query = { ...req.query };
+    if (!isAdmin) {
+      // Non-admin: only own audit trail (prevent cross-user leakage).
+      query.actorId = req.user.id;
+      delete query.actor;
+      delete query.actorIds;
+    }
+    const allItems = (await repository.listAuditLogs(query)).map((item) => mapAuditLog(item, parse));
     const data = paginatedResponse(allItems, req.query);
     res.json(ok(data));
   });
@@ -40,7 +54,7 @@ function createAuditRouter({
     res.status(201).json(ok({ page, pageTitle }));
   });
 
-  return router;
+  return wrapRouterAsync(router);
 }
 
 module.exports = {

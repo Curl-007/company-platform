@@ -17,13 +17,17 @@ const STATE_DOT: Record<GateState, string> = {
 };
 
 export default function FlowView() {
-  const { data: overview, loading, error, reload } = useAsync<FlowOverviewItem[]>(fetchFlowOverview, []);
+  const { data: overview, loading, error, reload } = useAsync<FlowOverviewItem[]>(
+    fetchFlowOverview,
+    [],
+    { cacheKey: 'flow:overview' },
+  );
   const {
     data: templateCatalog,
     loading: templateLoading,
     error: templateError,
     reload: reloadTemplates,
-  } = useAsync(() => fetchWorkflowTemplates(false), []);
+  } = useAsync(() => fetchWorkflowTemplates(false), [], { cacheKey: 'workflow:templates' });
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');

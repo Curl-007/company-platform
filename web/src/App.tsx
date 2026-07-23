@@ -69,8 +69,12 @@ function AppContent() {
 
   useEffect(() => {
     if (!user || !getToken()) return;
+    const startedToken = getToken();
+    let cancelled = false;
     getMe()
       .then((freshUser) => {
+        // Drop stale getMe if user logged out / re-logged as someone else mid-flight.
+        if (cancelled || getToken() !== startedToken) return;
         setUser(freshUser);
         if (!canAccessPageForUser(freshUser, getRoutePage(location.pathname))) {
           navigateToPage('dashboard', {}, true);
@@ -78,13 +82,17 @@ function AppContent() {
         }
       })
       .catch((error: unknown) => {
+        if (cancelled || getToken() !== startedToken) return;
         if (isSessionInvalidError(error)) {
-          doLogout();
+          // api.ts already cleared auth on current-session 401; sync React state.
           setUser(null);
           return;
         }
         toast.info('无法刷新会话，已保留本地登录状态。请检查网络后重试。');
       });
+    return () => {
+      cancelled = true;
+    };
     // Intentionally depends on route changes, not `user`, to avoid re-fetch loops after setUser.
   }, [location.pathname, navigateToPage, toast]);
 

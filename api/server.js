@@ -62,6 +62,7 @@ const {
 const { createAuthMiddleware } = require("./src/middleware/auth");
 const { createProjectAccess } = require("./src/security/projectAccess");
 const { createSecretCodec } = require("./src/security/secretCodec");
+const { wrapRouterAsync } = require("./src/lib/asyncHandler");
 const { createAuditRouter } = require("./src/modules/audit/routes");
 const { createAuditRepository } = require("./src/modules/audit/repository");
 const { createAuthRouter } = require("./src/modules/auth/routes");
@@ -627,10 +628,10 @@ const {
 
 app.use(authenticate);
 
-app.use("/api", createMetaRouter({
+app.use("/api", wrapRouterAsync(createMetaRouter({
   ok,
   publicEnums,
-}));
+})));
 
 function extractJsonPayload(text) {
   const raw = String(text || "").trim();
@@ -673,7 +674,7 @@ app.get("/api/health", async (req, res) => {
   return res.json(ok(payload));
 });
 
-app.use("/api", createAuthRouter({
+app.use("/api", wrapRouterAsync(createAuthRouter({
   audit,
   authLimiter,
   buildCapabilities,
@@ -681,8 +682,8 @@ app.use("/api", createAuthRouter({
   ok,
   publicUser,
   service: authService,
-}));
-app.use("/api", createAuditRouter({
+})));
+app.use("/api", wrapRouterAsync(createAuditRouter({
   audit,
   fail,
   ok,
@@ -690,11 +691,11 @@ app.use("/api", createAuditRouter({
   parse,
   repository: createAuditRepository({ rows }),
   requirePermission,
-}));
+})));
 
-app.use("/api", createDashboardRouter({ fail, ok, service: dashboardService }));
+app.use("/api", wrapRouterAsync(createDashboardRouter({ fail, ok, service: dashboardService })));
 
-app.use("/api", createProjectsRouter({
+app.use("/api", wrapRouterAsync(createProjectsRouter({
   audit,
   beginIdempotentRequest,
   canAccessProject: projectAccess.canAccessProject,
@@ -719,9 +720,9 @@ app.use("/api", createProjectsRouter({
   sourceBrowser: projectSourceBrowser,
   statusHistory,
   transaction,
-}));
+})));
 
-app.use("/api", createWorkflowRouter({
+app.use("/api", wrapRouterAsync(createWorkflowRouter({
   audit,
   canAccessProject: projectAccess.canAccessProject,
   canManageProject: projectAccess.canManageProject,
@@ -732,9 +733,9 @@ app.use("/api", createWorkflowRouter({
   requirePermission,
   templateStore: workflowTemplateStore,
   workflowTemplates: publicWorkflowTemplates,
-}));
+})));
 
-app.use("/api", createStrategyRouter({
+app.use("/api", wrapRouterAsync(createStrategyRouter({
   audit,
   canAccessProject: projectAccess.canAccessProject,
   canManageProject: projectAccess.canManageProject,
@@ -755,9 +756,9 @@ app.use("/api", createStrategyRouter({
   rows,
   run,
   transaction,
-}));
+})));
 
-app.use("/api", createProductsRouter({
+app.use("/api", wrapRouterAsync(createProductsRouter({
   audit,
   canAccessProject: projectAccess.canAccessProject,
   fail,
@@ -776,9 +777,9 @@ app.use("/api", createProductsRouter({
   row,
   rows,
   run,
-}));
+})));
 
-app.use("/api", createRequirementsRouter({
+app.use("/api", wrapRouterAsync(createRequirementsRouter({
   audit,
   beginIdempotentRequest,
   canAccessProject: projectAccess.canAccessProject,
@@ -801,8 +802,8 @@ app.use("/api", createRequirementsRouter({
   statusHistory,
   syncRequirementTask,
   transaction,
-}));
-app.use("/api", createTasksRouter({
+})));
+app.use("/api", wrapRouterAsync(createTasksRouter({
   audit,
   beginIdempotentRequest,
   canAccessProject: projectAccess.canAccessProject,
@@ -830,9 +831,9 @@ app.use("/api", createTasksRouter({
   taskTypes: TASK_TYPES,
   transaction,
   weekKeyOf,
-}));
+})));
 
-app.use("/api", createDeliveryRouter({
+app.use("/api", wrapRouterAsync(createDeliveryRouter({
   audit,
   beginIdempotentRequest,
   buildReleaseReport,
@@ -859,9 +860,9 @@ app.use("/api", createDeliveryRouter({
   transaction,
   validateBuildStatusTransition,
   validateReleaseStatusTransition,
-}));
+})));
 
-app.use("/api", createTestingRouter({
+app.use("/api", wrapRouterAsync(createTestingRouter({
   audit,
   canAccessProject: projectAccess.canAccessProject,
   canWriteProject: projectAccess.canWriteProject,
@@ -880,9 +881,9 @@ app.use("/api", createTestingRouter({
   run,
   syncTestCaseTask,
   testCaseStatuses: TEST_CASE_STATUSES,
-}));
+})));
 
-app.use("/api", createDocumentsRouter({
+app.use("/api", wrapRouterAsync(createDocumentsRouter({
   audit,
   canAccessProject: projectAccess.canAccessProject,
   canWriteProject: projectAccess.canWriteProject,
@@ -904,8 +905,8 @@ app.use("/api", createDocumentsRouter({
   run,
   storageDir: STORAGE_DIR,
   upload,
-}));
-app.use("/api", createAiJobsRouter({
+})));
+app.use("/api", wrapRouterAsync(createAiJobsRouter({
   audit,
   canAccessProject: projectAccess.canAccessProject,
   canViewDocument,
@@ -922,7 +923,7 @@ app.use("/api", createAiJobsRouter({
   requirementPriorities: REQUIREMENT_PRIORITIES,
   requirePermission,
   transaction,
-}));
+})));
 
 const { ensureAiTargetAccess } = createAiTargetAccess({
   row,
@@ -933,7 +934,7 @@ const { ensureAiTargetAccess } = createAiTargetAccess({
   isOrganizationProjectManager: projectAccess.isOrganizationProjectManager,
 });
 
-app.use("/api", createWorkLogsRouter({
+app.use("/api", wrapRouterAsync(createWorkLogsRouter({
   analyzeWorkLog: workLogAnalysisService.analyze,
   audit,
   beginIdempotentRequest,
@@ -958,8 +959,8 @@ app.use("/api", createWorkLogsRouter({
   transaction,
   weekKeyOf,
   workLogMatchesProject: workLogHelpers.workLogMatchesProject,
-}));
-app.use("/api", createTimeEntriesRouter({
+})));
+app.use("/api", wrapRouterAsync(createTimeEntriesRouter({
   audit,
   beginIdempotentRequest,
   canAccessProject: projectAccess.canAccessProject,
@@ -972,8 +973,8 @@ app.use("/api", createTimeEntriesRouter({
   paginatedResponse,
   repository: createTimeEntriesRepository({ insert, row, rows, run }),
   transaction,
-}));
-app.use("/api", createDefectsRouter({
+})));
+app.use("/api", wrapRouterAsync(createDefectsRouter({
   audit,
   canAccessProject: projectAccess.canAccessProject,
   canWriteProject: projectAccess.canWriteProject,
@@ -987,8 +988,8 @@ app.use("/api", createDefectsRouter({
   requireAnyPermission,
   repository: createDefectsRepository({ insert, row, rows, run }),
   syncDefectTask,
-}));
-app.use("/api", createGovernanceRouter({
+})));
+app.use("/api", wrapRouterAsync(createGovernanceRouter({
   audit,
   canAccessProject: projectAccess.canAccessProject,
   canManageProject: projectAccess.canManageProject,
@@ -997,9 +998,9 @@ app.use("/api", createGovernanceRouter({
   now,
   ok,
   repository: createGovernanceRepository({ insert, row, rows, run }),
-}));
+})));
 
-app.use("/api", createOrganizationRouter({
+app.use("/api", wrapRouterAsync(createOrganizationRouter({
   audit,
   fail,
   nextId,
@@ -1008,9 +1009,9 @@ app.use("/api", createOrganizationRouter({
   repository: organizationRepository,
   requirePermission,
   transaction,
-}));
+})));
 
-app.use("/api", createTeamRouter({
+app.use("/api", wrapRouterAsync(createTeamRouter({
   audit,
   buildTeamMembers: teamService.buildTeamMembers,
   canViewTeamLogs: workLogHelpers.canViewTeamLogs,
@@ -1030,9 +1031,9 @@ app.use("/api", createTeamRouter({
   run,
   systemRoles: SYSTEM_ROLES,
   organizationRepository,
-}));
+})));
 
-app.use("/api", createCapacityRouter({
+app.use("/api", wrapRouterAsync(createCapacityRouter({
   audit,
   canManageProject: projectAccess.canManageProject,
   canViewCapacity: workLogHelpers.canViewTeamLogs,
@@ -1042,9 +1043,9 @@ app.use("/api", createCapacityRouter({
   ok,
   repository: createCapacityRepository({ insert, row, rows, run }),
   requirePermission,
-}));
+})));
 
-app.use("/api", createAiProviderAdminRouter({
+app.use("/api", wrapRouterAsync(createAiProviderAdminRouter({
   audit,
   callRealModel,
   fail,
@@ -1052,18 +1053,27 @@ app.use("/api", createAiProviderAdminRouter({
   publicConfig: aiProviderStore.publicConfig,
   requirePermission,
   service: aiProviderAdminService,
-}));
+})));
 
-app.use("/api", createAiInteractionsRouter({
+app.use("/api", wrapRouterAsync(createAiInteractionsRouter({
   audit,
   buildAiChatPrompt: aiChatService.buildPrompt,
   buildAiChatContext: aiChatService.buildContext,
   callRealModel,
+  canAccessProject: projectAccess.canAccessProject,
   createAiRequirementRecommendation: aiAdviceService.createRequirementRecommendation,
   createAiSummary: aiSummaryService.createSummary,
   createBusinessAdvice: aiAdviceService.createBusinessAdvice,
   ensureAiTargetAccess,
   fail,
+  listAccessibleProjectIds: async (user) => {
+    const projects = await rows("SELECT id FROM projects WHERE deleted_at IS NULL");
+    const ids = [];
+    for (const project of projects) {
+      if (await projectAccess.canAccessProject(user, project.id)) ids.push(project.id);
+    }
+    return ids;
+  },
   localAiChatReply: aiChatService.localReplyV2,
   normalizeAttachments: aiChatService.normalizeAttachments,
   normalizeMessages: normalizeAiChatMessages,
@@ -1075,7 +1085,7 @@ app.use("/api", createAiInteractionsRouter({
   resolveAiProviderConfig: aiProviderStore.resolveConfig,
   row,
   rows,
-}));
+})));
 
 // Windows child_process.kill('SIGTERM') terminates without running handlers.
 // Non-production opt-in lets ops drills invoke the same shutdown() path over HTTP.
@@ -1112,6 +1122,14 @@ app.use((err, req, res, _next) => {
       ? `File exceeds the ${MAX_UPLOAD_BYTES} byte limit.`
       : (err.message || "Upload rejected.");
     return fail(res, 400, errorCode, message);
+  }
+  // Structured domain errors (status + code) from route handlers / policy layers.
+  if (err && err.status && Number(err.status) >= 400 && Number(err.status) < 500) {
+    return fail(res, err.status, err.code || "VALIDATION_FAILED", err.message || "Request failed.");
+  }
+  if (err && (err.code === "PERIOD_TOO_LARGE" || err.code === "SOURCE_PATH_ALLOWLIST_REQUIRED")) {
+    const status = err.status || (err.code === "PERIOD_TOO_LARGE" ? 400 : 503);
+    return fail(res, status, err.code, err.message || "Request failed.");
   }
   console.error(err);
   // Never leak internal error details to the client in production.

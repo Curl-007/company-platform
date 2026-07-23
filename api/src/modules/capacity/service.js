@@ -12,12 +12,25 @@ function currentWeek() {
   return { periodStart: start, periodEnd: date.toISOString().slice(0, 10) };
 }
 
-function resolvePeriod(query = {}) {
+function resolvePeriod(query = {}, options = {}) {
   const fallback = currentWeek();
-  return {
+  const period = {
     periodStart: isoDate(query.periodStart) || fallback.periodStart,
     periodEnd: isoDate(query.periodEnd) || fallback.periodEnd,
   };
+  // Optional max span enforcement (P0-7 capacity DoS guard). Call sites may also
+  // use assertPeriodWithinLimit from lib/periodLimits for explicit HTTP errors.
+  if (options.maxDays) {
+    const { assertPeriodWithinLimit } = require("../../lib/periodLimits");
+    const check = assertPeriodWithinLimit(period, { maxDays: options.maxDays });
+    if (!check.ok) {
+      const error = new Error(check.message);
+      error.code = check.code;
+      error.status = 400;
+      throw error;
+    }
+  }
+  return period;
 }
 
 function boundedNumber(value, fallback, { min = 0, max = 10000 } = {}) {

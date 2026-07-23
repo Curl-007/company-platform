@@ -12,11 +12,13 @@ function createAiInteractionsRouter({
   buildAiChatPrompt,
   buildAiChatContext,
   callRealModel,
+  canAccessProject,
   createAiRequirementRecommendation,
   createAiSummary,
   createBusinessAdvice,
   ensureAiTargetAccess,
   fail,
+  listAccessibleProjectIds,
   localAiChatReply,
   normalizeAttachments,
   normalizeMessages,
@@ -30,6 +32,19 @@ function createAiInteractionsRouter({
   rows,
 }) {
   const router = express.Router();
+
+  async function resolveSummaryProjectIds(user) {
+    if (typeof listAccessibleProjectIds === "function") {
+      return listAccessibleProjectIds(user);
+    }
+    if (typeof canAccessProject !== "function") return null;
+    const projects = await rows("SELECT id FROM projects WHERE deleted_at IS NULL");
+    const ids = [];
+    for (const project of projects) {
+      if (await canAccessProject(user, project.id)) ids.push(project.id);
+    }
+    return ids;
+  }
 
   router.post("/ai/requirements/:id/score", requirePermission("ai:*"), async (req, res, next) => {
     try {
@@ -109,14 +124,43 @@ function createAiInteractionsRouter({
     } catch (error) { return next(error); }
   });
 
-  router.get("/ai/summary", async (req, res, next) => {
+  router.get("/ai/summary", requirePermission("ai:*"), async (req, res, next) => {
     try {
       const aiProvider = await publicAiProviderConfig();
-      const jobs = await rows("SELECT * FROM ai_jobs ORDER BY created_at DESC");
+      const isAdmin = req.user?.role === "admin" || (Array.isArray(req.user?.permissions) && req.user.permissions.includes("*"));
+      const projectIds = isAdmin ? null : await resolveSummaryProjectIds(req.user);
+      // Non-admin: only jobs/logs for accessible scope (global job list is admin-only).
+      let jobs = [];
+      let logAnalysis = 0;
+      if (isAdmin) {
+        jobs = await rows("SELECT * FROM ai_jobs ORDER BY created_at DESC");
+        const workLogCount = await row("SELECT COUNT(*) AS c FROM work_logs");
+        logAnalysis = workLogCount?.c || 0;
+      } else if (Array.isArray(projectIds) && projectIds.length) {
+        // Jobs are not project-keyed in as-built schema; hide cross-tenant job metadata for non-admin.
+        jobs = [];
+        const names = await rows(
+          `SELECT name FROM projects WHERE deleted_at IS NULL AND id IN (${projectIds.map((_, i) => `@id${i}`).join(",")})`,
+          Object.fromEntries(projectIds.map((id, i) => [`id${i}`, id])),
+        );
+        if (names.length) {
+          const workLogCount = await row(
+            `SELECT COUNT(*) AS c FROM work_logs WHERE project IN (${names.map((_, i) => `@n${i}`).join(",")})`,
+            Object.fromEntries(names.map((item, i) => [`n${i}`, item.name])),
+          );
+          logAnalysis = workLogCount?.c || 0;
+        }
+      }
       const scope = req.query.scope || "dashboard";
-      const workLogCount = await row("SELECT COUNT(*) AS c FROM work_logs");
-      const summary = buildSummary({ aiProvider, jobs, logAnalysis: workLogCount?.c || 0 });
-      const aiSummary = await createAiSummary(scope, summary.metrics, { cacheKey: req.query.fresh ? `${req.user?.role || "user"}:${Date.now()}` : req.user?.role || "user" });
+      const summary = buildSummary({ aiProvider, jobs, logAnalysis });
+      const visibilityKey = isAdmin ? "admin" : `u:${req.user?.id || "anon"}`;
+      const cacheKey = req.query.fresh
+        ? `${visibilityKey}:${Date.now()}`
+        : visibilityKey;
+      const aiSummary = await createAiSummary(scope, summary.metrics, {
+        cacheKey,
+        projectIds: isAdmin ? undefined : (projectIds || []),
+      });
       return res.json(ok({
         scope,
         title: aiSummary.title,

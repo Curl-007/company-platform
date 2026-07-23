@@ -10,6 +10,7 @@ const {
   normalizeWorkloadThresholds,
   resolvePeriod,
 } = require("./service");
+const { assertPeriodWithinLimit, MAX_CAPACITY_PERIOD_DAYS } = require("../../lib/periodLimits");
 
 function createCapacityRouter({
   audit,
@@ -30,13 +31,27 @@ function createCapacityRouter({
     try { return normalizeWorkloadThresholds(JSON.parse(setting?.value || "{}")) || DEFAULT_WORKLOAD_THRESHOLDS; } catch { return DEFAULT_WORKLOAD_THRESHOLDS; }
   }
 
+  function periodOrFail(res, query) {
+    const period = resolvePeriod(query);
+    const check = assertPeriodWithinLimit(period, { maxDays: MAX_CAPACITY_PERIOD_DAYS });
+    if (!check.ok) {
+      fail(res, 400, check.code, check.message);
+      return null;
+    }
+    return check.period;
+  }
+
   router.get("/capacity/overview", async (req, res) => {
     if (!canViewCapacity(req.user)) return fail(res, 403, "PERMISSION_DENIED", "只有项目经理和管理员可以查看团队容量。");
-    res.json(ok(await buildOverview(resolvePeriod(req.query), undefined, await workloadThresholds())));
+    const period = periodOrFail(res, req.query);
+    if (!period) return;
+    res.json(ok(await buildOverview(period, undefined, await workloadThresholds())));
   });
 
   router.get("/capacity/me", async (req, res) => {
-    const overview = await buildOverview(resolvePeriod(req.query), req.user.id, await workloadThresholds());
+    const period = periodOrFail(res, req.query);
+    if (!period) return;
+    const overview = await buildOverview(period, req.user.id, await workloadThresholds());
     res.json(ok(overview.members[0] || null));
   });
 
@@ -57,8 +72,8 @@ function createCapacityRouter({
 
   router.get("/capacity/calendar", async (req, res) => {
     if (!canViewCapacity(req.user)) return fail(res, 403, "PERMISSION_DENIED", "Only project managers and administrators can view the work calendar.");
-    const period = resolvePeriod(req.query);
-    if (period.periodEnd < period.periodStart) return fail(res, 400, "VALIDATION_FAILED", "periodEnd must not be before periodStart.");
+    const period = periodOrFail(res, req.query);
+    if (!period) return;
     res.json(ok({ period, ...mapCalendar(await resolveCalendar(period)) }));
   });
 
@@ -81,7 +96,8 @@ function createCapacityRouter({
     });
     const after = await defaultCalendar();
     await audit(req.user, "work_calendar.update", "work_calendar", calendar.id, before, after, req.ip);
-    const period = resolvePeriod(body);
+    const period = periodOrFail(res, body);
+    if (!period) return;
     res.json(ok({ period, ...mapCalendar(await resolveCalendar(period)) }));
   });
 
@@ -111,8 +127,8 @@ function createCapacityRouter({
     if (!canViewCapacity(req.user)) return fail(res, 403, "PERMISSION_DENIED", "无权维护团队容量。");
     const user = await repository.findActiveUser(req.params.userId);
     if (!user) return fail(res, 404, "RESOURCE_NOT_FOUND", "Active user not found.");
-    const period = resolvePeriod(req.body || {});
-    if (period.periodEnd < period.periodStart) return fail(res, 400, "VALIDATION_FAILED", "periodEnd must not be before periodStart.");
+    const period = periodOrFail(res, req.body || {});
+    if (!period) return;
     const existing = await repository.findPlan({ userId: req.params.userId, ...period });
     if (req.body?.useCalendar !== undefined && typeof req.body.useCalendar !== "boolean") return fail(res, 400, "VALIDATION_FAILED", "useCalendar must be a boolean.");
     const fields = {
@@ -162,8 +178,8 @@ function createCapacityRouter({
     if (project.owner !== user.name && !membership) {
       return fail(res, 400, "USER_NOT_PROJECT_MEMBER", "用户必须先加入项目，才能分配项目投入。");
     }
-    const period = resolvePeriod(req.body || {});
-    if (period.periodEnd < period.periodStart) return fail(res, 400, "VALIDATION_FAILED", "periodEnd must not be before periodStart.");
+    const period = periodOrFail(res, req.body || {});
+    if (!period) return;
     const allocationPercent = boundedNumber(req.body?.allocationPercent, 0, { max: 200 });
     const plannedHours = boundedNumber(req.body?.plannedHours, null);
     if (allocationPercent === null || plannedHours === null && req.body?.plannedHours !== undefined && req.body?.plannedHours !== null && req.body?.plannedHours !== "") {

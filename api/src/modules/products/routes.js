@@ -206,6 +206,25 @@ function createProductsRouter({
   router.delete("/products/:id", requirePermission("product:*"), async (req, res) => {
     const before = await row("SELECT * FROM products WHERE id = @id", { id: req.params.id });
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Product not found.");
+    const linkedProjects = await rows(
+      "SELECT id FROM projects WHERE product_id = @id AND deleted_at IS NULL",
+      { id: req.params.id },
+    );
+    const linkedReleases = await rows("SELECT id FROM releases WHERE product_id = @id", { id: req.params.id });
+    if (linkedProjects.length || linkedReleases.length) {
+      return fail(
+        res,
+        409,
+        "PRODUCT_HAS_DEPENDENCIES",
+        "产品仍有关联项目或发布，不能直接删除。",
+        {
+          dependencies: {
+            projectIds: linkedProjects.map((item) => item.id),
+            releaseIds: linkedReleases.map((item) => item.id),
+          },
+        },
+      );
+    }
     await run("DELETE FROM products WHERE id = @id", { id: req.params.id });
     await audit(req.user, "product.delete", "product", req.params.id, before, null, req.ip);
     res.json(ok({ success: true }));

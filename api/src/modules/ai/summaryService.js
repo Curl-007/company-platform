@@ -3,91 +3,214 @@ function compactText(value, max = 180) {
   return text.length > max ? `${text.slice(0, max)}...` : text;
 }
 
-async function collectAiBusinessSnapshot({ rows }, scope = "dashboard") {
+function sqlInPlaceholders(ids, prefix) {
+  return ids.map((_, index) => `@${prefix}${index}`).join(", ");
+}
+
+function sqlInParams(ids, prefix) {
+  const params = {};
+  ids.forEach((id, index) => {
+    params[`${prefix}${index}`] = id;
+  });
+  return params;
+}
+
+/**
+ * Collect business snapshot for AI summary.
+ * When projectIds is a non-empty array, all project-bound tables are filtered to that set.
+ * Empty array → empty snapshot (no access). Omitted/null → legacy global (admin only at call site).
+ */
+async function collectAiBusinessSnapshot({ rows }, scope = "dashboard", options = {}) {
+  const projectIds = options.projectIds;
+  const scoped = Array.isArray(projectIds);
+  const ids = scoped ? projectIds.filter(Boolean) : null;
+
+  if (scoped && ids.length === 0) {
+    return {
+      scope,
+      projects: [],
+      requirements: [],
+      tasks: [],
+      defects: [],
+      workLogs: [],
+      aiJobs: [],
+      builds: [],
+      releases: [],
+    };
+  }
+
+  const projectFilter = scoped ? `AND id IN (${sqlInPlaceholders(ids, "p")})` : "";
+  const projectParams = scoped ? sqlInParams(ids, "p") : {};
+  const byProject = scoped ? `AND project_id IN (${sqlInPlaceholders(ids, "p")})` : "";
+
+  const projects = await rows(
+    `SELECT id, name, status, health_score, progress, risk_count, owner
+     FROM projects
+     WHERE deleted_at IS NULL ${projectFilter}
+     ORDER BY risk_count DESC, health_score ASC
+     LIMIT 12`,
+    projectParams,
+  );
+
+  const requirements = await rows(
+    `SELECT id, title, status, priority, completion, project_id, owner, assignee
+     FROM requirements
+     WHERE deleted_at IS NULL
+       AND (priority = 'high' OR completion < 80)
+       ${byProject}
+     ORDER BY priority ASC, completion ASC
+     LIMIT 25`,
+    projectParams,
+  );
+
+  const tasks = await rows(
+    `SELECT id, title, status, project_id, requirement_id, owner, progress, blocker, due_date
+     FROM tasks
+     WHERE status NOT IN ('done', 'cancelled')
+       ${byProject}
+     ORDER BY CASE WHEN blocker IS NULL OR blocker = '' THEN 1 ELSE 0 END, due_date ASC
+     LIMIT 25`,
+    projectParams,
+  );
+
+  const defects = await rows(
+    `SELECT id, title, severity, status, project_id, requirement_id, assignee
+     FROM defects
+     WHERE status NOT IN ('closed', 'verified', 'rejected')
+       ${byProject}
+     ORDER BY severity DESC, id
+     LIMIT 25`,
+    projectParams,
+  );
+
+  // work_logs.project is a free-text name in as-built schema; filter by accessible project names when scoped.
+  let workLogs;
+  if (scoped) {
+    const names = projects.map((item) => item.name).filter(Boolean);
+    if (!names.length) {
+      workLogs = [];
+    } else {
+      const nameParams = sqlInParams(names, "n");
+      workLogs = await rows(
+        `SELECT author, project, content, blockers, next_plan, created_at
+         FROM work_logs
+         WHERE project IN (${sqlInPlaceholders(names, "n")})
+         ORDER BY created_at DESC
+         LIMIT 10`,
+        nameParams,
+      );
+    }
+  } else {
+    workLogs = await rows(
+      "SELECT author, project, content, blockers, next_plan, created_at FROM work_logs ORDER BY created_at DESC LIMIT 10",
+    );
+  }
+
+  // ai_jobs may lack project_id; keep recent jobs when unscoped; when scoped only return empty or jobs if table has project column later.
+  let aiJobs;
+  if (scoped) {
+    aiJobs = [];
+  } else {
+    aiJobs = await rows(
+      "SELECT job_id, scene, status, progress, current_step, error_message, created_at FROM ai_jobs ORDER BY created_at DESC LIMIT 10",
+    );
+  }
+
+  const builds = await rows(
+    `SELECT id, name, version, status, project_id, build_date, notes
+     FROM builds
+     WHERE 1=1 ${byProject}
+     ORDER BY created_at DESC
+     LIMIT 10`,
+    projectParams,
+  );
+
+  // Releases are product-scoped; for project-scoped users omit cross-product release noise.
+  let releases;
+  if (scoped) {
+    releases = [];
+  } else {
+    releases = await rows(
+      "SELECT id, name, version, status, product_id, release_date, release_notes FROM releases ORDER BY created_at DESC LIMIT 10",
+    );
+  }
+
   return {
     scope,
-    projects: (await rows("SELECT id, name, status, health_score, progress, risk_count, owner FROM projects WHERE deleted_at IS NULL ORDER BY risk_count DESC, health_score ASC LIMIT 12"))
-      .map((item) => ({
-        id: item.id,
-        name: item.name,
-        status: item.status,
-        healthScore: item.health_score,
-        progress: item.progress,
-        riskCount: item.risk_count,
-        owner: item.owner,
-      })),
-    requirements: (await rows("SELECT id, title, status, priority, completion, project_id, owner, assignee FROM requirements WHERE deleted_at IS NULL AND (priority = 'high' OR completion < 80) ORDER BY priority ASC, completion ASC LIMIT 25"))
-      .map((item) => ({
-        id: item.id,
-        title: item.title,
-        status: item.status,
-        priority: item.priority,
-        completion: item.completion,
-        projectId: item.project_id,
-        owner: item.owner,
-        assignee: item.assignee,
-      })),
-    tasks: (await rows("SELECT id, title, status, project_id, requirement_id, owner, progress, blocker, due_date FROM tasks WHERE status NOT IN ('done', 'cancelled') ORDER BY CASE WHEN blocker IS NULL OR blocker = '' THEN 1 ELSE 0 END, due_date ASC LIMIT 25"))
-      .map((item) => ({
-        id: item.id,
-        title: item.title,
-        status: item.status,
-        projectId: item.project_id,
-        requirementId: item.requirement_id,
-        owner: item.owner,
-        progress: item.progress,
-        blocker: item.blocker,
-        dueDate: item.due_date,
-      })),
-    defects: (await rows("SELECT id, title, severity, status, project_id, requirement_id, assignee FROM defects WHERE status NOT IN ('closed', 'verified', 'rejected') ORDER BY severity DESC, id LIMIT 25"))
-      .map((item) => ({
-        id: item.id,
-        title: item.title,
-        severity: item.severity,
-        status: item.status,
-        projectId: item.project_id,
-        requirementId: item.requirement_id,
-        assignee: item.assignee,
-      })),
-    workLogs: (await rows("SELECT author, project, content, blockers, next_plan, created_at FROM work_logs ORDER BY created_at DESC LIMIT 10"))
-      .map((item) => ({
-        author: item.author,
-        project: item.project,
-        content: compactText(item.content),
-        blockers: compactText(item.blockers),
-        nextPlan: compactText(item.next_plan),
-        createdAt: item.created_at,
-      })),
-    aiJobs: (await rows("SELECT job_id, scene, status, progress, current_step, error_message, created_at FROM ai_jobs ORDER BY created_at DESC LIMIT 10"))
-      .map((item) => ({
-        jobId: item.job_id,
-        scene: item.scene,
-        status: item.status,
-        progress: item.progress,
-        currentStep: item.current_step,
-        errorMessage: item.error_message,
-        createdAt: item.created_at,
-      })),
-    builds: (await rows("SELECT id, name, version, status, project_id, build_date, notes FROM builds ORDER BY created_at DESC LIMIT 10"))
-      .map((item) => ({
-        id: item.id,
-        name: item.name,
-        version: item.version,
-        status: item.status,
-        projectId: item.project_id,
-        buildDate: item.build_date,
-        notes: compactText(item.notes),
-      })),
-    releases: (await rows("SELECT id, name, version, status, product_id, release_date, release_notes FROM releases ORDER BY created_at DESC LIMIT 10"))
-      .map((item) => ({
-        id: item.id,
-        name: item.name,
-        version: item.version,
-        status: item.status,
-        productId: item.product_id,
-        releaseDate: item.release_date,
-        releaseNotes: compactText(item.release_notes),
-      })),
+    projects: projects.map((item) => ({
+      id: item.id,
+      name: item.name,
+      status: item.status,
+      healthScore: item.health_score,
+      progress: item.progress,
+      riskCount: item.risk_count,
+      owner: item.owner,
+    })),
+    requirements: requirements.map((item) => ({
+      id: item.id,
+      title: item.title,
+      status: item.status,
+      priority: item.priority,
+      completion: item.completion,
+      projectId: item.project_id,
+      owner: item.owner,
+      assignee: item.assignee,
+    })),
+    tasks: tasks.map((item) => ({
+      id: item.id,
+      title: item.title,
+      status: item.status,
+      projectId: item.project_id,
+      requirementId: item.requirement_id,
+      owner: item.owner,
+      progress: item.progress,
+      blocker: item.blocker,
+      dueDate: item.due_date,
+    })),
+    defects: defects.map((item) => ({
+      id: item.id,
+      title: item.title,
+      severity: item.severity,
+      status: item.status,
+      projectId: item.project_id,
+      requirementId: item.requirement_id,
+      assignee: item.assignee,
+    })),
+    workLogs: workLogs.map((item) => ({
+      author: item.author,
+      project: item.project,
+      content: compactText(item.content),
+      blockers: compactText(item.blockers),
+      nextPlan: compactText(item.next_plan),
+      createdAt: item.created_at,
+    })),
+    aiJobs: aiJobs.map((item) => ({
+      jobId: item.job_id,
+      scene: item.scene,
+      status: item.status,
+      progress: item.progress,
+      currentStep: item.current_step,
+      errorMessage: item.error_message,
+      createdAt: item.created_at,
+    })),
+    builds: builds.map((item) => ({
+      id: item.id,
+      name: item.name,
+      version: item.version,
+      status: item.status,
+      projectId: item.project_id,
+      buildDate: item.build_date,
+      notes: compactText(item.notes),
+    })),
+    releases: releases.map((item) => ({
+      id: item.id,
+      name: item.name,
+      version: item.version,
+      status: item.status,
+      productId: item.product_id,
+      releaseDate: item.release_date,
+      releaseNotes: compactText(item.release_notes),
+    })),
   };
 }
 
@@ -185,7 +308,9 @@ function createAiSummaryService({ callModel, extractJsonPayload, getModelName, r
     const cacheKey = `${scope || "dashboard"}:${options.cacheKey || "global"}`;
     const cached = cache.get(cacheKey);
     if (!options.skipCache && cached && Date.now() - cached.createdAt < CACHE_TTL_MS) return cached.value;
-    const snapshot = options.snapshot || await collectAiBusinessSnapshot({ rows }, scope);
+    const snapshot = options.snapshot || await collectAiBusinessSnapshot({ rows }, scope, {
+      projectIds: options.projectIds,
+    });
     const fallback = buildLocalAiSummary(scope, metrics, snapshot);
     const signals = buildAiSummarySignals(snapshot);
     const prompt = [
@@ -225,7 +350,7 @@ function createAiSummaryService({ callModel, extractJsonPayload, getModelName, r
     createSummary,
     invalidateCache,
     clearCache,
-    collectSnapshot: (scope) => collectAiBusinessSnapshot({ rows }, scope),
+    collectSnapshot: (scope, options) => collectAiBusinessSnapshot({ rows }, scope, options),
   };
 }
 
