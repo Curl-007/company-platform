@@ -44,6 +44,9 @@ jobs:
       - name: SQLite backup and restore drill
         run: npm run drill:sqlite-backup
 
+      - name: Graceful shutdown drill
+        run: npm run drill:graceful-shutdown
+
       - name: Initialize disposable migration verification database
         run: DATABASE_FILE="$RUNNER_TEMP/project-management.db" node -e "require('./api/db').initDb()"
 
@@ -70,6 +73,12 @@ jobs:
 
       - name: Frontend production build
         run: npm run build -w web
+
+      - name: Single-process production start smoke (static + readiness)
+        run: npm run smoke:prod
+        env:
+          JWT_SECRET: ci-jwt-secret-not-for-prod
+          AI_CONFIG_ENCRYPTION_KEY: ci-ai-key-16chars
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium

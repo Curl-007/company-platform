@@ -3,10 +3,14 @@ const { hasPermission, publicUser } = require("../security/accessControl");
 
 function createAuthMiddleware({ jwtSecret, fail, row }) {
   async function authenticate(req, res, next) {
-    if (req.path === "/api/health" || req.path === "/api/auth/login") return next();
+    // Same-origin SPA / static assets / WebSocket upgrade paths are not JWT-gated here.
+    // API surface is always under /api; collaboration socket uses authenticateSocket.
+    const path = req.path || "";
+    if (!path.startsWith("/api")) return next();
+    if (path === "/api/health" || path === "/api/auth/login") return next();
     // Non-production ops drill only: same gate as server.js route registration.
     if (
-      req.path === "/api/ops/shutdown" &&
+      path === "/api/ops/shutdown" &&
       process.env.NODE_ENV !== "production" &&
       String(process.env.ENABLE_HTTP_SHUTDOWN || "") === "1"
     ) {

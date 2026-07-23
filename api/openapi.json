@@ -19,10 +19,10 @@
     "/api/health": {
       "get": {
         "security": [],
-        "summary": "Liveness probe for the API process",
+        "summary": "Liveness and readiness probe (DB ping + SQLite migration ledger)",
         "responses": {
           "200": {
-            "description": "Service is up",
+            "description": "Process is up and ready (database reachable; migrations aligned for SQLite)",
             "content": {
               "application/json": {
                 "schema": {
@@ -32,7 +32,8 @@
                       "type": "object",
                       "properties": {
                         "status": {
-                          "type": "string"
+                          "type": "string",
+                          "enum": ["ok", "fail"]
                         },
                         "service": {
                           "type": "string"
@@ -42,6 +43,20 @@
                         },
                         "uptime": {
                           "type": "number"
+                        },
+                        "serveWeb": {
+                          "type": "boolean"
+                        },
+                        "checks": {
+                          "type": "object",
+                          "properties": {
+                            "database": {
+                              "type": "object"
+                            },
+                            "migrations": {
+                              "type": "object"
+                            }
+                          }
                         }
                       }
                     },
@@ -52,6 +67,9 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Process is up but not ready (database or migration check failed)"
           }
         }
       }

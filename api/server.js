@@ -40,6 +40,14 @@ const {
 } = require("./db");
 const { formatPreflightReport, preflightEnv } = require("./src/ops/envPreflight");
 const { preflightMigrationStatus } = require("./src/ops/migrationStatus");
+const { checkReadiness } = require("./src/ops/readiness");
+const {
+  apiOnlyContentSecurityPolicyDirectives,
+  mountStaticWeb,
+  resolveWebDist,
+  shouldServeWeb,
+  spaContentSecurityPolicyDirectives,
+} = require("./src/ops/staticWeb");
 const {
   SYSTEM_ROLES,
   buildCapabilities,
@@ -445,21 +453,23 @@ const teamService = createTeamService({
   rows,
 });
 
-// Security headers. API responses use a restrictive CSP (no script execution expected on JSON APIs).
+// Same-origin SPA hosting for single-process SQLite trial / internal production.
+// Default: production + web/dist present, or SERVE_WEB=1. Disable with SERVE_WEB=0.
+const SERVE_WEB = shouldServeWeb(process.env, { apiRoot: __dirname, isProd: IS_PROD });
+const WEB_DIST = SERVE_WEB ? resolveWebDist(process.env, { apiRoot: __dirname }) : null;
+
+// Security headers. When hosting the SPA, CSP must allow self scripts/styles/ws.
+// API-only mode keeps a restrictive CSP (no script execution expected on JSON APIs).
 app.use(helmet({
   contentSecurityPolicy: {
     useDefaults: true,
-    directives: {
-      defaultSrc: ["'none'"],
-      frameAncestors: ["'none'"],
-      baseUri: ["'none'"],
-      formAction: ["'none'"],
-    },
+    directives: SERVE_WEB ? spaContentSecurityPolicyDirectives() : apiOnlyContentSecurityPolicyDirectives(),
   },
   crossOriginResourcePolicy: { policy: "cross-origin" },
 }));
 
 // CORS: only allow the configured web origins to carry credentials/tokens.
+// Same-origin SPA does not need CORS for browser XHR, but keep allowlist for split-origin trials.
 app.use(cors({ origin: ALLOWED_ORIGINS, methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"] }));
 // Ensure request/response JSON is interpreted as UTF-8 (Windows clients/tools may omit charset).
 app.use(express.json({ limit: "32mb", type: ["application/json", "application/*+json"] }));
@@ -637,7 +647,25 @@ function callRealModel(prompt, options = {}) {
   return aiModelClient.callModel(prompt, options);
 }
 
-app.get("/api/health", (req, res) => res.json(ok({ status: "ok", service: "company-project-management-api", database: dialect || "sqlite", uptime: Math.round(process.uptime()) })));
+app.get("/api/health", async (req, res) => {
+  const readiness = await checkReadiness({
+    row,
+    dialect,
+    sqliteConnection: dialect === "sqlite" ? sqliteConnection : null,
+    migrationsDir: path.join(__dirname, "migrations"),
+  });
+  const payload = {
+    status: readiness.ok ? "ok" : "fail",
+    service: "company-project-management-api",
+    database: dialect || "sqlite",
+    uptime: Math.round(process.uptime()),
+    serveWeb: SERVE_WEB,
+    checks: readiness.checks,
+  };
+  // liveness-style clients that only look at HTTP status get 503 when not ready
+  if (!readiness.ok) return res.status(503).json(ok(payload));
+  return res.json(ok(payload));
+});
 
 app.use("/api", createAuthRouter({
   audit,
@@ -1060,6 +1088,17 @@ if (!IS_PROD && String(process.env.ENABLE_HTTP_SHUTDOWN || "") === "1") {
   });
 }
 
+// Host built SPA after API routes so /api and /ws stay authoritative.
+if (SERVE_WEB) {
+  try {
+    mountStaticWeb(app, WEB_DIST, { isProd: IS_PROD });
+    console.log(`[web] serving static SPA from ${WEB_DIST}`);
+  } catch (error) {
+    console.error("FATAL: SERVE_WEB enabled but web dist is not usable:", error && error.message ? error.message : error);
+    process.exit(1);
+  }
+}
+
 app.use((err, req, res, _next) => {
   if (err && (err.code === "LIMIT_FILE_SIZE" || err.code === "UPLOAD_TOO_LARGE" || err.code === "UPLOAD_TYPE_NOT_ALLOWED" || err.status === 400)) {
     const errorCode = err.code === "LIMIT_FILE_SIZE" ? "UPLOAD_TOO_LARGE" : (err.code || "VALIDATION_FAILED");
@@ -1124,6 +1163,9 @@ function startServer(port) {
       });
     }
     console.log(`Company project management API listening on http://localhost:${port}`);
+    if (SERVE_WEB) {
+      console.log(`Same-origin web UI: http://localhost:${port}/ (HashRouter SPA)`);
+    }
   });
 }
 

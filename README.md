@@ -16,7 +16,7 @@
 npm install
 ```
 
-同时启动前后端：
+开发（API + Vite 代理）：
 
 ```bash
 npm run dev
@@ -24,13 +24,33 @@ npm run dev
 
 默认地址：
 
-- 前端：http://localhost:5173
-- 后端：http://localhost:4010
+- 前端（Vite）：http://localhost:5173
+- 后端 API：http://localhost:4010
 
-## 构建
+## 内部试用 / 单机生产（同源）
+
+单进程托管 **API + `web/dist` 静态前端**（`/api`、`/ws` 同源）：
+
+```bash
+npm run build -w web
+# 必填生产密钥（≥16，且 AI_CONFIG_ENCRYPTION_KEY ≠ JWT_SECRET）
+export JWT_SECRET='replace-me-16chars'
+export AI_CONFIG_ENCRYPTION_KEY='replace-me-ai-16'
+export NODE_ENV=production
+npm run start:prod
+```
+
+浏览器打开：http://localhost:4010/  
+健康检查（含 DB / 迁移 readiness）：`GET /api/health`
+
+部署、备份与回滚见 [docs/16-sqlite-trial-deploy.md](./docs/16-sqlite-trial-deploy.md)。
+
+## 构建与门禁
 
 ```bash
 npm run build
+npm run check          # audit+lint+test+build+preflight+drills+prod smoke
+npm run check:rc       # check + disposable SQLite E2E
 ```
 
 ## 初始账号
@@ -43,4 +63,4 @@ npm run build
 - 开发：`dev@example.com` / `Dev@12345`
 - 测试：`qa@example.com` / `Qa@12345`
 
-生产部署时建议通过环境变量设置 `SEED_*_PASSWORD`，并配置 `JWT_SECRET`。若需在管理端持久化 AI 供应商 API Key，还必须单独配置 `AI_CONFIG_ENCRYPTION_KEY`（≥16 字符，且不得与 `JWT_SECRET` 相同）。
+生产部署时建议通过环境变量设置 `SEED_*_PASSWORD`，并配置 `JWT_SECRET`。若需在管理端持久化 AI 供应商 API Key，还必须单独配置 `AI_CONFIG_ENCRYPTION_KEY`（≥16 字符，且不得与 `JWT_SECRET` 相同）。试用环境建议 `SEED_DEMO_DATA=0`，自行创建账号。

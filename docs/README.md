@@ -27,6 +27,7 @@
 - [实现状态与差异清单](./10-实现状态与差异清单.md) ← **代码现状与 gap 台账，联调前必读**
 - [闭环操作设计方案](./11-闭环操作设计方案.md)
 - [项目审查一页摘要](./15-项目审查一页摘要.md) ← **审查结论 + 未完成 backlog 压缩视图**
+- [单机 SQLite 试用部署与回滚](./16-sqlite-trial-deploy.md) ← **start:prod / 同源静态 / 备份回滚**
 - [W2 PostgreSQL 运行时计划](./w2-postgres-plan.md) ← **真 PG：W0–W7 开发/验证完成；默认 sqlite；生产切库未做**
 - [PostgreSQL 迁移执行手册](./postgresql-migration-runbook.md) ← **导出/导入/对账/启停/回滚操作**
 
