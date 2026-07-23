@@ -18,9 +18,14 @@ const fs = require("node:fs");
 const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
+const { assertSqliteReopenable } = require("../src/ops/sqliteFsPreflight");
+const { preflightMigrationStatus } = require("../src/ops/migrationStatus");
+const { preflightDatabase } = require("../src/db/migrationPreflight");
+const { DatabaseSync } = require("node:sqlite");
 
 const apiRoot = path.resolve(__dirname, "..");
 const repoRoot = path.resolve(apiRoot, "..");
+const migrationsDir = path.join(apiRoot, "migrations");
 
 function parseArgs(argv) {
   const signalIndex = argv.indexOf("--signal");
@@ -215,8 +220,39 @@ async function runDrill(options = {}) {
 
   logStream.end();
 
+  // After process exit: DB must reopen, pass integrity_check, accept a write, and keep migrations valid.
+  // This proves closeDatabase released locks and did not leave a corrupt/half-written main file.
+  let dbPostExit = { ok: false };
+  if (exitedCleanly && sawGraceful && fs.existsSync(databaseFile)) {
+    try {
+      const reopen = assertSqliteReopenable(databaseFile, { DatabaseSync });
+      const handle = new DatabaseSync(databaseFile);
+      try {
+        const migration = preflightMigrationStatus(handle, migrationsDir);
+        const data = preflightDatabase(handle);
+        dbPostExit = {
+          ok: Boolean(reopen.ok && migration.ok && data.ok),
+          integrity: reopen.integrity,
+          migrationOk: migration.ok,
+          missingApplied: migration.missingApplied,
+          dataOk: data.ok,
+          users: data.counts && data.counts.users,
+        };
+      } finally {
+        handle.close();
+      }
+    } catch (error) {
+      dbPostExit = {
+        ok: false,
+        error: error && error.message ? error.message : String(error),
+      };
+    }
+  } else if (!fs.existsSync(databaseFile)) {
+    dbPostExit = { ok: false, error: "database file missing after shutdown" };
+  }
+
   const report = {
-    ok: Boolean(exitedCleanly && sawGraceful && shutdownMs < 12_000),
+    ok: Boolean(exitedCleanly && sawGraceful && shutdownMs < 12_000 && dbPostExit.ok),
     mode: trigger.mode,
     signal: trigger.signal || null,
     port,
@@ -224,6 +260,8 @@ async function runDrill(options = {}) {
     exitSignal: result.exitSignal || null,
     shutdownMs,
     sawGracefulLog: sawGraceful,
+    databaseFile,
+    dbPostExit,
     trigger,
     workDir,
   };
@@ -238,6 +276,9 @@ async function runDrill(options = {}) {
   } else {
     report.logTail = logText.slice(-1500);
     report.cleaned = false;
+    if (!report.error && !dbPostExit.ok) {
+      report.error = dbPostExit.error || "post-exit database verification failed";
+    }
   }
 
   return report;

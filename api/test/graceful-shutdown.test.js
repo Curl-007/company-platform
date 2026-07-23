@@ -9,4 +9,7 @@ test("API process exits cleanly via shared shutdown path", { timeout: 60_000 }, 
   assert.equal(report.ok, true, report.error || JSON.stringify(report));
   assert.equal(report.sawGracefulLog, true);
   assert.ok(report.shutdownMs < 12_000);
+  assert.equal(report.dbPostExit && report.dbPostExit.ok, true, JSON.stringify(report.dbPostExit));
+  assert.equal(report.dbPostExit.migrationOk, true);
+  assert.equal(report.dbPostExit.dataOk, true);
 });

@@ -1,7 +1,11 @@
 /**
  * Startup / deploy environment preflight for the API process.
  * Fail-closed in production for secrets and dangerous opt-ins.
+ * Optionally validates SQLite parent-directory writability when DATABASE_FILE is set
+ * (or defaultDatabaseFile is provided by the server entrypoint).
  */
+
+const { preflightSqliteFilesystem } = require("./sqliteFsPreflight");
 
 function isProduction(env = process.env) {
   return String(env.NODE_ENV || "development") === "production";
@@ -9,9 +13,10 @@ function isProduction(env = process.env) {
 
 /**
  * @param {NodeJS.ProcessEnv} [env]
- * @returns {{ ok: boolean, isProd: boolean, issues: Array<{ level: 'error'|'warn', code: string, message: string }> }}
+ * @param {{ defaultDatabaseFile?: string, checkFilesystem?: boolean }} [options]
+ * @returns {{ ok: boolean, isProd: boolean, issues: Array<{ level: 'error'|'warn', code: string, message: string }>, databaseFile?: string|null }}
  */
-function preflightEnv(env = process.env) {
+function preflightEnv(env = process.env, options = {}) {
   const issues = [];
   const isProd = isProduction(env);
   const jwt = String(env.JWT_SECRET || "").trim();
@@ -19,6 +24,7 @@ function preflightEnv(env = process.env) {
   const rateLimitTrustLocal = String(env.RATE_LIMIT_TRUST_LOCAL || "").trim();
   const port = Number(env.PORT || 4010);
   const dialect = String(env.DB_DIALECT || env.DATABASE_DIALECT || "sqlite").toLowerCase();
+  const checkFilesystem = options.checkFilesystem !== false;
 
   if (!Number.isFinite(port) || port < 1 || port > 65535) {
     issues.push({ level: "error", code: "PORT_INVALID", message: "PORT must be an integer between 1 and 65535." });
@@ -60,6 +66,7 @@ function preflightEnv(env = process.env) {
     });
   }
 
+  let databaseFile = null;
   if (dialect === "postgres" || dialect === "postgresql") {
     const url = String(env.DATABASE_URL || env.POSTGRES_TARGET_URL || "").trim();
     if (!url) {
@@ -69,12 +76,15 @@ function preflightEnv(env = process.env) {
         message: "PostgreSQL dialect requires DATABASE_URL or POSTGRES_TARGET_URL.",
       });
     }
-  } else if (env.DATABASE_FILE) {
-    // Soft check only: path may not exist yet on first boot.
-    const databaseFile = String(env.DATABASE_FILE).trim();
-    if (!databaseFile) {
-      issues.push({ level: "error", code: "DATABASE_FILE_EMPTY", message: "DATABASE_FILE is set but empty." });
-    }
+  } else if (env.DATABASE_FILE !== undefined && String(env.DATABASE_FILE).trim() === "") {
+    issues.push({ level: "error", code: "DATABASE_FILE_EMPTY", message: "DATABASE_FILE is set but empty." });
+  } else if (checkFilesystem) {
+    const fsReport = preflightSqliteFilesystem(env, {
+      defaultDatabaseFile: options.defaultDatabaseFile,
+      isProd,
+    });
+    databaseFile = fsReport.databaseFile;
+    for (const issue of fsReport.issues) issues.push(issue);
   }
 
   if (isProd && String(env.SEED_DEMO_DATA || "") === "1") {
@@ -98,6 +108,7 @@ function preflightEnv(env = process.env) {
     ok: errors.length === 0,
     isProd,
     issues,
+    databaseFile,
   };
 }
 

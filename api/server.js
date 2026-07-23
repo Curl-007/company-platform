@@ -12,6 +12,7 @@ const {
   audit: writeAuditLog,
   initDb,
   closeDatabase,
+  db: sqliteConnection,
   insert,
   json,
   mapDefect,
@@ -38,6 +39,7 @@ const {
   STORAGE_DIR,
 } = require("./db");
 const { formatPreflightReport, preflightEnv } = require("./src/ops/envPreflight");
+const { preflightMigrationStatus } = require("./src/ops/migrationStatus");
 const {
   SYSTEM_ROLES,
   buildCapabilities,
@@ -153,8 +155,12 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 const IS_PROD = NODE_ENV === "production";
 
 // Fail closed in production before opening sockets or loading secrets deeply.
+// Also validates SQLite parent-dir writability (DATABASE_FILE or default api/app.db).
 {
-  const envReport = preflightEnv(process.env);
+  const defaultDatabaseFile = process.env.DATABASE_FILE
+    ? undefined
+    : path.join(__dirname, "app.db");
+  const envReport = preflightEnv(process.env, { defaultDatabaseFile, checkFilesystem: true });
   for (const issue of envReport.issues) {
     const line = `[env] ${issue.code}: ${issue.message}`;
     if (issue.level === "error") console.error(line);
@@ -1173,9 +1179,32 @@ process.on("SIGINT", () => {
   void shutdown("SIGINT");
 });
 
-// Wait for dialect-specific init (sync sqlite / async postgres ping+schema check).
+// Wait for dialect-specific init (sync sqlite / async postgres ping+schema check),
+// then verify migration ledger matches on-disk migration files (sqlite).
 _dbInitPromise
   .then(() => {
+    if (dialect === "sqlite" && sqliteConnection) {
+      const migrationsDir = path.join(__dirname, "migrations");
+      const migrationReport = preflightMigrationStatus(sqliteConnection, migrationsDir);
+      if (!migrationReport.ok) {
+        console.error(
+          "FATAL: schema migration status preflight failed:",
+          JSON.stringify({
+            missingApplied: migrationReport.missingApplied,
+            checksumMismatches: migrationReport.checksumMismatches,
+            diskCount: migrationReport.diskCount,
+            appliedCount: migrationReport.appliedCount,
+            error: migrationReport.error || null,
+          }),
+        );
+        process.exit(1);
+      }
+      if (migrationReport.extraApplied.length) {
+        console.warn(
+          `[env] MIGRATION_EXTRA_APPLIED: applied rows not on disk: ${migrationReport.extraApplied.join(", ")}`,
+        );
+      }
+    }
     startServer(PORT);
   })
   .catch((error) => {
