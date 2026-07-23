@@ -22,8 +22,12 @@ const webRoot = path.join(repoRoot, "web");
 function parseArgs(argv) {
   const portArg = argv.find((arg, index) => argv[index - 1] === "--port");
   // Default 4010 so Vite's proxy (web/vite.config.ts) reaches the disposable API.
+  // API multi-role smoke (handoff/membership) is on by default for RC; pass
+  // --skip-api-roles to opt out of the longer API path. --with-api-roles is
+  // retained as an explicit alias for documentation/CI callers.
   return {
-    withApiRoles: argv.includes("--with-api-roles"),
+    withApiRoles: !argv.includes("--skip-api-roles"),
+    withFullUi: !argv.includes("--skip-full-ui"),
     port: Number(portArg || process.env.PORT || 4010),
   };
 }
@@ -127,9 +131,19 @@ async function main() {
       browserEnv.PLAYWRIGHT_BASE_URL = process.env.PLAYWRIGHT_BASE_URL;
     }
 
+    const e2eSpecs = [
+      "e2e/smoke.spec.ts",
+      "e2e/roles-flow.spec.ts",
+      "e2e/rc-security-flow.spec.ts",
+    ];
+    if (options.withFullUi) {
+      e2eSpecs.push("e2e/full-ui-flow.spec.ts");
+    }
+    console.log(`[rc-e2e] Playwright specs: ${e2eSpecs.join(", ")}`);
+
     const playwrightCli = path.join(webRoot, "node_modules", "playwright", "cli.js");
     const playwrightArgs = fs.existsSync(playwrightCli)
-      ? [playwrightCli, "test", "e2e/smoke.spec.ts", "e2e/roles-flow.spec.ts", "--project=chromium"]
+      ? [playwrightCli, "test", ...e2eSpecs, "--project=chromium"]
       : null;
     if (playwrightArgs) {
       await runCommand(process.execPath, playwrightArgs, {
@@ -138,14 +152,14 @@ async function main() {
         shell: false,
       });
     } else {
-      await runCommand("npx", ["playwright", "test", "e2e/smoke.spec.ts", "e2e/roles-flow.spec.ts", "--project=chromium"], {
+      await runCommand("npx", ["playwright", "test", ...e2eSpecs, "--project=chromium"], {
         cwd: webRoot,
         env: browserEnv,
       });
     }
 
     if (options.withApiRoles) {
-      console.log("[rc-e2e] running API multi-role smoke");
+      console.log("[rc-e2e] running API multi-role smoke (membership + handoff)");
       await runCommand(process.execPath, [path.join(apiRoot, "scripts", "full-flow-roles.js")], {
         cwd: apiRoot,
         env: {

@@ -75,7 +75,7 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: web
 
-      - name: Isolated disposable-SQLite browser E2E (smoke + roles)
+      - name: Isolated disposable-SQLite RC E2E (UI + roles + handoff)
         run: npm run test:rc-e2e
         env:
           CI: true
