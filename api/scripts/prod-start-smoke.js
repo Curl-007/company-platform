@@ -103,6 +103,11 @@ async function runSmoke() {
     const indexResponse = await fetch(`http://127.0.0.1:${port}/`);
     const indexText = await indexResponse.text();
     const indexOk = indexResponse.ok && /<!doctype html>/i.test(indexText);
+    const csp = String(indexResponse.headers.get("content-security-policy") || "");
+    const hsts = indexResponse.headers.get("strict-transport-security");
+    // Plain-HTTP SPA: must not upgrade scripts to HTTPS (causes intermittent blank pages).
+    const cspOk = !/upgrade-insecure-requests/i.test(csp) && /script-src[^;]*'self'/i.test(csp);
+    const hstsOk = hsts == null;
 
     // Prefer SIGTERM; if process does not exit on Windows quickly, SIGKILL after assert.
     const exitPromise = new Promise((resolve) => {
@@ -123,11 +128,15 @@ async function runSmoke() {
     }
 
     const report = {
-      ok: Boolean(health && indexOk),
+      ok: Boolean(health && indexOk && cspOk && hstsOk),
       port,
       health: health?.data || health,
       indexOk,
       indexStatus: indexResponse.status,
+      cspOk,
+      hstsOk,
+      csp,
+      hsts,
       exit: exited,
       serveWebLog: /serving static SPA/i.test(log),
       workDir,

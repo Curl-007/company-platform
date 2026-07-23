@@ -45,6 +45,7 @@ const {
   apiOnlyContentSecurityPolicyDirectives,
   mountStaticWeb,
   resolveWebDist,
+  shouldEnableHsts,
   shouldServeWeb,
   spaContentSecurityPolicyDirectives,
 } = require("./src/ops/staticWeb");
@@ -460,12 +461,17 @@ const WEB_DIST = SERVE_WEB ? resolveWebDist(process.env, { apiRoot: __dirname })
 
 // Security headers. When hosting the SPA, CSP must allow self scripts/styles/ws.
 // API-only mode keeps a restrictive CSP (no script execution expected on JSON APIs).
+// Plain-HTTP deploys must NOT send upgrade-insecure-requests or HSTS (lazy chunks break).
+const ENABLE_HSTS = shouldEnableHsts(process.env);
 app.use(helmet({
   contentSecurityPolicy: {
     useDefaults: true,
     directives: SERVE_WEB ? spaContentSecurityPolicyDirectives() : apiOnlyContentSecurityPolicyDirectives(),
   },
   crossOriginResourcePolicy: { policy: "cross-origin" },
+  strictTransportSecurity: ENABLE_HSTS
+    ? { maxAge: 31536000, includeSubDomains: true }
+    : false,
 }));
 
 // CORS: only allow the configured web origins to carry credentials/tokens.

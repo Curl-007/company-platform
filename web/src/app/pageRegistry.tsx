@@ -1,4 +1,4 @@
-import React, { lazy } from 'react';
+import React from 'react';
 import {
   Activity,
   BarChart3,
@@ -17,23 +17,24 @@ import {
   Workflow,
 } from 'lucide-react';
 import type { PageKey, SessionUser } from '../types';
+import { lazyWithRetry } from './lazyWithRetry';
 
-const DashboardPage = lazy(() => import('../pages/DashboardPage'));
-const ProjectsPage = lazy(() => import('../pages/ProjectsPage'));
-const ProductsPage = lazy(() => import('../pages/ProductsPage'));
-const TeamPage = lazy(() => import('../pages/TeamPage'));
-const TeamLogsPage = lazy(() => import('../pages/TeamLogsPage'));
-const CapacityPage = lazy(() => import('../pages/CapacityPage'));
-const RequirementsPage = lazy(() => import('../pages/RequirementsPage'));
-const TestingPage = lazy(() => import('../pages/TestingPage'));
-const DocumentsPage = lazy(() => import('../pages/DocumentsPage'));
-const AiPage = lazy(() => import('../pages/AiPage'));
-const ReportsPage = lazy(() => import('../pages/ReportsPage'));
-const FlowPage = lazy(() => import('../pages/FlowPage'));
-const DynamicPage = lazy(() => import('../pages/DynamicPage'));
-const DeliveryCenterPage = lazy(() => import('../pages/DeliveryCenterPage'));
-const MyWorkPage = lazy(() => import('../pages/MyWorkPage'));
-const SettingsPage = lazy(() => import('../pages/SettingsPage'));
+const DashboardPage = lazyWithRetry(() => import('../pages/DashboardPage'));
+const ProjectsPage = lazyWithRetry(() => import('../pages/ProjectsPage'));
+const ProductsPage = lazyWithRetry(() => import('../pages/ProductsPage'));
+const TeamPage = lazyWithRetry(() => import('../pages/TeamPage'));
+const TeamLogsPage = lazyWithRetry(() => import('../pages/TeamLogsPage'));
+const CapacityPage = lazyWithRetry(() => import('../pages/CapacityPage'));
+const RequirementsPage = lazyWithRetry(() => import('../pages/RequirementsPage'));
+const TestingPage = lazyWithRetry(() => import('../pages/TestingPage'));
+const DocumentsPage = lazyWithRetry(() => import('../pages/DocumentsPage'));
+const AiPage = lazyWithRetry(() => import('../pages/AiPage'));
+const ReportsPage = lazyWithRetry(() => import('../pages/ReportsPage'));
+const FlowPage = lazyWithRetry(() => import('../pages/FlowPage'));
+const DynamicPage = lazyWithRetry(() => import('../pages/DynamicPage'));
+const DeliveryCenterPage = lazyWithRetry(() => import('../pages/DeliveryCenterPage'));
+const MyWorkPage = lazyWithRetry(() => import('../pages/MyWorkPage'));
+const SettingsPage = lazyWithRetry(() => import('../pages/SettingsPage'));
 
 export interface NavEntry {
   key: PageKey;

@@ -8,6 +8,7 @@ const { checkReadiness } = require("../src/ops/readiness");
 const {
   shouldServeWeb,
   resolveWebDist,
+  shouldEnableHsts,
   spaContentSecurityPolicyDirectives,
   apiOnlyContentSecurityPolicyDirectives,
 } = require("../src/ops/staticWeb");
@@ -116,6 +117,16 @@ test("SPA CSP is broader than API-only CSP", () => {
   assert.deepEqual(api.defaultSrc, ["'none'"]);
   assert.ok(spa.scriptSrc.includes("'self'"));
   assert.ok(spa.connectSrc.includes("ws:") || spa.connectSrc.includes("wss:"));
+  // Helmet defaults include upgrade-insecure-requests; plain HTTP SPA must disable it.
+  assert.equal(spa.upgradeInsecureRequests, null);
+  assert.equal(api.upgradeInsecureRequests, null);
+});
+
+test("shouldEnableHsts is opt-in only", () => {
+  assert.equal(shouldEnableHsts({}), false);
+  assert.equal(shouldEnableHsts({ ENABLE_HSTS: "0" }), false);
+  assert.equal(shouldEnableHsts({ ENABLE_HSTS: "1" }), true);
+  assert.equal(shouldEnableHsts({ ENABLE_HSTS: "true" }), true);
 });
 
 test("preflightMigrationStatus still used by readiness path", () => {

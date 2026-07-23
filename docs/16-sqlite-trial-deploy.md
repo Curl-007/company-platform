@@ -39,6 +39,9 @@ export WEB_DIST='/path/to/web/dist'         # 可选；默认 monorepo web/dist
 export CORS_ORIGIN='http://localhost:4010'  # 同源可留默认；若反代域名需写入
 export SEED_DEMO_DATA=0                     # 试用空库不建议自动演示种子；仅空库首次需要账号时再评估
 export AI_ENABLED=false                     # 无外网模型时可关
+# 纯 HTTP 部署不要开 HSTS / 不要让 CSP upgrade-insecure-requests
+# （Helmet 默认项已在 SERVE_WEB 路径关闭；仅 TLS 终止后可设 ENABLE_HSTS=1）
+# export ENABLE_HSTS=1
 ```
 
 Windows PowerShell 示例：
@@ -87,8 +90,10 @@ npm run smoke:prod
    - `checks.database.ok == true`
    - `checks.migrations.ok == true`（SQLite）
    - `serveWeb == true`
-6. 浏览器打开首页，登录（若 `SEED_DEMO_DATA=1` 空库会有演示账号，**试用请尽快改密或关种子**）
-7. （可选）`npm run preflight:database -w api -- --database "$DATABASE_FILE"`
+6. 确认响应头无 `upgrade-insecure-requests`、无 HSTS（纯 HTTP）：
+   - `curl -sI http://127.0.0.1:$PORT/ | rg -i "content-security-policy|strict-transport"`
+7. 浏览器打开首页，登录（若 `SEED_DEMO_DATA=1` 空库会有演示账号，**试用请尽快改密或关种子**）
+8. （可选）`npm run preflight:database -w api -- --database "$DATABASE_FILE"`
 
 ## 6. 备份与回滚
 
@@ -125,6 +130,8 @@ npm run drill:sqlite-backup
 ```
 
 ## 7. 反向代理（可选）
+
+若前置 Nginx/Caddy **并终止 TLS**：可在本进程设 `ENABLE_HSTS=1`，或由反代统一下发 HSTS；**切勿**在纯 HTTP 直连场景开启。
 
 若前置 Nginx/Caddy：
 

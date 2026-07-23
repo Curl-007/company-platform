@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { HashRouter, useLocation, useNavigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Login from './components/Login';
+import PageErrorBoundary from './components/common/PageErrorBoundary';
 import { getMe, getSessionUser, setSessionUser, logout as doLogout } from './services/auth';
 import { ApiError, getToken } from './services/api';
 import { canAccessPageForUser } from './constants/roles';
@@ -133,9 +134,11 @@ function AppContent() {
       onUserUpdate={handleUserUpdate}
       onLogout={handleLogout}
     >
-      <Suspense fallback={<div className="page-suspense-fallback">加载中...</div>}>
-        <PageComponent user={user} />
-      </Suspense>
+      <PageErrorBoundary key={currentPage} pageLabel={currentPage}>
+        <Suspense fallback={<div className="page-suspense-fallback">加载中...</div>}>
+          <PageComponent user={user} />
+        </Suspense>
+      </PageErrorBoundary>
     </Layout>
   );
 }

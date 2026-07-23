@@ -40,6 +40,11 @@ function shouldServeWeb(env = process.env, options = {}) {
 
 /**
  * Helmet CSP directives safe enough for the Vite production SPA on same origin.
+ *
+ * IMPORTANT: `upgradeInsecureRequests` must stay disabled for plain-HTTP
+ * single-process deploys. Helmet's CSP defaults include it; browsers then
+ * rewrite lazy-loaded `/assets/*.js` to https:// and fail (blank page).
+ * Pass `null` so helmet omits the directive when useDefaults is true.
  */
 function spaContentSecurityPolicyDirectives() {
   return {
@@ -54,6 +59,8 @@ function spaContentSecurityPolicyDirectives() {
     frameAncestors: ["'none'"],
     baseUri: ["'self'"],
     formAction: ["'self'"],
+    // Explicitly disable Helmet default (camelCase key + null).
+    upgradeInsecureRequests: null,
   };
 }
 
@@ -66,7 +73,19 @@ function apiOnlyContentSecurityPolicyDirectives() {
     frameAncestors: ["'none'"],
     baseUri: ["'none'"],
     formAction: ["'none'"],
+    upgradeInsecureRequests: null,
   };
+}
+
+/**
+ * Whether to send Strict-Transport-Security.
+ * Default off: internal SQLite trial/prod is plain HTTP. Opt in with ENABLE_HSTS=1
+ * only when TLS terminates in front of this process (or process serves HTTPS).
+ * @param {NodeJS.ProcessEnv} [env]
+ */
+function shouldEnableHsts(env = process.env) {
+  const flag = String(env.ENABLE_HSTS || "").trim().toLowerCase();
+  return flag === "1" || flag === "true" || flag === "on" || flag === "yes";
 }
 
 /**
@@ -111,6 +130,7 @@ module.exports = {
   apiOnlyContentSecurityPolicyDirectives,
   mountStaticWeb,
   resolveWebDist,
+  shouldEnableHsts,
   shouldServeWeb,
   spaContentSecurityPolicyDirectives,
 };
