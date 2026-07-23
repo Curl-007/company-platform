@@ -456,6 +456,14 @@ function createDeliveryRouter({
     const before = await repository.findRelease(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Release not found.");
     if (!(await ensureReleaseWrite(req, res, before, "Cannot delete a release in an archived or inaccessible project."))) return;
+    const status = String(before.status || "").toLowerCase();
+    if (["released", "deployed", "completed"].includes(status)) {
+      return fail(res, 409, "RELEASE_ALREADY_SHIPPED", "已发布/已完成的发布记录不能删除，请保留审计证据。", { status: before.status });
+    }
+    const approvalCount = Number((await repository.listApprovals?.(req.params.id) || []).length || 0);
+    if (approvalCount > 0 && status !== "draft" && status !== "planning") {
+      return fail(res, 409, "RELEASE_HAS_APPROVALS", "发布已有审批记录，不能直接删除。", { approvalCount });
+    }
     const response = await write(async () => {
       await repository.deleteRelease(req.params.id);
       await audit(req.user, "release.delete", "release", req.params.id, before, null, req.ip);

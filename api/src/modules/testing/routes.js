@@ -179,6 +179,13 @@ function createTestingRouter({
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Test case not found.");
     if (!(await canWriteProject(req.user, before.project_id))) return fail(res, 403, "PROJECT_ARCHIVED_OR_ACCESS_DENIED", "Cannot delete a test case in an archived or inaccessible project.");
     if (!(await canAccessProject(req.user, before.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权删除该测试用例。");
+    const runCount = Number((await row(
+      "SELECT COUNT(*) AS count FROM test_runs WHERE test_case_id = @id",
+      { id: req.params.id },
+    ))?.count || 0);
+    if (runCount > 0) {
+      return fail(res, 409, "TEST_CASE_HAS_RUNS", "测试用例仍有执行记录，不能直接删除。", { runCount });
+    }
     await run("DELETE FROM test_cases WHERE id = @id", { id: req.params.id });
     await audit(req.user, "test_case.delete", "test_case", req.params.id, before, null, req.ip);
     res.json(ok({ deleted: true, id: req.params.id }));
