@@ -22,11 +22,13 @@ test("createSqliteAccess exposes the async public contract", async () => {
   assert.equal(typeof access.rows, "function");
   assert.equal(typeof access.run, "function");
   assert.equal(typeof access.insert, "function");
+  assert.equal(typeof access.upsert, "function");
   assert.equal(typeof access.transaction, "function");
   assert.equal(typeof access._sync?.row, "function");
   assert.equal(typeof access._sync?.rows, "function");
   assert.equal(typeof access._sync?.run, "function");
   assert.equal(typeof access._sync?.insert, "function");
+  assert.equal(typeof access._sync?.upsert, "function");
   assert.equal(typeof access._sync?.exec, "function");
 
   const inserted = access.insert("items", { id: "I1", name: "alpha", qty: 1 });
@@ -37,6 +39,9 @@ test("createSqliteAccess exposes the async public contract", async () => {
   assert.equal(found?.id, "I1");
   assert.equal(found?.name, "alpha");
   assert.equal(found?.qty, 1);
+  await assert.rejects(() => access.insert("items", { id: "I1", name: "collision", qty: 99 }));
+  await access.upsert("items", { id: "I1", name: "updated", qty: 3 });
+  assert.equal((await access.row("SELECT name FROM items WHERE id = @id", { id: "I1" })).name, "updated");
 
   const missing = await access.row("SELECT * FROM items WHERE id = @id", { id: "missing" });
   assert.equal(missing, undefined);

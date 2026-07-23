@@ -7,22 +7,19 @@ import { ApiError } from '../../../services/api';
 import { createIdempotencyKey } from '../../../services/idempotency';
 import type { Project } from '../../../types';
 import { createWorkLog } from '../api';
-
-function today() {
-  return new Date().toISOString().slice(0, 10);
-}
+import { businessDateKey } from '../../../utils/businessDate';
 
 export default function DailyLogForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => Promise<void> }) {
   const [projectId, setProjectId] = useState('');
   const [content, setContent] = useState('');
   const [blockers, setBlockers] = useState('');
   const [nextPlan, setNextPlan] = useState('');
-  const [logDate, setLogDate] = useState(today());
+  const [logDate, setLogDate] = useState(businessDateKey());
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const createRequest = useRef<{ key: string; payload: string } | null>(null);
-  const { data: projects } = useAsync<Project[]>(fetchProjects, []);
+  const { data: projects } = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
   const selectedProject = useMemo(
     () => (projects ?? []).find((item) => item.id === projectId) ?? null,
     [projectId, projects],

@@ -19,7 +19,7 @@ import { canOperate } from '../../../constants/roles';
 import type { StrategicGoal } from '../../../types';
 
 export default function StrategicGoalsTab() {
-  const { data, loading, error, reload } = useAsync<StrategicGoal[]>(fetchStrategicGoals, []);
+  const { data, loading, error, reload } = useAsync<StrategicGoal[]>(fetchStrategicGoals, [], { cacheKey: 'strategic-goals:list' });
   const canManageGoals = canOperate(getSessionUser(), 'users:create');
   const toast = useToast();
   const confirm = useConfirm();

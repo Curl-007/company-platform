@@ -14,6 +14,7 @@ const {
   closeDatabase,
   db: sqliteConnection,
   insert,
+  upsert,
   json,
   mapDefect,
   mapDocument,
@@ -34,6 +35,7 @@ const {
   row,
   rows,
   run,
+  sanitizeAuditValue,
   transaction,
   dialect,
   STORAGE_DIR,
@@ -86,6 +88,7 @@ const { createAiAdviceService } = require("./src/modules/ai/adviceService");
 const { createAiProviderAdminRouter } = require("./src/modules/ai/providerAdminRoutes");
 const { createAiProviderAdminService } = require("./src/modules/ai/providerAdminService");
 const { createAiProviderStore } = require("./src/modules/ai/providerStore");
+const { assertAiProviderUrlAllowed } = require("./src/modules/ai/outboundUrlPolicy");
 const { createDashboardRouter } = require("./src/modules/dashboard/routes");
 const { createDashboardRepository } = require("./src/modules/dashboard/repository");
 const { createDashboardService } = require("./src/modules/dashboard/service");
@@ -259,6 +262,18 @@ aiProviderStore.migrateSecrets().catch((error) => {
   console.warn("AI provider secret migration failed:", error.message);
 });
 const projectAccess = createProjectAccess({ row });
+async function resolveAccessScope(user) {
+  if (user?.role === "admin" || (Array.isArray(user?.permissions) && user.permissions.includes("*"))) {
+    return { all: true };
+  }
+  if (!user) return { projectIds: [] };
+  const projects = await rows("SELECT id FROM projects WHERE deleted_at IS NULL ORDER BY id");
+  const projectIds = [];
+  for (const project of projects) {
+    if (await projectAccess.canAccessProject(user, project.id)) projectIds.push(project.id);
+  }
+  return { projectIds };
+}
 const projectRepository = createProjectsRepository({ insert, row, rows, run });
 const deliveryRepository = createDeliveryRepository({ insert, row, rows, run });
 const projectActivationReadiness = (project) =>
@@ -290,7 +305,6 @@ const aiChatService = createAiChatService({
 });
 const aiModelClient = createAiModelClient({
   getConfig: aiProviderStore.resolveConfig,
-  fetchImpl: fetch,
   normalizeAttachments: aiChatService.normalizeAttachments,
   dataUrlForAttachment,
   recordSuccess: aiProviderStore.recordSuccess,
@@ -327,6 +341,7 @@ const aiProviderAdminService = createAiProviderAdminService({
   readActive: aiProviderStore.resolveConfig,
   readList: aiProviderStore.readList,
   resetHealth: aiProviderStore.resetHealth,
+  validateBaseUrl: assertAiProviderUrlAllowed,
   writeActive: aiProviderStore.writeActiveConfig,
   writeList: aiProviderStore.writeList,
 });
@@ -339,8 +354,8 @@ const aiSummaryService = createAiSummaryService({
 
 // Keep process-local AI summary cache coherent after mutating business data.
 // Scope is process-wide clear (cheap) so dashboards/summary don't serve stale TTL.
-async function audit(actor, action, resourceType, resourceId, beforeValue, afterValue, ip) {
-  const result = await writeAuditLog(actor, action, resourceType, resourceId, beforeValue, afterValue, ip);
+async function audit(actor, action, resourceType, resourceId, beforeValue, afterValue, ip, explicitScope) {
+  const result = await writeAuditLog(actor, action, resourceType, resourceId, beforeValue, afterValue, ip, explicitScope);
   try {
     if (typeof action === "string" && !action.startsWith("ai.") && !action.startsWith("auth.") && action !== "page.view") {
       aiSummaryService.clearCache();
@@ -358,7 +373,6 @@ const dashboardService = createDashboardService({
   mapProject,
   mapRequirement,
   mapTask,
-  projectAccess,
   repository: dashboardRepository,
   visibleDocumentsForUser,
 });
@@ -425,12 +439,11 @@ const aiAdviceService = createAiAdviceService({
   rows,
 });
 const statusHistory = createStatusHistory({ insert, nextId, now, rows });
-const sprintCommitment = createSprintCommitment({ insert, nextId, now, row, rows });
+const sprintCommitment = createSprintCommitment({ insert, nextId, now, row, rows, upsert });
 const workflowTemplateStore = createWorkflowTemplateStore({
-  insert,
   row,
-  run,
   now,
+  upsert,
 });
 const projectFlowService = createProjectFlowService({
   row,
@@ -501,6 +514,29 @@ const upload = multer({
   dest: STORAGE_DIR,
   limits: { fileSize: MAX_UPLOAD_BYTES },
   fileFilter: createMulterFileFilter(),
+});
+const PRODUCT_IMAGE_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const PRODUCT_IMAGE_TYPES = new Map([
+  [".png", "image/png"],
+  [".jpg", "image/jpeg"],
+  [".jpeg", "image/jpeg"],
+  [".webp", "image/webp"],
+  [".gif", "image/gif"],
+]);
+const productImageUpload = multer({
+  dest: STORAGE_DIR,
+  limits: { fileSize: PRODUCT_IMAGE_MAX_UPLOAD_BYTES },
+  fileFilter: (_req, file, callback) => {
+    const extension = path.extname(String(file.originalname || "")).toLowerCase();
+    const mimeType = String(file.mimetype || "").toLowerCase();
+    if (PRODUCT_IMAGE_TYPES.get(extension) !== mimeType) {
+      const error = new Error("Product images support PNG, JPEG, WebP, and GIF only.");
+      error.code = "UPLOAD_TYPE_NOT_ALLOWED";
+      error.status = 400;
+      return callback(error);
+    }
+    return callback(null, true);
+  },
 });
 
 function ok(data, meta = {}) {
@@ -657,6 +693,7 @@ function callRealModel(prompt, options = {}) {
 app.get("/api/health", async (req, res) => {
   const readiness = await checkReadiness({
     row,
+    rows,
     dialect,
     sqliteConnection: dialect === "sqlite" ? sqliteConnection : null,
     migrationsDir: path.join(__dirname, "migrations"),
@@ -691,9 +728,11 @@ app.use("/api", wrapRouterAsync(createAuditRouter({
   parse,
   repository: createAuditRepository({ rows }),
   requirePermission,
+  resolveAccessScope,
+  sanitizeAuditValue,
 })));
 
-app.use("/api", wrapRouterAsync(createDashboardRouter({ fail, ok, service: dashboardService })));
+app.use("/api", wrapRouterAsync(createDashboardRouter({ fail, ok, resolveAccessScope, service: dashboardService })));
 
 app.use("/api", wrapRouterAsync(createProjectsRouter({
   audit,
@@ -772,11 +811,14 @@ app.use("/api", wrapRouterAsync(createProductsRouter({
   now,
   ok,
   parse,
+  productImageUpload,
   requireAnyPermission,
   requirePermission,
   row,
   rows,
   run,
+  storageDir: STORAGE_DIR,
+  transaction,
 })));
 
 app.use("/api", wrapRouterAsync(createRequirementsRouter({
@@ -881,6 +923,7 @@ app.use("/api", wrapRouterAsync(createTestingRouter({
   run,
   syncTestCaseTask,
   testCaseStatuses: TEST_CASE_STATUSES,
+  transaction,
 })));
 
 app.use("/api", wrapRouterAsync(createDocumentsRouter({
@@ -904,6 +947,7 @@ app.use("/api", wrapRouterAsync(createDocumentsRouter({
   rows,
   run,
   storageDir: STORAGE_DIR,
+  transaction,
   upload,
 })));
 app.use("/api", wrapRouterAsync(createAiJobsRouter({
@@ -1041,7 +1085,7 @@ app.use("/api", wrapRouterAsync(createCapacityRouter({
   nextId,
   now,
   ok,
-  repository: createCapacityRepository({ insert, row, rows, run }),
+  repository: createCapacityRepository({ row, rows, run, upsert }),
   requirePermission,
 })));
 
@@ -1060,20 +1104,11 @@ app.use("/api", wrapRouterAsync(createAiInteractionsRouter({
   buildAiChatPrompt: aiChatService.buildPrompt,
   buildAiChatContext: aiChatService.buildContext,
   callRealModel,
-  canAccessProject: projectAccess.canAccessProject,
   createAiRequirementRecommendation: aiAdviceService.createRequirementRecommendation,
   createAiSummary: aiSummaryService.createSummary,
   createBusinessAdvice: aiAdviceService.createBusinessAdvice,
   ensureAiTargetAccess,
   fail,
-  listAccessibleProjectIds: async (user) => {
-    const projects = await rows("SELECT id FROM projects WHERE deleted_at IS NULL");
-    const ids = [];
-    for (const project of projects) {
-      if (await projectAccess.canAccessProject(user, project.id)) ids.push(project.id);
-    }
-    return ids;
-  },
   localAiChatReply: aiChatService.localReplyV2,
   normalizeAttachments: aiChatService.normalizeAttachments,
   normalizeMessages: normalizeAiChatMessages,
@@ -1082,6 +1117,7 @@ app.use("/api", wrapRouterAsync(createAiInteractionsRouter({
   publicAiProviderConfig: aiProviderStore.publicConfig,
   requirementScore,
   requirePermission,
+  resolveAccessScope,
   resolveAiProviderConfig: aiProviderStore.resolveConfig,
   row,
   rows,
@@ -1116,6 +1152,11 @@ if (SERVE_WEB) {
 }
 
 app.use((err, req, res, _next) => {
+  const isProductImageUpload = req.method === "POST"
+    && /^\/api\/products\/[^/]+\/images\/?(?:\?|$)/.test(req.originalUrl || "");
+  if (err?.code === "LIMIT_FILE_SIZE" && isProductImageUpload) {
+    return fail(res, 413, "UPLOAD_TOO_LARGE", "Product image exceeds the 5 MiB limit.");
+  }
   if (err && (err.code === "LIMIT_FILE_SIZE" || err.code === "UPLOAD_TOO_LARGE" || err.code === "UPLOAD_TYPE_NOT_ALLOWED" || err.status === 400)) {
     const errorCode = err.code === "LIMIT_FILE_SIZE" ? "UPLOAD_TOO_LARGE" : (err.code || "VALIDATION_FAILED");
     const message = err.code === "LIMIT_FILE_SIZE"
@@ -1150,6 +1191,7 @@ const { wss } = createDocumentCollaborationServer({
   audit,
   publicUser,
   reindexDocument: reindexDocumentForRag,
+  transaction,
 });
 
 const { recoverPendingAiJobs } = createAiJobRecovery({

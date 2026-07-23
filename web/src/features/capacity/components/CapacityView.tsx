@@ -52,8 +52,8 @@ export default function CapacityView({ user }: { user?: SessionUser | null }) {
     [periodStart, periodEnd],
     { cacheKey: 'capacity:overview' },
   );
-  const membersAsync = useAsync<TeamMemberOverview[]>(fetchTeamMembers, [], { cacheKey: 'capacity:team-members' });
-  const projectsAsync = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'capacity:projects' });
+  const membersAsync = useAsync<TeamMemberOverview[]>(fetchTeamMembers, [], { cacheKey: 'team:members' });
+  const projectsAsync = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
   const overview = overviewAsync.data;
 
   useEffect(() => {

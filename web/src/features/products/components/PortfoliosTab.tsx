@@ -22,7 +22,7 @@ import { ROADMAP_STATUS_LABELS, labelOf } from '../../../constants/enums';
 import type { Portfolio } from '../../../types';
 
 export default function PortfoliosTab() {
-  const { data, loading, error, reload } = useAsync<Portfolio[]>(fetchPortfolios, []);
+  const { data, loading, error, reload } = useAsync<Portfolio[]>(fetchPortfolios, [], { cacheKey: 'portfolios:list' });
   const toast = useToast();
   const confirm = useConfirm();
   const canManagePortfolios = canOperate(getSessionUser(), 'products:manage');

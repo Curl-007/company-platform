@@ -15,6 +15,7 @@ api/storage/
 api/backups/
 api/.tmp-w6*/
 api/.tmp-w6*
+data/
 
 # Playwright / local smoke artifacts
 web/test-results/

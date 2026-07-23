@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 export interface TreeTableColumn<T> {
   key: string;
@@ -168,13 +169,29 @@ function TreeTable<T extends { id: string }>({
       <table className="tree-table">
         <thead>
           <tr>
-            {selectable && <th key="__checkbox__" className="tree-table-checkbox-col" style={{ width: 40 }} />}
+            {selectable && (
+              <th
+                key="__checkbox__"
+                className="tree-table-checkbox-col"
+                style={{ width: 40 }}
+                scope="col"
+                aria-label="选择"
+              />
+            )}
             {columns.map((col) => (
-              <th key={col.key} style={{ width: col.width, textAlign: col.align ?? 'left' }}>
+              <th key={col.key} scope="col" style={{ width: col.width, textAlign: col.align ?? 'left' }}>
                 {col.title}
               </th>
             ))}
-            {rowActions && <th key="__actions__" className="tree-table-actions-col" style={{ width: 120 }} />}
+            {rowActions && (
+              <th
+                key="__actions__"
+                className="tree-table-actions-col"
+                style={{ width: 120 }}
+                scope="col"
+                aria-label="操作"
+              />
+            )}
           </tr>
         </thead>
         <tbody>
@@ -189,6 +206,14 @@ function TreeTable<T extends { id: string }>({
                 key={key}
                 className={`${onRowClick ? 'clickable' : ''} ${selectedIds?.has(item.id) ? 'selected' : ''}`}
                 onClick={() => onRowClick?.(item)}
+                tabIndex={onRowClick ? 0 : undefined}
+                onKeyDown={(event) => {
+                  if (!onRowClick || event.target !== event.currentTarget) return;
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onRowClick(item);
+                  }
+                }}
               >
                 {selectable && (
                   <td onClick={(e) => e.stopPropagation()}>
@@ -196,6 +221,7 @@ function TreeTable<T extends { id: string }>({
                       type="checkbox"
                       checked={selectedIds?.has(item.id) ?? false}
                       onChange={() => toggleSelect(item.id)}
+                      aria-label={`选择 ${item.id}`}
                     />
                   </td>
                 )}
@@ -211,18 +237,22 @@ function TreeTable<T extends { id: string }>({
                         paddingLeft: indent + (isFirst ? 8 : 0),
                       }}
                     >
-                      {isFirst && (
-                        <span
-                          className={`tree-table-toggle ${canExpand ? '' : 'invisible'}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (canExpand) toggleExpand(item.id);
+                      {isFirst && (canExpand ? (
+                        <button
+                          className="tree-table-toggle"
+                          type="button"
+                          aria-expanded={isExpanded}
+                          aria-label={`${isExpanded ? '折叠' : '展开'} ${item.id}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleExpand(item.id);
                           }}
-                          style={{ visibility: canExpand ? 'visible' : 'hidden' }}
                         >
-                          {isExpanded ? '\u25BC' : '\u25B6'}
-                        </span>
-                      )}
+                          {isExpanded
+                            ? <ChevronDown size={13} aria-hidden="true" />
+                            : <ChevronRight size={13} aria-hidden="true" />}
+                        </button>
+                      ) : <span className="tree-table-toggle invisible" aria-hidden="true" />)}
                       {isFirst && showLines && depth > 0 && (
                         <span className="tree-table-lines" style={{ position: 'relative' }}>
                           {isLastChild.slice(0, depth).map((isLast, levelIdx) => (
@@ -251,7 +281,7 @@ function TreeTable<T extends { id: string }>({
                   );
                 })}
                 {rowActions && (
-                  <td className="tree-table-actions" onClick={(e) => e.stopPropagation()}>
+                  <td className="tree-table-actions" aria-label="操作" onClick={(e) => e.stopPropagation()}>
                     {rowActions(item)}
                   </td>
                 )}

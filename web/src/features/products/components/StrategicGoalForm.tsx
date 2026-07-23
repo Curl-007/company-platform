@@ -32,8 +32,8 @@ export default function StrategicGoalForm({
   const [portfolioIds, setPortfolioIds] = useState(initial?.portfolioIds ?? []);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const programs = useAsync<Program[]>(fetchPrograms, []).data ?? [];
-  const portfolios = useAsync<Portfolio[]>(fetchPortfolios, []).data ?? [];
+  const programs = useAsync<Program[]>(fetchPrograms, [], { cacheKey: 'programs:list' }).data ?? [];
+  const portfolios = useAsync<Portfolio[]>(fetchPortfolios, [], { cacheKey: 'portfolios:list' }).data ?? [];
   const toggle = (id: string, current: string[], setter: (next: string[]) => void) => setter(current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
 
   async function submit() {

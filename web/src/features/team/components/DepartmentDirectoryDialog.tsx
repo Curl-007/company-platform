@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { useRef, useState, type FormEvent } from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
 import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
@@ -26,6 +26,16 @@ export default function DepartmentDirectoryDialog({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState({ name: '', parentId: '', managerUserId: '', responsibilities: '', status: 'active' as 'active' | 'archived' });
   const [submitting, setSubmitting] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  function focusNameInput() {
+    window.requestAnimationFrame(() => {
+      const input = nameInputRef.current;
+      if (!input) return;
+      input.focus({ preventScroll: true });
+      input.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+  }
 
   function setField(key: keyof typeof draft, value: string) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -34,6 +44,7 @@ export default function DepartmentDirectoryDialog({
   function reset() {
     setEditingId(null);
     setDraft({ name: '', parentId: '', managerUserId: '', responsibilities: '', status: 'active' });
+    focusNameInput();
   }
 
   function editDepartment(item: OrganizationUnit) {
@@ -45,6 +56,7 @@ export default function DepartmentDirectoryDialog({
       responsibilities: item.responsibilities,
       status: item.status === 'archived' ? 'archived' : 'active',
     });
+    focusNameInput();
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -90,18 +102,17 @@ export default function DepartmentDirectoryDialog({
   }
 
   return (
-    <Overlay onClose={onClose} maxWidth={980}>
+    <Overlay onClose={onClose} maxWidth={980} ariaLabel="部门目录">
       <Panel
         title="部门目录"
         subtitle="部门用于成员归属、协作范围和资源协调；不用于个人绩效、排名、薪酬或人事决策。"
-        toolbar={<Button variant="secondary" size="sm" icon={<Plus size={14} />} onClick={reset}>新建部门</Button>}
       >
         <div className="team-detail-grid">
           <section className="team-detail-section">
             <div className="team-section-title">{editingId ? '编辑部门' : '新建部门'}</div>
             <form className="form-stack" onSubmit={submit}>
               <FormField label="名称" htmlFor="department-name" required>
-                <TextInput id="department-name" value={draft.name} onChange={(event) => setField('name', event.target.value)} required />
+                <TextInput ref={nameInputRef} id="department-name" value={draft.name} onChange={(event) => setField('name', event.target.value)} required />
               </FormField>
               <FormField label="上级部门" htmlFor="department-parent">
                 <SelectInput id="department-parent" value={draft.parentId} onChange={(event) => setField('parentId', event.target.value)}>
@@ -119,7 +130,7 @@ export default function DepartmentDirectoryDialog({
                 <TextArea id="department-responsibilities" rows={3} value={draft.responsibilities} onChange={(event) => setField('responsibilities', event.target.value)} />
               </FormField>
               {editingId ? <FormField label="状态" htmlFor="department-status"><SelectInput id="department-status" value={draft.status} onChange={(event) => setField('status', event.target.value)}><option value="active">启用</option><option value="archived">归档</option></SelectInput></FormField> : null}
-              <div className="team-create-actions">
+              <div className="department-form-actions">
                 {editingId ? <Button variant="secondary" size="sm" onClick={reset} disabled={submitting}>取消编辑</Button> : null}
                 <Button type="submit" variant="primary" size="sm" disabled={submitting}>{submitting ? '保存中...' : editingId ? '保存部门' : '创建部门'}</Button>
               </div>

@@ -77,6 +77,40 @@ function createDeliveryRouter({
     return true;
   }
 
+  async function validateReleaseProduct(res, build, productId, { deriveFromBuild = false } = {}) {
+    let normalizedProductId = productId === undefined || productId === null || productId === ""
+      ? null
+      : String(productId).trim();
+    if (!build) {
+      if (normalizedProductId && !(await repository.findProduct(normalizedProductId))) {
+        fail(res, 404, "RESOURCE_NOT_FOUND", "Product not found.");
+        return null;
+      }
+      return { productId: normalizedProductId };
+    }
+    const project = await repository.findProjectProduct(build.project_id);
+    if (!project) {
+      fail(res, 404, "RESOURCE_NOT_FOUND", "Build project not found.");
+      return null;
+    }
+    const projectProductId = project.product_id || null;
+    if (deriveFromBuild && normalizedProductId === null) normalizedProductId = projectProductId;
+    if (normalizedProductId && !(await repository.findProduct(normalizedProductId))) {
+      fail(res, 404, "RESOURCE_NOT_FOUND", "Product not found.");
+      return null;
+    }
+    if (normalizedProductId !== projectProductId) {
+      fail(res, 400, "RELEASE_BUILD_PRODUCT_MISMATCH", "Release product must match the product of the build's project.", {
+        buildId: build.id,
+        projectId: project.id,
+        projectProductId,
+        releaseProductId: normalizedProductId,
+      });
+      return null;
+    }
+    return { productId: normalizedProductId };
+  }
+
   async function loadReleaseBuild(release) {
     return release?.build_id ? await repository.findBuild(release.build_id) : null;
   }
@@ -216,14 +250,21 @@ function createDeliveryRouter({
     const before = await repository.findBuild(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Build not found.");
     if (!(await ensureBuildWrite(req, res, before, "Cannot delete a build in an archived or inaccessible project."))) return;
-    const releaseCount = await repository.countReleasesForBuild(req.params.id);
-    if (releaseCount > 0) return fail(res, 409, "BUILD_HAS_RELEASES", "构建已关联发布，不能删除。", { releaseCount });
-    const response = await write(async () => {
+    const outcome = await write(async () => {
+      const dependencies = await repository.buildDependencies(req.params.id);
+      if (Object.values(dependencies).some((dependency) => dependency.count > 0)) {
+        return { dependencies };
+      }
       await repository.deleteBuild(req.params.id);
       await audit(req.user, "build.delete", "build", req.params.id, before, null, req.ip);
-      return ok({ deleted: req.params.id });
+      return { response: ok({ deleted: req.params.id }) };
     });
-    res.json(response);
+    if (outcome.dependencies) {
+      return fail(res, 409, "BUILD_HAS_DEPENDENCIES", "构建仍有关联发布、缺陷或任务，不能删除。", {
+        dependencies: outcome.dependencies,
+      });
+    }
+    res.json(outcome.response);
   });
 
   router.get("/releases", async (req, res) => {
@@ -255,10 +296,12 @@ function createDeliveryRouter({
         return fail(res, 400, "VALIDATION_FAILED", "A release needs a build before it can link requirements or defects.");
       }
     } else if (!(await validateLinkedResources(res, build.project_id, linkedStories, linkedBugs))) return;
+    const productResolution = await validateReleaseProduct(res, build, productId, { deriveFromBuild: Boolean(build) });
+    if (!productResolution) return;
     const idempotency = await beginIdempotentRequest(req, res, "release.create");
     if (!idempotency) return;
     const release = buildReleaseCreate(
-      { productId, name, version, releaseDate, buildId, releaseType, linkedStories, linkedBugs, releaseNotes },
+      { productId: productResolution.productId, name, version, releaseDate, buildId, releaseType, linkedStories, linkedBugs, releaseNotes },
       { id: await nextId("REL", "releases"), actor: req.user, now, json },
     );
     try {
@@ -283,11 +326,11 @@ function createDeliveryRouter({
     if (await repository.findApprovalByApprover(before.id, req.user.id)) {
       return fail(res, 403, "RELEASE_APPROVER_CONTENT_CHANGE_FORBIDDEN", "An approver cannot modify release content after recording a decision.");
     }
-    const { name, version, releaseDate, buildId, releaseType, linkedStories, linkedBugs, releaseNotes } = req.body || {};
+    const { productId, name, version, releaseDate, buildId, releaseType, linkedStories, linkedBugs, releaseNotes } = req.body || {};
     if (releaseType !== undefined && !releaseTypes.includes(releaseType)) {
       return fail(res, 400, "VALIDATION_FAILED", `Release type must be one of: ${releaseTypes.join(", ")}`);
     }
-    let targetBuild = loadReleaseBuild(before);
+    let targetBuild = await loadReleaseBuild(before);
     if (buildId !== undefined && buildId !== null && buildId !== "") {
       targetBuild = await repository.findBuild(buildId);
       const build = targetBuild;
@@ -307,7 +350,15 @@ function createDeliveryRouter({
         return fail(res, 400, "VALIDATION_FAILED", "A release needs a build before it can link requirements or defects.");
       }
     } else if (!(await validateLinkedResources(res, targetBuild.project_id, targetStories, targetBugs))) return;
+    const targetProductId = productId === undefined ? before.product_id : productId;
+    const productResolution = await validateReleaseProduct(res, targetBuild, targetProductId, {
+      deriveFromBuild: Boolean(targetBuild && productId === undefined && !before.product_id),
+    });
+    if (!productResolution) return;
     const response = await write(async () => {
+      if (productResolution.productId !== (before.product_id || null)) {
+        await repository.updateReleaseProduct(req.params.id, productResolution.productId);
+      }
       if (name !== undefined) await repository.updateReleaseName(req.params.id, String(name).trim());
       if (version !== undefined) await repository.updateReleaseVersion(req.params.id, version);
       if (releaseDate !== undefined) await repository.updateReleaseDate(req.params.id, releaseDate);

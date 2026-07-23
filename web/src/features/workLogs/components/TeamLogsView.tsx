@@ -35,7 +35,7 @@ export default function TeamLogsView() {
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [selectedMemberSummary, setSelectedMemberSummary] = useState<TeamWorkSummaryMember | null>(null);
 
-  const { data: projects } = useAsync<Project[]>(fetchProjects, []);
+  const { data: projects } = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
   const selectedProject = useMemo(
     () => (projects ?? []).find((item) => item.id === projectId) ?? null,
     [projectId, projects],
@@ -43,10 +43,12 @@ export default function TeamLogsView() {
   const teamLogsAsync = useAsync<WorkLog[]>(
     () => fetchTeamWorkLogs({ projectId: projectId || undefined, role: role || undefined, author: author || undefined, date: date || undefined }),
     [projectId, role, author, date],
+    { cacheKey: 'work-logs:team' },
   );
   const summaryAsync = useAsync<TeamWorkSummary>(
     () => fetchTeamWeeklySummary({ projectId: projectId || undefined, week: week || undefined, role: role || undefined }),
     [projectId, week, role],
+    { cacheKey: 'work-logs:weekly-summary' },
   );
 
   const logs = teamLogsAsync.data ?? [];

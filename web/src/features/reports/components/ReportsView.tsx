@@ -30,7 +30,7 @@ import RiskReport from './RiskReport';
 import DeliveryReport from './DeliveryReport';
 
 export default function ReportsView() {
-  const { data, loading, error, reload } = useAsync<DashboardData>(fetchDashboard, []);
+  const { data, loading, error, reload } = useAsync<DashboardData>(fetchDashboard, [], { cacheKey: 'dashboard:overview' });
   const [view, setView] = useState<ReportView>('overview');
   const currentUser = getSessionUser();
   const canUseAi = canOperate(currentUser, 'ai:analyze');

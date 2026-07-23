@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { Buffer } from 'node:buffer';
 
 /**
  * Near-full UI tour (admin interactions + multi-role permission probes).
@@ -81,7 +82,7 @@ test.describe('admin full navigation walk', () => {
 });
 
 test.describe('admin key interactions', () => {
-  test('A products tabs and company goals entry', async ({ page }) => {
+  test('A products page exposes only the supported tabs', async ({ page }) => {
     test.setTimeout(120_000);
     await loginAs(page, 'admin');
     await openNav(page, '产品管理');
@@ -90,15 +91,93 @@ test.describe('admin key interactions', () => {
     for (const tab of ['产品', '项目集', '组合'] as const) {
       await page
         .locator('.nav-tabs.products-page-tabs, .products-page-tabs, .nav-tabs')
-        .getByRole('button', { name: tab, exact: true })
+        .getByRole('tab', { name: tab, exact: true })
         .click();
       await expect(page.locator('.nav-tabs .nav-tab.active')).toContainText(tab);
     }
 
-    await page.getByRole('button', { name: '公司目标 / OKR', exact: true }).click();
-    await expect(page.getByRole('button', { name: '返回产品工作台', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: '返回产品工作台', exact: true }).click();
     await expect(page.locator('.nav-tabs .nav-tab')).toHaveCount(3);
+    await expect(page.getByRole('button', { name: '公司目标 / OKR', exact: true })).toHaveCount(0);
+  });
+
+  test('A2 product image upload renders through auth and can be removed', async ({ page }) => {
+    test.setTimeout(120_000);
+    const productName = `E2E 图片产品 ${Date.now()}`;
+    const onePixelPng = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      'base64',
+    );
+
+    await loginAs(page, 'admin');
+    await openNav(page, '产品管理');
+    await expectHeading(page, '产品管理');
+    await page.getByRole('button', { name: '新建产品', exact: true }).click();
+
+    const createDialog = page.getByRole('dialog');
+    await expect(createDialog.locator('.panel-title')).toHaveText('新建产品');
+    await createDialog
+      .locator('label.form-label')
+      .filter({ hasText: /^产品名称$/ })
+      .locator('..')
+      .locator('input')
+      .fill(productName);
+    await createDialog
+      .locator('label.form-label')
+      .filter({ hasText: /^负责人$/ })
+      .first()
+      .locator('..')
+      .locator('input')
+      .fill('E2E 管理员');
+    await createDialog.locator('input[type="file"]').setInputFiles({
+      name: 'product-image.png',
+      mimeType: 'image/png',
+      buffer: onePixelPng,
+    });
+    await expect(createDialog.getByRole('img', { name: '待上传产品图片 1' })).toHaveAttribute('src', /^blob:/);
+
+    const createResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return response.request().method() === 'POST' && url.pathname === '/api/products';
+    });
+    const uploadResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return response.request().method() === 'POST'
+        && /^\/api\/products\/[^/]+\/images$/.test(url.pathname);
+    });
+    await createDialog.getByRole('button', { name: '保存', exact: true }).click();
+    expect((await createResponsePromise).ok()).toBeTruthy();
+    expect((await uploadResponsePromise).ok()).toBeTruthy();
+    await expect(createDialog).toHaveCount(0);
+
+    const productItem = page.locator('.product-list-item').filter({ hasText: productName });
+    await expect(productItem).toBeVisible();
+    await productItem.click();
+    const detailPane = page.locator('.product-detail-pane').filter({
+      has: page.getByRole('heading', { name: productName, exact: true }),
+    });
+    const heroMedia = detailPane.locator('.product-hero-media');
+    await expect(heroMedia.getByRole('img', { name: productName, exact: true })).toHaveAttribute('src', /^blob:/);
+
+    await detailPane.getByRole('button', { name: '编辑产品', exact: true }).click();
+    const editDialog = page.getByRole('dialog');
+    await expect(editDialog.locator('.panel-title')).toHaveText('编辑产品');
+    await editDialog
+      .locator('.product-image-preview-item')
+      .getByRole('button', { name: '删除', exact: true })
+      .click();
+    await expect(editDialog.locator('.product-image-dropzone')).toBeVisible();
+
+    const deleteResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return response.request().method() === 'DELETE'
+        && /^\/api\/products\/[^/]+\/images\/[^/]+$/.test(url.pathname);
+    });
+    await editDialog.getByRole('button', { name: '保存', exact: true }).click();
+    expect((await deleteResponsePromise).ok()).toBeTruthy();
+    await expect(editDialog).toHaveCount(0);
+
+    await expect(heroMedia.locator('img')).toHaveCount(0);
+    await expect(heroMedia.locator('.product-hero-empty')).toHaveText(productName.slice(0, 1));
   });
 
   test('B project list shell and optional detail', async ({ page }) => {
@@ -217,7 +296,7 @@ test.describe('admin key interactions', () => {
       await expect(tab).toBeVisible();
       await tab.click();
       await expect(tabBar.locator('.tab-item.active')).toContainText(name);
-      await expect(page.locator('.panel-title').filter({ hasText: panel }).first()).toBeVisible({
+      await expect(page.locator('.panel-title, .mywork-empty-copy h3').filter({ hasText: panel }).first()).toBeVisible({
         timeout: 15_000,
       });
     }
@@ -401,6 +480,12 @@ test.describe('assigned work surfaces for DEV and QA', () => {
     await openNav(page, '我的工作');
     await expectHeading(page, /我的工作/);
     await page.locator('.tab-bar, .mywork-tab-bar').getByRole('button', { name: '我的任务', exact: true }).click();
+    const emptyTaskState = page.locator('.mywork-empty-panel');
+    if ((await emptyTaskState.count()) > 0) {
+      await expect(emptyTaskState).toContainText('当前没有待办任务');
+      await expect(page.locator('.mywork-panels')).toHaveCount(0);
+      return;
+    }
     await expect(page.locator('.mywork-panel-left, .panel').filter({ hasText: /任务队列|任务/ }).first()).toBeVisible({
       timeout: 15_000,
     });
@@ -437,6 +522,12 @@ test.describe('assigned work surfaces for DEV and QA', () => {
     const general = await filterCount('一般任务');
     expect(requirement + testCase + defect + general).toBe(all);
 
+    if (all === 0) {
+      await expect(page.locator('.mywork-empty-panel')).toContainText('当前没有待办任务');
+      await expect(page.locator('.mywork-panels')).toHaveCount(0);
+      return;
+    }
+
     // Queue subtitle also exposes the same breakdown when on 全部
     await filters.getByRole('button', { name: /全部/ }).click();
     await expect(page.locator('.mywork-panel-left .panel-subtitle, .panel.mywork-panel-left .panel-subtitle').first()).toContainText(
@@ -445,6 +536,11 @@ test.describe('assigned work surfaces for DEV and QA', () => {
 
     // Switching to 一般任务 should show only that bucket's count in queue subtitle
     await filters.getByRole('button', { name: /一般任务/ }).click();
+    if (general === 0) {
+      await expect(page.locator('.mywork-empty-panel')).toContainText('当前类型暂无任务');
+      await expect(page.locator('.mywork-panels')).toHaveCount(0);
+      return;
+    }
     await expect(page.locator('.mywork-panel-left, .panel.mywork-panel-left').first()).toContainText(
       new RegExp(`当前筛选\\s*${general}\\s*条`),
     );
@@ -468,7 +564,10 @@ test.describe('assigned work surfaces for DEV and QA', () => {
     await loginAs(page, 'qa');
     await openNav(page, '我的工作');
     await page.locator('.tab-bar, .mywork-tab-bar').getByRole('button', { name: '我的缺陷', exact: true }).click();
-    await expect(page.locator('.panel').filter({ hasText: /我的缺陷|缺陷详情/ }).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.mywork-split, .mywork-empty-panel').first()).toBeVisible({ timeout: 15_000 });
+    if ((await page.locator('.mywork-split').count()) > 0) {
+      await expect(page.locator('.panel').filter({ hasText: /我的缺陷|缺陷详情/ }).first()).toBeVisible();
+    }
     const handoff = page.locator('.mywork-handoff');
     if ((await handoff.count()) > 0) {
       await expect(handoff.getByRole('button', { name: /指派开发修复|指派测试验证/ }).first()).toBeVisible();

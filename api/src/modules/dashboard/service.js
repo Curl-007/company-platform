@@ -1,4 +1,4 @@
-const { filterAsync, mapAsync } = require("../../lib/asyncIter");
+const { mapAsync } = require("../../lib/asyncIter");
 function createDashboardService({
   createAiSummary,
   mapBuild,
@@ -7,29 +7,35 @@ function createDashboardService({
   mapProject,
   mapRequirement,
   mapTask,
-  projectAccess,
   repository,
   visibleDocumentsForUser,
 }) {
   async function build(scope = {}) {
-    const { owner, user } = scope;
-    const allProjects = (await repository.listProjects()).map(mapProject);
-    const projects = await filterAsync(allProjects, async (project) => await projectAccess.canAccessProject(user, project.id));
+    const { accessScope, owner, skipCache = false, user } = scope;
+    const requestedProjectIds = accessScope?.all === true
+      ? null
+      : new Set(Array.isArray(accessScope?.projectIds) ? accessScope.projectIds.map(String) : []);
+    const projects = (await repository.listProjects(accessScope))
+      .map(mapProject)
+      .filter((project) => requestedProjectIds === null || requestedProjectIds.has(project.id));
     const accessibleProjectIds = new Set(projects.map((project) => project.id));
-    const tasks = (await repository.listTasksByOwner(owner))
+    const effectiveAccessScope = accessScope?.all === true
+      ? { all: true }
+      : { projectIds: [...accessibleProjectIds].sort() };
+    const tasks = (await repository.listTasksByOwner(owner, effectiveAccessScope))
       .map(mapTask)
       .filter((task) => accessibleProjectIds.has(task.projectId));
-    const requirements = (await repository.listRequirementsByOwner(owner))
+    const requirements = (await repository.listRequirementsByOwner(owner, effectiveAccessScope))
       .map(mapRequirement)
       .filter((requirement) => accessibleProjectIds.has(requirement.projectId));
-    const tests = (await repository.listTestCases()).filter((testCase) => accessibleProjectIds.has(testCase.project_id));
-    const documents = visibleDocumentsForUser(user, (await repository.listDocuments()).map(mapDocument))
+    const tests = (await repository.listTestCases(effectiveAccessScope)).filter((testCase) => accessibleProjectIds.has(testCase.project_id));
+    const documents = visibleDocumentsForUser(user, (await repository.listDocuments(effectiveAccessScope)).map(mapDocument))
       .filter((document) => !document.projectId || accessibleProjectIds.has(document.projectId));
     const myDefects = owner
-      ? (await repository.listDefectsByAssignee(owner)).map(mapDefect).filter((defect) => accessibleProjectIds.has(defect.projectId))
+      ? (await repository.listDefectsByAssignee(owner, effectiveAccessScope)).map(mapDefect).filter((defect) => accessibleProjectIds.has(defect.projectId))
       : [];
     const myBuilds = owner
-      ? (await repository.listBuildsByCreator(owner)).map(mapBuild).filter((build) => accessibleProjectIds.has(build.projectId))
+      ? (await repository.listBuildsByCreator(owner, effectiveAccessScope)).map(mapBuild).filter((build) => accessibleProjectIds.has(build.projectId))
       : [];
 
     const taskCounts = tasks.reduce((counts, task) => {
@@ -66,16 +72,17 @@ function createDashboardService({
         title: requirement.title,
         completion: requirement.completion,
         projectId: requirement.projectId,
-        projectName: await repository.findProjectName(requirement.projectId),
+        projectName: await repository.findProjectName(requirement.projectId, effectiveAccessScope),
       })),
       ai: await createAiSummary("dashboard", {
         ...metrics,
-        totalJobs: await repository.countAiJobs(),
-        logAnalysis: await repository.countWorkLogs(),
+        totalJobs: await repository.countAiJobs(effectiveAccessScope),
+        logAnalysis: await repository.countWorkLogs(effectiveAccessScope),
       }, {
         cacheKey: `${user?.id || owner || user?.role || "dashboard"}:${[...accessibleProjectIds].sort().join(",") || "none"}`,
-        projectIds: [...accessibleProjectIds],
-        backgroundRefresh: true,
+        accessScope: effectiveAccessScope,
+        backgroundRefresh: !skipCache,
+        skipCache,
         timeoutMs: 14000,
       }),
     };

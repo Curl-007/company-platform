@@ -32,7 +32,7 @@ export function bindProjectWorkflowTemplate(projectId: string, templateId: strin
     `/api/projects/${encodeURIComponent(projectId)}/workflow-binding`,
     { templateId },
     {
-      invalidatePrefixes: ['fetchWorkflowTemplates', 'fetchProjectFlow', 'fetchFlowOverview', 'fetchProjectWorkflowBinding'],
+      invalidateKeys: ['workflow:templates', 'project:flow', 'flow:overview', 'project:workflow-binding'],
     },
   );
 }

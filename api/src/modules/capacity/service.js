@@ -67,6 +67,88 @@ function calendarContext(period, calendar, exceptions) {
   return { workingWeekdays, isWorkingDate, workingDays, exceptions };
 }
 
+function datesInPeriod(period, isWorkingDate) {
+  const dates = [];
+  const cursor = new Date(`${period.periodStart}T00:00:00.000Z`);
+  const end = new Date(`${period.periodEnd}T00:00:00.000Z`);
+  while (cursor <= end) {
+    const date = cursor.toISOString().slice(0, 10);
+    if (isWorkingDate(date)) dates.push(date);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+function evaluateAllocationConcurrency({
+  period,
+  projectId,
+  allocationPercent,
+  plannedHours,
+  effectiveHours,
+  existingAllocations = [],
+  isWorkingDate,
+}) {
+  const targetDates = datesInPeriod(period, isWorkingDate);
+  const targetDailyCapacity = targetDates.length > 0 ? effectiveHours / targetDates.length : 0;
+  const targetDailyHours = targetDates.length > 0
+    ? (plannedHours === null ? targetDailyCapacity * allocationPercent / 100 : plannedHours / targetDates.length)
+    : 0;
+  const existingDaily = existingAllocations.map((allocation) => {
+    const workingDates = datesInPeriod({
+      periodStart: allocation.period_start,
+      periodEnd: allocation.period_end,
+    }, isWorkingDate);
+    const configuredHours = allocation.planned_hours === null || allocation.planned_hours === undefined
+      ? null
+      : Number(allocation.planned_hours) || 0;
+    const percent = Number(allocation.allocation_percent) || 0;
+    return {
+      ...allocation,
+      percent,
+      dailyHours: configuredHours === null
+        ? targetDailyCapacity * percent / 100
+        : (workingDates.length > 0 ? configuredHours / workingDates.length : 0),
+    };
+  });
+
+  let peakAllocationPercent = 0;
+  let peakPlannedHours = 0;
+  const overloadedDates = [];
+  for (const date of targetDates) {
+    // A project has one effective allocation on a date. Overlapping records for
+    // the same project represent an override, while different projects compete.
+    const contributionByProject = new Map();
+    for (const allocation of existingDaily) {
+      if (allocation.project_id === projectId) continue;
+      if (allocation.period_start > date || allocation.period_end < date) continue;
+      const previous = contributionByProject.get(allocation.project_id);
+      if (!previous || allocation.percent > previous.percent || allocation.dailyHours > previous.dailyHours) {
+        contributionByProject.set(allocation.project_id, {
+          percent: Math.max(previous?.percent || 0, allocation.percent),
+          dailyHours: Math.max(previous?.dailyHours || 0, allocation.dailyHours),
+        });
+      }
+    }
+    const daily = [...contributionByProject.values()].reduce((sum, contribution) => ({
+      percent: sum.percent + contribution.percent,
+      hours: sum.hours + contribution.dailyHours,
+    }), { percent: allocationPercent, hours: targetDailyHours });
+    peakAllocationPercent = Math.max(peakAllocationPercent, daily.percent);
+    peakPlannedHours = Math.max(peakPlannedHours, daily.hours);
+    if (daily.percent > 100 || (targetDailyCapacity > 0 && daily.hours > targetDailyCapacity)) {
+      overloadedDates.push(date);
+    }
+  }
+
+  return {
+    needsOverrideApproval: overloadedDates.length > 0,
+    peakAllocationPercent: Math.round(peakAllocationPercent * 100) / 100,
+    peakPlannedHours: Math.round(peakPlannedHours * 100) / 100,
+    effectiveDailyHours: Math.round(targetDailyCapacity * 100) / 100,
+    overloadedDates: overloadedDates.slice(0, 10),
+  };
+}
+
 function mapPlan(plan, calendarWorkingDays = null) {
   if (!plan) return null;
   const manualWorkingDays = Math.max(0, Number(plan.working_days) || 0);
@@ -251,6 +333,7 @@ module.exports = {
   calendarContext,
   createCapacityService,
   DEFAULT_WORKLOAD_THRESHOLDS,
+  evaluateAllocationConcurrency,
   isoDate,
   mapAllocation,
   mapPlan,

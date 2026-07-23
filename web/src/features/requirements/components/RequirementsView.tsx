@@ -31,6 +31,19 @@ import {
 import { canOperate } from '../../../constants/roles';
 import { clearRequirementFocusFromHash, readRequirementFocusFromHash } from './requirementsFocus';
 
+export function RequirementCompletionCell({ completion }: { completion?: number | null }) {
+  const percent = completion ?? 0;
+
+  return (
+    <div className="requirement-completion-cell" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+      <div className="requirement-completion-bar" style={{ flex: '1 1 auto', minWidth: 0 }}>
+        <ProgressBar percent={percent} height={6} showPercent={false} />
+      </div>
+      <span className="text-mono" style={{ minWidth: 42 }}>{percent}%</span>
+    </div>
+  );
+}
+
 export default function RequirementsView() {
   const toast = useToast();
   const confirm = useConfirm();
@@ -40,10 +53,11 @@ export default function RequirementsView() {
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<Requirement | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
-  const projectsState = useAsync<Project[]>(fetchProjects, []);
+  const projectsState = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
   const { data, loading, error, reload } = useAsync<Requirement[]>(
     () => fetchRequirements(filters),
     [filters.keyword, filters.status, filters.priority, filters.projectId],
+    { cacheKey: 'requirements:list' },
   );
 
   const projects = projectsState.data ?? [];
@@ -114,12 +128,7 @@ export default function RequirementsView() {
       key: 'completion',
       title: '完成度',
       width: 180,
-      render: (item) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <ProgressBar percent={item.completion ?? 0} height={6} />
-          <span className="text-mono" style={{ minWidth: 42 }}>{item.completion ?? 0}%</span>
-        </div>
-      ),
+      render: (item) => <RequirementCompletionCell completion={item.completion} />,
     },
     {
       key: 'actions',

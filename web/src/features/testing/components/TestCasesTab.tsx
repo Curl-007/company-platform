@@ -38,7 +38,7 @@ export default function TestCasesTab({
   const sessionUser = getSessionUser();
   const canManageTesting = canOperate(sessionUser, 'testing:manage');
   const canUseAi = canOperate(sessionUser, 'ai:analyze');
-  const { data, loading, error, reload } = useAsync<TestCase[]>(fetchTestCases, []);
+  const { data, loading, error, reload } = useAsync<TestCase[]>(fetchTestCases, [], { cacheKey: 'test-cases:list' });
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<TestCase | null>(null);
   const [executing, setExecuting] = useState<TestCase | null>(null);
@@ -103,9 +103,13 @@ export default function TestCasesTab({
       render: (item) => (
         canManageTesting ? (
           <select className="form-select" value={item.status} onClick={(e) => e.stopPropagation()} onChange={async (e) => {
-            await updateTestCaseStatus(item.id, e.target.value);
-            toast.success('测试状态已更新');
-            reload();
+            try {
+              await updateTestCaseStatus(item.id, e.target.value);
+              toast.success('测试状态已更新');
+              reload();
+            } catch (error) {
+              toast.error(error instanceof ApiError ? error.message : '更新测试状态失败');
+            }
           }}>
             {TEST_CASE_STATUSES.map((status) => <option key={status} value={status}>{labelOf(TEST_CASE_STATUS_LABELS, status)}</option>)}
           </select>

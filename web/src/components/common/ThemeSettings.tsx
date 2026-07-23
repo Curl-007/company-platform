@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Contrast, Maximize2, Minus, Moon, Palette, PanelLeftClose, PanelLeftOpen, PanelTop, Plus, RotateCcw, SlidersHorizontal, Sparkles, Sun, Type, X, ZapOff } from 'lucide-react';
 import {
   WORK_FONT_LABELS,
+  WORK_THEME_STORAGE_KEY,
   WORK_THEMES,
   applyWorkTheme,
   defaultWorkThemeSettings,
@@ -25,10 +26,57 @@ const CONTENT_GUTTER_MAJOR = 40;
 export default function ThemeSettings() {
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState<WorkThemeSettings>(() => readWorkThemeSettings());
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    applyWorkTheme(settings);
-  }, [settings]);
+    const syncAcrossTabs = (event: StorageEvent) => {
+      if (event.key !== WORK_THEME_STORAGE_KEY && event.key !== null) return;
+      const next = readWorkThemeSettings();
+      applyWorkTheme(next);
+      setSettings(next);
+    };
+    window.addEventListener('storage', syncAcrossTabs);
+    return () => window.removeEventListener('storage', syncAcrossTabs);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    closeButtonRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      const focusable = Array.from(drawerRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      ) ?? []);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      triggerRef.current?.focus();
+    };
+  }, [open]);
 
   const changed = useMemo(() => {
     return JSON.stringify(settings) !== JSON.stringify(defaultWorkThemeSettings);
@@ -45,20 +93,26 @@ export default function ThemeSettings() {
   const drawer = open ? (
     <>
       <div className="theme-settings-scrim" onClick={() => setOpen(false)} />
-      <aside className="theme-settings-drawer" aria-label="主题设置面板">
+      <aside
+        ref={drawerRef}
+        className="theme-settings-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="theme-settings-title"
+      >
         <div className="theme-settings-header">
           <div>
-            <div className="theme-settings-title">
+            <div className="theme-settings-title" id="theme-settings-title">
               <SlidersHorizontal size={16} />
               主题设置
             </div>
-            <div className="theme-settings-subtitle">来自 Glass UI 的主题、密度和玻璃参数</div>
+            <div className="theme-settings-subtitle">工作台的主题、密度与布局偏好</div>
           </div>
           <div className="theme-settings-actions">
-            <button className="topbar-icon-button" onClick={reset} aria-label="恢复默认">
+            <button type="button" className="topbar-icon-button" onClick={reset} aria-label="恢复默认">
               <RotateCcw size={16} />
             </button>
-            <button className="topbar-icon-button" onClick={() => setOpen(false)} aria-label="关闭主题设置">
+            <button ref={closeButtonRef} type="button" className="topbar-icon-button" onClick={() => setOpen(false)} aria-label="关闭主题设置">
               <X size={16} />
             </button>
           </div>
@@ -81,10 +135,10 @@ export default function ThemeSettings() {
 
           <OptionBlock title="明暗">
             <div className="theme-segmented">
-              <button className={settings.mode === 'dark' ? 'active' : ''} onClick={() => update({ mode: 'dark' })}>
+              <button type="button" className={settings.mode === 'dark' ? 'active' : ''} aria-pressed={settings.mode === 'dark'} onClick={() => update({ mode: 'dark' })}>
                 <Moon size={15} /> 深色
               </button>
-              <button className={settings.mode === 'light' ? 'active' : ''} onClick={() => update({ mode: 'light' })}>
+              <button type="button" className={settings.mode === 'light' ? 'active' : ''} aria-pressed={settings.mode === 'light'} onClick={() => update({ mode: 'light' })}>
                 <Sun size={15} /> 浅色
               </button>
             </div>
@@ -122,7 +176,9 @@ export default function ThemeSettings() {
               {fontOptions.map(([value, label]) => (
                 <button
                   key={value}
+                  type="button"
                   className={settings.fontFamily === value ? 'active' : ''}
+                  aria-pressed={settings.fontFamily === value}
                   onClick={() => update({ fontFamily: value })}
                 >
                   {label}
@@ -161,6 +217,8 @@ export default function ThemeSettings() {
   return (
     <>
       <button
+        ref={triggerRef}
+        type="button"
         className="topbar-icon-button"
         onClick={() => setOpen(true)}
         aria-label="打开主题设置"
@@ -188,14 +246,14 @@ function OptionBlock({
 }) {
   return (
     <section className="theme-option-block">
-      <span className="theme-option-title">
+      <h2 className="theme-option-title">
         {canReset && (
-          <button onClick={onReset} aria-label={`重置${title}`}>
+          <button type="button" onClick={onReset} aria-label={`重置${title}`}>
             <RotateCcw size={12} />
           </button>
         )}
         {title}
-      </span>
+      </h2>
       {children}
     </section>
   );
@@ -214,7 +272,7 @@ function ThemeCard({
 }) {
   const preview = theme.preview[mode];
   return (
-    <button className={`theme-preset-card ${active ? 'active' : ''}`} onClick={onClick} aria-pressed={active}>
+    <button type="button" className={`theme-preset-card ${active ? 'active' : ''}`} onClick={onClick} aria-pressed={active}>
       <span className="theme-preset-preview" style={{ background: preview.bg }}>
         <span style={{ background: `linear-gradient(90deg, ${preview.gradient.join(', ')})` }} />
       </span>
@@ -227,7 +285,7 @@ function ThemeCard({
 
 function ToggleTile({ icon, label, active, onClick }: { icon: ReactNode; label: string; active: boolean; onClick: () => void }) {
   return (
-    <button className={`theme-toggle-tile ${active ? 'active' : ''}`} onClick={onClick}>
+    <button type="button" className={`theme-toggle-tile ${active ? 'active' : ''}`} onClick={onClick} aria-pressed={active}>
       <span className="theme-toggle-icon">{icon}</span>
       <span>{label}</span>
       <strong>{active ? '开' : '关'}</strong>
@@ -253,13 +311,13 @@ function FontSizeSetting({
     <OptionBlock title="字号" canReset={canReset} onReset={onReset}>
       <div className="theme-stepper-row">
         <Type size={15} className="text-secondary" />
-        <button className="topbar-icon-button" disabled={value <= FONT_SIZE_RANGE[0]} onClick={() => nextValue(-1)} aria-label="减小字号">
+        <button type="button" className="topbar-icon-button" disabled={value <= FONT_SIZE_RANGE[0]} onClick={() => nextValue(-1)} aria-label="减小字号">
           <Minus size={14} />
         </button>
         <div className="theme-progress-track">
           <span style={{ width: `${pct}%` }} />
         </div>
-        <button className="topbar-icon-button" disabled={value >= FONT_SIZE_RANGE[1]} onClick={() => nextValue(1)} aria-label="增大字号">
+        <button type="button" className="topbar-icon-button" disabled={value >= FONT_SIZE_RANGE[1]} onClick={() => nextValue(1)} aria-label="增大字号">
           <Plus size={14} />
         </button>
         <strong>{value}px</strong>
@@ -368,6 +426,7 @@ function NavLayoutSetting({
         {options.map((option) => (
           <button
             key={option.value}
+            type="button"
             className={`theme-layout-option ${value === option.value ? 'active' : ''}`}
             onClick={() => onChange(option.value)}
             aria-pressed={value === option.value}

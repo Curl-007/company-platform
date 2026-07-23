@@ -1,6 +1,6 @@
 const CORE_TABLES = Object.freeze([
   "users", "org_units", "strategic_goals", "programs", "portfolios", "projects", "products", "requirements", "tasks", "test_cases", "test_runs",
-  "documents", "document_chunk", "rag_citation", "objects", "work_logs", "project_members", "capacity_plans", "leave_records", "project_allocations", "time_entries",
+  "documents", "document_chunk", "rag_citation", "objects", "product_images", "work_logs", "project_members", "capacity_plans", "leave_records", "project_allocations", "time_entries",
   "project_risks", "project_decisions", "ai_jobs", "sprints", "sprint_commitments", "sprint_scope_changes",
   "defects", "audit_logs", "status_histories", "burndown_snapshots", "app_settings", "builds", "releases",
   "release_approvals", "rollback_records", "schema_migrations", "work_calendars", "work_calendar_exceptions", "idempotency_keys",
@@ -64,6 +64,8 @@ const REFERENCE_RULES = Object.freeze([
   ["ai_jobs", "written_requirement_id", "requirements", "id"],
   // ai_jobs.source_id is polymorphic by source_type (document/etc.) and is not checked here.
   ["objects", "created_by", "users", "id"],
+  ["product_images", "product_id", "products", "id"],
+  ["product_images", "object_id", "objects", "id"],
   ["rag_citation", "created_by", "users", "id"],
   ["status_histories", "project_id", "projects", "id"],
   ["status_histories", "actor_id", "users", "id"],
@@ -74,6 +76,14 @@ const REFERENCE_RULES = Object.freeze([
   ["release_approvals", "release_id", "releases", "id"],
   ["rollback_records", "release_id", "releases", "id"],
   ["audit_logs", "actor_id", "users", "id"],
+  ["audit_logs", "project_id", "projects", "id"],
+  ["audit_logs", "subject_user_id", "users", "id"],
+]);
+
+const REQUIRED_COLUMNS = Object.freeze([
+  ["audit_logs", "scope_type"],
+  ["audit_logs", "project_id"],
+  ["audit_logs", "subject_user_id"],
 ]);
 
 const JSON_COLUMNS = Object.freeze([
@@ -93,10 +103,14 @@ function tableColumns(db, table) {
   return new Set(db.prepare(`PRAGMA table_info(${quoted(table)})`).all().map((column) => column.name));
 }
 
-function preflightDatabase(db, { expectedTables = CORE_TABLES } = {}) {
+function preflightDatabase(db, { expectedTables = CORE_TABLES, expectedColumns = REQUIRED_COLUMNS } = {}) {
   const tableNames = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all().map((item) => item.name));
   const columns = new Map([...tableNames].map((table) => [table, tableColumns(db, table)]));
+  const expectedTableNames = new Set(expectedTables);
   const missingTables = expectedTables.filter((table) => !tableNames.has(table));
+  const missingColumns = expectedColumns
+    .filter(([table, column]) => expectedTableNames.has(table) && tableNames.has(table) && !columns.get(table).has(column))
+    .map(([table, column]) => `${table}.${column}`);
   const integrityRows = db.prepare("PRAGMA integrity_check").all();
   const integrity = integrityRows.map((item) => item.integrity_check || Object.values(item)[0]);
   const referenceViolations = [];
@@ -127,8 +141,8 @@ function preflightDatabase(db, { expectedTables = CORE_TABLES } = {}) {
   }
   const counts = Object.fromEntries([...tableNames].sort().map((table) => [table, db.prepare(`SELECT COUNT(*) AS count FROM ${quoted(table)}`).get().count]));
   const foreignKeyRows = db.prepare("PRAGMA foreign_key_check").all();
-  const ok = missingTables.length === 0 && integrity.every((value) => value === "ok") && foreignKeyRows.length === 0 && referenceViolations.length === 0 && jsonViolations.length === 0;
-  return { ok, integrity, missingTables, foreignKeyViolations: foreignKeyRows, referenceViolations, jsonViolations, counts };
+  const ok = missingTables.length === 0 && missingColumns.length === 0 && integrity.every((value) => value === "ok") && foreignKeyRows.length === 0 && referenceViolations.length === 0 && jsonViolations.length === 0;
+  return { ok, integrity, missingTables, missingColumns, foreignKeyViolations: foreignKeyRows, referenceViolations, jsonViolations, counts };
 }
 
-module.exports = { CORE_TABLES, REFERENCE_RULES, preflightDatabase };
+module.exports = { CORE_TABLES, REFERENCE_RULES, REQUIRED_COLUMNS, preflightDatabase };

@@ -5,6 +5,9 @@ const {
   assertConfigurableSourcePath,
   canConfigureSourcePath,
 } = require("./sourcePathPolicy");
+const { BUILTIN_ID, builtinTemplates } = require("../../workflow/templateStore");
+
+const WORKFLOW_TEMPLATE_BY_ID = new Map(builtinTemplates().map((template) => [template.id, template]));
 
 function createProjectsRouter({
   audit,
@@ -68,6 +71,39 @@ function createProjectsRouter({
     };
   }
 
+  /**
+   * programId/productId contract:
+   * - field omitted → keep existing (undefined into buildProject*)
+   * - null / "" → unbind
+   * - non-empty id → must exist
+   */
+  async function resolveLinkField(value, { findById, notFoundMessage }) {
+    if (value === undefined) return { ok: true, value: undefined };
+    if (value === null || value === "") return { ok: true, value: null };
+    const id = String(value).trim();
+    if (!id) return { ok: true, value: null };
+    const found = await findById(id);
+    if (!found) return { ok: false, status: 404, code: "RESOURCE_NOT_FOUND", message: notFoundMessage };
+    return { ok: true, value: id };
+  }
+
+  async function validateBoundWorkflowProcessMode(projectId, processMode) {
+    if (processMode === undefined) return null;
+    if (typeof repository.findWorkflowBinding !== "function") return null;
+    const binding = await repository.findWorkflowBinding(projectId);
+    if (!binding) return null;
+    const template = WORKFLOW_TEMPLATE_BY_ID.get(binding.template_id) || WORKFLOW_TEMPLATE_BY_ID.get(BUILTIN_ID);
+    const normalizedMode = String(processMode || "").trim().toLowerCase();
+    const allowedModes = (template?.processModes || []).map((item) => String(item).toLowerCase());
+    if (allowedModes.length === 0 || allowedModes.includes(normalizedMode)) return null;
+    return {
+      templateId: template.id,
+      templateName: template.name,
+      processMode: normalizedMode,
+      allowedProcessModes: allowedModes,
+    };
+  }
+
   router.get("/projects", async (req, res) => {
     const __src_allItems = await repository.listProjects(req.query);
     const __mid_allItems = await filterAsync(__src_allItems, async (project) => await canAccessProject(req.user, project.id));
@@ -82,18 +118,29 @@ function createProjectsRouter({
     const sourcePathFieldPresent = Object.prototype.hasOwnProperty.call(req.body || {}, "sourcePath");
     const sourcePathResolved = resolveSourcePathForWrite(req.user, sourcePath, { fieldPresent: sourcePathFieldPresent });
     if (!sourcePathResolved.ok) return fail(res, sourcePathResolved.status, sourcePathResolved.code, sourcePathResolved.message);
+    const programLink = await resolveLinkField(programId, {
+      findById: repository.findProgramId,
+      notFoundMessage: "Program not found.",
+    });
+    if (!programLink.ok) return fail(res, programLink.status, programLink.code, programLink.message);
+    const productLink = await resolveLinkField(productId, {
+      findById: repository.findProductId,
+      notFoundMessage: "Product not found.",
+    });
+    if (!productLink.ok) return fail(res, productLink.status, productLink.code, productLink.message);
     const idempotency = await beginIdempotentRequest(req, res, "project.create");
     if (!idempotency) return;
     try {
       const response = await transaction(async () => {
+        const stamp = now();
         const project = buildProjectCreate(
           {
             name,
             owner,
             status,
             progress,
-            programId,
-            productId,
+            programId: programLink.value,
+            productId: productLink.value,
             processMode,
             code,
             objective,
@@ -102,9 +149,12 @@ function createProjectsRouter({
             endDate,
             sourcePath: sourcePathFieldPresent ? sourcePathResolved.value : undefined,
           },
-          { id: await nextId("PRJ", "projects"), now: now(), json },
+          { id: await nextId("PRJ", "projects"), now: stamp, json },
         );
         await repository.createProject(project);
+        if (project.program_id) {
+          await repository.syncProgramProjectIdsCache(project.program_id, stamp);
+        }
         await statusHistory.record({ resourceType: "project", resourceId: project.id, projectId: project.id, toStatus: project.status, reason: "项目创建", actor: req.user });
         await audit(req.user, "project.create", "project", project.id, null, project, req.ip);
         const created = ok(mapProject(await repository.findProject(project.id)));
@@ -137,15 +187,21 @@ function createProjectsRouter({
       const readiness = await projectActivationReadiness(before, repository, parse);
       if (!readiness.ok) return fail(res, 409, "PROJECT_ACTIVATION_GATE_BLOCKED", "Project needs an objective, planned dates, members, a milestone or sprint, approved capacity allocations, and matching capacity plans before activation.", readiness);
     }
-    const updateResult = await repository.updateProjectStatus({ id: req.params.id, status: req.body.status, updatedAt: now(), expectedVersion });
-    if (updateResult.changes === 0) {
-      const current = await repository.findProjectVersion(req.params.id);
-      return fail(res, 409, "VERSION_CONFLICT", "Project was changed by another user. Refresh and retry your update.", { expectedVersion, currentVersion: Number(current?.version) || null });
+    const outcome = await transaction(async () => {
+      const updateResult = await repository.updateProjectStatus({ id: req.params.id, status: req.body.status, updatedAt: now(), expectedVersion });
+      if (updateResult.changes === 0) {
+        const current = await repository.findProjectVersion(req.params.id);
+        return { currentVersion: Number(current?.version) || null };
+      }
+      const after = await repository.findProject(req.params.id);
+      await statusHistory.record({ resourceType: "project", resourceId: after.id, projectId: after.id, fromStatus: before.status, toStatus: after.status, reason: req.body?.statusReason, actor: req.user });
+      await audit(req.user, "project.status_update", "project", req.params.id, before, after, req.ip);
+      return { after };
+    });
+    if (!outcome.after) {
+      return fail(res, 409, "VERSION_CONFLICT", "Project was changed by another user. Refresh and retry your update.", { expectedVersion, currentVersion: outcome.currentVersion });
     }
-    const after = await repository.findProject(req.params.id);
-    await statusHistory.record({ resourceType: "project", resourceId: after.id, projectId: after.id, fromStatus: before.status, toStatus: after.status, reason: req.body?.statusReason, actor: req.user });
-    await audit(req.user, "project.status_update", "project", req.params.id, before, after, req.ip);
-    res.json(ok(mapProject(after)));
+    res.json(ok(mapProject(outcome.after)));
   });
 
   router.patch("/projects/:id", requirePermission("project:*"), async (req, res) => {
@@ -158,6 +214,29 @@ function createProjectsRouter({
     const sourcePathFieldPresent = Object.prototype.hasOwnProperty.call(req.body || {}, "sourcePath");
     const sourcePathResolved = resolveSourcePathForWrite(req.user, sourcePath, { fieldPresent: sourcePathFieldPresent });
     if (!sourcePathResolved.ok) return fail(res, sourcePathResolved.status, sourcePathResolved.code, sourcePathResolved.message);
+    const programFieldPresent = Object.prototype.hasOwnProperty.call(req.body || {}, "programId");
+    const productFieldPresent = Object.prototype.hasOwnProperty.call(req.body || {}, "productId");
+    const programLink = await resolveLinkField(programFieldPresent ? programId : undefined, {
+      findById: repository.findProgramId,
+      notFoundMessage: "Program not found.",
+    });
+    if (!programLink.ok) return fail(res, programLink.status, programLink.code, programLink.message);
+    const productLink = await resolveLinkField(productFieldPresent ? productId : undefined, {
+      findById: repository.findProductId,
+      notFoundMessage: "Product not found.",
+    });
+    if (!productLink.ok) return fail(res, productLink.status, productLink.code, productLink.message);
+    const workflowConflict = await validateBoundWorkflowProcessMode(before.id, processMode);
+    if (workflowConflict) {
+      return fail(
+        res,
+        409,
+        "WORKFLOW_TEMPLATE_PROCESS_MODE_INCOMPATIBLE",
+        `流程模板「${workflowConflict.templateName}」不支持过程模式「${workflowConflict.processMode}」。`,
+        workflowConflict,
+      );
+    }
+    const stamp = now();
     const next = buildProjectUpdate(
       { ...before },
       {
@@ -169,14 +248,14 @@ function createProjectsRouter({
         status,
         progress,
         processMode,
-        programId,
-        productId,
+        programId: programFieldPresent ? programLink.value : undefined,
+        productId: productFieldPresent ? productLink.value : undefined,
         milestones,
         startDate,
         endDate,
         sourcePath: sourcePathFieldPresent ? sourcePathResolved.value : undefined,
       },
-      { expectedVersion, now: now() },
+      { expectedVersion, now: stamp },
     );
     if (status !== undefined) {
       if (!projectStatuses.includes(status)) return fail(res, 400, "VALIDATION_FAILED", `Status must be one of: ${projectStatuses.join(", ")}`);
@@ -186,15 +265,27 @@ function createProjectsRouter({
         if (!readiness.ok) return fail(res, 409, "PROJECT_ACTIVATION_GATE_BLOCKED", "Project needs an objective, planned dates, members, a milestone or sprint, approved capacity allocations, and matching capacity plans before activation.", readiness);
       }
     }
-    const updateResult = await repository.updateProject(next);
-    if (updateResult.changes === 0) {
-      const current = await repository.findProjectVersion(req.params.id);
-      return fail(res, 409, "VERSION_CONFLICT", "Project was changed by another user. Refresh and retry your update.", { expectedVersion, currentVersion: Number(current?.version) || null });
+    const outcome = await transaction(async () => {
+      const updateResult = await repository.updateProject(next);
+      if (updateResult.changes === 0) {
+        const current = await repository.findProjectVersion(req.params.id);
+        return { currentVersion: Number(current?.version) || null };
+      }
+      const after = await repository.findProject(req.params.id);
+      if (before.program_id && before.program_id !== after.program_id) {
+        await repository.syncProgramProjectIdsCache(before.program_id, stamp);
+      }
+      if (after.program_id && before.program_id !== after.program_id) {
+        await repository.syncProgramProjectIdsCache(after.program_id, stamp);
+      }
+      if (status !== undefined) await statusHistory.record({ resourceType: "project", resourceId: after.id, projectId: after.id, fromStatus: before.status, toStatus: after.status, reason: req.body?.statusReason, actor: req.user });
+      await audit(req.user, "project.update", "project", req.params.id, before, after, req.ip);
+      return { after };
+    });
+    if (!outcome.after) {
+      return fail(res, 409, "VERSION_CONFLICT", "Project was changed by another user. Refresh and retry your update.", { expectedVersion, currentVersion: outcome.currentVersion });
     }
-    const after = await repository.findProject(req.params.id);
-    if (status !== undefined) await statusHistory.record({ resourceType: "project", resourceId: after.id, projectId: after.id, fromStatus: before.status, toStatus: after.status, reason: req.body?.statusReason, actor: req.user });
-    await audit(req.user, "project.update", "project", req.params.id, before, after, req.ip);
-    res.json(ok(mapProject(after)));
+    res.json(ok(mapProject(outcome.after)));
   });
 
   router.delete("/projects/:id", requirePermission("project:*"), async (req, res) => {
@@ -211,8 +302,12 @@ function createProjectsRouter({
         { dependencies },
       );
     }
-    await repository.softDeleteProject({ id: req.params.id, deletedAt: now() });
-    await audit(req.user, "project.delete", "project", req.params.id, before, null, req.ip);
+    await transaction(async () => {
+      const deletedAt = now();
+      await repository.softDeleteProject({ id: req.params.id, deletedAt });
+      if (before.program_id) await repository.syncProgramProjectIdsCache(before.program_id, deletedAt);
+      await audit(req.user, "project.delete", "project", req.params.id, before, null, req.ip);
+    });
     res.json(ok({ deleted: true, id: req.params.id }));
   });
 

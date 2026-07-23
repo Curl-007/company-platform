@@ -60,7 +60,7 @@ function createStrategyRouter({
   row,
   rows,
   run,
-  transaction,
+  transaction = async (work) => work(),
 }) {
   const router = express.Router();
 
@@ -77,11 +77,38 @@ function createStrategyRouter({
     return allProducts.filter((product) => visibleIds.has(product.id));
   }
 
+  // Single source of truth: projects.program_id. programs.project_ids is a denormalized cache.
   async function allProgramProjectIds(program) {
-    const persistedIds = ids(parse(program.project_ids, []));
-    const linkedIds = (await rows("SELECT id FROM projects WHERE program_id = @programId AND deleted_at IS NULL", { programId: program.id }))
-      .map((project) => project.id);
-    return [...new Set([...persistedIds, ...linkedIds])];
+    return (await rows(
+      "SELECT id FROM projects WHERE program_id = @programId AND deleted_at IS NULL ORDER BY id",
+      { programId: program.id },
+    )).map((project) => project.id);
+  }
+
+  async function syncProgramProjectIdsCache(programId, projectIds, updatedAt) {
+    await run(
+      "UPDATE programs SET project_ids = @projectIds, updated_at = @updatedAt WHERE id = @id",
+      { id: programId, projectIds: json(projectIds), updatedAt },
+    );
+  }
+
+  async function projectProgramAssignments(projectIds) {
+    const assignments = new Map();
+    for (const projectId of projectIds) {
+      const project = await row("SELECT id, program_id FROM projects WHERE id = @id", { id: projectId });
+      if (project) assignments.set(projectId, project.program_id || null);
+    }
+    return assignments;
+  }
+
+  async function refreshProgramCaches(programIds, updatedAt) {
+    for (const programId of programIds) {
+      if (!programId) continue;
+      const program = await row("SELECT id FROM programs WHERE id = @id", { id: programId });
+      if (!program) continue;
+      const linkedIds = await allProgramProjectIds(program);
+      await syncProgramProjectIdsCache(program.id, linkedIds, updatedAt);
+    }
   }
 
   async function mapProgram(program, user) {
@@ -301,14 +328,24 @@ function createStrategyRouter({
     const links = await assertProjectLinks(projectIds, req.user);
     if (links) return fail(res, links.status || 400, links.status ? "PERMISSION_DENIED" : "VALIDATION_FAILED", links.error);
     const program = await transaction(async () => {
+      const stamp = now();
+      const previousAssignments = await projectProgramAssignments(projectIds);
       const record = {
         id: await nextId("PROG", "programs"), name, owner, objective, status,
-        health_score: 0, progress: 0, project_ids: json(projectIds), risks: json(riskItems(req.body?.risks)), updated_at: now(),
+        health_score: 0, progress: 0, project_ids: json(projectIds), risks: json(riskItems(req.body?.risks)), updated_at: stamp,
       };
       await insert("programs", record);
       for (const id of projectIds) {
-        await run("UPDATE projects SET program_id = @programId, updated_at = @updatedAt WHERE id = @id", { id, programId: record.id, updatedAt: record.updated_at });
+        if (previousAssignments.get(id) === record.id) continue;
+        await run(
+          "UPDATE projects SET program_id = @programId, updated_at = @updatedAt, version = COALESCE(version, 1) + 1 WHERE id = @id",
+          { id, programId: record.id, updatedAt: stamp },
+        );
       }
+      const affectedPrograms = new Set([...previousAssignments.values(), record.id]);
+      await refreshProgramCaches(affectedPrograms, stamp);
+      const linkedIds = await allProgramProjectIds(record);
+      record.project_ids = json(linkedIds);
       await audit(req.user, "program.create", "program", record.id, null, record, req.ip);
       return record;
     });
@@ -329,22 +366,32 @@ function createStrategyRouter({
     if (!PROGRAM_STATUSES.has(status)) return fail(res, 400, "VALIDATION_FAILED", "Invalid program status.");
     const after = await transaction(async () => {
       const previousProjectIds = await allProgramProjectIds(before);
+      const affectedProjectIds = [...new Set([...previousProjectIds, ...nextProjectIds])];
+      const previousAssignments = await projectProgramAssignments(affectedProjectIds);
       const updatedAt = now();
       await run(`UPDATE programs SET name = @name, owner = @owner, objective = @objective, status = @status,
-        project_ids = @projectIds, risks = @risks, updated_at = @updatedAt WHERE id = @id`, {
-        id: before.id, name, owner, objective, status, projectIds: json(nextProjectIds),
+        risks = @risks, updated_at = @updatedAt WHERE id = @id`, {
+        id: before.id, name, owner, objective, status,
         risks: json(req.body?.risks === undefined ? riskItems(parse(before.risks, [])) : riskItems(req.body.risks)), updatedAt,
       });
       for (const id of previousProjectIds.filter((item) => !nextProjectIds.includes(item))) {
         await run(
-          "UPDATE projects SET program_id = NULL, updated_at = @updatedAt WHERE id = @id AND program_id = @programId",
+          "UPDATE projects SET program_id = NULL, updated_at = @updatedAt, version = COALESCE(version, 1) + 1 WHERE id = @id AND program_id = @programId",
           { id, programId: before.id, updatedAt },
         );
       }
       for (const id of nextProjectIds) {
-        await run("UPDATE projects SET program_id = @programId, updated_at = @updatedAt WHERE id = @id", { id, programId: before.id, updatedAt });
+        if (previousAssignments.get(id) === before.id) continue;
+        await run(
+          "UPDATE projects SET program_id = @programId, updated_at = @updatedAt, version = COALESCE(version, 1) + 1 WHERE id = @id",
+          { id, programId: before.id, updatedAt },
+        );
       }
+      const affectedPrograms = new Set([...previousAssignments.values(), before.id]);
+      await refreshProgramCaches(affectedPrograms, updatedAt);
+      const linkedIds = await allProgramProjectIds(before);
       const record = await row("SELECT * FROM programs WHERE id = @id", { id: before.id });
+      record.project_ids = json(linkedIds);
       await audit(req.user, "program.update", "program", before.id, before, record, req.ip);
       return record;
     });
@@ -354,10 +401,16 @@ function createStrategyRouter({
   router.delete("/programs/:id", requirePermission("project:*"), async (req, res) => {
     const before = await row("SELECT * FROM programs WHERE id = @id", { id: req.params.id });
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Program not found.");
-    const linked = await rows("SELECT id FROM projects WHERE program_id = @programId AND deleted_at IS NULL", { programId: before.id });
-    if (linked.length) return fail(res, 409, "PROGRAM_HAS_PROJECTS", "Detach linked projects before deleting this program.", { projectIds: linked.map((item) => item.id) });
-    await run("DELETE FROM programs WHERE id = @id", { id: before.id });
-    await audit(req.user, "program.delete", "program", before.id, before, null, req.ip);
+    const linked = await rows("SELECT id FROM projects WHERE program_id = @programId ORDER BY id", { programId: before.id });
+    if (linked.length) {
+      return fail(res, 409, "PROGRAM_HAS_PROJECTS", "Detach linked projects, including archived records, before deleting this program.", {
+        dependencies: { projects: { count: linked.length, sampleIds: linked.slice(0, 10).map((item) => item.id) } },
+      });
+    }
+    await transaction(async () => {
+      await run("DELETE FROM programs WHERE id = @id", { id: before.id });
+      await audit(req.user, "program.delete", "program", before.id, before, null, req.ip);
+    });
     res.json(ok({ deleted: true, id: before.id }));
   });
 

@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, Suspense } from 'react';
 import { HashRouter, useLocation, useNavigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Login from './components/Login';
 import PageErrorBoundary from './components/common/PageErrorBoundary';
 import { getMe, getSessionUser, setSessionUser, logout as doLogout } from './services/auth';
-import { ApiError, getToken } from './services/api';
+import { ApiError, getSessionGeneration, getToken, SessionSupersededError } from './services/api';
 import { canAccessPageForUser } from './constants/roles';
 import { trackPageView } from './features/audit/api';
 import { useToast } from './components/common/Toast';
@@ -38,6 +38,10 @@ function AppContent() {
   const [user, setUser] = useState<SessionUser | null>(() => getSessionUser());
   const [currentPage, setCurrentPage] = useState<PageKey>(() => getRoutePage(location.pathname));
 
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.pathname]);
+
   const navigateToPage = useCallback((page: PageKey, params: Record<string, string> = {}, replace = false): void => {
   const query = new URLSearchParams(params).toString();
     navigate({ pathname: `/${page}`, search: query ? `?${query}` : '' }, { replace });
@@ -70,11 +74,16 @@ function AppContent() {
   useEffect(() => {
     if (!user || !getToken()) return;
     const startedToken = getToken();
+    const startedGeneration = getSessionGeneration();
     let cancelled = false;
     getMe()
       .then((freshUser) => {
         // Drop stale getMe if user logged out / re-logged as someone else mid-flight.
-        if (cancelled || getToken() !== startedToken) return;
+        if (
+          cancelled
+          || getToken() !== startedToken
+          || getSessionGeneration() !== startedGeneration
+        ) return;
         setUser(freshUser);
         if (!canAccessPageForUser(freshUser, getRoutePage(location.pathname))) {
           navigateToPage('dashboard', {}, true);
@@ -82,12 +91,16 @@ function AppContent() {
         }
       })
       .catch((error: unknown) => {
-        if (cancelled || getToken() !== startedToken) return;
+        if (cancelled || error instanceof SessionSupersededError) return;
         if (isSessionInvalidError(error)) {
           // api.ts already cleared auth on current-session 401; sync React state.
           setUser(null);
           return;
         }
+        if (
+          getToken() !== startedToken
+          || getSessionGeneration() !== startedGeneration
+        ) return;
         toast.info('无法刷新会话，已保留本地登录状态。请检查网络后重试。');
       });
     return () => {

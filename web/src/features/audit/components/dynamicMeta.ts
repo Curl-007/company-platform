@@ -1,5 +1,6 @@
 import type { AuditLogFilters } from '../api';
 import type { AuditLogRecord } from '../../../types';
+import { businessDateKey, businessWeekStart } from '../../../utils/businessDate';
 
 export interface TimelineEntry {
   record: AuditLogRecord;
@@ -261,11 +262,9 @@ export function getActionCategory(action: string): EntryCategory {
 export function dateRangeFor(range: TimeRange): Pick<AuditLogFilters, 'dateFrom' | 'dateTo'> {
   if (range === 'all') return {};
   const now = new Date();
-  const end = now.toISOString().slice(0, 10);
+  const end = businessDateKey(now);
   if (range === 'today') return { dateFrom: end, dateTo: end };
-  const start = new Date(now);
-  start.setDate(start.getDate() - 6);
-  return { dateFrom: start.toISOString().slice(0, 10), dateTo: end };
+  return { dateFrom: businessWeekStart(now), dateTo: end };
 }
 
 export function getResourceTarget(record: AuditLogRecord): string | null {

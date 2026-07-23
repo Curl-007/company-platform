@@ -15,7 +15,7 @@ function createService() {
   const fixtures = {
     projects: [
       { id: "PRJ-001", name: "Portal", status: "active", owner: "PM", progress: 60, healthScore: 68, riskCount: 2 },
-      { id: "PRJ-002", name: "Done", status: "done", owner: "PM", progress: 100, healthScore: 95, riskCount: 0 },
+      { id: "PRJ-002", name: "Portal", status: "done", owner: "PM", progress: 100, healthScore: 95, riskCount: 0 },
     ],
     requirements: [
       { id: "REQ-001", title: "Checkout", status: "testing", priority: "high", completion: 70, owner: "PDM", projectId: "PRJ-001" },
@@ -28,13 +28,13 @@ function createService() {
       { id: "BUG-002", title: "Closed", severity: "low", status: "closed", assignee: "QA", projectId: "PRJ-001" },
     ],
     documents: [
-      { id: "DOC-001", title: "Spec", type: "markdown", category: "project", aiStatus: "ready", updatedAt: "2026-07-15T00:00:00.000Z" },
+      { id: "DOC-001", title: "Spec", type: "markdown", category: "project", aiStatus: "ready", projectId: "PRJ-001", updatedAt: "2026-07-15T00:00:00.000Z" },
     ],
     builds: [
       { id: "BLD-001", name: "Build", status: "released", projectId: "PRJ-001", version: "1.0.0" },
     ],
     releases: [
-      { id: "REL-001", name: "Release", status: "staging", productId: "PROD-001", version: "1.0.0" },
+      { id: "REL-001", name: "Release", status: "staging", productId: "PROD-001", project_id: "PRJ-001", version: "1.0.0" },
     ],
   };
   return createAiChatService({
@@ -83,7 +83,7 @@ test("AI chat service normalizes messages and attachments for model-safe prompts
 
 test("AI chat service builds project context and fallback replies without performance scoring", async () => {
   const service = createService();
-  const context = await service.buildContext();
+  const context = await service.buildContext({ all: true });
   assert.equal(context.metrics.projects, 2);
   assert.equal(context.metrics.activeProjects, 1);
   assert.equal(context.metrics.riskyProjects, 1);
@@ -92,14 +92,26 @@ test("AI chat service builds project context and fallback replies without perfor
 
   const messages = [{ role: "user", content: "这个版本有什么风险？" }];
   const attachments = [{ kind: "document", name: "spec.md", mimeType: "text/markdown", size: 10, contentText: "验收标准" }];
-  const prompt = await service.buildPrompt({ messages, attachments, scope: "delivery", currentPage: "DeliveryCenter" });
+  const prompt = await service.buildPrompt({ messages, attachments, scope: "delivery", currentPage: "DeliveryCenter", accessScope: { all: true } });
   assert.match(prompt, /当前页面：DeliveryCenter/);
   assert.match(prompt, /平台上下文/);
   assert.match(prompt, /验收标准/);
 
-  const reply = await service.localReplyV2({ messages, attachments });
+  const reply = await service.localReplyV2({ messages, attachments, accessScope: { all: true } });
   assert.match(reply, /平台快照：2 个项目、1 条需求、1 个阻塞任务、1 个未关闭缺陷/);
   assert.doesNotMatch(reply, /绩效|评分|排名|薪酬|晋升|淘汰/);
+});
+
+test("AI chat context fails closed and isolates same-name projects by project id", async () => {
+  const service = createService();
+  const missingScope = await service.buildContext();
+  assert.equal(missingScope.metrics.projects, 0);
+
+  const scoped = await service.buildContext({ projectIds: ["PRJ-001"] });
+  assert.deepEqual(scoped.projects.map((item) => item.id), ["PRJ-001"]);
+  assert.equal(scoped.projects[0].name, "Portal");
+  assert.equal(scoped.requirements.every((item) => item.projectId === "PRJ-001"), true);
+  assert.equal(scoped.delivery.builds.every((item) => item.projectId === "PRJ-001"), true);
 });
 
 test("AI chat extracts create_requirement ACTION_JSON and builds local drafts", async () => {
@@ -121,7 +133,7 @@ test("AI chat extracts create_requirement ACTION_JSON and builds local drafts", 
   assert.equal(wantsCreateRequirement([{ role: "user", content: "帮我新建一个需求：支付回调重试" }], []), true);
   assert.equal(wantsCreateRequirement([{ role: "user", content: "这个版本有什么风险？" }], []), false);
 
-  const context = await service.buildContext();
+  const context = await service.buildContext({ all: true });
   const local = buildLocalRequirementAction({
     messages: [{ role: "user", content: "请根据附件新建需求：标题：对账导出\n优先级：高\n验收标准：导出 Excel；权限校验" }],
     attachments: [{ kind: "document", name: "spec.md", contentText: "对账导出需求说明" }],

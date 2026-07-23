@@ -29,7 +29,7 @@ export default function DocumentsView() {
   const [editing, setEditing] = useState<Document | null>(null);
   const [collaborating, setCollaborating] = useState<Document | null>(null);
   const [uploading, setUploading] = useState(false);
-  const { data: projectsData } = useAsync<Project[]>(fetchProjects, []);
+  const { data: projectsData } = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
   const { data, loading, error, reload } = useAsync<Document[]>(
     () => fetchDocuments({
       type: typeFilter || undefined,
@@ -37,6 +37,7 @@ export default function DocumentsView() {
       projectId: projectFilter || undefined,
     }),
     [typeFilter, categoryFilter, projectFilter],
+    { cacheKey: 'documents:list' },
   );
 
   const projects = projectsData ?? [];

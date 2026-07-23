@@ -116,10 +116,9 @@ function mapStoredTemplate(row, parse) {
 }
 
 function createWorkflowTemplateStore({
-  insert,
   row,
-  run,
   now,
+  upsert,
 }) {
   async function listTemplates() {
     // Only the two builtin templates are exposed.
@@ -199,36 +198,28 @@ function createWorkflowTemplateStore({
       error.code = "RESOURCE_NOT_FOUND";
       throw error;
     }
-    const stamp = now();
-    const existing = await row(
-      "SELECT project_id FROM project_workflow_bindings WHERE project_id = @projectId",
-      { projectId },
-    );
-    if (existing) {
-      await run(
-        `UPDATE project_workflow_bindings
-         SET template_id = @templateId,
-             template_version = @templateVersion,
-             bound_by = @boundBy,
-             bound_at = @boundAt
-         WHERE project_id = @projectId`,
-        {
-          projectId,
-          templateId: template.id,
-          templateVersion: template.version || "published",
-          boundBy: actor?.id || null,
-          boundAt: stamp,
-        },
-      );
-    } else {
-      await insert("project_workflow_bindings", {
-        project_id: projectId,
-        template_id: template.id,
-        template_version: template.version || "published",
-        bound_by: actor?.id || null,
-        bound_at: stamp,
-      });
+    const project = await row("SELECT id, process_mode FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectId });
+    if (!project) {
+      const error = new Error("Project not found.");
+      error.code = "RESOURCE_NOT_FOUND";
+      throw error;
     }
+    const processMode = String(project.process_mode || "scrum").trim().toLowerCase();
+    const allowedModes = Array.isArray(template.processModes) ? template.processModes.map((item) => String(item).toLowerCase()) : [];
+    if (allowedModes.length && !allowedModes.includes(processMode)) {
+      const error = new Error(`流程模板「${template.name}」不支持项目过程模式「${processMode}」，允许：${allowedModes.join(", ")}。`);
+      error.code = "WORKFLOW_TEMPLATE_PROCESS_MODE_INCOMPATIBLE";
+      error.status = 409;
+      throw error;
+    }
+    const stamp = now();
+    await upsert("project_workflow_bindings", {
+      project_id: projectId,
+      template_id: template.id,
+      template_version: template.version || "published",
+      bound_by: actor?.id || null,
+      bound_at: stamp,
+    }, { conflictTarget: "project_id" });
     return getProjectBinding(projectId);
   }
 

@@ -539,6 +539,26 @@ async function main() {
       productId = idOf(product.json);
     }
 
+    if (sessions.pm?.token && projectId && productId) {
+      const currentProject = await getEntity(`/api/projects/${encodeURIComponent(projectId)}`, sessions.pm.token);
+      if (currentProject.status === 200 && currentProject.entity) {
+        const linked = await req("PATCH", `/api/projects/${encodeURIComponent(projectId)}`, {
+          token: sessions.pm.token,
+          body: {
+            version: versionOf(currentProject.entity),
+            productId,
+          },
+        });
+        record(
+          "PM link project to product",
+          linked.status === 200 && dataOf(linked.json)?.productId === productId,
+          `status=${linked.status} productId=${dataOf(linked.json)?.productId || "?"} code=${linked.json?.errorCode || ""}`,
+        );
+      } else {
+        record("PM link project to product", false, `projectStatus=${currentProject.status}`);
+      }
+    }
+
     if (sessions.pdm?.token && projectId) {
       const reqCreated = await expectStatus(
         "PDM create requirement",
@@ -862,12 +882,12 @@ async function main() {
         token: sessions.qa.token,
       });
       record(
-        "QA delete disposable test-case",
-        del.status === 200 && (dataOf(del.json)?.deleted === true || del.json?.data?.deleted === true),
-        `status=${del.status} deleted=${dataOf(del.json)?.deleted}`,
+        "QA block deleting dependent test-case",
+        del.status === 409 && del.json?.errorCode === "TEST_CASE_HAS_DEPENDENCIES",
+        `status=${del.status} code=${del.json?.errorCode || ""} taskDependencies=${del.json?.details?.dependencies?.tasks?.count || 0}`,
       );
     } else {
-      record("QA delete disposable test-case", false, `createStatus=${disposable.status}`);
+      record("QA block deleting dependent test-case", false, `createStatus=${disposable.status}`);
     }
 
     const bug = await expectStatus(
@@ -1391,9 +1411,9 @@ async function main() {
             token: sessions.qa.token,
           });
           record(
-            "QA confirm AI delete draft → DELETE test-case",
-            del.status === 200,
-            `status=${del.status} deleted=${dataOf(del.json)?.deleted}`,
+            "QA confirm AI delete draft → dependency guard",
+            del.status === 409 && del.json?.errorCode === "TEST_CASE_HAS_DEPENDENCIES",
+            `status=${del.status} code=${del.json?.errorCode || ""} taskDependencies=${del.json?.details?.dependencies?.tasks?.count || 0}`,
           );
         }
       }

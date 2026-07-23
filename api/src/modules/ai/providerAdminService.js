@@ -1,3 +1,5 @@
+const { validateAiProviderBaseUrl } = require("./outboundUrlPolicy");
+
 function providerError(code, message, status) {
   const error = new Error(message);
   error.code = code;
@@ -14,16 +16,16 @@ function createAiProviderAdminService({
   readActive,
   readList,
   resetHealth,
+  validateBaseUrl = validateAiProviderBaseUrl,
   writeActive,
   writeList,
 }) {
-  function validate(entry) {
+  async function validate(entry) {
     if (!entry.baseUrl || !entry.model) throw providerError("VALIDATION_FAILED", "baseUrl 和 model 为必填项。", 400);
     try {
-      const url = new URL(entry.baseUrl);
-      if (!['http:', 'https:'].includes(url.protocol)) throw new Error("invalid protocol");
-    } catch {
-      throw providerError("VALIDATION_FAILED", "baseUrl 必须是合法的 http/https 地址。", 400);
+      await validateBaseUrl(entry.baseUrl);
+    } catch (error) {
+      throw providerError("VALIDATION_FAILED", error?.message || "baseUrl 必须是合法、安全的 http/https 地址。", 400);
     }
   }
 
@@ -65,7 +67,7 @@ function createAiProviderAdminService({
       } else if (typeof body.apiKey === "string" && body.apiKey.trim()) {
         next.apiKey = body.apiKey.trim();
       }
-      validate(next);
+      await validate(next);
       const providers = body.createNew
         ? [...stored.providers, next]
         : stored.providers.some((item) => item.id === next.id)

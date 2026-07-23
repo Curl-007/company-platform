@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ClipboardList } from 'lucide-react';
 import Panel from '../../../components/common/Panel';
 import ProgressBar from '../../../components/common/ProgressBar';
 import StatusBadge from '../../../components/common/StatusBadge';
@@ -15,6 +16,7 @@ import { useAsync } from '../../../hooks/useAsync';
 import { fetchRequirement } from '../../requirements/api';
 import { navigateTo } from '../../team/components/teamMeta';
 import type { DashboardData, Requirement } from '../../../types';
+import MyWorkEmptyPanel from './MyWorkEmptyPanel';
 
 type RequirementProgressItem = DashboardData['requirementProgress'][number];
 
@@ -37,11 +39,34 @@ export default function MyWorkRequirementsPanel({ items }: { items: RequirementP
   const detailAsync = useAsync<Requirement | null>(
     () => (selectedSummary ? fetchRequirement(selectedSummary.id) : Promise.resolve(null)),
     [selectedSummary?.id],
+    { cacheKey: 'requirements:detail' },
   );
   const detail = detailAsync.data;
 
   function openInRequirements(id: string) {
     navigateTo('requirements', { focus: id });
+  }
+
+  if (items.length === 0) {
+    return (
+      <MyWorkEmptyPanel
+        icon={<ClipboardList size={26} />}
+        eyebrow="需求跟进"
+        title="当前没有待跟进需求"
+        description="没有指派给你的需求，新的跟进事项会显示在这里。"
+        action={
+          canOpenRequirements ? (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => navigateTo('requirements')}
+            >
+              <ClipboardList size={15} /> 查看需求管理
+            </button>
+          ) : undefined
+        }
+      />
+    );
   }
 
   return (
@@ -72,7 +97,6 @@ export default function MyWorkRequirementsPanel({ items }: { items: RequirementP
               </div>
             </div>
           ))}
-          {items.length === 0 ? <div className="empty-state-desc">当前没有指派给你的需求。</div> : null}
         </div>
       </Panel>
 

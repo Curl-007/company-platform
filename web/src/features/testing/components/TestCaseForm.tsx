@@ -31,7 +31,7 @@ export default function TestCaseForm({
   onDone: () => void;
   canUseAi?: boolean;
 }) {
-  const { data: projects } = useAsync<Project[]>(fetchProjects, []);
+  const { data: projects } = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
   const [name, setName] = useState(item?.name ?? '');
   const [projectId, setProjectId] = useState(item?.projectId ?? '');
   const [owner, setOwner] = useState(item?.owner ?? '');

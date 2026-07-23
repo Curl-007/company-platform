@@ -19,7 +19,7 @@ test("document collaboration update requires a base revision", async () => {
     rooms: new Map(),
     documentId: "DOC-001",
     user: { id: "USR-001" },
-    message: { type: "update", content: "x" },
+    message: { type: "update", content: "x", clientMutationId: "mutation-invalid" },
     row: () => assert.fail("row should not be called"),
     run: () => assert.fail("run should not be called"),
     now: () => "2026-07-15T10:00:00.000Z",
@@ -29,6 +29,7 @@ test("document collaboration update requires a base revision", async () => {
   });
   assert.equal(result, "revision_required");
   assert.equal(socket.sent[0].code, "COLLAB_REVISION_REQUIRED");
+  assert.equal(socket.sent[0].clientMutationId, "mutation-invalid");
 });
 
 test("document collaboration update reports conflict without overwriting newer content", async () => {
@@ -38,7 +39,7 @@ test("document collaboration update reports conflict without overwriting newer c
     rooms: new Map([["DOC-001", new Set([socket])]]),
     documentId: "DOC-001",
     user: { id: "USR-001" },
-    message: { type: "update", content: "new", baseRevision: 1 },
+    message: { type: "update", content: "new", baseRevision: 1, clientMutationId: "mutation-conflict" },
     row: (sql) => sql.includes("FROM users")
       ? { id: "USR-001", status: "active" }
       : sql.includes("SELECT content")
@@ -51,19 +52,27 @@ test("document collaboration update reports conflict without overwriting newer c
     canManageDocument: () => true,
   });
   assert.equal(result, "conflict");
-  assert.deepEqual(socket.sent[0], { type: "conflict", documentId: "DOC-001", content: "latest", revision: 2 });
+  assert.deepEqual(socket.sent[0], {
+    type: "conflict",
+    documentId: "DOC-001",
+    content: "latest",
+    revision: 2,
+    preserveLocalDraft: true,
+    clientMutationId: "mutation-conflict",
+  });
 });
 
 test("document collaboration update writes audit evidence and broadcasts to peers", async () => {
   const socket = createSocket();
   const peer = createSocket();
   const audits = [];
+  let transactionCount = 0;
   const result = await handleCollaborationUpdate({
     socket,
     rooms: new Map([["DOC-001", new Set([socket, peer])]]),
     documentId: "DOC-001",
     user: { id: "USR-001" },
-    message: { type: "update", content: "updated content", baseRevision: 2 },
+    message: { type: "update", content: "updated content", baseRevision: 2, clientMutationId: "mutation-saved" },
     remoteAddress: "127.0.0.1",
     row: (sql) => sql.includes("FROM users")
       ? { id: "USR-001", name: "用户", status: "active" }
@@ -79,11 +88,16 @@ test("document collaboration update writes audit evidence and broadcasts to peer
     audit: (...args) => audits.push(args),
     publicUser: (user) => ({ id: user.id, name: user.name }),
     canManageDocument: () => true,
+    transaction: async (work) => {
+      transactionCount += 1;
+      return work();
+    },
   });
   assert.equal(result, "updated");
   assert.equal(socket.sent[0].type, "saved");
   assert.equal(socket.sent[0].documentId, "DOC-001");
   assert.equal(socket.sent[0].revision, 3);
+  assert.equal(socket.sent[0].clientMutationId, "mutation-saved");
   assert.ok(Array.isArray(socket.sent[0].peers));
   assert.equal(peer.sent.length, 1);
   assert.equal(peer.sent[0].type, "update");
@@ -94,6 +108,7 @@ test("document collaboration update writes audit evidence and broadcasts to peer
   assert.equal(audits[0][3], "DOC-001");
   assert.equal(audits[0][5].contentLength, "updated content".length);
   assert.equal(audits[0][6], "127.0.0.1");
+  assert.equal(transactionCount, 1);
 });
 
 test("document collaboration presence lists unique online peers", () => {

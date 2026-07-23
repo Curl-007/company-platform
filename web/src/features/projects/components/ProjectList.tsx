@@ -29,7 +29,7 @@ export default function ProjectList({
   onOpen: (id: string) => void;
   currentUser?: SessionUser | null;
 }) {
-  const { data, loading, error, reload } = useAsync<Project[]>(fetchProjects, []);
+  const { data, loading, error, reload } = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
   const [keyword, setKeyword] = useState(() => window.localStorage.getItem(STORAGE_KEYS.projectKeyword) ?? '');
   const [filter, setFilter] = useState<ProjectFilter>(() => {
     const saved = window.localStorage.getItem(STORAGE_KEYS.projectFilter);

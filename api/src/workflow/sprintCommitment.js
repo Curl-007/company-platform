@@ -29,7 +29,7 @@ function mapScopeChange(item) {
   };
 }
 
-function createSprintCommitment({ insert, nextId, now, row, rows }) {
+function createSprintCommitment({ insert, nextId, now, row, rows, upsert }) {
   async function getCommitment(sprintId) {
     return mapCommitment(await row("SELECT * FROM sprint_commitments WHERE sprint_id = @sprintId", { sprintId }));
   }
@@ -50,8 +50,21 @@ function createSprintCommitment({ insert, nextId, now, row, rows }) {
       committed_by_name: actor?.name || "",
       committed_at: now(),
     };
-    await insert("sprint_commitments", commitment);
-    return mapCommitment(commitment);
+    await upsert("sprint_commitments", commitment, {
+      conflictTarget: "sprint_id",
+      excludeUpdateColumns: [
+        "id",
+        "project_id",
+        "baseline_task_ids",
+        "baseline_task_count",
+        "baseline_estimated_hours",
+        "baseline_remaining_hours",
+        "committed_by",
+        "committed_by_name",
+        "committed_at",
+      ],
+    });
+    return getCommitment(sprint.id);
   }
 
   async function recordScopeChange({ sprint, task, changeType, impactHours = 0, reason, actor }) {

@@ -273,6 +273,19 @@ CREATE TABLE IF NOT EXISTS objects (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS product_images (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL,
+  object_id TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_product_images_object
+  ON product_images(object_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_product_images_product_sort
+  ON product_images(product_id, sort_order);
+
 CREATE TABLE IF NOT EXISTS work_logs (
   id TEXT PRIMARY KEY,
   author TEXT NOT NULL,
@@ -502,8 +515,22 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   before_json TEXT,
   after_json TEXT,
   ip TEXT,
+  scope_type TEXT NOT NULL DEFAULT 'global',
+  project_id TEXT,
+  subject_user_id TEXT,
   created_at TEXT NOT NULL
 );
+
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS scope_type TEXT NOT NULL DEFAULT 'global';
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS project_id TEXT;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS subject_user_id TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_audit_scope_project_created
+  ON audit_logs(scope_type, project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_actor_created
+  ON audit_logs(actor_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_subject_created
+  ON audit_logs(subject_user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS status_histories (
   id TEXT PRIMARY KEY,
@@ -528,6 +555,9 @@ CREATE TABLE IF NOT EXISTS burndown_snapshots (
   remaining_hours DOUBLE PRECISION NOT NULL,
   created_at TEXT NOT NULL
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_burndown_snapshots_sprint_date
+  ON burndown_snapshots(sprint_id, date);
 
 CREATE TABLE IF NOT EXISTS app_settings (
   key TEXT PRIMARY KEY,

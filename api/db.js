@@ -4,6 +4,7 @@ const { DatabaseSync } = require("node:sqlite");
 const { createDatabaseRuntime, resolveDatabaseDialect } = require("./src/db/runtime");
 const { createAccess } = require("./src/db/access");
 const { CORE_TABLES } = require("./src/db/migrationPreflight");
+const { applyCompatibilityColumns, inspectSqliteSchema } = require("./src/db/sqliteSchema");
 const bcrypt = require("bcryptjs");
 const {
   programs,
@@ -26,7 +27,9 @@ const {
 const DB_FILE = process.env.DATABASE_FILE
   ? path.resolve(process.env.DATABASE_FILE)
   : path.join(__dirname, "app.db");
-const STORAGE_DIR = path.join(__dirname, "storage");
+const STORAGE_DIR = process.env.STORAGE_DIR
+  ? path.resolve(process.env.STORAGE_DIR)
+  : path.join(__dirname, "storage");
 const MIGRATIONS_DIR = path.join(__dirname, "migrations");
 const dialect = resolveDatabaseDialect(process.env);
 const databaseRuntime = createDatabaseRuntime({
@@ -62,6 +65,39 @@ function parse(value, fallback = null) {
 
 function now() {
   return new Date().toISOString();
+}
+
+function validateAppliedMigrationChecksums() {
+  const ledgerExists = db.prepare(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'",
+  ).get();
+  if (!ledgerExists) return;
+
+  const diskMigrations = new Map();
+  const files = fs.existsSync(MIGRATIONS_DIR)
+    ? fs.readdirSync(MIGRATIONS_DIR).filter((file) => /^\d+_.+\.js$/.test(file)).sort()
+    : [];
+  for (const file of files) {
+    const filename = path.join(MIGRATIONS_DIR, file);
+    const migration = require(filename);
+    if (!migration?.id || typeof migration.up !== "function") throw new Error(`Invalid database migration: ${file}`);
+    if (diskMigrations.has(migration.id)) throw new Error(`Duplicate database migration id: ${migration.id}`);
+    const rawSource = fs.readFileSync(filename, "utf8");
+    const normalizedSource = rawSource.replace(/\r\n/g, "\n");
+    diskMigrations.set(migration.id, {
+      normalizedChecksum: require("crypto").createHash("sha256").update(normalizedSource).digest("hex"),
+      legacyChecksum: require("crypto").createHash("sha256").update(rawSource).digest("hex"),
+    });
+  }
+
+  const appliedMigrations = db.prepare("SELECT id, checksum FROM schema_migrations ORDER BY id").all();
+  for (const applied of appliedMigrations) {
+    const expected = diskMigrations.get(applied.id);
+    if (!expected) throw new Error(`Applied migration file is missing: ${applied.id}`);
+    if (applied.checksum !== expected.normalizedChecksum && applied.checksum !== expected.legacyChecksum) {
+      throw new Error(`Applied migration was modified: ${applied.id}`);
+    }
+  }
 }
 
 function runMigrations() {
@@ -123,7 +159,7 @@ async function initDbPostgres() {
     }
   }
 
-  const required = ["schema_migrations", "users", "projects"];
+  const required = [...CORE_TABLES];
   const listed = await databaseRuntime.query(
     `SELECT table_name
        FROM information_schema.tables
@@ -141,33 +177,13 @@ async function initDbPostgres() {
     );
   }
 
-  // Soft check: warn (do not fail) if CORE_TABLES are incomplete — import/schema may be partial.
-  try {
-    const coreListed = await databaseRuntime.query(
-      `SELECT table_name
-         FROM information_schema.tables
-        WHERE table_schema = 'public'
-          AND table_name = ANY($1::text[])`,
-      [[...CORE_TABLES]],
-    );
-    const corePresent = new Set((coreListed.rows || []).map((r) => r.table_name));
-    const coreMissing = CORE_TABLES.filter((name) => !corePresent.has(name));
-    if (coreMissing.length) {
-      console.warn(
-        `[db] PostgreSQL missing optional core tables (${coreMissing.length}): ${coreMissing.slice(0, 8).join(", ")}${coreMissing.length > 8 ? "…" : ""}. ` +
-          "Re-apply postgres-baseline.sql if this is unexpected.",
-      );
-    }
-  } catch (error) {
-    console.warn("[db] PostgreSQL core table check skipped:", error.message);
-  }
-
   // Seed is SQLite bootstrap-only; PG is expected to be loaded via import or ops seed.
   return { dialect: "postgres", seeded: false };
 }
 
 function initDbSqlite() {
   fs.mkdirSync(STORAGE_DIR, { recursive: true });
+  validateAppliedMigrationChecksums();
   exec(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS users (
@@ -532,6 +548,9 @@ function initDbSqlite() {
       before_json TEXT,
       after_json TEXT,
       ip TEXT,
+      scope_type TEXT NOT NULL DEFAULT 'global',
+      project_id TEXT,
+      subject_user_id TEXT,
       created_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS status_histories (
@@ -608,79 +627,7 @@ function initDbSqlite() {
       created_at TEXT NOT NULL
     );
   `);
-  try { exec("ALTER TABLE test_cases ADD COLUMN description TEXT DEFAULT ''"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE test_cases ADD COLUMN steps TEXT DEFAULT ''"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE test_cases ADD COLUMN expected_result TEXT DEFAULT ''"); } catch { /* column already exists */ }
-  // G-1/G-2: sprint & assignment fields — nullable for backward compat with existing rows.
-  try { exec("ALTER TABLE tasks ADD COLUMN sprint_id TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE tasks ADD COLUMN assignee_id TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE tasks ADD COLUMN dependency_ids TEXT DEFAULT '[]'"); } catch { /* column already exists */ }
-  // Burndown: remaining (left) hours — completes the estimate/consumed/left trio.
-  try { exec("ALTER TABLE tasks ADD COLUMN remaining_hours REAL DEFAULT 0"); } catch { /* column already exists */ }
-  // Requirement hierarchy: parent_id for epic → story decomposition.
-  try { exec("ALTER TABLE requirements ADD COLUMN parent_id TEXT"); } catch { /* column already exists */ }
-  // G-4: status column for existing users databases created before the column was added to CREATE TABLE.
-  try { exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE users ADD COLUMN phone TEXT DEFAULT ''"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE users ADD COLUMN position TEXT DEFAULT ''"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE users ADD COLUMN department TEXT DEFAULT ''"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''"); } catch { /* column already exists */ }
-  // G-10/G-12: AI Job state machine fields — nullable for backward compat with existing rows.
-  try { exec("ALTER TABLE ai_jobs ADD COLUMN error_message TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE ai_jobs ADD COLUMN retry_count INTEGER DEFAULT 0"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE ai_jobs ADD COLUMN started_at TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE ai_jobs ADD COLUMN failed_at TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE ai_jobs ADD COLUMN rejected_at TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE ai_jobs ADD COLUMN rejected_reason TEXT"); } catch { /* column already exists */ }
-  // Build/release traceability: which build a task belongs to, which build a defect was found in.
-  try { exec("ALTER TABLE tasks ADD COLUMN build_id TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE defects ADD COLUMN found_in_build TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE defects ADD COLUMN affected_version TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE defects ADD COLUMN reporter TEXT"); } catch { /* column already exists */ }
-  // Project edit enhancement: 5 new columns for project detail (12-综合升级设计方案 §3.1)
-  try { exec("ALTER TABLE projects ADD COLUMN code TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE projects ADD COLUMN description TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE projects ADD COLUMN start_date TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE projects ADD COLUMN end_date TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE projects ADD COLUMN source_path TEXT"); } catch { /* column already exists */ }
-  // Test management enhancement: description column for defects (§3.5)
-  try { exec("ALTER TABLE defects ADD COLUMN description TEXT DEFAULT ''"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE defects ADD COLUMN version INTEGER NOT NULL DEFAULT 1"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN description TEXT DEFAULT ''"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN image_url TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN system_name TEXT DEFAULT ''"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN system_version TEXT DEFAULT ''"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN application_version TEXT DEFAULT ''"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN hardware_info TEXT DEFAULT '{}'"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN system_info TEXT DEFAULT '{}'"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN application_info TEXT DEFAULT '{}'"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN hardware_metrics TEXT DEFAULT '[]'"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN system_metrics TEXT DEFAULT '[]'"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE products ADD COLUMN app_metrics TEXT DEFAULT '[]'"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN log_date TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN source_document_id TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN file_name TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN file_type TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN week_key TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN weekly_summary TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN role TEXT DEFAULT 'dev'"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN project_id TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE work_logs ADD COLUMN author_id TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE requirements ADD COLUMN assignee TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE requirements ADD COLUMN assignee_role TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE requirements ADD COLUMN assignment_status TEXT DEFAULT 'unassigned'"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE tasks ADD COLUMN description TEXT DEFAULT ''"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE tasks ADD COLUMN assignee_role TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE tasks ADD COLUMN source_type TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE tasks ADD COLUMN source_id TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE test_cases ADD COLUMN assignee_role TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE documents ADD COLUMN category TEXT NOT NULL DEFAULT 'project'"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE documents ADD COLUMN owner_role TEXT DEFAULT 'pm'"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE documents ADD COLUMN project_id TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE documents ADD COLUMN collab_revision INTEGER NOT NULL DEFAULT 0"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE defects ADD COLUMN assignee_role TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE project_members ADD COLUMN user_id TEXT"); } catch { /* column already exists */ }
-  try { exec("ALTER TABLE releases ADD COLUMN creator_id TEXT"); } catch { /* column already exists */ }
+  applyCompatibilityColumns(db);
   runSync(
     `UPDATE project_members
      SET user_id = (SELECT id FROM users WHERE users.name = project_members.user_name)
@@ -693,7 +640,6 @@ function initDbSqlite() {
   exec("CREATE INDEX IF NOT EXISTS idx_status_histories_resource_created ON status_histories(resource_type, resource_id, created_at DESC)");
   exec("CREATE INDEX IF NOT EXISTS idx_status_histories_project_created ON status_histories(project_id, created_at DESC)");
   exec("CREATE INDEX IF NOT EXISTS idx_sprint_scope_changes_sprint_created ON sprint_scope_changes(sprint_id, created_at DESC)");
-  try { exec("ALTER TABLE capacity_plans ADD COLUMN leave_hours REAL NOT NULL DEFAULT 0"); } catch { /* column already exists */ }
   exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_capacity_plans_user_period ON capacity_plans(user_id, period_start, period_end)");
   exec("CREATE INDEX IF NOT EXISTS idx_leave_records_status_date ON leave_records(status, leave_date)");
   exec("CREATE INDEX IF NOT EXISTS idx_leave_records_user_date ON leave_records(user_id, leave_date DESC)");
@@ -731,6 +677,10 @@ function initDbSqlite() {
   exec("CREATE INDEX IF NOT EXISTS idx_workflow_templates_status_updated ON workflow_templates(status, updated_at DESC)");
   exec("CREATE INDEX IF NOT EXISTS idx_project_workflow_bindings_template ON project_workflow_bindings(template_id)");
   runMigrations();
+  const schemaReport = inspectSqliteSchema(db, { requiredTables: CORE_TABLES });
+  if (!schemaReport.ok) {
+    throw new Error(`SQLite schema readiness failed: ${JSON.stringify(schemaReport)}`);
+  }
   seed();
 }
 
@@ -1116,6 +1066,7 @@ const row = access.row;
 const rows = access.rows;
 const run = access.run;
 const insert = access.insert;
+const upsert = access.upsert;
 const transaction = access.transaction;
 
 function mapProject(item) {
@@ -1366,16 +1317,14 @@ function mapProduct(item) {
 
 const AUDIT_SECRET_KEYS = new Set([
   "password",
-  "password_hash",
-  "passwordHash",
-  "api_key",
-  "apiKey",
-  "api_key_encrypted",
-  "apiKeyEncrypted",
+  "passwordhash",
+  "apikey",
+  "apikeyencrypted",
   "authorization",
   "token",
-  "accessToken",
-  "refreshToken",
+  "accesstoken",
+  "refreshtoken",
+  "clientsecret",
 ]);
 
 function sanitizeAuditValue(value) {
@@ -1383,11 +1332,135 @@ function sanitizeAuditValue(value) {
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [
     key,
-    AUDIT_SECRET_KEYS.has(key) ? "[REDACTED]" : sanitizeAuditValue(item),
+    AUDIT_SECRET_KEYS.has(String(key).replace(/[-_]/g, "").toLowerCase()) ? "[REDACTED]" : sanitizeAuditValue(item),
   ]));
 }
 
-async function audit(actor, action, resourceType, resourceId, beforeValue, afterValue, ip) {
+const AUDIT_PROJECT_LOOKUPS = Object.freeze({
+  requirement: "SELECT project_id FROM requirements WHERE id = @id",
+  task: "SELECT project_id FROM tasks WHERE id = @id",
+  defect: "SELECT project_id FROM defects WHERE id = @id",
+  test_case: "SELECT project_id FROM test_cases WHERE id = @id",
+  document: "SELECT project_id FROM documents WHERE id = @id",
+  build: "SELECT project_id FROM builds WHERE id = @id",
+  sprint: "SELECT project_id FROM sprints WHERE id = @id",
+  work_log: "SELECT project_id FROM work_logs WHERE id = @id",
+  time_entry: "SELECT project_id FROM time_entries WHERE id = @id",
+  project_risk: "SELECT project_id FROM project_risks WHERE id = @id",
+  project_decision: "SELECT project_id FROM project_decisions WHERE id = @id",
+  project_allocation: "SELECT project_id FROM project_allocations WHERE id = @id",
+});
+
+function findAuditField(value, names, depth = 0, seen = new Set()) {
+  if (!value || typeof value !== "object" || depth > 6 || seen.has(value)) return null;
+  seen.add(value);
+  for (const [key, item] of Object.entries(value)) {
+    if (names.has(key) && item != null && String(item).trim()) return String(item).trim();
+  }
+  for (const item of Object.values(value)) {
+    const found = findAuditField(item, names, depth + 1, seen);
+    if (found) return found;
+  }
+  return null;
+}
+
+async function verifiedProjectId(candidate) {
+  if (!candidate) return null;
+  const project = await row("SELECT id FROM projects WHERE id = @id", { id: String(candidate) });
+  return project?.id || null;
+}
+
+async function verifiedUserId(candidate) {
+  if (!candidate) return null;
+  const user = await row("SELECT id FROM users WHERE id = @id", { id: String(candidate) });
+  return user?.id || null;
+}
+
+async function resolveAuditScope(resourceType, resourceId, beforeValue, afterValue, explicitScope) {
+  const explicit = explicitScope && typeof explicitScope === "object" ? explicitScope : null;
+  if (explicit) {
+    const explicitType = explicit.scopeType || explicit.scope_type;
+    if (explicitType === "global") return { scope_type: "global", project_id: null, subject_user_id: null };
+    if (explicitType === "project") {
+      const projectId = await verifiedProjectId(explicit.projectId || explicit.project_id);
+      return projectId
+        ? { scope_type: "project", project_id: projectId, subject_user_id: null }
+        : { scope_type: "global", project_id: null, subject_user_id: null };
+    }
+    if (explicitType === "user") {
+      const subjectUserId = await verifiedUserId(explicit.subjectUserId || explicit.subject_user_id);
+      return subjectUserId
+        ? { scope_type: "user", project_id: null, subject_user_id: subjectUserId }
+        : { scope_type: "global", project_id: null, subject_user_id: null };
+    }
+    return { scope_type: "global", project_id: null, subject_user_id: null };
+  }
+
+  const values = [afterValue, beforeValue];
+  let projectId = null;
+  for (const value of values) {
+    projectId = await verifiedProjectId(findAuditField(value, new Set(["project_id", "projectId"])));
+    if (projectId) break;
+  }
+  if (!projectId && resourceType === "project") projectId = await verifiedProjectId(resourceId);
+  if (!projectId && resourceId && AUDIT_PROJECT_LOOKUPS[resourceType]) {
+    const linked = await row(AUDIT_PROJECT_LOOKUPS[resourceType], { id: resourceId });
+    projectId = await verifiedProjectId(linked?.project_id);
+  }
+  if (!projectId && resourceType === "test_run" && resourceId) {
+    const linked = await row(
+      `SELECT tc.project_id
+         FROM test_runs tr
+         JOIN test_cases tc ON tc.id = tr.test_case_id
+        WHERE tr.id = @id`,
+      { id: resourceId },
+    );
+    projectId = await verifiedProjectId(linked?.project_id);
+  }
+  if (!projectId && resourceType === "release") {
+    const buildId = values.map((value) => findAuditField(value, new Set(["build_id", "buildId"]))).find(Boolean);
+    const linked = buildId
+      ? await row("SELECT project_id FROM builds WHERE id = @id", { id: buildId })
+      : await row(
+        `SELECT b.project_id
+           FROM releases r
+           JOIN builds b ON b.id = r.build_id
+          WHERE r.id = @id`,
+        { id: resourceId },
+      );
+    projectId = await verifiedProjectId(linked?.project_id);
+  }
+  if (!projectId && resourceType === "ai_job" && resourceId) {
+    const linked = await row(
+      `SELECT COALESCE(CASE WHEN j.source_type = 'project' THEN j.source_id END, d.project_id, sr.project_id, wr.project_id) AS project_id
+         FROM ai_jobs j
+         LEFT JOIN documents d ON j.source_type = 'document' AND d.id = j.source_id
+         LEFT JOIN requirements sr ON j.source_type = 'requirement' AND sr.id = j.source_id
+         LEFT JOIN requirements wr ON wr.id = j.written_requirement_id
+        WHERE j.job_id = @id`,
+      { id: resourceId },
+    );
+    projectId = await verifiedProjectId(linked?.project_id);
+  }
+  if (projectId) return { scope_type: "project", project_id: projectId, subject_user_id: null };
+
+  let subjectUserId = null;
+  if (resourceType === "user") {
+    subjectUserId = await verifiedUserId(resourceId);
+    if (!subjectUserId) {
+      for (const value of values) {
+        subjectUserId = await verifiedUserId(findAuditField(value, new Set(["id", "user_id", "userId"]))) || null;
+        if (subjectUserId) break;
+      }
+    }
+  }
+  return subjectUserId
+    ? { scope_type: "user", project_id: null, subject_user_id: subjectUserId }
+    : { scope_type: "global", project_id: null, subject_user_id: null };
+}
+
+async function audit(actor, action, resourceType, resourceId, beforeValue, afterValue, ip, explicitScope) {
+  const auditScope = await resolveAuditScope(resourceType, resourceId, beforeValue, afterValue, explicitScope);
   await insert("audit_logs", {
     id: `AUD-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
     actor_id: actor?.id || null,
@@ -1398,6 +1471,7 @@ async function audit(actor, action, resourceType, resourceId, beforeValue, after
     before_json: json(sanitizeAuditValue(beforeValue)),
     after_json: json(sanitizeAuditValue(afterValue)),
     ip: ip || null,
+    ...auditScope,
     created_at: now(),
   });
 }
@@ -1413,19 +1487,16 @@ async function recordBurndownSnapshot(sprintId) {
   // Sum remaining hours across all tasks in this sprint.
   const taskHours = await rows("SELECT remaining_hours AS h FROM tasks WHERE sprint_id = @sid", { sid: sprintId });
   const total = taskHours.reduce((sum, t) => sum + (Number(t.h) || 0), 0);
-  // Upsert: one row per sprint+date. Try update first; insert if missing.
-  const existing = await row("SELECT id FROM burndown_snapshots WHERE sprint_id = @sid AND date = @date", { sid: sprintId, date: today });
-  if (existing) {
-    await run("UPDATE burndown_snapshots SET remaining_hours = @h WHERE id = @id", { id: existing.id, h: total });
-  } else {
-    await insert("burndown_snapshots", {
-      id: `BURN-${sprintId}-${today}`,
-      sprint_id: sprintId,
-      date: today,
-      remaining_hours: total,
-      created_at: now(),
-    });
-  }
+  await upsert("burndown_snapshots", {
+    id: `BURN-${sprintId}-${today}`,
+    sprint_id: sprintId,
+    date: today,
+    remaining_hours: total,
+    created_at: now(),
+  }, {
+    conflictTarget: ["sprint_id", "date"],
+    excludeUpdateColumns: ["id", "created_at"],
+  });
 }
 
 /**
@@ -1487,6 +1558,7 @@ module.exports = {
   initDb,
   closeDatabase,
   insert,
+  upsert,
   rows,
   row,
   run,
@@ -1495,6 +1567,7 @@ module.exports = {
   parse,
   now,
   audit,
+  resolveAuditScope,
   sanitizeAuditValue,
   recordBurndownSnapshot,
   buildSprintBurndown,

@@ -5,7 +5,9 @@ const {
   decodeXmlEntities,
   extractDocxText,
   extractTextFromUpload,
+  MAX_TEXT_EXTRACT_BYTES,
   readZipEntry,
+  uploadBuffer,
 } = require("../src/modules/documents/textExtraction");
 
 function base64(value) {
@@ -31,6 +33,7 @@ test("document text extraction handles plain text and entity-decoded docx conten
     extractTextFromUpload("note.txt", "text/plain", base64(" 第一行  \n\n\n第二行 ")),
     "第一行 \n\n第二行",
   );
+  assert.equal(extractTextFromUpload("buffer.txt", "text/plain", Buffer.from("buffer payload")), "buffer payload");
 
   const docxXml = "<w:document><w:body><w:p><w:r><w:t>设计&amp;开发</w:t></w:r></w:p><w:p><w:r><w:t>完成</w:t></w:r></w:p></w:body></w:document>";
   const docx = localZipEntry("word/document.xml", docxXml, 8);
@@ -61,4 +64,10 @@ test("docx zip reader refuses oversized compressed entries (zip-bomb guard)", ()
   const bomb = Buffer.concat([header, name, Buffer.alloc(100)]);
   assert.equal(readZipEntry(bomb, "word/document.xml"), "");
   assert.equal(extractDocxText(bomb), "");
+});
+
+test("document text extraction rejects buffers above the upload limit", () => {
+  const oversized = Buffer.alloc(MAX_TEXT_EXTRACT_BYTES + 1);
+  assert.equal(uploadBuffer(oversized), null);
+  assert.equal(extractTextFromUpload("large.txt", "text/plain", oversized), "");
 });

@@ -1,16 +1,14 @@
 import type { UpsertCapacityPlanInput } from '../api';
+import { businessDateKey, businessWeekStart, shiftBusinessDate } from '../../../utils/businessDate';
 
 export function toDate(value: Date): string {
-  return value.toISOString().slice(0, 10);
+  return businessDateKey(value);
 }
 
 export function weekRange(offsetWeeks = 0, weekCount = 1) {
-  const start = new Date();
-  const offset = (start.getDay() + 6) % 7;
-  start.setDate(start.getDate() - offset + offsetWeeks * 7);
-  const end = new Date(start);
-  end.setDate(end.getDate() + weekCount * 7 - 1);
-  return { periodStart: toDate(start), periodEnd: toDate(end) };
+  const periodStart = shiftBusinessDate(businessWeekStart(), offsetWeeks * 7);
+  const periodEnd = shiftBusinessDate(periodStart, weekCount * 7 - 1);
+  return { periodStart, periodEnd };
 }
 
 export function currentWeek() {

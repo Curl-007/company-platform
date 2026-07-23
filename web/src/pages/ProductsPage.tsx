@@ -1,57 +1,79 @@
-import { useState } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import PageHeader from '../components/common/PageHeader';
 import ProductsTab from '../features/products/components/ProductsTab';
 import ProgramsTab from '../features/products/components/ProgramsTab';
 import PortfoliosTab from '../features/products/components/PortfoliosTab';
-import StrategicGoalsTab from '../features/products/components/StrategicGoalsTab';
 
 type Tab = 'products' | 'programs' | 'portfolios';
 
+const PRODUCT_TABS: Array<{ key: Tab; label: string }> = [
+  { key: 'products', label: '产品' },
+  { key: 'programs', label: '项目集' },
+  { key: 'portfolios', label: '组合' },
+];
+
+function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+  const tablist = event.currentTarget.closest('[role="tablist"]');
+  const tabs = tablist ? Array.from(tablist.querySelectorAll<HTMLButtonElement>('[role="tab"]')) : [];
+  const currentIndex = tabs.indexOf(event.currentTarget);
+  if (currentIndex < 0) return;
+
+  let nextIndex: number;
+  if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+  else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  else if (event.key === 'Home') nextIndex = 0;
+  else if (event.key === 'End') nextIndex = tabs.length - 1;
+  else return;
+
+  event.preventDefault();
+  tabs[nextIndex].focus();
+  tabs[nextIndex].click();
+}
+
 function ProductsPage() {
   const [tab, setTab] = useState<Tab>('products');
-  const [showGoals, setShowGoals] = useState(false);
 
   return (
     <div className="products-page">
       <PageHeader
         title="产品管理"
         description="统一管理产品、项目集与产品组合。"
-        actions={(
-          <button
-            type="button"
-            className={`btn btn-sm ${showGoals ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setShowGoals((open) => !open)}
-          >
-            {showGoals ? '返回产品工作台' : '公司目标 / OKR'}
-          </button>
-        )}
       />
 
-      {showGoals ? (
-        <div className="products-page-body products-goals-body">
-          <StrategicGoalsTab />
-        </div>
-      ) : (
-        <>
-          <div className="nav-tabs products-page-tabs">
-            <button className={`nav-tab ${tab === 'products' ? 'active' : ''}`} onClick={() => setTab('products')}>
-              产品
-            </button>
-            <button className={`nav-tab ${tab === 'programs' ? 'active' : ''}`} onClick={() => setTab('programs')}>
-              项目集
-            </button>
-            <button className={`nav-tab ${tab === 'portfolios' ? 'active' : ''}`} onClick={() => setTab('portfolios')}>
-              组合
-            </button>
-          </div>
+      <div className="nav-tabs products-page-tabs" role="tablist" aria-label="产品管理视图">
+        {PRODUCT_TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            id={`products-page-tab-${key}`}
+            type="button"
+            role="tab"
+            className={`nav-tab ${tab === key ? 'active' : ''}`}
+            aria-selected={tab === key}
+            aria-controls={`products-page-panel-${key}`}
+            tabIndex={tab === key ? 0 : -1}
+            onClick={() => setTab(key)}
+            onKeyDown={handleTabKeyDown}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-          <div className="products-page-body">
-            {tab === 'products' ? <ProductsTab /> : null}
-            {tab === 'programs' ? <ProgramsTab /> : null}
-            {tab === 'portfolios' ? <PortfoliosTab /> : null}
+      <div className="products-page-body">
+        {PRODUCT_TABS.map(({ key }) => (
+          <div
+            key={key}
+            id={`products-page-panel-${key}`}
+            role="tabpanel"
+            aria-labelledby={`products-page-tab-${key}`}
+            hidden={tab !== key}
+          >
+            {tab === key && key === 'products' ? <ProductsTab /> : null}
+            {tab === key && key === 'programs' ? <ProgramsTab /> : null}
+            {tab === key && key === 'portfolios' ? <PortfoliosTab /> : null}
           </div>
-        </>
-      )}
+        ))}
+      </div>
     </div>
   );
 }

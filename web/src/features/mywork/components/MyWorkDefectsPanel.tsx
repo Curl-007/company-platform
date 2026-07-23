@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Bug } from 'lucide-react';
 import Panel from '../../../components/common/Panel';
 import StatusBadge from '../../../components/common/StatusBadge';
 import {
@@ -14,6 +15,7 @@ import { navigateTo } from '../../team/components/teamMeta';
 import { fetchProjectMembers } from '../../projects/api';
 import { handoffDefect } from '../../testing/api';
 import type { DashboardData, ProjectMember } from '../../../types';
+import MyWorkEmptyPanel from './MyWorkEmptyPanel';
 
 type DefectItem = NonNullable<DashboardData['myDefects']>[number];
 
@@ -136,6 +138,28 @@ export default function MyWorkDefectsPanel({
       ? qaMembers
       : [...devMembers, ...qaMembers];
 
+  if (defects.length === 0) {
+    return (
+      <MyWorkEmptyPanel
+        icon={<Bug size={26} />}
+        eyebrow="缺陷队列"
+        title="当前没有待处理缺陷"
+        description="没有指派给你的缺陷，新的处理事项会显示在这里。"
+        action={
+          canOpenTesting ? (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => navigateTo('testing', { tab: 'defects' })}
+            >
+              <Bug size={15} /> 查看测试质量
+            </button>
+          ) : undefined
+        }
+      />
+    );
+  }
+
   return (
     <div className="mywork-split">
       <Panel title="我的缺陷" subtitle={`共 ${defects.length} 条`} className="mywork-panel-left">
@@ -164,7 +188,6 @@ export default function MyWorkDefectsPanel({
               </div>
             </div>
           ))}
-          {defects.length === 0 ? <div className="empty-state-desc">当前没有指派给你的缺陷。</div> : null}
         </div>
       </Panel>
 
@@ -289,9 +312,7 @@ export default function MyWorkDefectsPanel({
               </div>
             ) : null}
           </div>
-        ) : (
-          <div className="empty-state-desc">请选择左侧缺陷查看详情。</div>
-        )}
+        ) : null}
       </Panel>
     </div>
   );

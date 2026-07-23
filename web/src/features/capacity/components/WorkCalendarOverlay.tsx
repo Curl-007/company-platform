@@ -27,6 +27,7 @@ export default function WorkCalendarOverlay({
   const calendarAsync = useAsync<WorkCalendar & { period: { periodStart: string; periodEnd: string } }>(
     () => fetchWorkCalendar({ periodStart, periodEnd }),
     [periodStart, periodEnd],
+    { cacheKey: 'capacity:calendar' },
   );
   const [name, setName] = useState('');
   const [workingWeekdays, setWorkingWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);

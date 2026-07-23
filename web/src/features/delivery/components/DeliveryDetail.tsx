@@ -56,14 +56,17 @@ export default function DeliveryDetail({
   const approvalsState = useAsync<ReleaseApproval[]>(
     () => (releaseId ? fetchReleaseApprovals(releaseId) : Promise.resolve([])),
     [releaseId],
+    { cacheKey: 'delivery:release-approvals' },
   );
   const rollbacksState = useAsync<RollbackRecord[]>(
     () => (releaseId ? fetchRollbackRecords(releaseId) : Promise.resolve([])),
     [releaseId],
+    { cacheKey: 'delivery:rollback-records' },
   );
   const reportState = useAsync<ReleaseReport | null>(
     () => (releaseId ? fetchReleaseReport(releaseId).catch(() => null) : Promise.resolve(null)),
     [releaseId],
+    { cacheKey: 'delivery:release-report' },
   );
   const [approvalComment, setApprovalComment] = useState('');
   const [rollbackReason, setRollbackReason] = useState('');

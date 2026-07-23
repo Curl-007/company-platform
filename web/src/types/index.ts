@@ -6,6 +6,8 @@
 // truth; keep these aligned with the server response payloads.
 // ---------------------------------------------------------------------------
 
+import type { AiJobStatus } from '../constants/enums';
+
 // ---------------------------------------------------------------------------
 // Session / Auth
 // ---------------------------------------------------------------------------
@@ -688,6 +690,17 @@ export interface RoadmapItem {
   [key: string]: unknown;
 }
 
+export type ProductImageMimeType = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+
+export interface ProductImage {
+  id: string;
+  url: string;
+  fileName: string;
+  mimeType: ProductImageMimeType;
+  size: number;
+  sortOrder: number;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -695,8 +708,9 @@ export interface Product {
   version: string;
   stage: string;
   description?: string;
-  imageUrl?: string | null;
-  imageUrls?: string[];
+  images: ProductImage[];
+  readonly imageUrl?: string | null;
+  readonly imageUrls?: string[];
   systemName?: string;
   systemVersion?: string;
   applicationVersion?: string;
@@ -907,7 +921,7 @@ export interface AiEvidence {
 export interface AiJob {
   jobId: string;
   scene: string;
-  status: string;
+  status: AiJobStatus;
   progress: number;
   currentStep: string;
   result: Record<string, unknown>;
@@ -1011,6 +1025,9 @@ export interface AuditLogRecord {
   action: string;
   resourceType: string;
   resourceId: string | null;
+  scopeType: 'global' | 'project' | 'user';
+  projectId?: string | null;
+  subjectUserId?: string | null;
   createdAt: string;
   before?: unknown;
   after?: unknown;

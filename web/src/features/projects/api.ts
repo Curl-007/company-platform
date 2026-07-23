@@ -50,8 +50,8 @@ export interface CreateProjectInput {
   objective?: string;
   status?: string;
   progress?: number;
-  programId?: string;
-  productId?: string;
+  programId?: string | null;
+  productId?: string | null;
   processMode?: string;
 }
 
@@ -71,8 +71,8 @@ export interface UpdateProjectInput {
   status?: string;
   progress?: number;
   processMode?: string;
-  programId?: string;
-  productId?: string;
+  programId?: string | null;
+  productId?: string | null;
   milestones?: Milestone[];
   startDate?: string;
   endDate?: string;

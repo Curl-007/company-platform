@@ -8,7 +8,8 @@
  *   row(sql, params?) → Promise<object|undefined>
  *   rows(sql, params?) → Promise<object[]>
  *   run(sql, params?) → Promise<{ changes: number }>
- *   insert(table, data) → Promise<void>
+ *   insert(table, data) → Promise<void> (strict create)
+ *   upsert(table, data, options?) → Promise<void> (explicit replace/update)
  *   transaction(work) → Promise<T>
  *
  * SQLite also exposes `_sync` for init/migration/seed only.
@@ -16,7 +17,7 @@
  */
 
 const { AsyncLocalStorage } = require("node:async_hooks");
-const { toPostgresQuery, buildUpsertSql } = require("./sql");
+const { toPostgresQuery, buildInsertSql, buildUpsertSql } = require("./sql");
 
 function createSqliteAccess(databaseRuntime) {
   if (!databaseRuntime || typeof databaseRuntime.prepare !== "function") {
@@ -49,8 +50,15 @@ function createSqliteAccess(databaseRuntime) {
     if (!keys.length) {
       throw new Error(`insert() requires at least one column for table ${table}`);
     }
-    const placeholders = keys.map((key) => `@${key}`).join(", ");
-    prepare(`INSERT OR REPLACE INTO ${table} (${keys.join(", ")}) VALUES (${placeholders})`).run(data);
+    prepare(buildInsertSql(table, keys, { dialect: "sqlite" }).sql).run(data);
+  }
+
+  function upsertSync(table, data, options = {}) {
+    const keys = Object.keys(data);
+    if (!keys.length) {
+      throw new Error(`upsert() requires at least one column for table ${table}`);
+    }
+    prepare(buildUpsertSql(table, keys, { ...options, dialect: "sqlite" }).sql).run(data);
   }
 
   async function row(sql, params = {}) {
@@ -68,6 +76,10 @@ function createSqliteAccess(databaseRuntime) {
 
   async function insert(table, data) {
     insertSync(table, data);
+  }
+
+  async function upsert(table, data, options = {}) {
+    upsertSync(table, data, options);
   }
 
   /**
@@ -97,6 +109,7 @@ function createSqliteAccess(databaseRuntime) {
     rows,
     run,
     insert,
+    upsert,
     transaction,
     // Private sync surface for init/migration/seed paths only.
     _sync: {
@@ -104,6 +117,7 @@ function createSqliteAccess(databaseRuntime) {
       rows: rowsSync,
       run: runSync,
       insert: insertSync,
+      upsert: upsertSync,
       exec: execSync,
     },
   };
@@ -156,7 +170,22 @@ function createPostgresAccess(databaseRuntime) {
     if (!keys.length) {
       throw new Error(`insert() requires at least one column for table ${table}`);
     }
-    const built = buildUpsertSql(table, keys, { dialect: "postgres" });
+    const built = buildInsertSql(table, keys, { dialect: "postgres" });
+    const values = keys.map((key) => data[key]);
+    const client = txStorage.getStore();
+    if (client) {
+      await client.query(built.sql, values);
+      return;
+    }
+    await databaseRuntime.query(built.sql, values);
+  }
+
+  async function upsert(table, data, options = {}) {
+    const keys = Object.keys(data);
+    if (!keys.length) {
+      throw new Error(`upsert() requires at least one column for table ${table}`);
+    }
+    const built = buildUpsertSql(table, keys, { ...options, dialect: "postgres" });
     const values = keys.map((key) => data[key]);
     const client = txStorage.getStore();
     if (client) {
@@ -204,6 +233,7 @@ function createPostgresAccess(databaseRuntime) {
     rows,
     run,
     insert,
+    upsert,
     transaction,
     // Explicitly unavailable — callers that need sync must stay on sqlite.
     get _sync() {

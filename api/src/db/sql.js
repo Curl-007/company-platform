@@ -156,13 +156,47 @@ function toPostgresQuery(sql, params) {
 /**
  * Build a portable upsert for dynamic insert(table, row) helpers.
  */
-function buildUpsertSql(table, columns, { dialect = "sqlite", conflictTarget } = {}) {
+function buildUpsertSql(table, columns, {
+  dialect = "sqlite",
+  conflictTarget,
+  excludeUpdateColumns = [],
+} = {}) {
+  const tableName = String(table || "");
   const cols = columns.map((c) => String(c));
+  const safeIdentifier = /^[A-Za-z_][A-Za-z0-9_]*$/;
+  if (!safeIdentifier.test(tableName) || !cols.length || cols.some((column) => !safeIdentifier.test(column))) {
+    throw new Error("Dynamic upsert requires safe SQL identifiers and at least one column.");
+  }
+  const rawTarget = conflictTarget == null
+    ? [resolveReplaceConflictTarget(tableName, cols)]
+    : Array.isArray(conflictTarget)
+      ? conflictTarget
+      : [conflictTarget];
+  const targetColumns = rawTarget.map((column) => String(column));
+  if (!targetColumns.length || targetColumns.some((column) => !safeIdentifier.test(column) || !cols.includes(column))) {
+    throw new Error("Upsert conflictTarget must contain inserted column names.");
+  }
+  if (!Array.isArray(excludeUpdateColumns)) {
+    throw new Error("Upsert excludeUpdateColumns must be an array.");
+  }
+  const excludedColumns = excludeUpdateColumns.map((column) => String(column));
+  if (excludedColumns.some((column) => !safeIdentifier.test(column) || !cols.includes(column))) {
+    throw new Error("Upsert excludeUpdateColumns must contain inserted column names.");
+  }
   const placeholders = cols.map((c) => (dialect === "postgres" ? null : `@${c}`));
-  const target = conflictTarget || resolveReplaceConflictTarget(table, cols);
+  const target = targetColumns.length === 1 ? targetColumns[0] : targetColumns;
+  const conflictSql = targetColumns.join(", ");
+  const updateExclusions = new Set([...targetColumns, ...excludedColumns]);
   if (dialect === "sqlite") {
+    const assignments = cols
+      .filter((column) => !updateExclusions.has(column))
+      .map((column) => `${column} = excluded.${column}`)
+      .join(", ");
+    const updateClause = assignments
+      ? ` ON CONFLICT (${conflictSql}) DO UPDATE SET ${assignments}`
+      : ` ON CONFLICT (${conflictSql}) DO NOTHING`;
     return {
-      sql: `INSERT OR REPLACE INTO ${table} (${cols.join(", ")}) VALUES (${placeholders.join(", ")})`,
+      sql: `INSERT INTO ${tableName} (${cols.join(", ")}) VALUES (${placeholders.join(", ")})${updateClause}`,
       paramsStyle: "named",
       conflictTarget: target,
     };
@@ -170,16 +204,31 @@ function buildUpsertSql(table, columns, { dialect = "sqlite", conflictTarget } =
 
   const values = cols.map((_, i) => `$${i + 1}`);
   const assignments = cols
-    .filter((c) => c !== target)
+    .filter((column) => !updateExclusions.has(column))
     .map((c) => `${c} = EXCLUDED.${c}`)
     .join(", ");
   const updateClause = assignments
-    ? ` ON CONFLICT (${target}) DO UPDATE SET ${assignments}`
-    : ` ON CONFLICT (${target}) DO NOTHING`;
+    ? ` ON CONFLICT (${conflictSql}) DO UPDATE SET ${assignments}`
+    : ` ON CONFLICT (${conflictSql}) DO NOTHING`;
   return {
-    sql: `INSERT INTO ${table} (${cols.join(", ")}) VALUES (${values.join(", ")})${updateClause}`,
+    sql: `INSERT INTO ${tableName} (${cols.join(", ")}) VALUES (${values.join(", ")})${updateClause}`,
     paramsStyle: "positional",
     conflictTarget: target,
+  };
+}
+
+function buildInsertSql(table, columns, { dialect = "sqlite" } = {}) {
+  const tableName = String(table || "");
+  const cols = columns.map((column) => String(column));
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(tableName) || cols.some((column) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(column))) {
+    throw new Error("Dynamic insert requires safe SQL identifiers.");
+  }
+  const placeholders = dialect === "postgres"
+    ? cols.map((_, index) => `$${index + 1}`)
+    : cols.map((column) => `@${column}`);
+  return {
+    sql: `INSERT INTO ${tableName} (${cols.join(", ")}) VALUES (${placeholders.join(", ")})`,
+    paramsStyle: dialect === "postgres" ? "positional" : "named",
   };
 }
 
@@ -187,6 +236,7 @@ module.exports = {
   toPostgresParams,
   translateSqliteToPostgres,
   toPostgresQuery,
+  buildInsertSql,
   buildUpsertSql,
   resolveReplaceConflictTarget,
 };

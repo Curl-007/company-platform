@@ -109,17 +109,19 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               </button>
             </form>
 
-            <div className="login-card-hint">
-              <div className="login-card-hint-title">演示账号</div>
-              <div className="login-card-hint-row">
-                <span>管理员</span>
-                <code>admin@example.com / Admin@123</code>
+            {isDev ? (
+              <div className="login-card-hint">
+                <div className="login-card-hint-title">本地演示账号</div>
+                <div className="login-card-hint-row">
+                  <span>管理员</span>
+                  <code>admin@example.com / Admin@123</code>
+                </div>
+                <div className="login-card-hint-row">
+                  <span>项目经理</span>
+                  <code>pm@example.com / Pm@12345</code>
+                </div>
               </div>
-              <div className="login-card-hint-row">
-                <span>项目经理</span>
-                <code>pm@example.com / Pm@12345</code>
-              </div>
-            </div>
+            ) : null}
           </div>
         </div>
       </div>

@@ -22,6 +22,8 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
+const MOBILE_NAV_QUERY = '(max-width: 768px)';
+
 const Layout: React.FC<LayoutProps> = ({
   currentPage,
   onNavigate,
@@ -33,6 +35,47 @@ const Layout: React.FC<LayoutProps> = ({
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia(MOBILE_NAV_QUERY).matches : false,
+  );
+  const mobileMenuTriggerRef = React.useRef<HTMLButtonElement>(null);
+  const sidebarRef = React.useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(MOBILE_NAV_QUERY);
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsMobileViewport(event.matches);
+      if (!event.matches) setMobileNavOpen(false);
+    };
+
+    setIsMobileViewport(mediaQuery.matches);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileViewport || !mobileNavOpen) return undefined;
+
+    const previousFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : mobileMenuTriggerRef.current;
+    const sidebar = sidebarRef.current;
+    const focusTarget = sidebar?.querySelector<HTMLElement>('.sidebar-nav-item.active')
+      ?? sidebar?.querySelector<HTMLElement>('.sidebar-nav-item');
+    focusTarget?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setMobileNavOpen(false);
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [isMobileViewport, mobileNavOpen]);
 
   const handleNavClick = useCallback(
     (page: PageKey, focusId?: string) => {
@@ -56,21 +99,32 @@ const Layout: React.FC<LayoutProps> = ({
   ]
     .filter(Boolean)
     .join(' ');
+  const mobileNavUnavailable = isMobileViewport && !mobileNavOpen;
 
   return (
     <div className={shellClass}>
+      <a className="skip-link" href="#main-content">
+        跳到主要内容
+      </a>
       <div
         className={`mobile-scrim ${mobileNavOpen ? 'visible' : ''}`}
         onClick={() => setMobileNavOpen(false)}
+        aria-hidden="true"
       />
 
-      <aside className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
+      <aside
+        id="primary-sidebar"
+        ref={sidebarRef}
+        className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}
+        aria-hidden={mobileNavUnavailable || undefined}
+        inert={mobileNavUnavailable || undefined}
+      >
         <div className="sidebar-brand">
-          <div className="sidebar-brand-logo">P</div>
+          <div className="sidebar-brand-logo" aria-hidden="true">P</div>
           <div className="sidebar-brand-text">项目管理平台</div>
         </div>
 
-        <nav className="sidebar-nav">
+        <nav className="sidebar-nav" aria-label="主导航">
           {NAV_GROUPS.map((group) => {
             const visibleItems = group.items.filter((item) => canAccessPageForUser(user, item.key));
             if (visibleItems.length === 0) return null;
@@ -87,8 +141,11 @@ const Layout: React.FC<LayoutProps> = ({
                       key={item.key}
                       className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
                       onClick={() => handleNavClick(item.key)}
+                      aria-current={isActive ? 'page' : undefined}
+                      aria-label={item.label}
+                      title={item.label}
                     >
-                      <Icon size={18} />
+                      <Icon size={18} aria-hidden="true" />
                       <span>{item.label}</span>
                     </button>
                   );
@@ -103,12 +160,20 @@ const Layout: React.FC<LayoutProps> = ({
       <div className="main-content">
         <header className="topbar">
           <IconButton
+            ref={mobileMenuTriggerRef}
             className="mobile-menu-toggle"
             surface="topbar"
             icon={<Menu size={18} />}
             label="打开导航"
             onClick={() => setMobileNavOpen(true)}
+            aria-controls="primary-sidebar"
+            aria-expanded={mobileNavOpen}
           />
+
+          <div className="topbar-context">
+            <span className="topbar-context-kicker">工作空间</span>
+            <span className="topbar-context-title">{currentNavLabel}</span>
+          </div>
 
           <div className="topbar-actions">
             <IconButton
@@ -137,7 +202,9 @@ const Layout: React.FC<LayoutProps> = ({
           </div>
         </header>
 
-        <div className="main-content-body">{children}</div>
+        <main id="main-content" className="main-content-body" tabIndex={-1}>
+          {children}
+        </main>
       </div>
 
       {aiSidebarOpen && (
@@ -231,7 +298,7 @@ function ProfileDialog({
   }
 
   return (
-    <Overlay onClose={onClose} maxWidth={680}>
+    <Overlay onClose={onClose} maxWidth={680} ariaLabel="个人资料">
       <Panel
         title="个人资料"
         subtitle="维护你的基础信息，这些内容会显示在顶部头像和协作资料中。"

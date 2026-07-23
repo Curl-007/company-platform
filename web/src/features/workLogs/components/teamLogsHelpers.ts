@@ -1,5 +1,6 @@
 import type { TeamWorkSummary, TeamWorkSummaryMember, WorkLog } from '../../../types';
 import { USER_ROLE_LABELS, labelOf } from '../../../constants/enums';
+import { businessDateKey, businessWeekStart } from '../../../utils/businessDate';
 
 export type QuickFilter = 'all' | 'missing' | 'blocked';
 
@@ -12,14 +13,11 @@ export type RelatedLink = {
 };
 
 export function today() {
-  return new Date().toISOString().slice(0, 10);
+  return businessDateKey();
 }
 
 export function weekStart() {
-  const date = new Date();
-  const day = (date.getDay() + 6) % 7;
-  date.setDate(date.getDate() - day);
-  return date.toISOString().slice(0, 10);
+  return businessWeekStart();
 }
 
 export function downloadMarkdown(fileName: string, content: string) {

@@ -10,7 +10,11 @@ import type { KanbanColumn } from '../../../types';
 import { TASK_STATUS_LABELS, labelOf } from '../../../constants/enums';
 
 export default function KanbanTab({ projectId, canManageProject }: { projectId: string; canManageProject: boolean }) {
-  const { data, loading, error, reload } = useAsync<KanbanColumn[]>(() => fetchProjectKanban(projectId), [projectId]);
+  const { data, loading, error, reload } = useAsync<KanbanColumn[]>(
+    () => fetchProjectKanban(projectId),
+    [projectId],
+    { cacheKey: 'projects:kanban' },
+  );
   const [columns, setColumns] = useState<KanbanColumn[] | null>(null);
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);

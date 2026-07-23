@@ -52,12 +52,16 @@ test("default rules exist for built-in stages", () => {
 });
 
 test("evaluateProjectFlow applies custom stage rules from template", async () => {
+  let releaseEvidenceQuery = null;
   const service = createProjectFlowService({
-    row: async (sql) => {
+    row: async (sql, params) => {
       if (sql.includes("FROM projects")) {
         return { id: "PRJ-1", name: "Demo", status: "active", health_score: 80, product_id: null, deleted_at: null };
       }
-      if (sql.includes("FROM releases")) return null;
+      if (sql.includes("FROM releases")) {
+        releaseEvidenceQuery = { sql, params };
+        return null;
+      }
       return null;
     },
     rows: async (sql) => {
@@ -101,4 +105,8 @@ test("evaluateProjectFlow applies custom stage rules from template", async () =>
   // prior passed, but no release record => blocked/in_progress depending required rules
   assert.ok(["blocked", "in_progress", "passed"].includes(flow.gates[1].state));
   assert.ok(flow.gates[0].checks.some((item) => item.ruleId === "task_completion_ratio"));
+  assert.match(releaseEvidenceQuery.sql, /INNER JOIN builds b ON b\.id = r\.build_id/);
+  assert.match(releaseEvidenceQuery.sql, /b\.project_id = @projectId/);
+  assert.match(releaseEvidenceQuery.sql, /r\.product_id = @productId/);
+  assert.deepEqual(releaseEvidenceQuery.params, { projectId: "PRJ-1", productId: null });
 });

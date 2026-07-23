@@ -40,8 +40,8 @@ export default function StrategyForm({
     .map((item) => [item.title ?? '', item.version ?? '', item.quarter ?? '', item.status ?? 'planned'].join(' | ')).join('\n'));
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const projectOptions = useAsync<Project[]>(fetchProjects, []);
-  const productOptions = useAsync<Product[]>(fetchProducts, []);
+  const projectOptions = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
+  const productOptions = useAsync<Product[]>(fetchProducts, [], { cacheKey: 'products:list' });
   const links = kind === 'program' ? (projectOptions.data ?? []) : (productOptions.data ?? []);
 
   function toggleLink(id: string) {

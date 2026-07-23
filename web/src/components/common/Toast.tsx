@@ -1,5 +1,6 @@
-import React, { createContext, useCallback, useContext, useState } from 'react';
-import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { CheckCircle2, AlertCircle, Info, RefreshCw, X } from 'lucide-react';
+import { subscribeToAsyncRefreshFailures } from '../../services/asyncRefreshEvents';
 
 // ---------------------------------------------------------------------------
 // Toast: lightweight global notification system.
@@ -19,6 +20,19 @@ interface ToastItem {
   id: number;
   tone: ToastTone;
   message: string;
+  dedupeKey?: string;
+  action?: ToastAction;
+}
+
+interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
+interface PushOptions {
+  dedupeKey?: string;
+  action?: ToastAction;
+  autoDismissMs?: number | null;
 }
 
 interface ToastContextValue {
@@ -33,16 +47,73 @@ let counter = 0;
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [items, setItems] = useState<ToastItem[]>([]);
+  const timers = useRef(new Map<number, number>());
+  const idsByDedupeKey = useRef(new Map<string, number>());
+  const dedupeKeysById = useRef(new Map<number, string>());
 
-  const remove = useCallback((id: number) => {
-    setItems((prev) => prev.filter((t) => t.id !== id));
+  const clearTimer = useCallback((id: number) => {
+    const timer = timers.current.get(id);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      timers.current.delete(id);
+    }
   }, []);
 
-  const push = useCallback((tone: ToastTone, message: string) => {
-    const id = ++counter;
-    setItems((prev) => [...prev, { id, tone, message }]);
-    window.setTimeout(() => remove(id), 3500);
+  const remove = useCallback((id: number) => {
+    clearTimer(id);
+    const dedupeKey = dedupeKeysById.current.get(id);
+    if (dedupeKey) {
+      idsByDedupeKey.current.delete(dedupeKey);
+      dedupeKeysById.current.delete(id);
+    }
+    setItems((prev) => prev.filter((t) => t.id !== id));
+  }, [clearTimer]);
+
+  const push = useCallback((tone: ToastTone, message: string, options: PushOptions = {}) => {
+    const existingId = options.dedupeKey
+      ? idsByDedupeKey.current.get(options.dedupeKey)
+      : undefined;
+    const id = existingId ?? ++counter;
+    const item: ToastItem = {
+      id,
+      tone,
+      message,
+      dedupeKey: options.dedupeKey,
+      action: options.action,
+    };
+
+    if (options.dedupeKey && existingId === undefined) {
+      idsByDedupeKey.current.set(options.dedupeKey, id);
+      dedupeKeysById.current.set(id, options.dedupeKey);
+    }
+
+    setItems((prev) => {
+      const exists = prev.some((toast) => toast.id === id);
+      if (!exists) return [...prev, item];
+      return prev.map((toast) => (toast.id === id ? item : toast));
+    });
+
+    clearTimer(id);
+    const autoDismissMs = options.autoDismissMs === undefined ? 3500 : options.autoDismissMs;
+    if (autoDismissMs !== null) {
+      timers.current.set(id, window.setTimeout(() => remove(id), autoDismissMs));
+    }
   }, [remove]);
+
+  useEffect(() => subscribeToAsyncRefreshFailures(({ detail }) => {
+    push('error', `数据刷新失败：${detail.message}`, {
+      dedupeKey: `async-refresh:${detail.cacheKey}`,
+      action: { label: '重试', onClick: detail.retry },
+      autoDismissMs: 10_000,
+    });
+  }), [push]);
+
+  useEffect(() => () => {
+    timers.current.forEach((timer) => window.clearTimeout(timer));
+    timers.current.clear();
+    idsByDedupeKey.current.clear();
+    dedupeKeysById.current.clear();
+  }, []);
 
   const value = React.useMemo<ToastContextValue>(() => ({
     success: (m: string) => push('success', m),
@@ -62,6 +133,19 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               {item.tone === 'info' && <Info size={18} />}
             </span>
             <span className="toast-message">{item.message}</span>
+            {item.action && (
+              <button
+                className="toast-action"
+                type="button"
+                onClick={() => {
+                  remove(item.id);
+                  item.action?.onClick();
+                }}
+              >
+                <RefreshCw size={14} aria-hidden="true" />
+                <span>{item.action.label}</span>
+              </button>
+            )}
             <button className="toast-close" onClick={() => remove(item.id)} aria-label="关闭">
               <X size={14} />
             </button>

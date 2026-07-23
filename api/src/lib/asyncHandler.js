@@ -25,7 +25,7 @@ function wrapRouterAsync(router) {
   for (const layer of router.stack) {
     if (!layer.route) continue;
     const route = layer.route;
-    for (const method of Object.keys(route.methods || {})) {
+    for (const _method of Object.keys(route.methods || {})) {
       const stack = route.stack;
       if (!Array.isArray(stack)) continue;
       for (const layerHandler of stack) {

@@ -70,17 +70,17 @@ export interface WorkThemePreset {
 export const WORK_THEME_STORAGE_KEY = 'work-glass-theme-settings';
 
 export const defaultWorkThemeSettings: WorkThemeSettings = {
-  theme: 'aurora',
-  mode: 'dark',
+  theme: 'scholar',
+  mode: 'light',
   density: 'standard',
   contrast: 'default',
   reduceMotion: false,
-  ambient: true,
-  fontSize: 16,
-  fontFamily: 'sans',
+  ambient: false,
+  fontSize: 15,
+  fontFamily: 'system',
   navLayout: 'expanded',
-  radius: 14,
-  glassBlur: 24,
+  radius: 6,
+  glassBlur: 0,
   contentPadding: 24,
 };
 
@@ -271,55 +271,55 @@ export const WORK_THEMES: WorkThemePreset[] = [
   },
   {
     id: 'scholar',
-    label: '学术专业',
-    blurb: '靛蓝·结构·描边',
+    label: '专业工作台',
+    blurb: '中性·清晰·高密度',
     preview: {
-      dark: { bg: '#0f172a', gradient: ['#4f46e5', '#0ea5e9', '#8b5cf6'] },
-      light: { bg: '#f1f5f9', gradient: ['#4f46e5', '#0ea5e9', '#8b5cf6'] },
+      dark: { bg: '#17201e', gradient: ['#2f9b7d', '#4f7db8', '#c18a3b'] },
+      light: { bg: '#f4f6f4', gradient: ['#176b57', '#2f6fad', '#b77722'] },
     },
     signature: {
-      gradient: ['#4f46e5', '#0ea5e9', '#8b5cf6'],
-      accentRgb: '79, 70, 229',
-      magentaRgb: '14, 165, 233',
-      amberRgb: '139, 92, 246',
+      gradient: ['#176b57', '#2f6fad', '#b77722'],
+      accentRgb: '23, 107, 87',
+      magentaRgb: '47, 111, 173',
+      amberRgb: '183, 119, 34',
       holoForeground: '#ffffff',
-      radius: 8,
+      radius: 6,
       glassBlur: 0,
     },
     dark: {
-      page: '#0f172a',
-      content: '#16203a',
-      sidebar: 'rgba(15, 23, 42, 0.70)',
-      topbar: 'rgba(15, 23, 42, 0.65)',
-      border: 'rgba(255, 255, 255, 0.10)',
-      borderStrong: 'rgba(255, 255, 255, 0.18)',
-      text: '#e8eef8',
-      secondary: 'rgba(232, 238, 248, 0.72)',
-      tertiary: 'rgba(232, 238, 248, 0.50)',
-      accent: '#4f46e5',
-      accentHover: '#0ea5e9',
-      accentRgb: '79, 70, 229',
+      page: '#151b1a',
+      content: '#1d2523',
+      sidebar: '#18201f',
+      topbar: '#1d2523',
+      border: 'rgba(229, 236, 232, 0.11)',
+      borderStrong: 'rgba(229, 236, 232, 0.20)',
+      text: '#edf2ef',
+      secondary: 'rgba(237, 242, 239, 0.72)',
+      tertiary: 'rgba(237, 242, 239, 0.52)',
+      accent: '#4ab394',
+      accentHover: '#62c3a7',
+      accentRgb: '74, 179, 148',
     },
     light: {
-      page: '#f1f5f9',
+      page: '#eef2ef',
       content: '#ffffff',
-      sidebar: 'rgba(255, 255, 255, 0.85)',
-      topbar: 'rgba(255, 255, 255, 0.80)',
-      border: 'rgba(15, 23, 42, 0.10)',
-      borderStrong: 'rgba(15, 23, 42, 0.18)',
-      text: '#0f172a',
-      secondary: 'rgba(15, 23, 42, 0.72)',
-      tertiary: 'rgba(15, 23, 42, 0.55)',
-      accent: '#4f46e5',
-      accentHover: '#0ea5e9',
-      accentRgb: '79, 70, 229',
+      sidebar: '#f7f9f7',
+      topbar: '#ffffff',
+      border: '#d6ddd8',
+      borderStrong: '#bdc9c1',
+      text: '#15201c',
+      secondary: '#4c5d56',
+      tertiary: '#72817b',
+      accent: '#15654f',
+      accentHover: '#0f4f3e',
+      accentRgb: '21, 101, 79',
     },
   },
 ];
 
 export const WORK_FONT_LABELS: Record<WorkThemeFont, string> = {
-  system: '跟随系统',
-  sans: 'Manrope',
+  system: '系统界面',
+  sans: '现代无衬线',
   noto: '思源黑体',
   misans: 'MiSans',
   puhui: '阿里普惠',
@@ -330,21 +330,48 @@ export function readWorkThemeSettings(): WorkThemeSettings {
   try {
     const raw = window.localStorage.getItem(WORK_THEME_STORAGE_KEY);
     if (!raw) return defaultWorkThemeSettings;
-    return normalizeSettings(JSON.parse(raw));
+    const parsed = JSON.parse(raw);
+    if (isLegacyScholarDefault(parsed)) return defaultWorkThemeSettings;
+    return normalizeSettings(parsed);
   } catch {
     return defaultWorkThemeSettings;
   }
 }
 
+function isLegacyScholarDefault(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const input = value as Partial<WorkThemeSettings>;
+  return input.theme === 'scholar'
+    && input.mode === 'light'
+    && input.density === 'compact'
+    && input.contrast === 'default'
+    && input.reduceMotion === false
+    && input.ambient === false
+    && input.fontSize === 14
+    && input.fontFamily === 'system'
+    && input.navLayout === 'expanded'
+    && input.radius === 6
+    && input.glassBlur === 0
+    && input.contentPadding === 20;
+}
+
 export function saveWorkThemeSettings(settings: WorkThemeSettings): WorkThemeSettings {
   const next = normalizeSettings(settings);
-  window.localStorage.setItem(WORK_THEME_STORAGE_KEY, JSON.stringify(next));
+  try {
+    window.localStorage.setItem(WORK_THEME_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // Storage may be disabled; the active document should still update.
+  }
   applyWorkTheme(next);
   return next;
 }
 
 export function resetWorkThemeSettings(): WorkThemeSettings {
-  window.localStorage.removeItem(WORK_THEME_STORAGE_KEY);
+  try {
+    window.localStorage.removeItem(WORK_THEME_STORAGE_KEY);
+  } catch {
+    // Keep reset functional even when persistent storage is unavailable.
+  }
   applyWorkTheme(defaultWorkThemeSettings);
   return defaultWorkThemeSettings;
 }
@@ -360,6 +387,19 @@ export function applyWorkTheme(settings: WorkThemeSettings): void {
   const radius = `${radiusValue}px`;
   const fontStack = fontStackOf(normalized.fontFamily);
   const [gradientStart, gradientMiddle, gradientEnd] = preset.signature.gradient;
+  const highContrast = normalized.contrast === 'high';
+  const secondaryText = highContrast
+    ? `color-mix(in srgb, ${colors.text} 88%, transparent)`
+    : colors.secondary;
+  const tertiaryText = highContrast
+    ? `color-mix(in srgb, ${colors.text} 72%, transparent)`
+    : colors.tertiary;
+  const border = highContrast
+    ? `color-mix(in srgb, ${colors.text} ${normalized.mode === 'dark' ? '34%' : '28%'}, transparent)`
+    : colors.border;
+  const borderStrong = highContrast
+    ? `color-mix(in srgb, ${colors.text} ${normalized.mode === 'dark' ? '48%' : '40%'}, transparent)`
+    : colors.borderStrong;
 
   root.setAttribute('data-theme', normalized.theme);
   root.setAttribute('data-mode', normalized.mode);
@@ -374,6 +414,13 @@ export function applyWorkTheme(settings: WorkThemeSettings): void {
   root.setAttribute('data-work-font', normalized.fontFamily);
   root.setAttribute('data-work-nav-layout', normalized.navLayout);
   root.style.fontSize = `${normalized.fontSize}px`;
+  root.style.setProperty('--fs-display', `${normalized.fontSize + 10}px`);
+  root.style.setProperty('--fs-page-title', `${normalized.fontSize + 7}px`);
+  root.style.setProperty('--fs-section-title', `${normalized.fontSize + 2}px`);
+  root.style.setProperty('--fs-body', `${normalized.fontSize}px`);
+  root.style.setProperty('--fs-helper', `${Math.max(12, normalized.fontSize - 2)}px`);
+  root.style.setProperty('--fs-table-body', `${Math.max(12, normalized.fontSize - 1)}px`);
+  root.style.setProperty('--fs-kpi-value', `${normalized.fontSize + 13}px`);
   root.style.setProperty('--content-padding', `${normalized.contentPadding}px`);
   root.style.setProperty('--content-gutter', `${normalized.contentPadding}px`);
   root.style.setProperty('--work-glass-blur', `${blurValue}px`);
@@ -387,7 +434,7 @@ export function applyWorkTheme(settings: WorkThemeSettings): void {
   root.style.setProperty('--bg-topbar', colors.topbar);
   root.style.setProperty('--bg-sidebar-hover', normalized.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(20, 24, 40, 0.06)');
   root.style.setProperty('--bg-sidebar-active', normalized.mode === 'dark' ? 'rgba(255, 255, 255, 0.14)' : 'rgba(20, 24, 40, 0.10)');
-  root.style.setProperty('--bg-sidebar-text', normalized.mode === 'dark' ? 'rgba(255, 255, 255, 0.60)' : 'rgba(16, 19, 28, 0.62)');
+  root.style.setProperty('--bg-sidebar-text', highContrast ? secondaryText : normalized.mode === 'dark' ? 'rgba(255, 255, 255, 0.60)' : 'rgba(16, 19, 28, 0.62)');
   root.style.setProperty('--bg-sidebar-text-active', colors.text);
   root.style.setProperty('--bg-primary', colors.content);
   root.style.setProperty('--bg-secondary', normalized.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(20, 24, 40, 0.04)');
@@ -396,14 +443,14 @@ export function applyWorkTheme(settings: WorkThemeSettings): void {
   root.style.setProperty('--bg-active', normalized.mode === 'dark' ? 'rgba(255, 255, 255, 0.14)' : 'rgba(20, 24, 40, 0.12)');
   root.style.setProperty('--bg-subtle', normalized.mode === 'dark' ? 'rgba(255, 255, 255, 0.055)' : 'rgba(20, 24, 40, 0.045)');
   root.style.setProperty('--text-primary', colors.text);
-  root.style.setProperty('--text-secondary', colors.secondary);
-  root.style.setProperty('--text-tertiary', colors.tertiary);
+  root.style.setProperty('--text-secondary', secondaryText);
+  root.style.setProperty('--text-tertiary', tertiaryText);
   root.style.setProperty('--text-inverse', preset.signature.holoForeground);
-  root.style.setProperty('--border-default', colors.border);
-  root.style.setProperty('--border-divider', colors.border);
-  root.style.setProperty('--border-sidebar', colors.border);
-  root.style.setProperty('--border-light', colors.border);
-  root.style.setProperty('--border-strong', colors.borderStrong);
+  root.style.setProperty('--border-default', border);
+  root.style.setProperty('--border-divider', border);
+  root.style.setProperty('--border-sidebar', border);
+  root.style.setProperty('--border-light', border);
+  root.style.setProperty('--border-strong', borderStrong);
   root.style.setProperty('--accent', colors.accent);
   root.style.setProperty('--accent-hover', colors.accentHover);
   root.style.setProperty('--accent-soft', `rgba(${preset.signature.accentRgb}, 0.14)`);
@@ -423,9 +470,9 @@ export function applyWorkTheme(settings: WorkThemeSettings): void {
 function normalizeSettings(value: unknown): WorkThemeSettings {
   const input = (value && typeof value === 'object' ? value : {}) as Partial<WorkThemeSettings>;
   const theme = WORK_THEMES.some((item) => item.id === input.theme) ? input.theme! : defaultWorkThemeSettings.theme;
-  const mode = input.mode === 'light' ? 'light' : 'dark';
-  const density = input.density === 'compact' ? 'compact' : 'standard';
-  const contrast = input.contrast === 'high' ? 'high' : 'default';
+  const mode = input.mode === 'light' || input.mode === 'dark' ? input.mode : defaultWorkThemeSettings.mode;
+  const density = input.density === 'compact' || input.density === 'standard' ? input.density : defaultWorkThemeSettings.density;
+  const contrast = input.contrast === 'high' || input.contrast === 'default' ? input.contrast : defaultWorkThemeSettings.contrast;
   const fontFamily = isWorkFont(input.fontFamily) ? input.fontFamily : defaultWorkThemeSettings.fontFamily;
   const navLayout = isWorkNavLayout(input.navLayout) ? input.navLayout : defaultWorkThemeSettings.navLayout;
 
@@ -434,8 +481,8 @@ function normalizeSettings(value: unknown): WorkThemeSettings {
     mode,
     density,
     contrast,
-    reduceMotion: Boolean(input.reduceMotion),
-    ambient: input.ambient !== false,
+    reduceMotion: typeof input.reduceMotion === 'boolean' ? input.reduceMotion : defaultWorkThemeSettings.reduceMotion,
+    ambient: typeof input.ambient === 'boolean' ? input.ambient : defaultWorkThemeSettings.ambient,
     fontSize: clampNumber(input.fontSize, 13, 18, defaultWorkThemeSettings.fontSize),
     fontFamily,
     navLayout,
@@ -474,14 +521,14 @@ function lightenHex(hex: string, amount: number): string {
 function fontStackOf(font: WorkThemeFont): string {
   switch (font) {
     case 'sans':
-      return '"Manrope", "Noto Sans SC", "Microsoft YaHei", "Segoe UI Variable", sans-serif';
+      return '"Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif';
     case 'noto':
-      return '"Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif';
+      return '"Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif';
     case 'misans':
-      return '"MiSans", "Microsoft YaHei", "Segoe UI Variable", sans-serif';
+      return '"MiSans", "Segoe UI Variable Text", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif';
     case 'puhui':
-      return '"Alibaba PuHuiTi", "Microsoft YaHei", "Segoe UI Variable", sans-serif';
+      return '"Alibaba PuHuiTi", "Segoe UI Variable Text", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif';
     default:
-      return '"Segoe UI Variable", "Microsoft YaHei", system-ui, sans-serif';
+      return '"Segoe UI Variable Text", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif';
   }
 }

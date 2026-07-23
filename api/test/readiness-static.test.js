@@ -37,10 +37,13 @@ test("checkReadiness reports database and migration health for sqlite", async ()
       dialect: "sqlite",
       sqliteConnection: db,
       migrationsDir,
+      requiredTables: ["schema_migrations"],
+      requiredColumns: [],
     });
     assert.equal(okReport.ok, true);
     assert.equal(okReport.status, "ok");
     assert.equal(okReport.checks.database.ok, true);
+    assert.equal(okReport.checks.schema.ok, true);
     assert.equal(okReport.checks.migrations.ok, true);
 
     db.prepare("DELETE FROM schema_migrations WHERE id = @id").run({ id: expected[0].id });
@@ -49,6 +52,8 @@ test("checkReadiness reports database and migration health for sqlite", async ()
       dialect: "sqlite",
       sqliteConnection: db,
       migrationsDir,
+      requiredTables: ["schema_migrations"],
+      requiredColumns: [],
     });
     assert.equal(failReport.ok, false);
     assert.equal(failReport.checks.migrations.ok, false);
@@ -61,6 +66,8 @@ test("checkReadiness reports database and migration health for sqlite", async ()
       dialect: "sqlite",
       sqliteConnection: db,
       migrationsDir,
+      requiredTables: ["schema_migrations"],
+      requiredColumns: [],
     });
     assert.equal(dbDown.ok, false);
     assert.equal(dbDown.checks.database.ok, false);
@@ -72,10 +79,50 @@ test("checkReadiness reports database and migration health for sqlite", async ()
 test("checkReadiness skips migration ledger for postgres dialect", async () => {
   const report = await checkReadiness({
     row: async () => ({ ok: 1 }),
+    rows: async () => [{ table_name: "users" }, { table_name: "projects" }],
     dialect: "postgres",
+    requiredTables: ["users", "projects"],
   });
   assert.equal(report.ok, true);
+  assert.equal(report.checks.schema.detail, "schema_ok");
   assert.equal(report.checks.migrations.detail, "skipped_for_postgres");
+});
+
+test("checkReadiness fails for an incomplete postgres schema", async () => {
+  const report = await checkReadiness({
+    row: async () => ({ ok: 1 }),
+    rows: async () => [{ table_name: "users" }],
+    dialect: "postgres",
+    requiredTables: ["users", "projects"],
+  });
+  assert.equal(report.ok, false);
+  assert.deepEqual(report.checks.schema.missingTables, ["projects"]);
+});
+
+test("checkReadiness fails when a required sqlite column is missing", async () => {
+  const migrationsDir = path.join(__dirname, "..", "migrations");
+  const expected = listMigrationFiles(migrationsDir);
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec("CREATE TABLE schema_migrations (id TEXT PRIMARY KEY, checksum TEXT, applied_at TEXT); CREATE TABLE users (id TEXT PRIMARY KEY);");
+    for (const item of expected) {
+      db.prepare("INSERT INTO schema_migrations (id, checksum, applied_at) VALUES (@id, @checksum, @at)")
+        .run({ id: item.id, checksum: item.checksum, at: new Date().toISOString() });
+    }
+    const report = await checkReadiness({
+      row: async () => ({ ok: 1 }),
+      dialect: "sqlite",
+      sqliteConnection: db,
+      migrationsDir,
+      requiredTables: ["schema_migrations", "users"],
+      requiredColumns: [["users", "status", "TEXT"]],
+    });
+    assert.equal(report.ok, false);
+    assert.equal(report.checks.schema.detail, "schema_incomplete");
+    assert.deepEqual(report.checks.schema.missingColumns, ["users.status"]);
+  } finally {
+    db.close();
+  }
 });
 
 test("shouldServeWeb defaults to production when dist exists", () => {

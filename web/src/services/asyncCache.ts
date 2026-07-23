@@ -31,36 +31,35 @@ export function getAsyncCacheUser(): string {
   return cacheUserKey;
 }
 
-/**
- * Build a namespaced cache key.
- * - Prefer an explicit string `cacheKey` (P0-5).
- * - Fallback: named function or short body fingerprint of an anonymous loader.
- */
-export function buildAsyncCacheKey(
-  loaderOrKey: (() => Promise<unknown>) | string,
-  deps: unknown[] = [],
-): string {
-  let name: string;
-  if (typeof loaderOrKey === 'string') {
-    name = loaderOrKey.trim() || 'key';
-  } else {
-    const named = loaderOrKey.name && loaderOrKey.name !== 'anonymous' ? loaderOrKey.name : '';
-    let bodyHint = '';
-    if (!named) {
-      try {
-        const src = loaderOrKey.toString().replace(/\s+/g, ' ').slice(0, 120);
-        bodyHint = `anon:${src}`;
-      } catch {
-        bodyHint = 'anon';
-      }
-    }
-    name = named || bodyHint;
+/** Build a user-scoped key from an explicit, stable cache namespace. */
+export function buildAsyncCacheKey(cacheKey: string, deps: readonly unknown[] = []): string {
+  const namespace = cacheKey.trim();
+  if (!namespace) {
+    throw new TypeError('useAsync cacheKey must be a non-empty string');
   }
+
+  let serializedDeps: string | undefined;
   try {
-    return `${cacheUserKey}:${name}:${JSON.stringify(deps)}`;
-  } catch {
-    return `${cacheUserKey}:${name}:${deps.length}`;
+    serializedDeps = JSON.stringify(deps, (_key, value: unknown) => {
+      if (typeof value === 'bigint' || typeof value === 'function' || typeof value === 'symbol') {
+        throw new TypeError('useAsync dependencies must be JSON-serializable');
+      }
+      return value;
+    });
+  } catch (error) {
+    if (error instanceof TypeError && error.message.startsWith('useAsync dependencies')) {
+      throw error;
+    }
+    throw new TypeError(
+      `useAsync dependencies must be JSON-serializable: ${error instanceof Error ? error.message : 'unknown value'}`,
+    );
   }
+
+  if (serializedDeps === undefined) {
+    throw new TypeError('useAsync dependencies must be JSON-serializable');
+  }
+
+  return `${cacheUserKey}:${namespace}:${serializedDeps}`;
 }
 
 export function getAsyncCacheEntry<T>(key: string): CacheEntry<T> | undefined {
@@ -82,7 +81,7 @@ export function clearAsyncCache(): void {
 
 /**
  * Invalidate selected cache entries.
- * - string: case-insensitive substring match against the cache key
+ * - string: exact cache namespace for the active user (all dependency variants)
  * - RegExp: tested against the cache key
  * - function: predicate over the cache key
  */
@@ -90,13 +89,16 @@ export function invalidateAsyncCache(
   match: string | RegExp | ((key: string) => boolean),
 ): number {
   let removed = 0;
+  const namespacePrefix =
+    typeof match === 'string' ? `${cacheUserKey}:${match.trim()}:` : null;
   for (const key of [...cache.keys()]) {
+    if (match instanceof RegExp) match.lastIndex = 0;
     const hit =
       typeof match === 'function'
         ? match(key)
         : match instanceof RegExp
           ? match.test(key)
-          : key.toLowerCase().includes(String(match).toLowerCase());
+          : Boolean(namespacePrefix && key.startsWith(namespacePrefix));
     if (hit) {
       cache.delete(key);
       removed += 1;

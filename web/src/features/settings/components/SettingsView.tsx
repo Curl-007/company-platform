@@ -39,7 +39,7 @@ export default function SettingsView() {
     loading: aiProviderLoading,
     error: aiProviderError,
     reload: reloadAiProvider,
-  } = useAsync<AiProviderConfig>(fetchAiProviderConfig, []);
+  } = useAsync<AiProviderConfig>(fetchAiProviderConfig, [], { cacheKey: 'settings:ai-provider' });
 
   const [apiConfig, setApiConfig] = useState(() =>
     loadConfig(SETTINGS_STORAGE_KEYS.api, DEFAULT_API_CONFIG),

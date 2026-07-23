@@ -2,11 +2,12 @@
 /**
  * RC isolated browser E2E:
  * - temporary SQLite database
- * - temporary API on a free port (default 4010)
+ * - temporary API and Vite servers on free ports
  * - Playwright smoke + multi-role nav flow
  *
  * Usage (repo root):
  *   node scripts/rc-e2e.js
+ *   node scripts/rc-e2e.js --port 4310
  *   node scripts/rc-e2e.js --with-api-roles
  */
 const { spawn } = require("node:child_process");
@@ -20,15 +21,15 @@ const apiRoot = path.join(repoRoot, "api");
 const webRoot = path.join(repoRoot, "web");
 
 function parseArgs(argv) {
-  const portArg = argv.find((arg, index) => argv[index - 1] === "--port");
-  // Default 4010 so Vite's proxy (web/vite.config.ts) reaches the disposable API.
+  const portIndex = argv.indexOf("--port");
+  const portArg = portIndex >= 0 ? argv[portIndex + 1] : process.env.RC_E2E_PORT;
   // API multi-role smoke (handoff/membership) is on by default for RC; pass
   // --skip-api-roles to opt out of the longer API path. --with-api-roles is
   // retained as an explicit alias for documentation/CI callers.
   return {
     withApiRoles: !argv.includes("--skip-api-roles"),
     withFullUi: !argv.includes("--skip-full-ui"),
-    port: Number(portArg || process.env.PORT || 4010),
+    port: portArg == null ? 0 : Number(portArg),
   };
 }
 
@@ -81,14 +82,18 @@ function runCommand(command, args, options = {}) {
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const port = Number.isFinite(options.port) && options.port > 0 ? options.port : await getFreePort();
+  let webPort = await getFreePort();
+  while (webPort === port) webPort = await getFreePort();
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "pm-rc-e2e-"));
   const databaseFile = path.join(workDir, "e2e.db");
+  const storageDir = path.join(workDir, "storage");
   const apiLog = path.join(workDir, "api.log");
 
   const env = {
     ...process.env,
     PORT: String(port),
     DATABASE_FILE: databaseFile,
+    STORAGE_DIR: storageDir,
     JWT_SECRET: process.env.JWT_SECRET || "rc-e2e-jwt-secret-16",
     AI_CONFIG_ENCRYPTION_KEY: process.env.AI_CONFIG_ENCRYPTION_KEY || "rc-e2e-ai-key-16ch",
     SEED_DEMO_DATA: process.env.SEED_DEMO_DATA || "0",
@@ -98,7 +103,9 @@ async function main() {
 
   console.log(`[rc-e2e] workDir=${workDir}`);
   console.log(`[rc-e2e] database=${databaseFile}`);
+  console.log(`[rc-e2e] storage=${storageDir}`);
   console.log(`[rc-e2e] port=${port}`);
+  console.log(`[rc-e2e] webPort=${webPort}`);
 
   // Bootstrap schema + seed accounts into the disposable DB.
   await runCommand(process.execPath, [path.join(repoRoot, "scripts", "bootstrap-temp-db.js")], {
@@ -126,6 +133,9 @@ async function main() {
     const browserEnv = {
       ...env,
       CI: process.env.CI || "true",
+      VITE_API_PROXY_TARGET: `http://127.0.0.1:${port}`,
+      PLAYWRIGHT_WEB_PORT: String(webPort),
+      PLAYWRIGHT_REUSE_SERVER: "false",
     };
     if (process.env.PLAYWRIGHT_BASE_URL) {
       browserEnv.PLAYWRIGHT_BASE_URL = process.env.PLAYWRIGHT_BASE_URL;
@@ -133,6 +143,7 @@ async function main() {
 
     const e2eSpecs = [
       "e2e/smoke.spec.ts",
+      "e2e/ui-responsive.spec.ts",
       "e2e/roles-flow.spec.ts",
       "e2e/rc-security-flow.spec.ts",
     ];

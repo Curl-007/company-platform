@@ -8,7 +8,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
  * - cross-account session switch (no privilege leak)
  * - project membership boundaries (via API in browser origin)
  * - task / defect handoff happy path + outsider deny
- * - products three tabs + company goals entry (not a fourth tab)
+ * - products page exposes only the supported three tabs
  */
 
 type RoleKey = 'admin' | 'pm' | 'pdm' | 'dev' | 'qa';
@@ -172,20 +172,14 @@ test.describe('RC products three tabs', () => {
     for (const tab of ['产品', '项目集', '组合'] as const) {
       await page
         .locator('.nav-tabs.products-page-tabs, .products-page-tabs, .nav-tabs')
-        .getByRole('button', { name: tab, exact: true })
+        .getByRole('tab', { name: tab, exact: true })
         .click();
       await expect(page.locator('.nav-tabs .nav-tab.active')).toContainText(tab);
       await expect(page.locator('.panel, .card, .data-table, .page-header').first()).toBeVisible();
     }
 
     await expect(page.locator('.nav-tabs .nav-tab')).toHaveCount(3);
-    await expect(page.locator('.nav-tabs').getByRole('button', { name: '公司目标', exact: true })).toHaveCount(0);
-
-    await page.getByRole('button', { name: '公司目标 / OKR', exact: true }).click();
-    await expect(page.getByRole('button', { name: '返回产品工作台', exact: true })).toBeVisible();
-    await expect(page.locator('.nav-tabs')).toHaveCount(0);
-    await page.getByRole('button', { name: '返回产品工作台', exact: true }).click();
-    await expect(page.locator('.nav-tabs .nav-tab')).toHaveCount(3);
+    await expect(page.getByRole('button', { name: '公司目标 / OKR', exact: true })).toHaveCount(0);
   });
 
   test('pdm can open products tabs without settings', async ({ page }) => {
@@ -195,7 +189,7 @@ test.describe('RC products three tabs', () => {
     await openNav(page, '产品管理');
     await expect(page.getByRole('heading', { name: '产品管理' })).toBeVisible({ timeout: 15_000 });
     for (const tab of ['产品', '项目集', '组合'] as const) {
-      await page.locator('.nav-tabs').getByRole('button', { name: tab, exact: true }).click();
+      await page.locator('.nav-tabs').getByRole('tab', { name: tab, exact: true }).click();
       await expect(page.locator('.nav-tabs .nav-tab.active')).toContainText(tab);
     }
   });

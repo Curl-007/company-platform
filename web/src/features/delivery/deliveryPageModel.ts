@@ -12,6 +12,7 @@ import type {
   Release,
   Requirement,
 } from '../../types';
+import { businessDateKey } from '../../utils/businessDate';
 
 export type DeliveryTab = 'overview' | 'builds' | 'releases' | 'gates';
 export type DeliveryKind = 'build' | 'release';
@@ -60,7 +61,7 @@ export function splitIds(value: string): string[] {
 }
 
 export function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return businessDateKey();
 }
 
 export function formatDate(value?: string | null): string {
@@ -199,6 +200,5 @@ export function buildPipelineStages(
       records: records.filter((item) => (item.kind === 'build' && item.status === 'released' && !releaseBuildIds.has(item.id)) || (item.kind === 'release' && item.status === 'draft')),
     },
     { id: 'released', label: '已发布', tone: 'done', records: records.filter((item) => item.kind === 'release' && item.status === 'released') },
-    { id: 'risk', label: '失败/回滚', tone: 'risk', records: records.filter((item) => item.status === 'failed' || item.status === 'rollback') },
   ];
 }

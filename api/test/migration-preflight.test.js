@@ -65,3 +65,41 @@ test("database migration preflight detects orphan relations and invalid JSON bef
     db.close();
   }
 });
+
+test("database migration preflight requires audit scope columns and validates their references", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(`
+      CREATE TABLE users (id TEXT PRIMARY KEY);
+      CREATE TABLE projects (id TEXT PRIMARY KEY);
+      CREATE TABLE audit_logs (
+        id TEXT PRIMARY KEY,
+        actor_id TEXT,
+        project_id TEXT,
+        subject_user_id TEXT
+      );
+      INSERT INTO users (id) VALUES ('U-001');
+      INSERT INTO projects (id) VALUES ('PRJ-001');
+      INSERT INTO audit_logs (id, actor_id, project_id, subject_user_id)
+      VALUES ('AUD-001', 'U-001', 'PRJ-MISSING', 'U-MISSING');
+    `);
+
+    const missingScope = preflightDatabase(db, { expectedTables: ["users", "projects", "audit_logs"] });
+    assert.equal(missingScope.ok, false);
+    assert.deepEqual(missingScope.missingColumns, ["audit_logs.scope_type"]);
+    assert.ok(missingScope.referenceViolations.some((item) => (
+      item.childTable === "audit_logs" && item.childColumn === "project_id" && item.count === 1
+    )));
+    assert.ok(missingScope.referenceViolations.some((item) => (
+      item.childTable === "audit_logs" && item.childColumn === "subject_user_id" && item.count === 1
+    )));
+
+    db.exec("ALTER TABLE audit_logs ADD COLUMN scope_type TEXT NOT NULL DEFAULT 'global'");
+    db.exec("UPDATE audit_logs SET project_id = 'PRJ-001', subject_user_id = 'U-001'");
+    const clean = preflightDatabase(db, { expectedTables: ["users", "projects", "audit_logs"] });
+    assert.equal(clean.ok, true);
+    assert.deepEqual(clean.missingColumns, []);
+  } finally {
+    db.close();
+  }
+});

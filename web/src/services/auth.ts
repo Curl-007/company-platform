@@ -7,6 +7,7 @@ import {
   getSessionGeneration,
   clearAuthArtifacts,
   setOnSessionExpired,
+  SessionSupersededError,
 } from './api';
 import { clearAsyncCache, setAsyncCacheUser } from './asyncCache';
 import type { SessionUser, UserCapabilities, ApiResponse } from '../types';
@@ -41,6 +42,12 @@ function writeUser(user: SessionUser | null): void {
 
 let currentUser: SessionUser | null = readUser();
 
+function assertCurrentSession(generation: number, tokenAtStart: string | null): void {
+  if (getSessionGeneration() !== generation || getToken() !== tokenAtStart) {
+    throw new SessionSupersededError();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -50,18 +57,22 @@ let currentUser: SessionUser | null = readUser();
  * Stores the JWT token in the api module and caches the user object.
  */
 export async function login(email: string, password: string): Promise<SessionUser> {
-  // Drop residual cache/snapshot; setToken later bumps session generation so
-  // in-flight 401/getMe from a previous session cannot clobber the new one.
+  // Advancing the generation at attempt start invalidates every request from
+  // the previous session, including an older concurrent login attempt.
+  setToken(null);
   clearAsyncCache();
   setAsyncCacheUser(null);
   currentUser = null;
   writeUser(null);
+  const attemptGeneration = getSessionGeneration();
 
   const res = await post<ApiResponse<{ token: string; user: SessionUser }>>(
     '/api/auth/login',
     { email, password },
   );
+  assertCurrentSession(attemptGeneration, null);
   const { token: jwt, user } = res.data;
+  // Token installation advances the generation again and commits the winner.
   setToken(jwt);
   currentUser = user;
   writeUser(user);
@@ -77,10 +88,7 @@ export async function getMe(): Promise<SessionUser> {
   const generation = getSessionGeneration();
   const tokenAtStart = getToken();
   const res = await get<ApiResponse<SessionUser>>('/api/auth/me');
-  if (getSessionGeneration() !== generation || getToken() !== tokenAtStart) {
-    // A concurrent login/logout won; do not clobber the newer session snapshot.
-    return res.data;
-  }
+  assertCurrentSession(generation, tokenAtStart);
   currentUser = res.data;
   writeUser(res.data);
   setAsyncCacheUser(res.data?.id ?? null);
@@ -88,7 +96,14 @@ export async function getMe(): Promise<SessionUser> {
 }
 
 export async function fetchCapabilities(): Promise<UserCapabilities> {
+  const generation = getSessionGeneration();
+  const tokenAtStart = getToken();
+  const userIdAtStart = currentUser?.id ?? null;
   const res = await get<ApiResponse<UserCapabilities>>('/api/auth/capabilities');
+  assertCurrentSession(generation, tokenAtStart);
+  if ((currentUser?.id ?? null) !== userIdAtStart) {
+    throw new SessionSupersededError();
+  }
   const user = currentUser;
   if (user) {
     currentUser = { ...user, capabilities: res.data };
@@ -107,7 +122,14 @@ export interface UpdateProfileInput {
 }
 
 export async function updateMyProfile(input: UpdateProfileInput): Promise<SessionUser> {
+  const generation = getSessionGeneration();
+  const tokenAtStart = getToken();
+  const userIdAtStart = currentUser?.id ?? null;
   const res = await patch<ApiResponse<SessionUser>>('/api/auth/me', input);
+  assertCurrentSession(generation, tokenAtStart);
+  if ((currentUser?.id ?? null) !== userIdAtStart) {
+    throw new SessionSupersededError();
+  }
   currentUser = res.data;
   writeUser(res.data);
   return res.data;

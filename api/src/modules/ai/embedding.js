@@ -8,6 +8,7 @@
  */
 
 const crypto = require("node:crypto");
+const { requestAiProviderUrl } = require("./outboundUrlPolicy");
 
 const LOCAL_PROVIDER = "local-hash";
 const LOCAL_MODEL = "hash-v1";
@@ -116,7 +117,7 @@ function parseEmbedding(value) {
  */
 async function embedRemote(text, {
   getConfig,
-  fetchImpl = fetch,
+  requestImpl = requestAiProviderUrl,
   timeoutMs = 15000,
   logger = console,
 } = {}) {
@@ -135,7 +136,7 @@ async function embedRemote(text, {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetchImpl(`${String(config.baseUrl).replace(/\/$/, "")}/embeddings`, {
+    const response = await requestImpl(config.baseUrl, "embeddings", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -143,6 +144,7 @@ async function embedRemote(text, {
       },
       body: JSON.stringify({ model, input: text }),
       signal: controller.signal,
+      redirect: "error",
     });
     if (!response.ok) {
       const detail = await response.text().catch(() => "");

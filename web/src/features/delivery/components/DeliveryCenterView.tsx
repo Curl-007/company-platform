@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import {
   AlertTriangle,
   Package,
@@ -51,6 +51,31 @@ import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { canOperate } from '../../../constants/roles';
 import type { Build, Defect, DeliveryGateResult, Product, Project, Release, Requirement } from '../../../types';
 
+const DELIVERY_TABS: Array<{ key: DeliveryTab; label: string }> = [
+  { key: 'overview', label: '全链路' },
+  { key: 'builds', label: '构建' },
+  { key: 'releases', label: '发布' },
+  { key: 'gates', label: '质量门禁' },
+];
+
+function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+  const tablist = event.currentTarget.closest('[role="tablist"]');
+  const tabs = tablist ? Array.from(tablist.querySelectorAll<HTMLButtonElement>('[role="tab"]')) : [];
+  const currentIndex = tabs.indexOf(event.currentTarget);
+  if (currentIndex < 0) return;
+
+  let nextIndex: number;
+  if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+  else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  else if (event.key === 'Home') nextIndex = 0;
+  else if (event.key === 'End') nextIndex = tabs.length - 1;
+  else return;
+
+  event.preventDefault();
+  tabs[nextIndex].focus();
+  tabs[nextIndex].click();
+}
+
 export default function DeliveryCenterView() {
   const toast = useToast();
   const confirm = useConfirm();
@@ -67,13 +92,13 @@ export default function DeliveryCenterView() {
   const [creatingBuild, setCreatingBuild] = useState(false);
   const [creatingRelease, setCreatingRelease] = useState(false);
 
-  const projectsState = useAsync<Project[]>(fetchProjects, []);
-  const productsState = useAsync<Product[]>(fetchProducts, []);
-  const buildsState = useAsync<Build[]>(() => fetchBuilds(), []);
-  const releasesState = useAsync<Release[]>(() => fetchReleases(), []);
-  const gatesState = useAsync<DeliveryGateResult[]>(() => fetchDeliveryGates(), []);
-  const requirementsState = useAsync<Requirement[]>(() => fetchRequirements(), []);
-  const defectsState = useAsync<Defect[]>(() => fetchDefects(), []);
+  const projectsState = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
+  const productsState = useAsync<Product[]>(fetchProducts, [], { cacheKey: 'products:list' });
+  const buildsState = useAsync<Build[]>(() => fetchBuilds(), [], { cacheKey: 'delivery:builds' });
+  const releasesState = useAsync<Release[]>(() => fetchReleases(), [], { cacheKey: 'delivery:releases' });
+  const gatesState = useAsync<DeliveryGateResult[]>(() => fetchDeliveryGates(), [], { cacheKey: 'delivery:gates' });
+  const requirementsState = useAsync<Requirement[]>(() => fetchRequirements(), [], { cacheKey: 'requirements:list' });
+  const defectsState = useAsync<Defect[]>(() => fetchDefects(), [], { cacheKey: 'defects:list' });
 
   const projects = projectsState.data ?? [];
   const products = productsState.data ?? [];
@@ -254,79 +279,98 @@ export default function DeliveryCenterView() {
         />
       ) : null}
 
-      <div className="delivery-tabs">
-        {[
-          ['overview', '全链路'],
-          ['builds', '构建'],
-          ['releases', '发布'],
-          ['gates', '质量门禁'],
-        ].map(([key, label]) => (
-          <button key={key} className={`delivery-tab ${tab === key ? 'active' : ''}`} onClick={() => setTab(key as DeliveryTab)}>
+      <div className="delivery-tabs" role="tablist" aria-label="构建发布视图">
+        {DELIVERY_TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            id={`delivery-tab-${key}`}
+            type="button"
+            role="tab"
+            className={`delivery-tab ${tab === key ? 'active' : ''}`}
+            aria-selected={tab === key}
+            aria-controls={`delivery-panel-${key}`}
+            tabIndex={tab === key ? 0 : -1}
+            onClick={() => setTab(key)}
+            onKeyDown={handleTabKeyDown}
+          >
             {label}
           </button>
         ))}
       </div>
 
-      {loading || error ? (
-        <PageState loading={loading} error={error} onRetry={reloadAll} />
-      ) : (
-        <>
-          {tab === 'overview' ? (
-            <DeliveryOverview
-              pipelineStages={pipelineStages}
-              builds={builds}
-              projects={projects}
-              products={products}
-              releaseBuildIds={releaseBuildIds}
-              candidateCount={summary.candidates}
-              canManageDelivery={canManageDelivery}
-              onOpenRecord={openRecord}
-              onCreateRelease={() => setCreatingRelease(true)}
-            />
-          ) : null}
+      {DELIVERY_TABS.map(({ key }) => (
+        <div
+          key={key}
+          id={`delivery-panel-${key}`}
+          role="tabpanel"
+          className={tab === key ? 'stack' : undefined}
+          aria-labelledby={`delivery-tab-${key}`}
+          hidden={tab !== key}
+        >
+          {tab === key ? (
+            loading || error ? (
+              <PageState loading={loading} error={error} onRetry={reloadAll} />
+            ) : (
+              <>
+                {tab === 'overview' ? (
+                  <DeliveryOverview
+                    pipelineStages={pipelineStages}
+                    builds={builds}
+                    projects={projects}
+                    products={products}
+                    releaseBuildIds={releaseBuildIds}
+                    candidateCount={summary.candidates}
+                    canManageDelivery={canManageDelivery}
+                    onOpenRecord={openRecord}
+                    onCreateRelease={() => setCreatingRelease(true)}
+                  />
+                ) : null}
 
-          {tab !== 'overview' ? (
-            <Panel
-              title={tab === 'builds' ? '构建清单' : tab === 'releases' ? '发布清单' : '质量门禁'}
-              subtitle={`当前显示 ${filteredRecords.length} / ${records.length} 条交付记录`}
-            >
-              <DeliveryFilters
-                keyword={keyword}
-                onKeyword={setKeyword}
-                kind={kindFilter}
-                onKind={setKindFilter}
-                status={statusFilter}
-                onStatus={setStatusFilter}
-                statusChoices={statusChoices}
-              />
-              {tab === 'gates' ? (
-                <GateBoard records={filteredRecords} gateMap={gateMap} onOpen={openRecord} />
-              ) : (
-                <DeliveryRecordList
-                  records={filteredRecords.filter((record) => tab === 'builds' ? record.kind === 'build' : record.kind === 'release')}
-                  onOpen={openRecord}
-                  onStatus={handleStatus}
-                  onDelete={handleDelete}
-                  canManageDelivery={canManageDelivery}
-                />
-              )}
-            </Panel>
-          ) : (
-            <Panel title="最近交付记录" subtitle="构建、预发、正式发布和回滚统一追踪">
-              <DeliveryFilters
-                keyword={keyword}
-                onKeyword={setKeyword}
-                kind={kindFilter}
-                onKind={setKindFilter}
-                status={statusFilter}
-                onStatus={setStatusFilter}
-                statusChoices={statusChoices}
-              />
-              <DeliveryRecordList records={filteredRecords} onOpen={openRecord} onStatus={handleStatus} onDelete={handleDelete} canManageDelivery={canManageDelivery} />
-            </Panel>
-          )}
-        </>
-      )}
+                {tab !== 'overview' ? (
+                  <Panel
+                    title={tab === 'builds' ? '构建清单' : tab === 'releases' ? '发布清单' : '质量门禁'}
+                    subtitle={`当前显示 ${filteredRecords.length} / ${records.length} 条交付记录`}
+                  >
+                    <DeliveryFilters
+                      keyword={keyword}
+                      onKeyword={setKeyword}
+                      kind={kindFilter}
+                      onKind={setKindFilter}
+                      status={statusFilter}
+                      onStatus={setStatusFilter}
+                      statusChoices={statusChoices}
+                    />
+                    {tab === 'gates' ? (
+                      <GateBoard records={filteredRecords} gateMap={gateMap} onOpen={openRecord} />
+                    ) : (
+                      <DeliveryRecordList
+                        records={filteredRecords.filter((record) => tab === 'builds' ? record.kind === 'build' : record.kind === 'release')}
+                        onOpen={openRecord}
+                        onStatus={handleStatus}
+                        onDelete={handleDelete}
+                        canManageDelivery={canManageDelivery}
+                      />
+                    )}
+                  </Panel>
+                ) : (
+                  <Panel title="最近交付记录" subtitle="构建、预发、正式发布和回滚统一追踪">
+                    <DeliveryFilters
+                      keyword={keyword}
+                      onKeyword={setKeyword}
+                      kind={kindFilter}
+                      onKind={setKindFilter}
+                      status={statusFilter}
+                      onStatus={setStatusFilter}
+                      statusChoices={statusChoices}
+                    />
+                    <DeliveryRecordList records={filteredRecords} onOpen={openRecord} onStatus={handleStatus} onDelete={handleDelete} canManageDelivery={canManageDelivery} />
+                  </Panel>
+                )}
+              </>
+            )
+          ) : null}
+        </div>
+      ))}
 
       {selected ? <DeliveryDetail record={selected} gate={gateMap.get(`${selected.kind}:${selected.id}`)} statusError={statusError} onClose={() => openRecord(null)} onStatus={handleStatus} onDelete={handleDelete} onChanged={reloadAll} canManageDelivery={canManageDelivery} canUseAi={canUseAi} /> : null}
       {creatingBuild && canManageDelivery ? <CreateBuildDialog projects={projects} requirements={requirements} defects={defects} onClose={() => setCreatingBuild(false)} onCreated={() => { setCreatingBuild(false); reloadAll(); }} /> : null}

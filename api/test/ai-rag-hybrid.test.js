@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
   embedLocal,
+  embedRemote,
   cosineSimilarity,
   serializeEmbedding,
   parseEmbedding,
@@ -93,4 +94,34 @@ test("ensureChunkEmbedding reuses stored vectors", () => {
   const ensured = ensureChunkEmbedding(chunk);
   assert.equal(ensured.persisted, true);
   assert.deepEqual(ensured.vector, embedded.vector);
+});
+
+test("remote embedding uses the policy-bound provider request path", async () => {
+  const calls = [];
+  const result = await embedRemote("delivery risk", {
+    getConfig: async () => ({
+      enabled: true,
+      apiKey: "sk-test",
+      baseUrl: "https://provider.example/v1",
+      embeddingModel: "embedding-a",
+      provider: "test-provider",
+    }),
+    requestImpl: async (baseUrl, endpoint, options) => {
+      calls.push({ baseUrl, endpoint, body: JSON.parse(options.body), redirect: options.redirect });
+      return {
+        ok: true,
+        status: 200,
+        text: async () => "",
+        json: async () => ({ data: [{ embedding: [3, 4] }] }),
+      };
+    },
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].baseUrl, "https://provider.example/v1");
+  assert.equal(calls[0].endpoint, "embeddings");
+  assert.deepEqual(calls[0].body, { model: "embedding-a", input: "delivery risk" });
+  assert.equal(calls[0].redirect, "error");
+  assert.equal(result.provider, "test-provider");
+  assert.deepEqual(result.vector, [0.6, 0.8]);
 });

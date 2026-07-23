@@ -12,13 +12,11 @@ function createAiInteractionsRouter({
   buildAiChatPrompt,
   buildAiChatContext,
   callRealModel,
-  canAccessProject,
   createAiRequirementRecommendation,
   createAiSummary,
   createBusinessAdvice,
   ensureAiTargetAccess,
   fail,
-  listAccessibleProjectIds,
   localAiChatReply,
   normalizeAttachments,
   normalizeMessages,
@@ -27,23 +25,32 @@ function createAiInteractionsRouter({
   publicAiProviderConfig,
   requirementScore,
   requirePermission,
+  resolveAccessScope,
   resolveAiProviderConfig,
   row,
   rows,
 }) {
   const router = express.Router();
 
-  async function resolveSummaryProjectIds(user) {
-    if (typeof listAccessibleProjectIds === "function") {
-      return listAccessibleProjectIds(user);
-    }
-    if (typeof canAccessProject !== "function") return null;
-    const projects = await rows("SELECT id FROM projects WHERE deleted_at IS NULL");
-    const ids = [];
-    for (const project of projects) {
-      if (await canAccessProject(user, project.id)) ids.push(project.id);
-    }
-    return ids;
+  function normalizeRequestAccessScope(accessScope) {
+    if (accessScope?.all === true) return { all: true };
+    if (!Array.isArray(accessScope?.projectIds)) return { projectIds: [] };
+    return {
+      projectIds: [...new Set(accessScope.projectIds.map(String).map((id) => id.trim()).filter(Boolean))].sort(),
+    };
+  }
+
+  async function accessScopeFor(user) {
+    if (typeof resolveAccessScope !== "function") return { projectIds: [] };
+    return normalizeRequestAccessScope(await resolveAccessScope(user));
+  }
+
+  function projectParams(projectIds) {
+    return Object.fromEntries(projectIds.map((id, index) => [`projectId${index}`, id]));
+  }
+
+  function projectPlaceholders(projectIds) {
+    return projectIds.map((_, index) => `@projectId${index}`).join(", ");
   }
 
   router.post("/ai/requirements/:id/score", requirePermission("ai:*"), async (req, res, next) => {
@@ -77,8 +84,9 @@ function createAiInteractionsRouter({
       const attachments = normalizeAttachments(req.body?.attachments);
       const scope = String(req.body?.scope || "project-management").slice(0, 80);
       const currentPage = String(req.body?.currentPage || "").slice(0, 120);
+      const accessScope = await accessScopeFor(req.user);
       if (!messages.length && !attachments.length) return fail(res, 400, "VALIDATION_FAILED", "请输入问题或上传附件。");
-      const prompt = await buildAiChatPrompt({ messages, attachments, scope, currentPage });
+      const prompt = await buildAiChatPrompt({ messages, attachments, scope, currentPage, accessScope });
       let fallback = false;
       let rawContent = await callRealModel(prompt, {
         system: "你是公司项目管理平台的 AI 对话助手，能阅读项目数据、用户上传文档和图片，并给出务实的项目管理建议。需要新建需求时在文末输出 ACTION_JSON。",
@@ -92,13 +100,13 @@ function createAiInteractionsRouter({
       });
       if (!rawContent) {
         fallback = true;
-        rawContent = await localAiChatReply({ messages, attachments });
+        rawContent = await localAiChatReply({ messages, attachments, accessScope });
       }
 
       let proposedActions = extractProposedActions(rawContent);
       let content = stripActionJson(rawContent);
       if (!proposedActions.length) {
-        const context = typeof buildAiChatContext === "function" ? await buildAiChatContext() : null;
+        const context = typeof buildAiChatContext === "function" ? await buildAiChatContext(accessScope) : null;
         const localAction = buildLocalAction({ messages, attachments, context });
         if (localAction) {
           proposedActions = [localAction];
@@ -127,8 +135,9 @@ function createAiInteractionsRouter({
   router.get("/ai/summary", requirePermission("ai:*"), async (req, res, next) => {
     try {
       const aiProvider = await publicAiProviderConfig();
-      const isAdmin = req.user?.role === "admin" || (Array.isArray(req.user?.permissions) && req.user.permissions.includes("*"));
-      const projectIds = isAdmin ? null : await resolveSummaryProjectIds(req.user);
+      const accessScope = await accessScopeFor(req.user);
+      const isAdmin = accessScope.all === true;
+      const projectIds = isAdmin ? [] : accessScope.projectIds;
       // Non-admin: only jobs/logs for accessible scope (global job list is admin-only).
       let jobs = [];
       let logAnalysis = 0;
@@ -136,30 +145,36 @@ function createAiInteractionsRouter({
         jobs = await rows("SELECT * FROM ai_jobs ORDER BY created_at DESC");
         const workLogCount = await row("SELECT COUNT(*) AS c FROM work_logs");
         logAnalysis = workLogCount?.c || 0;
-      } else if (Array.isArray(projectIds) && projectIds.length) {
-        // Jobs are not project-keyed in as-built schema; hide cross-tenant job metadata for non-admin.
-        jobs = [];
-        const names = await rows(
-          `SELECT name FROM projects WHERE deleted_at IS NULL AND id IN (${projectIds.map((_, i) => `@id${i}`).join(",")})`,
-          Object.fromEntries(projectIds.map((id, i) => [`id${i}`, id])),
+      } else if (projectIds.length) {
+        const params = projectParams(projectIds);
+        const placeholders = projectPlaceholders(projectIds);
+        const jobProjectExpression = "COALESCE(CASE WHEN j.source_type = 'project' THEN j.source_id END, d.project_id, sr.project_id, wr.project_id)";
+        jobs = (await rows(
+          `SELECT j.*, ${jobProjectExpression} AS project_id
+             FROM ai_jobs j
+             LEFT JOIN documents d ON j.source_type = 'document' AND d.id = j.source_id
+             LEFT JOIN requirements sr ON j.source_type = 'requirement' AND sr.id = j.source_id
+             LEFT JOIN requirements wr ON wr.id = j.written_requirement_id
+            WHERE ${jobProjectExpression} IN (${placeholders})
+            ORDER BY j.created_at DESC`,
+          params,
+        )).filter((job) => projectIds.includes(job.project_id));
+        const workLogCount = await row(
+          `SELECT COUNT(*) AS c FROM work_logs WHERE project_id IN (${placeholders})`,
+          params,
         );
-        if (names.length) {
-          const workLogCount = await row(
-            `SELECT COUNT(*) AS c FROM work_logs WHERE project IN (${names.map((_, i) => `@n${i}`).join(",")})`,
-            Object.fromEntries(names.map((item, i) => [`n${i}`, item.name])),
-          );
-          logAnalysis = workLogCount?.c || 0;
-        }
+        logAnalysis = workLogCount?.c || 0;
       }
       const scope = req.query.scope || "dashboard";
       const summary = buildSummary({ aiProvider, jobs, logAnalysis });
-      const visibilityKey = isAdmin ? "admin" : `u:${req.user?.id || "anon"}`;
-      const cacheKey = req.query.fresh
-        ? `${visibilityKey}:${Date.now()}`
-        : visibilityKey;
+      const visibilityKey = isAdmin
+        ? "admin:all"
+        : `u:${req.user?.id || "anon"}:projects:${projectIds.join(",") || "none"}`;
+      const skipCache = ["1", "true"].includes(String(req.query.fresh || "").toLowerCase());
       const aiSummary = await createAiSummary(scope, summary.metrics, {
-        cacheKey,
-        projectIds: isAdmin ? undefined : (projectIds || []),
+        accessScope,
+        cacheKey: visibilityKey,
+        skipCache,
       });
       return res.json(ok({
         scope,

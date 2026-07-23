@@ -32,7 +32,7 @@ export default function DefectForm({
   onDone: () => void;
   canUseAi?: boolean;
 }) {
-  const { data: projects } = useAsync<Project[]>(fetchProjects, []);
+  const { data: projects } = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
   const [title, setTitle] = useState(item?.title ?? '');
   const [projectId, setProjectId] = useState(item?.projectId ?? '');
   const [severity, setSeverity] = useState(item?.severity ?? 'medium');

@@ -1,72 +1,156 @@
-import { get, post, patch, put, del } from './api';
+import { get, post, patch, put, del, type ApiRequestOptions } from './api';
 import { clearAsyncCache, invalidateAsyncCache } from './asyncCache';
 import type { ApiResponse } from '../types';
 
 export interface MutationOptions {
-  /** false: do not invalidate; true/'all': broader invalidation; default: path heuristics */
+  /** false: keep cache; true/'all': clear cache; default: path-based key invalidation. */
   invalidateCache?: boolean | 'all';
-  /** Optional explicit loader-name prefixes to invalidate (e.g. ['fetchProjects', 'fetchDashboard']) */
-  invalidatePrefixes?: string[];
+  /** Explicit useAsync cache namespaces to invalidate after a successful mutation. */
+  invalidateKeys?: string[];
   headers?: Record<string, string>;
   timeoutMs?: number;
 }
 
 /**
- * Map API path segments to useAsync cache key prefixes (loader function names).
+ * Map API path segments to explicit useAsync cache namespaces.
  * Prefer targeted invalidation over clearAsyncCache.
  */
-function cachePrefixesForPath(path: string): string[] {
+function cacheKeysForPath(path: string): string[] {
   const normalized = path.split('?')[0].toLowerCase();
-  const prefixes = new Set<string>();
+  const keys = new Set<string>();
 
   const add = (...items: string[]) => {
-    for (const item of items) prefixes.add(item);
+    for (const item of items) keys.add(item);
   };
 
   if (normalized.includes('/projects') || normalized.includes('/wbs') || normalized.includes('/kanban')) {
-    add('fetchProjects', 'fetchDashboard', 'fetchProject');
+    add(
+      'projects:list',
+      'projects:detail',
+      'projects:delivery',
+      'projects:risks',
+      'projects:decisions',
+      'projects:members',
+      'projects:kanban',
+      'project:flow',
+      'project:workflow-binding',
+      'flow:overview',
+      'dashboard:overview',
+      'mywork:dashboard',
+      'capacity:overview',
+      'testing-quality:snapshot',
+    );
   }
   if (normalized.includes('/requirements')) {
-    add('fetchRequirements', 'fetchDashboard', 'fetchProjects');
+    add(
+      'requirements:list',
+      'requirements:detail',
+      'dashboard:overview',
+      'mywork:dashboard',
+      'projects:list',
+      'projects:detail',
+      'projects:delivery',
+      'delivery:gates',
+    );
   }
   if (normalized.includes('/documents')) {
-    add('fetchDocuments', 'fetchProjects');
+    add('documents:list', 'projects:list', 'ai:summary');
   }
   if (normalized.includes('/work-logs')) {
-    add('fetchWorkLogs', 'fetchTeamWorkLogs', 'fetchWeekly', 'fetchMyCapacity', 'fetchDashboard');
+    add(
+      'work-logs:team',
+      'work-logs:weekly-summary',
+      'mywork:weekly-summary',
+      'mywork:dashboard',
+      'mywork:capacity',
+      'capacity:overview',
+      'dashboard:overview',
+    );
   }
   if (normalized.includes('/time-entries')) {
-    add('fetchTimeEntries', 'fetchMyCapacity', 'fetchCapacity', 'fetchDashboard');
+    add('time-entries:list', 'mywork:capacity', 'mywork:dashboard', 'capacity:overview', 'dashboard:overview');
   }
   if (normalized.includes('/defects') || normalized.includes('/test-cases') || normalized.includes('/test-runs')) {
-    add('fetchDefects', 'fetchTestCases', 'fetchProjects', 'fetchDashboard');
+    add(
+      'defects:list',
+      'test-cases:list',
+      'testing-quality:snapshot',
+      'projects:list',
+      'projects:detail',
+      'projects:delivery',
+      'delivery:gates',
+      'dashboard:overview',
+      'mywork:dashboard',
+    );
   }
-  if (normalized.includes('/tasks') || normalized.includes('/status-history')) {
-    add('fetchTasks', 'fetchProject', 'fetchDashboard', 'fetchStatusHistory');
+  if (normalized.includes('/tasks') || normalized.includes('/status-history') || normalized.includes('/sprints')) {
+    add(
+      'projects:detail',
+      'projects:delivery',
+      'projects:kanban',
+      'sprints:burndown',
+      'sprints:commitment',
+      'sprints:scope-changes',
+      'tasks:status-history',
+      'dashboard:overview',
+      'mywork:dashboard',
+      'project:flow',
+      'flow:overview',
+    );
   }
   if (normalized.includes('/users') || normalized.includes('/team') || normalized.includes('/org/')) {
-    add('fetchUsers', 'fetchTeam', 'fetchDepartments', 'fetchOrganization');
+    add('team:members', 'organization:departments', 'capacity:overview', 'dashboard:overview');
   }
   if (normalized.includes('/capacity') || normalized.includes('/allocations')) {
-    add('fetchCapacity', 'fetchMyCapacity', 'fetchProjects', 'fetchDashboard');
+    add('capacity:overview', 'capacity:calendar', 'mywork:capacity', 'projects:list', 'dashboard:overview');
   }
-  if (normalized.includes('/products') || normalized.includes('/programs') || normalized.includes('/portfolios')) {
-    add('fetchProducts', 'fetchPrograms', 'fetchPortfolios', 'fetchProjects', 'fetchDashboard');
+  if (
+    normalized.includes('/products')
+    || normalized.includes('/programs')
+    || normalized.includes('/portfolios')
+    || normalized.includes('/strategic-goals')
+  ) {
+    add(
+      'products:list',
+      'programs:list',
+      'portfolios:list',
+      'strategic-goals:list',
+      'projects:list',
+      'projects:detail',
+      'projects:delivery',
+      'dashboard:overview',
+    );
   }
   if (normalized.includes('/releases') || normalized.includes('/builds') || normalized.includes('/delivery')) {
-    add('fetchReleases', 'fetchBuilds', 'fetchDelivery', 'fetchProjects', 'fetchDashboard');
+    add(
+      'delivery:builds',
+      'delivery:releases',
+      'delivery:gates',
+      'delivery:release-approvals',
+      'delivery:rollback-records',
+      'delivery:release-report',
+      'projects:list',
+      'projects:detail',
+      'projects:delivery',
+      'dashboard:overview',
+    );
   }
   if (normalized.includes('/ai/')) {
-    add('fetchAi', 'fetchDocuments');
+    add('ai:summary', 'documents:list', 'dashboard:overview');
+  }
+  if (normalized.includes('/ai-provider')) {
+    add('settings:ai-provider');
   }
   if (normalized.includes('/dashboard')) {
-    add('fetchDashboard');
+    add('dashboard:overview', 'mywork:dashboard');
   }
   if (normalized.includes('/flow') || normalized.includes('/workflow')) {
-    add('fetchWorkflowTemplates', 'fetchProjectFlow', 'fetchFlowOverview', 'fetchProjectWorkflowBinding');
+    add('workflow:templates', 'project:flow', 'flow:overview', 'project:workflow-binding');
   }
 
-  return [...prefixes];
+  if (keys.size > 0) add('audit:logs');
+
+  return [...keys];
 }
 
 function applyMutationCachePolicy(path: string, options: MutationOptions): void {
@@ -77,34 +161,28 @@ function applyMutationCachePolicy(path: string, options: MutationOptions): void 
     return;
   }
 
-  const prefixes = [
-    ...(options.invalidatePrefixes || []),
-    ...(options.invalidateCache === true ? [] : cachePrefixesForPath(path)),
-  ];
+  if (options.invalidateCache === true && !options.invalidateKeys?.length) {
+    clearAsyncCache();
+    return;
+  }
 
-  // true with no prefixes: still try path heuristics once, then fall back carefully
-  const heuristic = options.invalidateCache === true ? cachePrefixesForPath(path) : [];
-  const targets = prefixes.length > 0 ? prefixes : heuristic;
+  const targets = options.invalidateKeys?.length
+    ? options.invalidateKeys
+    : cacheKeysForPath(path);
 
   if (targets.length > 0) {
-    for (const prefix of targets) {
-      invalidateAsyncCache(prefix);
+    for (const cacheKey of targets) {
+      invalidateAsyncCache(cacheKey);
     }
     return;
   }
 
-  // Last resort: invalidate by first path segment after /api/
-  const segment = path.split('?')[0].replace(/^\/api\//, '').split('/')[0];
-  if (segment) {
-    invalidateAsyncCache(segment);
-    return;
-  }
-
+  // Unknown writes are rare and must not leave unrelated stale entries behind.
   clearAsyncCache();
 }
 
-export async function unwrap<T>(path: string): Promise<T> {
-  const res = await get<ApiResponse<T>>(path);
+export async function unwrap<T>(path: string, options?: ApiRequestOptions): Promise<T> {
+  const res = await get<ApiResponse<T>>(path, options);
   return res.data;
 }
 

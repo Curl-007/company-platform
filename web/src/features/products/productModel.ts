@@ -1,4 +1,4 @@
-import type { Portfolio, Product, ProductMetric, ProductModule, Program, RoadmapItem } from '../../types';
+import type { Portfolio, Product, ProductImage, ProductMetric, ProductModule, Program, RoadmapItem } from '../../types';
 import { PROJECT_STATUS_LABELS, ROADMAP_STATUS_LABELS } from '../../constants/enums';
 
 export type DetailItem = { key: string; value: string };
@@ -11,7 +11,16 @@ export const EMPTY_METRIC: ProductMetric = { label: '', value: '', unit: '', sta
 export const EMPTY_ROADMAP: RoadmapItem = { title: '', version: '', quarter: '', status: 'planned' };
 export const PRODUCT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const PRODUCT_IMAGE_MAX_COUNT = 6;
-export const PRODUCT_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml'];
+export const PRODUCT_IMAGE_ACCEPT = '.png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif';
+export const PRODUCT_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
+
+const PRODUCT_IMAGE_TYPE_BY_EXTENSION: Record<string, (typeof PRODUCT_IMAGE_TYPES)[number]> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+};
 
 export const GOAL_STATUS_LABELS: Record<string, string> = {
   draft: '草稿', active: '推进中', on_hold: '暂停', achieved: '已达成', closed: '已关闭',
@@ -77,15 +86,38 @@ export function sanitizeRoadmap(items: RoadmapItem[]): RoadmapItem[] {
     .filter((item) => item.title || item.version || item.quarter);
 }
 
-export function productImages(product?: Product | null): string[] {
-  const values = product?.imageUrls?.length ? product.imageUrls : product?.imageUrl ? [product.imageUrl] : [];
+export function isAcceptedProductImage(file: File): boolean {
+  const extensionIndex = file.name.lastIndexOf('.');
+  const extension = extensionIndex >= 0 ? file.name.slice(extensionIndex).toLowerCase() : '';
+  return PRODUCT_IMAGE_TYPE_BY_EXTENSION[extension] === file.type.toLowerCase();
+}
+
+export function validateProductImageFiles(files: readonly File[], currentCount: number): string | null {
+  if (currentCount + files.length > PRODUCT_IMAGE_MAX_COUNT) {
+    return `产品图片最多 ${PRODUCT_IMAGE_MAX_COUNT} 张，当前还可添加 ${Math.max(0, PRODUCT_IMAGE_MAX_COUNT - currentCount)} 张。`;
+  }
+  const invalidType = files.find((file) => !isAcceptedProductImage(file));
+  if (invalidType) return `${invalidType.name} 不是受支持的 PNG、JPG、WEBP 或 GIF 图片。`;
+  const oversized = files.find((file) => file.size > PRODUCT_IMAGE_MAX_BYTES);
+  if (oversized) return `${oversized.name} 超过 5 MiB 限制。`;
+  return null;
+}
+
+export function productImages(product?: Product | null): ProductImage[] {
+  return [...(product?.images ?? [])].sort((left, right) => left.sortOrder - right.sortOrder);
+}
+
+export function productImageUrls(product?: Product | null): string[] {
+  const structuredUrls = productImages(product).map((image) => image.url);
+  const legacyUrls = product?.imageUrls?.length ? product.imageUrls : product?.imageUrl ? [product.imageUrl] : [];
+  const values = structuredUrls.length ? structuredUrls : legacyUrls;
   return values
     .map((item) => String(item || '').trim())
     .filter((item) => item && !/^https?:\/\/(?:www\.)?example\.com\//i.test(item));
 }
 
 export function currentProductImage(product?: Product | null) {
-  return productImages(product)[0] || '';
+  return productImageUrls(product)[0] || '';
 }
 
 export function allProductMetrics(product?: Product | null): ProductMetric[] {

@@ -181,17 +181,15 @@ test.describe('multi-role full-flow UI', () => {
     await expect(page.locator('.sidebar-nav').getByRole('button', { name: '交付中心', exact: true })).toHaveCount(0);
   });
 
-  test('admin products tabs and goals entry still work', async ({ page }) => {
+  test('admin products page exposes only the three supported tabs', async ({ page }) => {
     await loginAs(page, 'admin');
     await openNav(page, '产品管理');
     await expect(page.getByRole('heading', { name: '产品管理' })).toBeVisible({ timeout: 15_000 });
     for (const tab of ['产品', '项目集', '组合'] as const) {
-      await page.locator('.nav-tabs.products-page-tabs, .products-page-tabs, .nav-tabs').getByRole('button', { name: tab, exact: true }).click();
+      await page.locator('.nav-tabs.products-page-tabs, .products-page-tabs, .nav-tabs').getByRole('tab', { name: tab, exact: true }).click();
       await expect(page.locator('.nav-tabs .nav-tab.active')).toContainText(tab);
     }
-    await page.getByRole('button', { name: '公司目标 / OKR', exact: true }).click();
-    await expect(page.getByRole('button', { name: '返回产品工作台', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: '返回产品工作台', exact: true }).click();
     await expect(page.locator('.nav-tabs .nav-tab')).toHaveCount(3);
+    await expect(page.getByRole('button', { name: '公司目标 / OKR', exact: true })).toHaveCount(0);
   });
 });

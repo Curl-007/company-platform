@@ -1,4 +1,4 @@
-function createCapacityRepository({ insert, row, rows, run }) {
+function createCapacityRepository({ row, rows, run, upsert }) {
   return {
     getSetting: (key) => row("SELECT value FROM app_settings WHERE key = @key", { key }),
     saveSetting: (key, value, updatedAt) => run(
@@ -18,7 +18,10 @@ function createCapacityRepository({ insert, row, rows, run }) {
       { userId, periodStart, periodEnd },
     ),
     findPlanById: (id) => row("SELECT * FROM capacity_plans WHERE id = @id", { id }),
-    upsertPlan: (plan) => insert("capacity_plans", plan),
+    upsertPlan: (plan) => upsert("capacity_plans", plan, {
+      conflictTarget: ["user_id", "period_start", "period_end"],
+      excludeUpdateColumns: ["id"],
+    }),
     listAllocations: (period) => rows(
       "SELECT * FROM project_allocations WHERE period_start = @periodStart AND period_end = @periodEnd",
       period,
@@ -34,11 +37,23 @@ function createCapacityRepository({ insert, row, rows, run }) {
        AND id != @existingId`,
       { userId, periodStart, periodEnd, existingId },
     ),
-    upsertAllocation: (allocation) => insert("project_allocations", allocation),
+    // Overlap-aware: any allocation whose date range intersects the target period.
+    listOverlappingAllocations: ({ userId, periodStart, periodEnd, existingId }) => rows(
+      `SELECT * FROM project_allocations
+       WHERE user_id = @userId
+         AND period_start <= @periodEnd
+         AND period_end >= @periodStart
+         AND id != @existingId`,
+      { userId, periodStart, periodEnd, existingId: existingId || "" },
+    ),
+    upsertAllocation: (allocation) => upsert("project_allocations", allocation, {
+      conflictTarget: ["project_id", "user_id", "period_start", "period_end"],
+      excludeUpdateColumns: ["id"],
+    }),
     approveAllocation: ({ id, approvedBy, approvedAt, updatedAt }) => run(
       `UPDATE project_allocations
        SET approval_status = 'approved', approved_by = @approvedBy, approved_at = @approvedAt, updated_at = @updatedAt
-       WHERE id = @id`,
+       WHERE id = @id AND approval_status = 'pending'`,
       { id, approvedBy, approvedAt, updatedAt },
     ),
     deleteAllocation: (id) => run("DELETE FROM project_allocations WHERE id = @id", { id }),
@@ -76,7 +91,10 @@ function createCapacityRepository({ insert, row, rows, run }) {
       { calendarId, date },
     ),
     findCalendarExceptionById: (id) => row("SELECT * FROM work_calendar_exceptions WHERE id = @id", { id }),
-    upsertCalendarException: (exception) => insert("work_calendar_exceptions", exception),
+    upsertCalendarException: (exception) => upsert("work_calendar_exceptions", exception, {
+      conflictTarget: ["calendar_id", "calendar_date"],
+      excludeUpdateColumns: ["id", "created_at"],
+    }),
     deleteCalendarException: (id) => run("DELETE FROM work_calendar_exceptions WHERE id = @id", { id }),
   };
 }

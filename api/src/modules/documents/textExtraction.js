@@ -5,6 +5,7 @@ const DOCX_MAX_COMPRESSED_ENTRY = 8 * 1024 * 1024;
 const DOCX_MAX_UNCOMPRESSED_ENTRY = 16 * 1024 * 1024;
 const DOCX_MAX_ENTRIES_SCANNED = 2000;
 const DOCX_MAX_TOTAL_COMPRESSED = 32 * 1024 * 1024;
+const MAX_TEXT_EXTRACT_BYTES = 25 * 1024 * 1024;
 
 function cleanText(value) {
   return String(value || "")
@@ -93,10 +94,22 @@ function extractDocxText(buffer) {
   }
 }
 
-function extractTextFromUpload(fileName, fileType, contentBase64) {
-  if (!contentBase64) return "";
-  const base64 = String(contentBase64).includes(",") ? String(contentBase64).split(",").pop() : String(contentBase64);
+function uploadBuffer(content) {
+  if (!content) return null;
+  if (Buffer.isBuffer(content)) {
+    return content.length <= MAX_TEXT_EXTRACT_BYTES ? content : null;
+  }
+  const raw = String(content);
+  const base64 = raw.includes(",") ? raw.slice(raw.indexOf(",") + 1) : raw;
+  // Reject oversized payloads before Buffer.from allocates decoded storage.
+  if (base64.length > Math.ceil(MAX_TEXT_EXTRACT_BYTES * 4 / 3) + 4) return null;
   const buffer = Buffer.from(base64 || "", "base64");
+  return buffer.length <= MAX_TEXT_EXTRACT_BYTES ? buffer : null;
+}
+
+function extractTextFromUpload(fileName, fileType, content) {
+  const buffer = uploadBuffer(content);
+  if (!buffer) return "";
   const ext = path.extname(String(fileName || "")).toLowerCase();
   const mime = String(fileType || "").toLowerCase();
 
@@ -154,4 +167,6 @@ module.exports = {
   readZipEntry,
   DOCX_MAX_COMPRESSED_ENTRY,
   DOCX_MAX_UNCOMPRESSED_ENTRY,
+  MAX_TEXT_EXTRACT_BYTES,
+  uploadBuffer,
 };

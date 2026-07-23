@@ -2,9 +2,12 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * UI smoke for the manual checklist (login + key pages after mega-page split).
- * Expects API on :4010. Starts Vite via webServer unless PLAYWRIGHT_BASE_URL is set.
+ * Starts Vite via webServer unless PLAYWRIGHT_BASE_URL is set. The RC runner
+ * supplies isolated API/Web ports through environment variables.
  */
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:5173';
+const requestedWebPort = Number(process.env.PLAYWRIGHT_WEB_PORT || 5173);
+const webPort = Number.isInteger(requestedWebPort) && requestedWebPort > 0 ? requestedWebPort : 5173;
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${webPort}`;
 
 export default defineConfig({
   testDir: './e2e',
@@ -26,10 +29,9 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
     : {
-        // Run from web package; reuse if `npm start` already launched Vite.
-        command: 'npm run dev',
+        command: `npm run dev -- --host 127.0.0.1 --port ${webPort} --strictPort`,
         url: baseURL,
-        reuseExistingServer: true,
+        reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER !== 'false',
         timeout: 120_000,
       },
 });

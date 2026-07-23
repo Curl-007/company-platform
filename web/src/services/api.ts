@@ -7,6 +7,12 @@ import { clearAsyncCache, setAsyncCacheUser } from './asyncCache';
 
 const BASE_URL = '';
 
+export interface ApiRequestOptions {
+  headers?: Record<string, string>;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+}
+
 // ---------------------------------------------------------------------------
 // Token management
 //
@@ -18,6 +24,8 @@ const BASE_URL = '';
 
 const TOKEN_STORAGE_KEY = 'pm.token';
 const USER_STORAGE_KEY = 'pm.user';
+
+type ResponseMode = 'auto' | 'blob';
 
 /** Optional hook so auth can clear its in-memory user snapshot on auto-expiry. */
 let onSessionExpired: (() => void) | null = null;
@@ -96,6 +104,14 @@ export class ApiError extends Error {
   }
 }
 
+/** Raised when a response belongs to a session that is no longer active. */
+export class SessionSupersededError extends Error {
+  constructor() {
+    super('会话已更新，已忽略过期请求');
+    this.name = 'SessionSupersededError';
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Core fetch wrapper
 // ---------------------------------------------------------------------------
@@ -104,7 +120,8 @@ async function request<T>(
   method: string,
   path: string,
   body?: unknown,
-  options?: { headers?: Record<string, string>; timeoutMs?: number },
+  options?: ApiRequestOptions,
+  responseMode: ResponseMode = 'auto',
 ): Promise<T> {
   const url = `${BASE_URL}${path}`;
   // Capture generation + token used for this request so a late 401 cannot
@@ -125,7 +142,14 @@ async function request<T>(
   }
 
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), options?.timeoutMs ?? 15000);
+  let timedOut = false;
+  const timeout = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, options?.timeoutMs ?? 15000);
+  const abortFromCaller = () => controller.abort();
+  if (options?.signal?.aborted) controller.abort();
+  else options?.signal?.addEventListener('abort', abortFromCaller, { once: true });
 
   const init: RequestInit = {
     method,
@@ -139,72 +163,88 @@ async function request<T>(
     signal: controller.signal,
   };
 
-  let response: Response;
   try {
-    response = await fetch(url, init);
-  } catch (networkError) {
-    window.clearTimeout(timeout);
-    if (networkError instanceof DOMException && networkError.name === 'AbortError') {
-      throw new ApiError('请求超时', 0);
+    let response: Response;
+    try {
+      response = await fetch(url, init);
+    } catch (networkError) {
+      if (sessionGeneration !== requestGeneration || token !== requestToken) {
+        throw new SessionSupersededError();
+      }
+      if (networkError instanceof DOMException && networkError.name === 'AbortError') {
+        throw new ApiError(timedOut ? '请求超时' : '请求已取消', 0);
+      }
+      throw new ApiError(
+        networkError instanceof Error ? networkError.message : '网络错误',
+        0,
+      );
     }
-    throw new ApiError(
-      networkError instanceof Error ? networkError.message : '网络错误',
-      0,
-    );
-  } finally {
-    window.clearTimeout(timeout);
-  }
 
-  // Auto-expire session on 401 only when the failing request still matches the active session.
-  if (response.status === 401) {
-    if (sessionGeneration === requestGeneration && token === requestToken) {
+    if (sessionGeneration !== requestGeneration || token !== requestToken) {
+      throw new SessionSupersededError();
+    }
+
+    // The generation check above guarantees a stale 401 cannot expire a newer session.
+    if (response.status === 401) {
       clearAuthArtifacts();
       window.location.hash = '#/login';
+      throw new ApiError('未授权 - 登录已过期', 401);
     }
-    throw new ApiError('未授权 - 登录已过期', 401);
-  }
 
-  // Parse response body
-  let data: unknown;
-  const contentType = response.headers.get('content-type') ?? '';
-  if (contentType.includes('application/json')) {
-    data = await response.json();
-  } else {
-    data = await response.text();
-  }
+    let data: unknown;
+    const contentType = response.headers.get('content-type') ?? '';
+    if (response.ok && responseMode === 'blob') {
+      data = await response.blob();
+    } else if (contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      data = await response.text();
+    }
 
-  if (!response.ok) {
-    const message =
-      typeof data === 'object' && data !== null && 'message' in data
-        ? String((data as Record<string, unknown>).message)
-        : `请求失败，状态码 ${response.status}`;
-    throw new ApiError(message, response.status, data);
-  }
+    if (sessionGeneration !== requestGeneration || token !== requestToken) {
+      throw new SessionSupersededError();
+    }
 
-  return data as T;
+    if (!response.ok) {
+      const message =
+        typeof data === 'object' && data !== null && 'message' in data
+          ? String((data as Record<string, unknown>).message)
+          : `请求失败，状态码 ${response.status}`;
+      throw new ApiError(message, response.status, data);
+    }
+
+    return data as T;
+  } finally {
+    window.clearTimeout(timeout);
+    options?.signal?.removeEventListener('abort', abortFromCaller);
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Public HTTP methods
 // ---------------------------------------------------------------------------
 
-export function get<T>(path: string, options?: { headers?: Record<string, string>; timeoutMs?: number }): Promise<T> {
+export function get<T>(path: string, options?: ApiRequestOptions): Promise<T> {
   return request<T>('GET', path, undefined, options);
 }
 
-export function post<T>(path: string, body?: unknown, options?: { headers?: Record<string, string>; timeoutMs?: number }): Promise<T> {
+export function getBlob(path: string, options?: ApiRequestOptions): Promise<Blob> {
+  return request<Blob>('GET', path, undefined, options, 'blob');
+}
+
+export function post<T>(path: string, body?: unknown, options?: ApiRequestOptions): Promise<T> {
   return request<T>('POST', path, body, options);
 }
 
-export function patch<T>(path: string, body?: unknown, options?: { headers?: Record<string, string>; timeoutMs?: number }): Promise<T> {
+export function patch<T>(path: string, body?: unknown, options?: ApiRequestOptions): Promise<T> {
   return request<T>('PATCH', path, body, options);
 }
 
-export function put<T>(path: string, body?: unknown, options?: { headers?: Record<string, string>; timeoutMs?: number }): Promise<T> {
+export function put<T>(path: string, body?: unknown, options?: ApiRequestOptions): Promise<T> {
   return request<T>('PUT', path, body, options);
 }
 
-export function del<T>(path: string, options?: { headers?: Record<string, string>; timeoutMs?: number }): Promise<T> {
+export function del<T>(path: string, options?: ApiRequestOptions): Promise<T> {
   return request<T>('DELETE', path, undefined, options);
 }
 

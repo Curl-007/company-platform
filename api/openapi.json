@@ -3886,6 +3886,179 @@
         }
       }
     },
+    "/api/products/{id}/images": {
+      "post": {
+        "summary": "Upload a product image",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "PNG, JPEG, WebP, or GIF image up to 5 MiB"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Uploaded product image and refreshed product",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeProductImageUpload"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "description": "Image exceeds the 5 MiB limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/{id}/images/{imageId}": {
+      "delete": {
+        "summary": "Delete a product image",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "imageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted product image and refreshed product",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeProductImageDeletion"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/products/{id}/images/{imageId}/content": {
+      "get": {
+        "summary": "Read product image content",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "imageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product image bytes",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/gif": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
     "/api/products/{id}/requirements": {
       "get": {
         "summary": "List requirements for a visible product, scoped again by project access",
@@ -9828,6 +10001,48 @@
         },
         "additionalProperties": false
       },
+      "ProductImage": {
+        "type": "object",
+        "required": [
+          "id",
+          "url",
+          "fileName",
+          "mimeType",
+          "size",
+          "sortOrder"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string",
+            "enum": [
+              "image/png",
+              "image/jpeg",
+              "image/webp",
+              "image/gif"
+            ]
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5242880
+          },
+          "sortOrder": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
       "Product": {
         "type": "object",
         "required": [
@@ -9836,6 +10051,9 @@
           "owner",
           "version",
           "stage",
+          "images",
+          "imageUrl",
+          "imageUrls",
           "modules",
           "roadmap"
         ],
@@ -9858,12 +10076,25 @@
           "description": {
             "type": "string"
           },
+          "images": {
+            "type": "array",
+            "maxItems": 6,
+            "items": {
+              "$ref": "#/components/schemas/ProductImage"
+            }
+          },
           "imageUrl": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "readOnly": true,
+            "deprecated": true,
+            "description": "One-version compatibility field derived from uploaded images or legacy stored URLs"
           },
           "imageUrls": {
             "type": "array",
+            "readOnly": true,
+            "deprecated": true,
+            "description": "One-version compatibility field derived from uploaded images or legacy stored URLs",
             "items": {
               "type": "string"
             }
@@ -9909,15 +10140,6 @@
           "description": {
             "type": "string"
           },
-          "imageUrl": {
-            "type": "string"
-          },
-          "imageUrls": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
           "modules": {
             "type": "array",
             "items": {
@@ -9955,16 +10177,6 @@
           },
           "description": {
             "type": "string"
-          },
-          "imageUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "imageUrls": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           },
           "modules": {
             "type": "array",
@@ -13278,6 +13490,67 @@
                 "items": {
                   "$ref": "#/components/schemas/Product"
                 }
+              }
+            }
+          }
+        ]
+      },
+      "EnvelopeProductImageUpload": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "image",
+                  "product"
+                ],
+                "properties": {
+                  "image": {
+                    "$ref": "#/components/schemas/ProductImage"
+                  },
+                  "product": {
+                    "$ref": "#/components/schemas/Product"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "EnvelopeProductImageDeletion": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "deleted",
+                  "id",
+                  "product"
+                ],
+                "properties": {
+                  "deleted": {
+                    "type": "boolean"
+                  },
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "product": {
+                    "$ref": "#/components/schemas/Product"
+                  }
+                },
+                "additionalProperties": false
               }
             }
           }

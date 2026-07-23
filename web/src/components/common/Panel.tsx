@@ -7,6 +7,8 @@ import React from 'react';
 interface PanelProps {
   /** Panel title text */
   title?: string;
+  /** Semantic heading level for the panel title. */
+  headingLevel?: 2 | 3 | 4 | 5 | 6;
   /** Subtitle or description */
   subtitle?: string;
   /** Icon element to show before the title */
@@ -27,6 +29,7 @@ interface PanelProps {
 
 const Panel: React.FC<PanelProps> = ({
   title,
+  headingLevel = 2,
   subtitle,
   icon,
   toolbar,
@@ -37,6 +40,7 @@ const Panel: React.FC<PanelProps> = ({
   noPadding = false,
 }) => {
   const hasHeader = title || toolbar;
+  const Heading = `h${headingLevel}` as React.ElementType;
 
   return (
     <div className={`panel ${className}`} style={style}>
@@ -45,7 +49,7 @@ const Panel: React.FC<PanelProps> = ({
           <div className="panel-header-left">
             {icon}
             <div>
-              {title && <div className="panel-title">{title}</div>}
+              {title && <Heading className="panel-title">{title}</Heading>}
               {subtitle && <div className="panel-subtitle">{subtitle}</div>}
             </div>
           </div>

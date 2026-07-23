@@ -24,9 +24,9 @@ interface GovernanceTabProps {
 }
 
 export default function GovernanceTab({ projectId, canManageProject, onProjectReload }: GovernanceTabProps) {
-  const risksAsync = useAsync<ProjectRisk[]>(() => fetchProjectRisks(projectId), [projectId]);
-  const decisionsAsync = useAsync<ProjectDecision[]>(() => fetchProjectDecisions(projectId), [projectId]);
-  const membersAsync = useAsync<ProjectMember[]>(() => fetchProjectMembers(projectId), [projectId]);
+  const risksAsync = useAsync<ProjectRisk[]>(() => fetchProjectRisks(projectId), [projectId], { cacheKey: 'projects:risks' });
+  const decisionsAsync = useAsync<ProjectDecision[]>(() => fetchProjectDecisions(projectId), [projectId], { cacheKey: 'projects:decisions' });
+  const membersAsync = useAsync<ProjectMember[]>(() => fetchProjectMembers(projectId), [projectId], { cacheKey: 'projects:members' });
   const [creatingRisk, setCreatingRisk] = useState(false);
   const [editingRisk, setEditingRisk] = useState<ProjectRisk | null>(null);
   const [creatingDecision, setCreatingDecision] = useState(false);

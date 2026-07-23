@@ -1,5 +1,6 @@
 import type { AiProposedAction } from '../../types';
 import { createIdempotencyKey } from '../../services/idempotency';
+import { businessDateKey } from '../../utils/businessDate';
 import {
   createRequirement,
   deleteRequirement,
@@ -436,7 +437,7 @@ export async function executeAiProposedAction(
       if (!content) throw new Error('请填写日报内容。');
       const created = await createWorkLog({
         content,
-        logDate: draft.workDate || new Date().toISOString().slice(0, 10),
+        logDate: draft.workDate || businessDateKey(),
         projectId: draft.projectId || undefined,
       }, createIdempotencyKey('ai-log'));
       id = created.id;
@@ -446,7 +447,7 @@ export async function executeAiProposedAction(
       if (!draft.projectId || !draft.hours) throw new Error('请选择项目并填写工时小时数。');
       const created = await createTimeEntry({
         projectId: draft.projectId,
-        workDate: draft.workDate || new Date().toISOString().slice(0, 10),
+        workDate: draft.workDate || businessDateKey(),
         hours: Number(draft.hours),
         category: 'delivery',
         workNature: 'unspecified',

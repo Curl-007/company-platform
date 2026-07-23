@@ -114,7 +114,7 @@
 .dynamic-rail,
 .dynamic-filter-panel {
   position: sticky;
-  top: 14px;
+  top: calc(var(--topbar-height) + 14px);
   border-radius: var(--radius-card);
   padding: 14px;
 }
@@ -1330,6 +1330,26 @@ html[data-work-mode='light'] .metric-card-value {
     linear-gradient(180deg, rgba(20, 18, 28, 0.8), rgba(14, 14, 22, 0.84));
 }
 
+html[data-work-mode='light'] .dynamic-timeline-item.is-important .dynamic-timeline-content {
+  border-color: color-mix(in srgb, var(--color-risk) 32%, var(--border-default));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-risk-bg) 72%, var(--bg-content)),
+    color-mix(in srgb, var(--color-risk-bg) 34%, var(--bg-content))
+  );
+  color: var(--text-primary);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--color-risk) 9%, transparent);
+}
+
+html[data-work-mode='light'] .dynamic-timeline-item.is-important .dynamic-timeline-content:hover {
+  border-color: color-mix(in srgb, var(--color-risk) 44%, var(--border-default));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-risk-bg) 86%, var(--bg-content)),
+    color-mix(in srgb, var(--color-risk-bg) 42%, var(--bg-content))
+  );
+}
+
 .dynamic-timeline-item.is-important .dynamic-timeline-heading .font-medium,
 .dynamic-timeline-item.is-important .dynamic-timeline-detail {
   color: var(--text-primary);
@@ -1853,7 +1873,7 @@ html[data-work-mode='light'] .theme-settings-drawer {
   height: 8px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--text-primary) 12%, transparent);
 }
 
 .theme-progress-track span {
@@ -1898,7 +1918,7 @@ html[data-work-mode='light'] .theme-settings-drawer {
 
 .theme-gutter-track {
   right: 0;
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--text-primary) 12%, transparent);
 }
 
 .theme-gutter-fill {
@@ -2340,6 +2360,22 @@ html[data-work-mode='light'] textarea::placeholder {
 }
 
 @media (max-width: 768px) {
+  .theme-settings-body {
+    padding: 14px;
+  }
+
+  .theme-preset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .theme-preset-card {
+    min-height: 100px;
+  }
+
+  .theme-preset-card small {
+    line-height: 1.45;
+  }
+
   .sidebar {
     background: rgba(10, 10, 15, 0.92);
   }

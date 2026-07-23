@@ -15,8 +15,8 @@ export function sendAiChat(input: AiChatInput): Promise<AiChatMessage> {
   });
 }
 
-export function fetchAiJob(id: string): Promise<AiJob> {
-  return unwrap<AiJob>(`/api/ai/jobs/${id}`);
+export function fetchAiJob(id: string, signal?: AbortSignal): Promise<AiJob> {
+  return unwrap<AiJob>(`/api/ai/jobs/${id}`, { signal });
 }
 
 export function confirmAiJob(id: string, input: ConfirmAiJobInput = {}): Promise<AiJob> {

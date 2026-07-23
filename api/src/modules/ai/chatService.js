@@ -15,6 +15,23 @@ function dataUrlForAttachment(attachment) {
   return `data:${safeMime};base64,${attachment.contentBase64}`;
 }
 
+function normalizeAccessScope(accessScope) {
+  if (accessScope?.all === true) return { all: true, projectIds: [] };
+  if (!Array.isArray(accessScope?.projectIds)) return { all: false, projectIds: [] };
+  return {
+    all: false,
+    projectIds: [...new Set(accessScope.projectIds.map(String).map((id) => id.trim()).filter(Boolean))].sort(),
+  };
+}
+
+function scopedParams(projectIds) {
+  return Object.fromEntries(projectIds.map((id, index) => [`projectId${index}`, id]));
+}
+
+function projectClause(projectIds, column = "project_id") {
+  return `${column} IN (${projectIds.map((_, index) => `@projectId${index}`).join(", ")})`;
+}
+
 function createAiChatService({
   extractTextFromUpload,
   mapBuild,
@@ -45,14 +62,55 @@ function createAiChatService({
       .slice(0, 6);
   }
 
-  async function buildContext() {
-    const projects = (await rows("SELECT * FROM projects WHERE deleted_at IS NULL ORDER BY id")).map(mapProject);
-    const requirements = (await rows("SELECT * FROM requirements WHERE deleted_at IS NULL ORDER BY id")).map(mapRequirement);
-    const tasks = (await rows("SELECT * FROM tasks ORDER BY id")).map(mapTask);
-    const defects = (await rows("SELECT * FROM defects ORDER BY id")).map(mapDefect);
-    const documents = (await rows("SELECT * FROM documents ORDER BY updated_at DESC LIMIT 12")).map(mapDocument);
-    const builds = (await rows("SELECT * FROM builds ORDER BY build_date DESC LIMIT 10")).map(mapBuild);
-    const releases = (await rows("SELECT * FROM releases ORDER BY release_date DESC LIMIT 10")).map(mapRelease);
+  async function buildContext(accessScope) {
+    const normalizedScope = normalizeAccessScope(accessScope);
+    if (!normalizedScope.all && normalizedScope.projectIds.length === 0) {
+      return {
+        metrics: {
+          projects: 0,
+          activeProjects: 0,
+          riskyProjects: 0,
+          requirements: 0,
+          tasks: 0,
+          blockedTasks: 0,
+          openDefects: 0,
+          documents: 0,
+          builds: 0,
+          releases: 0,
+        },
+        projects: [],
+        requirements: [],
+        blockedTasks: [],
+        openDefects: [],
+        recentDocuments: [],
+        delivery: { builds: [], releases: [] },
+      };
+    }
+    const params = normalizedScope.all ? {} : scopedParams(normalizedScope.projectIds);
+    const allowedProjectIds = new Set(normalizedScope.projectIds);
+    const isAllowedProject = (projectId) => normalizedScope.all || allowedProjectIds.has(projectId);
+    const projectFilter = normalizedScope.all ? "" : ` AND ${projectClause(normalizedScope.projectIds, "id")}`;
+    const boundFilter = normalizedScope.all ? "" : ` WHERE ${projectClause(normalizedScope.projectIds)}`;
+    const requirementsFilter = normalizedScope.all ? "" : ` AND ${projectClause(normalizedScope.projectIds)}`;
+    const releaseFilter = normalizedScope.all ? "" : ` WHERE ${projectClause(normalizedScope.projectIds, "b.project_id")}`;
+    const projectRows = await rows(`SELECT * FROM projects WHERE deleted_at IS NULL${projectFilter} ORDER BY id`, params);
+    const requirementRows = await rows(`SELECT * FROM requirements WHERE deleted_at IS NULL${requirementsFilter} ORDER BY id`, params);
+    const projects = projectRows.map(mapProject).filter((item) => isAllowedProject(item.id));
+    const requirements = requirementRows.map(mapRequirement).filter((item) => isAllowedProject(item.projectId));
+    const tasks = (await rows(`SELECT * FROM tasks${boundFilter} ORDER BY id`, params)).map(mapTask).filter((item) => isAllowedProject(item.projectId));
+    const defects = (await rows(`SELECT * FROM defects${boundFilter} ORDER BY id`, params)).map(mapDefect).filter((item) => isAllowedProject(item.projectId));
+    const documents = (await rows(`SELECT * FROM documents${boundFilter} ORDER BY updated_at DESC LIMIT 12`, params)).map(mapDocument).filter((item) => isAllowedProject(item.projectId));
+    const builds = (await rows(`SELECT * FROM builds${boundFilter} ORDER BY build_date DESC LIMIT 10`, params)).map(mapBuild).filter((item) => isAllowedProject(item.projectId));
+    const releaseRows = await rows(
+      `SELECT r.*, b.project_id AS project_id
+       FROM releases r
+       LEFT JOIN builds b ON b.id = r.build_id${releaseFilter}
+       ORDER BY r.release_date DESC LIMIT 10`,
+      params,
+    );
+    const releases = releaseRows
+      .map((item) => ({ ...mapRelease(item), projectId: item.project_id || item.projectId || null }))
+      .filter((item) => isAllowedProject(item.projectId));
     const activeProjects = projects.filter((item) => !["done", "archived"].includes(item.status));
     const riskyProjects = projects.filter((item) => item.riskCount > 0 || item.healthScore < 70);
     const openDefects = defects.filter((item) => !["closed", "rejected", "verified"].includes(item.status));
@@ -110,17 +168,18 @@ function createAiChatService({
         type: item.type,
         category: item.category,
         aiStatus: item.aiStatus,
+        projectId: item.projectId,
         updatedAt: item.updatedAt,
       })),
       delivery: {
         builds: builds.map((item) => ({ id: item.id, name: item.name, status: item.status, projectId: item.projectId, version: item.version })),
-        releases: releases.map((item) => ({ id: item.id, name: item.name, status: item.status, productId: item.productId, version: item.version })),
+        releases: releases.map((item) => ({ id: item.id, name: item.name, status: item.status, productId: item.productId, projectId: item.projectId, version: item.version })),
       },
     };
   }
 
-  async function buildPrompt({ messages, attachments, scope, currentPage }) {
-    const context = await buildContext();
+  async function buildPrompt({ messages, attachments, scope, currentPage, accessScope }) {
+    const context = await buildContext(accessScope);
     const attachmentSummaries = attachments.map((item, index) => ({
       index: index + 1,
       name: item.name,
@@ -148,9 +207,9 @@ function createAiChatService({
     ].join("\n");
   }
 
-  async function localReply({ messages, attachments }) {
+  async function localReply({ messages, attachments, accessScope }) {
     const latest = messages[messages.length - 1]?.content || "";
-    const context = await buildContext();
+    const context = await buildContext(accessScope);
     const attachmentLine = attachments.length
       ? `我已收到 ${attachments.length} 个附件：${attachments.map((item) => item.name).join("、")}。`
       : "当前没有附件。";
@@ -162,9 +221,9 @@ function createAiChatService({
     ].join("\n\n");
   }
 
-  async function localReplyV2({ messages, attachments }) {
+  async function localReplyV2({ messages, attachments, accessScope }) {
     const latest = messages[messages.length - 1]?.content || "";
-    const context = await buildContext();
+    const context = await buildContext(accessScope);
     const documentAttachments = attachments.filter((item) => item.kind === "document");
     const imageAttachments = attachments.filter((item) => item.kind === "image");
     const documentNotes = documentAttachments
@@ -203,6 +262,7 @@ const chatActions = require('./chatActions');
 module.exports = {
   createAiChatService,
   dataUrlForAttachment,
+  normalizeAccessScope,
   normalizeAiChatMessages,
   ACTION_TYPES: chatActions.ACTION_TYPES,
   wantsCreateRequirement: chatActions.wantsCreateRequirement,

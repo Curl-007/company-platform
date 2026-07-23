@@ -1269,10 +1269,14 @@ test("seed accounts remain disabled after restart, work logs keep authenticated 
   assert.equal(personalDashboard.body.data.requirementProgress.every((item) => item.projectId === project.body.data.id), true);
   assert.equal(personalDashboard.body.data.myBuilds.every((item) => item.projectId === project.body.data.id), true);
 
+  const restrictedProjectBeforeArchive = await request(api.port, `/api/projects/${restrictedProject.body.data.id}`, {
+    headers: admin.headers,
+  });
+  assert.equal(restrictedProjectBeforeArchive.response.status, 200);
   const archiveRestrictedProject = await request(api.port, `/api/projects/${restrictedProject.body.data.id}/status`, {
     method: "PATCH",
     headers: { ...admin.headers, "Content-Type": "application/json" },
-    body: JSON.stringify({ status: "archived", statusReason: "项目已完成归档", version: restrictedProject.body.data.version }),
+    body: JSON.stringify({ status: "archived", statusReason: "项目已完成归档", version: restrictedProjectBeforeArchive.body.data.version }),
   });
   assert.equal(archiveRestrictedProject.response.status, 200);
   const archivedProjectRead = await request(api.port, `/api/projects/${restrictedProject.body.data.id}`, { headers: admin.headers });

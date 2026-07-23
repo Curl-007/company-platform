@@ -42,10 +42,10 @@ export default function MyWorkView({ user }: { user?: SessionUser | null }) {
   const [showLogForm, setShowLogForm] = useState(false);
   const [showTimeEntryForm, setShowTimeEntryForm] = useState(false);
   const [editingTimeEntry, setEditingTimeEntry] = useState<TimeEntry | null>(null);
-  const { data, loading, error, reload } = useAsync<DashboardData>(fetchPersonalDashboard, []);
-  const weeklySummaryAsync = useAsync<WeeklyWorkSummary>(() => fetchWeeklyWorkSummary(), []);
+  const { data, loading, error, reload } = useAsync<DashboardData>(fetchPersonalDashboard, [], { cacheKey: 'mywork:dashboard' });
+  const weeklySummaryAsync = useAsync<WeeklyWorkSummary>(() => fetchWeeklyWorkSummary(), [], { cacheKey: 'mywork:weekly-summary' });
   const personalCapacityAsync = useAsync(() => fetchMyCapacity(), [], { cacheKey: 'mywork:capacity' });
-  const timeEntriesAsync = useAsync<TimeEntry[]>(() => fetchTimeEntries(), []);
+  const timeEntriesAsync = useAsync<TimeEntry[]>(() => fetchTimeEntries(), [], { cacheKey: 'time-entries:list' });
 
   async function removeTimeEntry(entry: TimeEntry) {
     const confirmed = await confirm({
@@ -108,7 +108,7 @@ export default function MyWorkView({ user }: { user?: SessionUser | null }) {
   const taskHistoryAsync = useAsync(
     () => selectedTask ? fetchTaskStatusHistory(selectedTask.id) : Promise.resolve([]),
     [selectedTask?.id],
-    { cacheKey: 'mywork:task-history' },
+    { cacheKey: 'tasks:status-history' },
   );
 
   useEffect(() => {

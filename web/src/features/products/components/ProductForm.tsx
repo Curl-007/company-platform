@@ -1,11 +1,10 @@
-import { useState, type ClipboardEvent, type DragEvent } from 'react';
-import type { CreateProductInput } from '../api';
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
+import type { CreateProductInput, ProductImageChanges } from '../api';
 import {
   EMPTY_MODULE,
   EMPTY_ROADMAP,
-  PRODUCT_IMAGE_MAX_BYTES,
+  PRODUCT_IMAGE_ACCEPT,
   PRODUCT_IMAGE_MAX_COUNT,
-  PRODUCT_IMAGE_TYPES,
   productImages,
   sanitizeDetailItems,
   sanitizeMetrics,
@@ -15,6 +14,7 @@ import {
   toMetrics,
   toModules,
   toRoadmap,
+  validateProductImageFiles,
   type DetailItem,
 } from '../productModel';
 import StructuredListSection from './StructuredListSection';
@@ -24,16 +24,24 @@ import MetricsSection from './MetricsSection';
 import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
 import { ApiError } from '../../../services/api';
+import ProductImage from './ProductImage';
 import {
   MODULE_STATUS_LABELS,
   PRODUCT_STAGE_LABELS,
   ROADMAP_STATUS_LABELS,
   labelOf,
 } from '../../../constants/enums';
-import type { Product, ProductMetric, ProductModule, RoadmapItem } from '../../../types';
+import type { Product, ProductImage as ProductImageRecord, ProductMetric, ProductModule, RoadmapItem } from '../../../types';
 
-function collectImageFiles(fileList?: FileList | null, extra: File[] = []) {
-  return [...Array.from(fileList ?? []), ...extra].filter((file) => file.type.startsWith('image/'));
+interface PendingProductImage {
+  id: string;
+  file: File;
+  previewUrl: string;
+}
+
+export interface ProductFormSubmission {
+  product: CreateProductInput;
+  imageChanges: ProductImageChanges;
 }
 
 export default function ProductForm({
@@ -45,14 +53,18 @@ export default function ProductForm({
   title: string;
   initial?: Product | null;
   onClose: () => void;
-  onSubmit: (payload: CreateProductInput) => Promise<void>;
+  onSubmit: (submission: ProductFormSubmission) => Promise<void>;
 }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [owner, setOwner] = useState(initial?.owner ?? '');
   const [version, setVersion] = useState(initial?.version ?? '1.0.0');
   const [stage, setStage] = useState(initial?.stage ?? 'design');
   const [description, setDescription] = useState(initial?.description ?? '');
-  const [imageUrls, setImageUrls] = useState<string[]>(productImages(initial));
+  const [savedImages, setSavedImages] = useState<ProductImageRecord[]>(() => productImages(initial));
+  const [pendingImages, setPendingImages] = useState<PendingProductImage[]>([]);
+  const [deletedImageIds, setDeletedImageIds] = useState<string[]>([]);
+  const previewUrls = useRef(new Set<string>());
+  const pendingSequence = useRef(0);
   const [systemName, setSystemName] = useState(initial?.systemName ?? '');
   const [systemVersion, setSystemVersion] = useState(initial?.systemVersion ?? '');
   const [applicationVersion, setApplicationVersion] = useState(initial?.applicationVersion ?? '');
@@ -67,65 +79,86 @@ export default function ProductForm({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const imageCount = savedImages.length + pendingImages.length;
 
-  async function readImageFile(file: File) {
-    return new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result ?? ''));
-      reader.onerror = () => reject(new Error('读取图片失败'));
-      reader.readAsDataURL(file);
-    });
-  }
+  useEffect(() => () => {
+    previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
+    previewUrls.current.clear();
+  }, []);
 
-  async function handleImageFiles(files?: FileList | File[] | null) {
+  function handleImageFiles(files?: FileList | File[] | null) {
     const selected = Array.isArray(files) ? files : Array.from(files ?? []);
     if (!selected.length) return;
-    const slots = PRODUCT_IMAGE_MAX_COUNT - imageUrls.length;
-    if (slots <= 0) {
-      setFormError(`最多上传 ${PRODUCT_IMAGE_MAX_COUNT} 张产品图片。`);
-      return;
-    }
-    const accepted = selected.slice(0, slots);
-    const invalidType = accepted.find((file) => !PRODUCT_IMAGE_TYPES.includes(file.type) && !file.type.startsWith('image/'));
-    if (invalidType) {
-      setFormError('产品图片支持 PNG、JPG、WEBP、GIF、SVG。');
-      return;
-    }
-    const oversize = accepted.find((file) => file.size > PRODUCT_IMAGE_MAX_BYTES);
-    if (oversize) {
-      setFormError('单张产品图片请控制在 5MB 以内。');
-      return;
-    }
+    const validationError = validateProductImageFiles(selected, imageCount);
+    if (validationError) return setFormError(validationError);
+
+    const additions: PendingProductImage[] = [];
     try {
-      const dataUrls = await Promise.all(accepted.map(readImageFile));
-      setImageUrls((prev) => [...prev, ...dataUrls].slice(0, PRODUCT_IMAGE_MAX_COUNT));
+      for (const file of selected) {
+        const previewUrl = URL.createObjectURL(file);
+        previewUrls.current.add(previewUrl);
+        pendingSequence.current += 1;
+        additions.push({ id: `pending-${pendingSequence.current}`, file, previewUrl });
+      }
+      setPendingImages((current) => [...current, ...additions]);
       setFormError(null);
     } catch {
-      setFormError('读取图片失败，请重试。');
+      additions.forEach((image) => {
+        previewUrls.current.delete(image.previewUrl);
+        URL.revokeObjectURL(image.previewUrl);
+      });
+      setFormError('无法创建图片预览，请重试。');
     }
+  }
+
+  function removeSavedImage(imageId: string) {
+    setSavedImages((current) => current.filter((image) => image.id !== imageId));
+    setDeletedImageIds((current) => current.includes(imageId) ? current : [...current, imageId]);
+  }
+
+  function removePendingImage(imageId: string) {
+    const removed = pendingImages.find((image) => image.id === imageId);
+    if (removed) {
+      previewUrls.current.delete(removed.previewUrl);
+      URL.revokeObjectURL(removed.previewUrl);
+    }
+    setPendingImages((current) => current.filter((image) => image.id !== imageId));
+  }
+
+  function clearImages() {
+    setDeletedImageIds((current) => [
+      ...current,
+      ...savedImages.map((image) => image.id).filter((id) => !current.includes(id)),
+    ]);
+    setSavedImages([]);
+    pendingImages.forEach((image) => {
+      previewUrls.current.delete(image.previewUrl);
+      URL.revokeObjectURL(image.previewUrl);
+    });
+    setPendingImages([]);
   }
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     event.stopPropagation();
     setDragActive(false);
-    const dropped = collectImageFiles(event.dataTransfer.files);
+    const dropped = Array.from(event.dataTransfer.files);
     if (!dropped.length) {
       setFormError('请拖入图片文件。');
       return;
     }
-    void handleImageFiles(dropped);
+    handleImageFiles(dropped);
   }
 
   function handlePaste(event: ClipboardEvent<HTMLDivElement>) {
     const items = Array.from(event.clipboardData?.items ?? []);
     const imageFiles = items
-      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .filter((item) => item.kind === 'file')
       .map((item) => item.getAsFile())
       .filter((file): file is File => Boolean(file));
     if (!imageFiles.length) return;
     event.preventDefault();
-    void handleImageFiles(imageFiles);
+    handleImageFiles(imageFiles);
   }
 
   function updateArrayItem<T>(items: T[], index: number, updater: (current: T) => T, setter: (next: T[]) => void) {
@@ -141,24 +174,28 @@ export default function ProductForm({
     setSubmitting(true);
     try {
       await onSubmit({
-        name: name.trim(),
-        owner: owner.trim(),
-        version: version.trim() || '1.0.0',
-        stage,
-        description: description.trim(),
-        imageUrl: imageUrls[0] || undefined,
-        imageUrls,
-        systemName: systemName.trim(),
-        systemVersion: systemVersion.trim(),
-        applicationVersion: applicationVersion.trim(),
-        modules: sanitizeModules(modules),
-        hardwareInfo: sanitizeDetailItems(hardwareInfo),
-        systemInfo: sanitizeDetailItems(systemInfo),
-        applicationInfo: sanitizeDetailItems(applicationInfo),
-        hardwareMetrics: sanitizeMetrics(hardwareMetrics),
-        systemMetrics: sanitizeMetrics(systemMetrics),
-        appMetrics: sanitizeMetrics(appMetrics),
-        roadmap: sanitizeRoadmap(roadmap),
+        product: {
+          name: name.trim(),
+          owner: owner.trim(),
+          version: version.trim() || '1.0.0',
+          stage,
+          description: description.trim(),
+          systemName: systemName.trim(),
+          systemVersion: systemVersion.trim(),
+          applicationVersion: applicationVersion.trim(),
+          modules: sanitizeModules(modules),
+          hardwareInfo: sanitizeDetailItems(hardwareInfo),
+          systemInfo: sanitizeDetailItems(systemInfo),
+          applicationInfo: sanitizeDetailItems(applicationInfo),
+          hardwareMetrics: sanitizeMetrics(hardwareMetrics),
+          systemMetrics: sanitizeMetrics(systemMetrics),
+          appMetrics: sanitizeMetrics(appMetrics),
+          roadmap: sanitizeRoadmap(roadmap),
+        },
+        imageChanges: {
+          files: pendingImages.map((image) => image.file),
+          deleteIds: deletedImageIds,
+        },
       });
     } catch (error) {
       setFormError(error instanceof ApiError ? error.message : '保存失败');
@@ -221,12 +258,20 @@ export default function ProductForm({
             onPaste={handlePaste}
             tabIndex={0}
           >
-            {imageUrls.length ? (
+            {imageCount ? (
               <div className="product-image-preview-grid">
-                {imageUrls.map((image, index) => (
-                  <div key={`${image.slice(0, 32)}-${index}`} className="product-image-preview-item">
-                    <img src={image} alt={`产品图片 ${index + 1}`} />
-                    <button className="btn btn-text btn-xs" onClick={() => setImageUrls((prev) => prev.filter((_, itemIndex) => itemIndex !== index))}>
+                {savedImages.map((image, index) => (
+                  <div key={image.id} className="product-image-preview-item">
+                    <ProductImage src={image.url} alt={`产品图片 ${index + 1}`} />
+                    <button type="button" className="btn btn-text btn-xs" onClick={() => removeSavedImage(image.id)}>
+                      删除
+                    </button>
+                  </div>
+                ))}
+                {pendingImages.map((image, index) => (
+                  <div key={image.id} className="product-image-preview-item">
+                    <img src={image.previewUrl} alt={`待上传产品图片 ${savedImages.length + index + 1}`} />
+                    <button type="button" className="btn btn-text btn-xs" onClick={() => removePendingImage(image.id)}>
                       删除
                     </button>
                   </div>
@@ -245,17 +290,17 @@ export default function ProductForm({
                   id="product-image-upload"
                   type="file"
                   multiple
-                  accept=".png,.jpg,.jpeg,.webp,.gif,.svg,image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                  accept={PRODUCT_IMAGE_ACCEPT}
                   style={{ display: 'none' }}
                   onChange={(e) => {
-                    void handleImageFiles(e.target.files);
+                    handleImageFiles(e.target.files);
                     e.currentTarget.value = '';
                   }}
                 />
-                <button className="btn btn-text btn-sm" onClick={() => setImageUrls([])} disabled={!imageUrls.length}>清空</button>
+                <button type="button" className="btn btn-text btn-sm" onClick={clearImages} disabled={!imageCount}>清空</button>
               </div>
               <span className="form-help-text">
-                支持拖拽、点击上传或粘贴截图；PNG/JPG/WEBP/GIF/SVG，单张 5MB，最多 {PRODUCT_IMAGE_MAX_COUNT} 张；当前 {imageUrls.length} 张。
+                支持拖拽、点击上传或粘贴截图；PNG/JPG/WEBP/GIF，单张 5 MiB，最多 {PRODUCT_IMAGE_MAX_COUNT} 张；当前 {imageCount} 张。
               </span>
             </div>
           </div>

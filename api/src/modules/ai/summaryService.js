@@ -15,29 +15,41 @@ function sqlInParams(ids, prefix) {
   return params;
 }
 
+function normalizeAccessScope(accessScope) {
+  if (accessScope?.all === true) return { all: true, projectIds: [] };
+  if (!Array.isArray(accessScope?.projectIds)) return { all: false, projectIds: [] };
+  return {
+    all: false,
+    projectIds: [...new Set(accessScope.projectIds.map(String).map((id) => id.trim()).filter(Boolean))].sort(),
+  };
+}
+
+function emptyBusinessSnapshot(scope) {
+  return {
+    scope,
+    projects: [],
+    requirements: [],
+    tasks: [],
+    defects: [],
+    workLogs: [],
+    aiJobs: [],
+    builds: [],
+    releases: [],
+  };
+}
+
 /**
  * Collect business snapshot for AI summary.
- * When projectIds is a non-empty array, all project-bound tables are filtered to that set.
- * Empty array → empty snapshot (no access). Omitted/null → legacy global (admin only at call site).
+ * Access must be explicit: { all: true } or { projectIds: [...] }.
+ * Missing or malformed scope fails closed to an empty snapshot.
  */
 async function collectAiBusinessSnapshot({ rows }, scope = "dashboard", options = {}) {
-  const projectIds = options.projectIds;
-  const scoped = Array.isArray(projectIds);
-  const ids = scoped ? projectIds.filter(Boolean) : null;
-
-  if (scoped && ids.length === 0) {
-    return {
-      scope,
-      projects: [],
-      requirements: [],
-      tasks: [],
-      defects: [],
-      workLogs: [],
-      aiJobs: [],
-      builds: [],
-      releases: [],
-    };
-  }
+  const accessScope = normalizeAccessScope(options.accessScope);
+  const scoped = !accessScope.all;
+  const ids = accessScope.projectIds;
+  if (scoped && ids.length === 0) return emptyBusinessSnapshot(scope);
+  const allowedProjectIds = new Set(ids);
+  const isAllowedProject = (projectId) => !scoped || allowedProjectIds.has(projectId);
 
   const projectFilter = scoped ? `AND id IN (${sqlInPlaceholders(ids, "p")})` : "";
   const projectParams = scoped ? sqlInParams(ids, "p") : {};
@@ -83,38 +95,28 @@ async function collectAiBusinessSnapshot({ rows }, scope = "dashboard", options 
     projectParams,
   );
 
-  // work_logs.project is a free-text name in as-built schema; filter by accessible project names when scoped.
-  let workLogs;
-  if (scoped) {
-    const names = projects.map((item) => item.name).filter(Boolean);
-    if (!names.length) {
-      workLogs = [];
-    } else {
-      const nameParams = sqlInParams(names, "n");
-      workLogs = await rows(
-        `SELECT author, project, content, blockers, next_plan, created_at
-         FROM work_logs
-         WHERE project IN (${sqlInPlaceholders(names, "n")})
-         ORDER BY created_at DESC
-         LIMIT 10`,
-        nameParams,
-      );
-    }
-  } else {
-    workLogs = await rows(
-      "SELECT author, project, content, blockers, next_plan, created_at FROM work_logs ORDER BY created_at DESC LIMIT 10",
-    );
-  }
+  const workLogs = await rows(
+    `SELECT author, project_id, project, content, blockers, next_plan, created_at
+     FROM work_logs
+     WHERE 1=1 ${byProject}
+     ORDER BY created_at DESC
+     LIMIT 10`,
+    projectParams,
+  );
 
-  // ai_jobs may lack project_id; keep recent jobs when unscoped; when scoped only return empty or jobs if table has project column later.
-  let aiJobs;
-  if (scoped) {
-    aiJobs = [];
-  } else {
-    aiJobs = await rows(
-      "SELECT job_id, scene, status, progress, current_step, error_message, created_at FROM ai_jobs ORDER BY created_at DESC LIMIT 10",
-    );
-  }
+  const jobProjectExpression = "COALESCE(CASE WHEN j.source_type = 'project' THEN j.source_id END, d.project_id, sr.project_id, wr.project_id)";
+  const aiJobs = await rows(
+    `SELECT j.job_id, j.scene, j.status, j.progress, j.current_step, j.error_message, j.created_at,
+            ${jobProjectExpression} AS project_id
+       FROM ai_jobs j
+       LEFT JOIN documents d ON j.source_type = 'document' AND d.id = j.source_id
+       LEFT JOIN requirements sr ON j.source_type = 'requirement' AND sr.id = j.source_id
+       LEFT JOIN requirements wr ON wr.id = j.written_requirement_id
+      ${scoped ? `WHERE ${jobProjectExpression} IN (${sqlInPlaceholders(ids, "p")})` : ""}
+      ORDER BY j.created_at DESC
+      LIMIT 10`,
+    projectParams,
+  );
 
   const builds = await rows(
     `SELECT id, name, version, status, project_id, build_date, notes
@@ -125,19 +127,20 @@ async function collectAiBusinessSnapshot({ rows }, scope = "dashboard", options 
     projectParams,
   );
 
-  // Releases are product-scoped; for project-scoped users omit cross-product release noise.
-  let releases;
-  if (scoped) {
-    releases = [];
-  } else {
-    releases = await rows(
-      "SELECT id, name, version, status, product_id, release_date, release_notes FROM releases ORDER BY created_at DESC LIMIT 10",
-    );
-  }
+  const releases = await rows(
+    `SELECT r.id, r.name, r.version, r.status, r.product_id, r.release_date, r.release_notes,
+            b.project_id AS project_id
+       FROM releases r
+       LEFT JOIN builds b ON b.id = r.build_id
+      ${scoped ? `WHERE b.project_id IN (${sqlInPlaceholders(ids, "p")})` : ""}
+      ORDER BY r.created_at DESC
+      LIMIT 10`,
+    projectParams,
+  );
 
   return {
     scope,
-    projects: projects.map((item) => ({
+    projects: projects.filter((item) => isAllowedProject(item.id)).map((item) => ({
       id: item.id,
       name: item.name,
       status: item.status,
@@ -146,7 +149,7 @@ async function collectAiBusinessSnapshot({ rows }, scope = "dashboard", options 
       riskCount: item.risk_count,
       owner: item.owner,
     })),
-    requirements: requirements.map((item) => ({
+    requirements: requirements.filter((item) => isAllowedProject(item.project_id)).map((item) => ({
       id: item.id,
       title: item.title,
       status: item.status,
@@ -156,7 +159,7 @@ async function collectAiBusinessSnapshot({ rows }, scope = "dashboard", options 
       owner: item.owner,
       assignee: item.assignee,
     })),
-    tasks: tasks.map((item) => ({
+    tasks: tasks.filter((item) => isAllowedProject(item.project_id)).map((item) => ({
       id: item.id,
       title: item.title,
       status: item.status,
@@ -167,7 +170,7 @@ async function collectAiBusinessSnapshot({ rows }, scope = "dashboard", options 
       blocker: item.blocker,
       dueDate: item.due_date,
     })),
-    defects: defects.map((item) => ({
+    defects: defects.filter((item) => isAllowedProject(item.project_id)).map((item) => ({
       id: item.id,
       title: item.title,
       severity: item.severity,
@@ -176,24 +179,26 @@ async function collectAiBusinessSnapshot({ rows }, scope = "dashboard", options 
       requirementId: item.requirement_id,
       assignee: item.assignee,
     })),
-    workLogs: workLogs.map((item) => ({
+    workLogs: workLogs.filter((item) => isAllowedProject(item.project_id)).map((item) => ({
       author: item.author,
+      projectId: item.project_id,
       project: item.project,
       content: compactText(item.content),
       blockers: compactText(item.blockers),
       nextPlan: compactText(item.next_plan),
       createdAt: item.created_at,
     })),
-    aiJobs: aiJobs.map((item) => ({
+    aiJobs: aiJobs.filter((item) => isAllowedProject(item.project_id)).map((item) => ({
       jobId: item.job_id,
       scene: item.scene,
       status: item.status,
       progress: item.progress,
       currentStep: item.current_step,
       errorMessage: item.error_message,
+      projectId: item.project_id,
       createdAt: item.created_at,
     })),
-    builds: builds.map((item) => ({
+    builds: builds.filter((item) => isAllowedProject(item.project_id)).map((item) => ({
       id: item.id,
       name: item.name,
       version: item.version,
@@ -202,12 +207,13 @@ async function collectAiBusinessSnapshot({ rows }, scope = "dashboard", options 
       buildDate: item.build_date,
       notes: compactText(item.notes),
     })),
-    releases: releases.map((item) => ({
+    releases: releases.filter((item) => isAllowedProject(item.project_id)).map((item) => ({
       id: item.id,
       name: item.name,
       version: item.version,
       status: item.status,
       productId: item.product_id,
+      projectId: item.project_id,
       releaseDate: item.release_date,
       releaseNotes: compactText(item.release_notes),
     })),
@@ -281,11 +287,35 @@ function buildAiSummarySignals(snapshot) {
   };
 }
 
-function createAiSummaryService({ callModel, extractJsonPayload, getModelName, rows, setTimeoutImpl = setTimeout }) {
+function createAiSummaryService({
+  callModel,
+  extractJsonPayload,
+  getModelName,
+  rows,
+  setTimeoutImpl = setTimeout,
+  nowImpl = Date.now,
+  cacheTtlMs = 90 * 1000,
+  cacheMaxEntries = 200,
+}) {
   // Process-local TTL cache only (not shared across instances). Callers that
   // mutate business data should invalidate via invalidateCache / clearCache.
   const cache = new Map();
-  const CACHE_TTL_MS = 90 * 1000;
+  const maxEntries = Math.max(1, Number(cacheMaxEntries) || 1);
+  const ttlMs = Math.max(1, Number(cacheTtlMs) || 1);
+
+  function sweepCache(timestamp = nowImpl()) {
+    for (const [key, entry] of cache) {
+      if (timestamp - entry.createdAt >= ttlMs) cache.delete(key);
+    }
+    while (cache.size > maxEntries) cache.delete(cache.keys().next().value);
+  }
+
+  function setCached(cacheKey, value) {
+    sweepCache();
+    cache.delete(cacheKey);
+    cache.set(cacheKey, { createdAt: nowImpl(), value });
+    while (cache.size > maxEntries) cache.delete(cache.keys().next().value);
+  }
 
   async function modelName() {
     if (typeof getModelName !== "function") return "local-rule-engine";
@@ -297,7 +327,10 @@ function createAiSummaryService({ callModel, extractJsonPayload, getModelName, r
       cache.clear();
       return;
     }
-    cache.delete(`${scope}:${cacheKey}`);
+    const prefix = `${scope}:${cacheKey}:`;
+    for (const key of cache.keys()) {
+      if (key.startsWith(prefix)) cache.delete(key);
+    }
   }
 
   function clearCache() {
@@ -305,11 +338,14 @@ function createAiSummaryService({ callModel, extractJsonPayload, getModelName, r
   }
 
   async function createSummary(scope, metrics, options = {}) {
-    const cacheKey = `${scope || "dashboard"}:${options.cacheKey || "global"}`;
+    const accessScope = normalizeAccessScope(options.accessScope);
+    const scopeKey = accessScope.all ? "all" : `projects:${accessScope.projectIds.join(",") || "none"}`;
+    const cacheKey = `${scope || "dashboard"}:${options.cacheKey || "global"}:${scopeKey}`;
+    sweepCache();
     const cached = cache.get(cacheKey);
-    if (!options.skipCache && cached && Date.now() - cached.createdAt < CACHE_TTL_MS) return cached.value;
+    if (!options.skipCache && cached) return cached.value;
     const snapshot = options.snapshot || await collectAiBusinessSnapshot({ rows }, scope, {
-      projectIds: options.projectIds,
+      accessScope,
     });
     const fallback = buildLocalAiSummary(scope, metrics, snapshot);
     const signals = buildAiSummarySignals(snapshot);
@@ -336,13 +372,13 @@ function createAiSummaryService({ callModel, extractJsonPayload, getModelName, r
     if (options.backgroundRefresh) {
       setTimeoutImpl(() => {
         resolveValue()
-          .then((value) => cache.set(cacheKey, { createdAt: Date.now(), value }))
-          .catch(() => cache.set(cacheKey, { createdAt: Date.now(), value: fallback }));
+          .then((value) => setCached(cacheKey, value))
+          .catch(() => setCached(cacheKey, fallback));
       }, 0);
       return { ...fallback, generatedBy: "local-rule-engine", refreshing: true };
     }
     const value = await resolveValue();
-    cache.set(cacheKey, { createdAt: Date.now(), value });
+    setCached(cacheKey, value);
     return value;
   }
 
@@ -350,6 +386,7 @@ function createAiSummaryService({ callModel, extractJsonPayload, getModelName, r
     createSummary,
     invalidateCache,
     clearCache,
+    cacheSize: () => cache.size,
     collectSnapshot: (scope, options) => collectAiBusinessSnapshot({ rows }, scope, options),
   };
 }
@@ -360,5 +397,7 @@ module.exports = {
   collectAiBusinessSnapshot,
   compactText,
   createAiSummaryService,
+  emptyBusinessSnapshot,
+  normalizeAccessScope,
   normalizeAiSummaryPayload,
 };

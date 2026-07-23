@@ -20,6 +20,10 @@ export function fetchAuditLogs(filters: AuditLogFilters = {}): Promise<AuditLogR
       action: String(item.action ?? ''),
       resourceType: String(item.resourceType ?? item.resource_type ?? ''),
       resourceId: item.resourceId != null ? String(item.resourceId) : item.resource_id != null ? String(item.resource_id) : null,
+      scopeType: String(item.scopeType ?? item.scope_type ?? 'global') as AuditLogRecord['scopeType'],
+      projectId: item.projectId != null ? String(item.projectId) : item.project_id != null ? String(item.project_id) : null,
+      subjectUserId:
+        item.subjectUserId != null ? String(item.subjectUserId) : item.subject_user_id != null ? String(item.subject_user_id) : null,
       createdAt: String(item.createdAt ?? item.created_at ?? ''),
       before: item.before,
       after: item.after,

@@ -8,6 +8,7 @@ import StatusBadge from '../../../components/common/StatusBadge';
 import FilterBar from '../../../components/common/FilterBar';
 import MetricStrip from '../../../components/common/MetricStrip';
 import type { AuditLogRecord } from '../../../types';
+import { isSameBusinessDay } from '../../../utils/businessDate';
 import DiffView from './DiffView';
 import {
   CATEGORY_META,
@@ -40,6 +41,7 @@ export default function DynamicView() {
   const { data, loading, error, reload } = useAsync<AuditLogRecord[]>(
     () => fetchAuditLogs(serverFilters),
     [serverFilters.dateFrom ?? '', serverFilters.dateTo ?? '', serverFilters.resourceType ?? '', serverFilters.action ?? '', serverFilters.includePageViews ?? ''],
+    { cacheKey: 'audit:logs' },
   );
 
   const timeline = useMemo(
@@ -68,11 +70,12 @@ export default function DynamicView() {
   }, [categoryFilter, importantOnly, keyword, roleFilter, timeline]);
 
   const stats = useMemo(() => {
+    const now = new Date();
     const importantCount = timeline.filter((item) => item.isImportant).length;
     const loginCount = timeline.filter((item) => item.category === 'auth').length;
     const changeCount = timeline.filter((item) => shouldShowDiff(item.record)).length;
     const riskCount = timeline.filter((item) => ['risk', 'blocked'].includes(item.categoryVariant)).length;
-    const todayCount = timeline.filter((item) => item.record.createdAt.slice(0, 10) === new Date().toISOString().slice(0, 10)).length;
+    const todayCount = timeline.filter((item) => isSameBusinessDay(new Date(item.record.createdAt), now)).length;
     return { importantCount, loginCount, changeCount, riskCount, todayCount };
   }, [timeline]);
 

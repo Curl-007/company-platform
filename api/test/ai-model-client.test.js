@@ -19,13 +19,13 @@ test("AI model client returns null without network calls when provider is disabl
   const calls = [];
   const disabledClient = createAiModelClient({
     getConfig: () => ({ enabled: false }),
-    fetchImpl: async (...args) => calls.push(args),
+    requestImpl: async (...args) => calls.push(args),
   });
   assert.equal(await disabledClient.callModel("hello"), null);
 
   const incompleteClient = createAiModelClient({
     getConfig: () => ({ enabled: true, apiKey: "", baseUrl: "https://example.test", model: "m" }),
-    fetchImpl: async (...args) => calls.push(args),
+    requestImpl: async (...args) => calls.push(args),
   });
   assert.equal(await incompleteClient.callModel("hello"), null);
   assert.equal(calls.length, 0);
@@ -43,7 +43,8 @@ test("AI model client calls chat completions and records provider success", asyn
       wireApi: "chat_completions",
       disableResponseStorage: true,
     }),
-    fetchImpl: async (url, options) => {
+    requestImpl: async (baseUrl, endpoint, options) => {
+      const url = `${baseUrl}/${endpoint}`;
       calls.push({ url, options, body: JSON.parse(options.body) });
       return jsonResponse({ choices: [{ message: { content: "chat ok" } }] });
     },
@@ -76,7 +77,8 @@ test("AI model client falls back from responses to chat completions and preserve
       wireApi: "responses",
       disableResponseStorage: false,
     }),
-    fetchImpl: async (url, options) => {
+    requestImpl: async (baseUrl, endpoint, options) => {
+      const url = `${baseUrl}/${endpoint}`;
       calls.push({ url, body: JSON.parse(options.body) });
       if (calls.length === 1) return jsonResponse({ error: "bad gateway" }, false, 502);
       return jsonResponse({ choices: [{ message: { content: "fallback ok" } }] });

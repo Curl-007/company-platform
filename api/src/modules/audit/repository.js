@@ -10,9 +10,25 @@ function createAuditRepository({ rows }) {
     actorId,
     actorIds,
     resourceIds,
+    visibility,
   } = {}) {
     const clauses = [];
     const params = {};
+    if (visibility && visibility.all !== true) {
+      params.viewerActorId = String(visibility.actorId || "");
+      const projectIds = Array.isArray(visibility.projectIds)
+        ? [...new Set(visibility.projectIds.map(String).filter(Boolean))]
+        : [];
+      if (projectIds.length) {
+        const keys = projectIds.map((_, index) => `@visibleProjectId${index}`);
+        projectIds.forEach((id, index) => {
+          params[`visibleProjectId${index}`] = id;
+        });
+        clauses.push(`(actor_id = @viewerActorId OR (scope_type = 'user' AND subject_user_id = @viewerActorId) OR (scope_type = 'project' AND project_id IN (${keys.join(", ")})))`);
+      } else {
+        clauses.push("(actor_id = @viewerActorId OR (scope_type = 'user' AND subject_user_id = @viewerActorId))");
+      }
+    }
     if (actor) {
       clauses.push("actor_name = @actor");
       params.actor = String(actor);

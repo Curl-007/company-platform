@@ -100,7 +100,10 @@ function createWorkflowRouter({
       return res.json(ok(binding));
     } catch (error) {
       const code = error.code || "INTERNAL_ERROR";
-      const status = code === "RESOURCE_NOT_FOUND" ? 404 : code === "VALIDATION_FAILED" ? 400 : 500;
+      const explicitStatus = Number(error.status);
+      const status = explicitStatus >= 400 && explicitStatus <= 599
+        ? explicitStatus
+        : code === "RESOURCE_NOT_FOUND" ? 404 : code === "VALIDATION_FAILED" ? 400 : 500;
       return fail(res, status, code, error.message);
     }
   });

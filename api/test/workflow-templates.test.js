@@ -7,6 +7,7 @@ const {
   createWorkflowTemplateStore,
 } = require("../src/workflow/templateStore");
 const { createProjectFlowService } = require("../src/modules/workflow/service");
+const { createSqliteAccess } = require("../src/db/access");
 
 test("builtin templates expose fixed and lightweight options only", () => {
   const templates = builtinTemplates();
@@ -19,6 +20,11 @@ test("template store only allows binding the two builtin templates", async () =>
   const { DatabaseSync } = require("node:sqlite");
   const db = new DatabaseSync(":memory:");
   db.exec(`
+    CREATE TABLE projects (
+      id TEXT PRIMARY KEY,
+      process_mode TEXT NOT NULL,
+      deleted_at TEXT
+    );
     CREATE TABLE project_workflow_bindings (
       project_id TEXT PRIMARY KEY,
       template_id TEXT NOT NULL,
@@ -26,7 +32,9 @@ test("template store only allows binding the two builtin templates", async () =>
       bound_by TEXT,
       bound_at TEXT NOT NULL
     );
+    INSERT INTO projects (id, process_mode, deleted_at) VALUES ('PRJ-1', 'scrum', NULL);
   `);
+  const access = createSqliteAccess(db);
   const store = createWorkflowTemplateStore({
     insert: async (table, data) => {
       const keys = Object.keys(data);
@@ -35,6 +43,7 @@ test("template store only allows binding the two builtin templates", async () =>
     row: async (sql, params = {}) => db.prepare(sql).get(params),
     rows: async (sql, params = {}) => db.prepare(sql).all(params),
     run: async (sql, params = {}) => db.prepare(sql).run(params),
+    upsert: access.upsert,
     json: (value) => JSON.stringify(value),
     parse: (value, fallback = null) => { try { return JSON.parse(value); } catch { return fallback; } },
     now: () => "2026-07-21T10:00:00.000Z",
@@ -51,6 +60,21 @@ test("template store only allows binding the two builtin templates", async () =>
   assert.equal(binding.templateId, LIGHTWEIGHT_ID);
   const got = await store.getProjectBinding("PRJ-1");
   assert.equal(got.templateId, LIGHTWEIGHT_ID);
+
+  db.prepare("DELETE FROM project_workflow_bindings WHERE project_id = 'PRJ-1'").run();
+  const concurrentBindings = await Promise.all([
+    store.bindProjectTemplate("PRJ-1", BUILTIN_ID, { id: "U1" }),
+    store.bindProjectTemplate("PRJ-1", LIGHTWEIGHT_ID, { id: "U2" }),
+  ]);
+  assert.equal(concurrentBindings.length, 2);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM project_workflow_bindings WHERE project_id = 'PRJ-1'").get().count, 1);
+  assert.ok([BUILTIN_ID, LIGHTWEIGHT_ID].includes((await store.getProjectBinding("PRJ-1")).templateId));
+
+  db.prepare("UPDATE projects SET process_mode = 'waterfall' WHERE id = 'PRJ-1'").run();
+  await assert.rejects(
+    () => store.bindProjectTemplate("PRJ-1", LIGHTWEIGHT_ID, { id: "U1" }),
+    (error) => error.code === "WORKFLOW_TEMPLATE_PROCESS_MODE_INCOMPATIBLE" && error.status === 409,
+  );
 });
 
 test("evaluateProjectFlow uses lightweight stage order when bound", async () => {

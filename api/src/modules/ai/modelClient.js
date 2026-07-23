@@ -1,3 +1,5 @@
+const { requestAiProviderUrl } = require("./outboundUrlPolicy");
+
 function normalizeAiWireApi(value) {
   return ["responses", "chat_completions"].includes(value) ? value : "chat_completions";
 }
@@ -18,7 +20,7 @@ function extractResponsesText(data) {
 
 function createAiModelClient({
   getConfig,
-  fetchImpl = fetch,
+  requestImpl = requestAiProviderUrl,
   normalizeAttachments = () => [],
   dataUrlForAttachment = () => null,
   recordSuccess = () => {},
@@ -69,11 +71,12 @@ function createAiModelClient({
       const timeout = setTimeout(() => controller.abort(), Number(options.timeoutMs || getTimeoutMs() || 30000));
       const endpoint = wireApi === "responses" ? "responses" : "chat/completions";
       try {
-        const response = await fetchImpl(`${config.baseUrl}/${endpoint}`, {
+        const response = await requestImpl(config.baseUrl, endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
           body: JSON.stringify(buildBody(wireApi)),
           signal: controller.signal,
+          redirect: "error",
         });
         if (!response.ok) {
           const detail = await response.text().catch(() => "");
@@ -99,6 +102,7 @@ function createAiModelClient({
     try {
       return await requestModel(primaryWireApi);
     } catch (error) {
+      if (String(error?.code || "").startsWith("AI_PROVIDER_")) throw error;
       const fallbackWireApi = primaryWireApi === "responses" ? "chat_completions" : "responses";
       logger?.warn?.(`AI ${primaryWireApi} request failed, retrying ${fallbackWireApi}:`, error.message);
       return requestModel(fallbackWireApi);

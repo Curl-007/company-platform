@@ -6,6 +6,7 @@ import { ConfirmProvider } from './components/common/ConfirmDialog';
 import { applyWorkTheme, readWorkThemeSettings } from './theme/workTheme';
 import './styles/global.css';
 import './styles/glass-skin.css';
+import './styles/enterprise-ui.css';
 
 applyWorkTheme(readWorkThemeSettings());
 

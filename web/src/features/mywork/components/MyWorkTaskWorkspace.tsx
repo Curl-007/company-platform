@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { FolderKanban, Inbox } from 'lucide-react';
 import Panel from '../../../components/common/Panel';
 import StatusBadge from '../../../components/common/StatusBadge';
 import ProgressBar from '../../../components/common/ProgressBar';
@@ -16,6 +17,7 @@ import { navigateTo } from '../../team/components/teamMeta';
 import { fetchProjectMembers } from '../../projects/api';
 import { handoffTask, type TaskHandoffAction } from '../../tasks/api';
 import type { ProjectMember, StatusHistoryEntry, Task } from '../../../types';
+import MyWorkEmptyPanel from './MyWorkEmptyPanel';
 
 export type TaskFilter = 'all' | 'requirement' | 'test_case' | 'defect' | 'general';
 
@@ -212,10 +214,12 @@ export default function MyWorkTaskWorkspace({
       : `当前筛选 ${visibleTasks.length} 条`;
 
   const targetOptions = canSubmitForTesting ? qaMembers : canReturnForFix ? devMembers : [];
+  const hasTasksOutsideFilter = taskFilter !== 'all' && filterCounts.all > 0;
+  const canOpenProjects = canAccessPageForUser(sessionUser, 'projects');
 
   return (
     <div className="mywork-tasks">
-      <div className="mywork-task-filters">
+      <div className="mywork-task-filters" role="group" aria-label="任务类型筛选">
         {filterButtons.map((item) => (
           <button
             key={item.key}
@@ -229,6 +233,27 @@ export default function MyWorkTaskWorkspace({
         ))}
       </div>
 
+      {visibleTasks.length === 0 ? (
+        <MyWorkEmptyPanel
+          icon={<Inbox size={26} />}
+          eyebrow={hasTasksOutsideFilter ? '筛选结果' : '任务队列'}
+          title={hasTasksOutsideFilter ? '当前类型暂无任务' : '当前没有待办任务'}
+          description={hasTasksOutsideFilter
+            ? '其他类型中仍有待处理事项。'
+            : '需求、测试、缺陷与一般任务当前均为 0 项。'}
+          action={
+            hasTasksOutsideFilter ? (
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => onTaskFilterChange('all')}>
+                <Inbox size={15} /> 查看全部任务
+              </button>
+            ) : canOpenProjects ? (
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigateTo('projects')}>
+                <FolderKanban size={15} /> 查看项目执行
+              </button>
+            ) : undefined
+          }
+        />
+      ) : (
       <div className="mywork-panels">
         <Panel title="任务队列" subtitle={queueSubtitle} className="mywork-panel-left">
           <div className="mywork-queue">
@@ -292,7 +317,6 @@ export default function MyWorkTaskWorkspace({
                 </div>
               ))
             )}
-            {visibleTasks.length === 0 ? <div className="empty-state-desc">当前筛选下暂无任务。</div> : null}
           </div>
         </Panel>
 
@@ -440,11 +464,10 @@ export default function MyWorkTaskWorkspace({
                 )}
               </div>
             </div>
-          ) : (
-            <div className="empty-state-desc">请选择左侧任务查看详情。</div>
-          )}
+          ) : null}
         </Panel>
       </div>
+      )}
     </div>
   );
 }

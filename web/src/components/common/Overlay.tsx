@@ -15,12 +15,22 @@ interface OverlayProps {
   children: ReactNode;
   onClose: () => void;
   maxWidth?: number;
+  /** ID of an element inside the dialog that provides its accessible name. */
+  ariaLabelledby?: string;
+  /** Accessible name used when the dialog has no visible labelled element. */
+  ariaLabel?: string;
 }
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
 
-function Overlay({ children, onClose, maxWidth = 560 }: OverlayProps) {
+function Overlay({
+  children,
+  onClose,
+  maxWidth = 560,
+  ariaLabelledby,
+  ariaLabel,
+}: OverlayProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
 
@@ -42,13 +52,17 @@ function Overlay({ children, onClose, maxWidth = 560 }: OverlayProps) {
       }
       if (e.key === 'Tab' && node) {
         const focusables = Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE));
-        if (focusables.length === 0) return;
+        if (focusables.length === 0) {
+          e.preventDefault();
+          node.focus();
+          return;
+        }
         const first = focusables[0];
         const last = focusables[focusables.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === node)) {
           e.preventDefault();
           last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
+        } else if (!e.shiftKey && (document.activeElement === last || document.activeElement === node)) {
           e.preventDefault();
           first.focus();
         }
@@ -89,6 +103,8 @@ function Overlay({ children, onClose, maxWidth = 560 }: OverlayProps) {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={ariaLabelledby}
+        aria-label={ariaLabel}
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
         style={{

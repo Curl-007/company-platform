@@ -41,11 +41,15 @@ export default function DefectsTab({
   const canManageTesting = canOperate(sessionUser, 'testing:manage');
   const canUseAi = canOperate(sessionUser, 'ai:analyze');
   const [filters, setFilters] = useState<DefectFilters>({});
-  const { data, loading, error, reload } = useAsync<Defect[]>(() => fetchDefects(filters), [filters.keyword, filters.status, filters.severity, filters.projectId]);
+  const { data, loading, error, reload } = useAsync<Defect[]>(
+    () => fetchDefects(filters),
+    [filters.keyword, filters.status, filters.severity, filters.projectId],
+    { cacheKey: 'defects:list' },
+  );
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Defect | null>(null);
   const defects = data ?? [];
-  const { data: projects } = useAsync<Project[]>(fetchProjects, []);
+  const { data: projects } = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
 
   useEffect(() => {
     if (!focusId || defects.length === 0 || editing?.id === focusId) return;

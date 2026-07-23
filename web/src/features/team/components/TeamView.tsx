@@ -54,8 +54,8 @@ export default function TeamView() {
   const canDisableUsers = canOperate(sessionUser, 'users:disable');
   const toast = useToast();
   const confirm = useConfirm();
-  const { data, loading, error, reload } = useAsync<TeamMemberOverview[]>(fetchTeamMembers, []);
-  const departmentsAsync = useAsync<OrganizationUnit[]>(fetchDepartments, []);
+  const { data, loading, error, reload } = useAsync<TeamMemberOverview[]>(fetchTeamMembers, [], { cacheKey: 'team:members' });
+  const departmentsAsync = useAsync<OrganizationUnit[]>(fetchDepartments, [], { cacheKey: 'organization:departments' });
   const members = data ?? [];
   const organizationUnits = departmentsAsync.data ?? [];
   const [keyword, setKeyword] = useState('');
@@ -216,22 +216,22 @@ export default function TeamView() {
 
       <div className="team-governance-strip">
         <div className="team-governance-item">
-          <span className="team-governance-icon"><KeyRound size={16} /></span>
-          <div>
+          <span className="team-governance-icon" aria-hidden="true"><KeyRound size={16} /></span>
+          <div className="team-governance-copy">
             <strong>账号治理</strong>
             <span>管理员维护账号、角色和状态；停用保留历史数据。</span>
           </div>
         </div>
         <div className="team-governance-item">
-          <span className="team-governance-icon"><BriefcaseBusiness size={16} /></span>
-          <div>
+          <span className="team-governance-icon" aria-hidden="true"><BriefcaseBusiness size={16} /></span>
+          <div className="team-governance-copy">
             <strong>团队协作</strong>
             <span>项目经理查看资源协调、项目参与、任务和日报风险，不形成个人绩效结论。</span>
           </div>
         </div>
         <div className="team-governance-item">
-          <span className="team-governance-icon"><ShieldCheck size={16} /></span>
-          <div>
+          <span className="team-governance-icon" aria-hidden="true"><ShieldCheck size={16} /></span>
+          <div className="team-governance-copy">
             <strong>权限边界</strong>
             <span>{canCreateUsers || canUpdateUsers || canDisableUsers ? '当前账号可执行账号治理。' : '当前账号仅可查看团队协作数据。'}</span>
           </div>

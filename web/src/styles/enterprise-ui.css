@@ -1,0 +1,1153 @@
+/*
+ * Professional workbench skin.
+ *
+ * Loaded after the legacy and optional glass themes. The scholar preset is the
+ * production default; other presets remain available as user-selected skins.
+ */
+
+html[data-work-theme='scholar'] {
+  color-scheme: light;
+  --sidebar-width: 232px;
+  --topbar-height: 58px;
+  --ai-sidebar-width: 368px;
+  --fs-display: 24px;
+  --fs-page-title: 22px;
+  --fs-section-title: 15px;
+  --fs-body: 14px;
+  --fs-helper: 12px;
+  --fs-table-body: 13px;
+  --radius-pill: 999px;
+  --shadow-xs: none;
+  --shadow-sm: 0 1px 2px color-mix(in srgb, var(--text-primary) 5%, transparent);
+  --shadow-light: 0 14px 34px color-mix(in srgb, var(--text-primary) 14%, transparent);
+  --shadow-panel: 0 1px 2px color-mix(in srgb, var(--text-primary) 5%, transparent),
+    0 8px 24px color-mix(in srgb, var(--text-primary) 4%, transparent);
+  --shadow-card-hover: 0 4px 12px color-mix(in srgb, var(--text-primary) 7%, transparent);
+  --shadow-btn-primary: none;
+  --surface-panel-header: color-mix(in srgb, var(--bg-page) 52%, var(--bg-content));
+  --surface-filter: var(--bg-content);
+  --surface-table: var(--bg-content);
+  --surface-summary: var(--bg-content);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+html[data-work-theme='scholar'][data-work-mode='light'] {
+  --color-success: #237a57;
+  --color-success-bg: #e8f5ee;
+  --color-warning: #9a6700;
+  --color-warning-bg: #fff5d6;
+  --color-risk: #c13743;
+  --color-risk-bg: #fdecef;
+  --color-info: #2f6fad;
+  --color-info-bg: #eaf2fa;
+  --color-blocked: #7456a6;
+  --color-blocked-bg: #f1ecf8;
+}
+
+html[data-work-theme='scholar'][data-work-mode='dark'] {
+  color-scheme: dark;
+  --color-success: #65c99f;
+  --color-success-bg: rgba(101, 201, 159, 0.13);
+  --color-warning: #e0b45a;
+  --color-warning-bg: rgba(224, 180, 90, 0.13);
+  --color-risk: #ed7d87;
+  --color-risk-bg: rgba(237, 125, 135, 0.13);
+  --color-info: #78a9dc;
+  --color-info-bg: rgba(120, 169, 220, 0.14);
+  --color-blocked: #aa91d3;
+  --color-blocked-bg: rgba(170, 145, 211, 0.14);
+}
+
+html[data-work-theme='scholar'] body {
+  min-width: 320px;
+  background: var(--bg-page);
+  font-weight: 400;
+  text-rendering: optimizeLegibility;
+}
+
+html[data-work-theme='scholar'] body::before,
+html[data-work-theme='scholar'] body::after {
+  display: none;
+}
+
+html[data-work-theme='scholar'][data-work-ambient='on'] body {
+  background:
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent) 4%, transparent) 0 1px, transparent 1px 48px),
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--accent) 3%, transparent) 0 1px, transparent 1px 48px),
+    var(--bg-page);
+}
+
+html[data-work-theme='scholar'] ::selection {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* Keyboard focus and skip navigation */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 12px;
+  z-index: 300;
+  padding: 8px 12px;
+  border-radius: var(--radius-button);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 700;
+  transform: translateY(-160%);
+  transition: transform var(--transition-fast);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+:where(button, a, input, select, textarea, [role='button'], [role='tab'], [role='slider']):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.main-content-body:focus,
+.app-overlay-dialog:focus {
+  outline: none;
+}
+
+/* Application shell */
+html[data-work-theme='scholar'] .app-shell,
+html[data-work-theme='scholar'] .app-shell.ai-sidebar-open {
+  background: var(--bg-page);
+}
+
+html[data-work-theme='scholar'] .sidebar {
+  background: var(--bg-sidebar);
+  border-color: var(--border-default);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-work-theme='scholar'] .sidebar-brand {
+  min-height: var(--topbar-height);
+  padding: 0 14px;
+  gap: 10px;
+  border-color: var(--border-divider);
+}
+
+html[data-work-theme='scholar'] .sidebar-brand-logo,
+html[data-work-theme='scholar'] .login-brand-logo-lg {
+  background: #173f35;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+html[data-work-theme='scholar'] .sidebar-brand-logo {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+}
+
+html[data-work-theme='scholar'] .sidebar-brand-text {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+html[data-work-theme='scholar'] .sidebar-nav {
+  padding: 10px 8px 18px;
+  gap: 0;
+}
+
+html[data-work-theme='scholar'] .sidebar-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 0 8px;
+}
+
+html[data-work-theme='scholar'] .sidebar-nav-group + .sidebar-nav-group {
+  margin-top: 3px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-divider);
+}
+
+html[data-work-theme='scholar'] .sidebar-nav-group-label {
+  padding: 3px 10px 6px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+html[data-work-theme='scholar'] .sidebar-nav-item {
+  min-height: 36px;
+  padding: 7px 10px;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-size: var(--fs-table-body);
+}
+
+html[data-work-theme='scholar'] .sidebar-nav-item:hover {
+  border-color: var(--border-divider);
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg-sidebar));
+  color: var(--text-primary);
+}
+
+html[data-work-theme='scholar'] .sidebar-nav-item.active {
+  border-color: color-mix(in srgb, var(--accent) 14%, var(--border-divider));
+  background: color-mix(in srgb, var(--accent) 9%, var(--bg-sidebar));
+  color: var(--accent);
+  font-weight: 700;
+}
+
+html[data-work-theme='scholar'] .sidebar-nav-item.active::before {
+  top: 7px;
+  bottom: 7px;
+  left: 0;
+  width: 3px;
+  background: var(--accent);
+}
+
+html[data-work-theme='scholar'] .topbar {
+  height: var(--topbar-height);
+  padding: 0 max(16px, var(--content-padding));
+  border-color: var(--border-default);
+  background: color-mix(in srgb, var(--bg-topbar) 96%, transparent);
+  box-shadow: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.topbar-context {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+
+.topbar-context-kicker {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.topbar-context-title {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-work-theme='scholar'] .topbar-actions {
+  gap: 5px;
+}
+
+html[data-work-theme='scholar'] .topbar-icon-button,
+html[data-work-theme='scholar'] .icon-button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-secondary);
+}
+
+html[data-work-theme='scholar'] .topbar-icon-button:hover,
+html[data-work-theme='scholar'] .icon-button:hover {
+  border-color: var(--border-divider);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+html[data-work-theme='scholar'] .topbar-profile-trigger {
+  min-height: 38px;
+  border-radius: 6px;
+}
+
+html[data-work-theme='scholar'] .topbar-avatar {
+  border-radius: 6px;
+  background: #dfece7;
+  color: #174b3e;
+}
+
+html[data-work-theme='scholar'][data-work-mode='dark'] .topbar-avatar {
+  background: #28483f;
+  color: #d9eee6;
+}
+
+html[data-work-theme='scholar'] .main-content-body {
+  width: 100%;
+  max-width: 1640px;
+  margin: 0 auto;
+  padding: 20px var(--content-padding) 40px;
+}
+
+/* Type and page hierarchy */
+html[data-work-theme='scholar'] .page-header {
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--border-divider);
+}
+
+html[data-work-theme='scholar'] .page-header-info h1,
+html[data-work-theme='scholar'] .page-title {
+  color: var(--text-primary);
+  font-size: var(--fs-page-title);
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+html[data-work-theme='scholar'] .page-header-info p {
+  max-width: 760px;
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+html[data-work-theme='scholar'] .section-title,
+html[data-work-theme='scholar'] .panel-title {
+  font-weight: 700;
+}
+
+/* Commands and form controls */
+html[data-work-theme='scholar'] .btn {
+  min-height: 34px;
+  border-radius: 6px;
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+html[data-work-theme='scholar'] .btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+html[data-work-theme='scholar'] .btn-primary:hover:not(:disabled) {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+  box-shadow: none;
+}
+
+html[data-work-theme='scholar'] .btn-secondary {
+  border-color: var(--border-strong);
+  background: var(--bg-content);
+  color: var(--text-primary);
+}
+
+html[data-work-theme='scholar'] .btn-secondary:hover:not(:disabled),
+html[data-work-theme='scholar'] .btn-text:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+html[data-work-theme='scholar'] :where(.form-input, .form-select, .form-textarea, input, textarea, select) {
+  min-height: 36px;
+  border-color: var(--border-default);
+  border-radius: 6px;
+  background: var(--bg-content);
+  color: var(--text-primary);
+  box-shadow: none;
+}
+
+html[data-work-theme='scholar'] :where(.form-input, .form-select, .form-textarea, input, textarea, select):focus {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+html[data-work-theme='scholar'] .form-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Panels, metrics and tables */
+html[data-work-theme='scholar'] :where(.panel, .metric-card, .data-table-wrapper, .tree-table-wrapper, .card, .filter-bar) {
+  border-color: var(--border-default);
+  border-radius: 6px;
+  background: var(--bg-content);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-work-theme='scholar'] .panel::before,
+html[data-work-theme='scholar'] .metric-card::before,
+html[data-work-theme='scholar'] .card::before {
+  display: none;
+}
+
+html[data-work-theme='scholar'] .panel-header {
+  min-height: 54px;
+  border-color: var(--border-divider);
+  background: var(--surface-panel-header);
+}
+
+html[data-work-theme='scholar'] .panel-title {
+  font-size: var(--fs-body);
+  white-space: normal;
+}
+
+html[data-work-theme='scholar'] .panel-subtitle {
+  margin-top: 2px;
+  color: var(--text-tertiary);
+}
+
+html[data-work-theme='scholar'] .metric-card {
+  gap: 7px;
+  min-width: 0;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+html[data-work-theme='scholar'] .metric-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-card-hover);
+  transform: none;
+}
+
+html[data-work-theme='scholar'] .metric-card-hero {
+  min-height: 118px;
+  padding: 16px 18px;
+  border-left-width: 3px;
+  background: var(--bg-content);
+}
+
+html[data-work-theme='scholar'] .metric-card-hero.tone-info { border-left-color: var(--color-info); }
+html[data-work-theme='scholar'] .metric-card-hero.tone-success { border-left-color: var(--color-success); }
+html[data-work-theme='scholar'] .metric-card-hero.tone-warning { border-left-color: var(--color-warning); }
+html[data-work-theme='scholar'] .metric-card-hero.tone-risk { border-left-color: var(--color-risk); }
+
+html[data-work-theme='scholar'] .metric-card-hero .metric-card-value {
+  font-size: 30px;
+}
+
+html[data-work-theme='scholar'] .metric-card-value {
+  color: var(--text-primary);
+  font-family: var(--font-en);
+  font-variant-numeric: tabular-nums;
+  text-shadow: none;
+}
+
+html[data-work-theme='scholar'] .metric-card-label {
+  color: var(--text-secondary);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+html[data-work-theme='scholar'] .metric-card-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+}
+
+html[data-work-theme='scholar'] .data-table-wrapper {
+  overflow: auto;
+}
+
+html[data-work-theme='scholar'] .data-table thead {
+  border-color: var(--border-default);
+  background: color-mix(in srgb, var(--bg-page) 66%, var(--bg-content));
+}
+
+html[data-work-theme='scholar'] .data-table th {
+  color: var(--text-secondary);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+html[data-work-theme='scholar'] .data-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg-content));
+}
+
+html[data-work-theme='scholar'] .status-badge {
+  border-color: color-mix(in srgb, currentColor 14%, transparent);
+  box-shadow: none;
+  font-weight: 700;
+}
+
+/* View tabs are navigation, not floating cards. */
+html[data-work-theme='scholar'] .nav-tabs,
+html[data-work-theme='scholar'] .delivery-tabs {
+  width: 100%;
+  gap: 18px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-default);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-work-theme='scholar'] .nav-tab,
+html[data-work-theme='scholar'] .delivery-tab {
+  position: relative;
+  min-height: 40px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+html[data-work-theme='scholar'] .nav-tab:hover,
+html[data-work-theme='scholar'] .delivery-tab:hover {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+html[data-work-theme='scholar'] .nav-tab.active,
+html[data-work-theme='scholar'] .delivery-tab.active {
+  background: transparent;
+  color: var(--accent);
+  box-shadow: none;
+}
+
+html[data-work-theme='scholar'] .nav-tab.active::after,
+html[data-work-theme='scholar'] .delivery-tab.active::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+}
+
+/* Dashboard */
+.dashboard-kpi-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dashboard-management-overview {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.55fr) minmax(0, 2fr);
+  gap: 20px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border-divider);
+  border-bottom: 1px solid var(--border-divider);
+}
+
+.dashboard-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 10px;
+}
+
+.dashboard-management-overview__heading {
+  margin: 0;
+}
+
+.dashboard-section-title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.dashboard-section-description {
+  margin-top: 2px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.dashboard-overview-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.dashboard-overview-stat {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  min-width: 0;
+  padding: 2px 18px;
+  border-left: 1px solid var(--border-divider);
+}
+
+.dashboard-overview-stat__label {
+  align-self: end;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dashboard-overview-stat__value {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  align-self: center;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 24px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-overview-stat__caption {
+  overflow: hidden;
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-overview-stat--risk .dashboard-overview-stat__value { color: var(--color-risk); }
+.dashboard-overview-stat--success .dashboard-overview-stat__value { color: var(--color-success); }
+
+.dashboard-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 2.15fr) minmax(300px, 0.85fr);
+  gap: 18px;
+  align-items: start;
+  margin-top: 18px;
+}
+
+.dashboard-workspace__primary,
+.dashboard-workspace__insights {
+  min-width: 0;
+}
+
+.dashboard-primary-stack,
+.dashboard-insights-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+}
+
+html[data-work-theme='scholar'] .action-summary-row {
+  gap: 8px;
+}
+
+html[data-work-theme='scholar'] .action-summary-item {
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  background: var(--bg-subtle);
+}
+
+/* Delivery center */
+html[data-work-theme='scholar'] .delivery-kpi-grid {
+  gap: 10px;
+}
+
+html[data-work-theme='scholar'] .delivery-ai-panel,
+html[data-work-theme='scholar'] .delivery-stage,
+html[data-work-theme='scholar'] .delivery-record-card,
+html[data-work-theme='scholar'] .delivery-gate-card,
+html[data-work-theme='scholar'] .delivery-detail-item,
+html[data-work-theme='scholar'] .delivery-detail-gates,
+html[data-work-theme='scholar'] .delivery-detail-sections section,
+html[data-work-theme='scholar'] .delivery-governance,
+html[data-work-theme='scholar'] .delivery-report-section {
+  border-radius: 6px;
+  background: var(--bg-content);
+  box-shadow: none;
+}
+
+html[data-work-theme='scholar'] .delivery-ai-panel,
+html[data-work-theme='scholar'] .delivery-report-section {
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--border-default));
+}
+
+html[data-work-theme='scholar'] .delivery-record-card:hover {
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg-content));
+  transform: none;
+}
+
+/* Products workbench: preserve the master-detail model without glass chrome. */
+html[data-work-theme='scholar'] .products-page-body .product-list-pane-header,
+html[data-work-theme='scholar'] .products-page-body .management-list-pane-header {
+  background: color-mix(in srgb, var(--bg-page) 68%, var(--bg-content));
+}
+
+html[data-work-theme='scholar'] .product-list-item.active,
+html[data-work-theme='scholar'] .management-list-item.active {
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-content));
+  color: var(--text-primary);
+}
+
+html[data-work-theme='scholar'] .product-hero-content h2,
+html[data-work-theme='scholar'] .management-hero h2 {
+  font-size: 24px;
+  line-height: 1.3;
+}
+
+/* Login */
+html[data-work-theme='scholar'] .login-screen {
+  min-height: 100dvh;
+  padding: 24px;
+  background: #eef2ef;
+}
+
+html[data-work-theme='scholar'] .login-shell {
+  width: min(1040px, 100%);
+  min-height: min(660px, calc(100dvh - 48px));
+  border: 1px solid #d7dfd9;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 64px rgba(31, 48, 42, 0.12);
+  overflow: hidden;
+}
+
+html[data-work-theme='scholar'] .login-brand-panel {
+  border: 0;
+  background: #173f35;
+  color: #ffffff;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-work-theme='scholar'] .login-brand-panel .login-brand-logo-lg {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+html[data-work-theme='scholar'] .login-brand-title {
+  color: #ffffff;
+  font-size: 40px;
+  line-height: 1.08;
+}
+
+html[data-work-theme='scholar'] .login-brand-subtitle,
+html[data-work-theme='scholar'] .login-brand-highlights li {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+html[data-work-theme='scholar'] .login-card {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-work-theme='scholar'] .login-card-kicker {
+  color: var(--accent);
+}
+
+html[data-work-theme='scholar'] .login-card-title {
+  background: none;
+  color: var(--text-primary);
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  -webkit-text-fill-color: var(--text-primary);
+}
+
+html[data-work-theme='scholar'] .login-input {
+  border-color: var(--border-default) !important;
+  border-radius: 6px !important;
+  background: var(--bg-content) !important;
+  color: var(--text-primary) !important;
+}
+
+html[data-work-theme='scholar'] .login-input:focus {
+  border-color: var(--accent) !important;
+  background: var(--bg-content) !important;
+  box-shadow: var(--focus-ring) !important;
+}
+
+html[data-work-theme='scholar'] .login-input:-webkit-autofill,
+html[data-work-theme='scholar'] .login-input:-webkit-autofill:hover,
+html[data-work-theme='scholar'] .login-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text-primary) !important;
+  box-shadow: 0 0 0 1000px var(--bg-content) inset !important;
+}
+
+html[data-work-theme='scholar'] .login-input-icon {
+  color: var(--text-tertiary);
+}
+
+html[data-work-theme='scholar'] .login-brand-highlights li {
+  border-radius: 6px;
+}
+
+html[data-work-theme='scholar'] .login-card-hint {
+  border-color: var(--border-divider);
+  background: var(--bg-subtle);
+}
+
+html[data-work-theme='scholar'] .login-card-hint-row code {
+  border-color: var(--border-divider);
+  background: var(--bg-content);
+  color: var(--text-secondary);
+}
+
+/* Theme drawer and overlays */
+html[data-work-theme='scholar'] .theme-settings-drawer,
+html[data-work-theme='scholar'] .app-overlay-dialog > .panel {
+  border-color: var(--border-default);
+  background: var(--bg-content);
+  box-shadow: var(--shadow-light);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-work-theme='scholar'] .dynamic-timeline-stage .dynamic-timeline {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+html[data-work-theme='scholar'] .mywork-task-filters {
+  gap: 6px;
+}
+
+html[data-work-theme='scholar'] .mywork-task-filters .btn {
+  min-height: 32px;
+  font-size: var(--fs-helper);
+  font-weight: 650;
+}
+
+html[data-work-theme='scholar'] .mywork-empty-panel {
+  box-shadow: var(--shadow-panel);
+}
+
+@media (max-width: 1200px) {
+  .dashboard-workspace {
+    grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.85fr);
+  }
+
+  .delivery-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .delivery-overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 980px) {
+  .dashboard-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-workspace__insights {
+    border-top: 1px solid var(--border-divider);
+    padding-top: 16px;
+  }
+
+  .dashboard-insights-stack {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .delivery-filter-bar {
+    grid-template-columns: minmax(0, 1fr) repeat(2, minmax(140px, 0.35fr));
+  }
+
+  .delivery-record-card {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .delivery-record-side {
+    grid-column: 2;
+  }
+
+  .delivery-gate-board,
+  .delivery-detail-sections,
+  .delivery-governance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .delivery-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  html[data-work-nav-layout] .app-shell,
+  html[data-work-nav-layout] .app-shell.ai-sidebar-open {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto !important;
+  }
+
+  html[data-work-nav-layout] .main-content {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+  }
+
+  html[data-work-nav-layout] .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    width: min(282px, 88vw);
+    height: 100dvh;
+    transform: translateX(-102%);
+    transition: transform var(--transition-normal);
+  }
+
+  html[data-work-nav-layout] .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  html[data-work-nav-layout='mini'] .sidebar-brand-text,
+  html[data-work-nav-layout='mini'] .sidebar-nav-group-label,
+  html[data-work-nav-layout='mini'] .sidebar-nav-item span {
+    display: block;
+  }
+
+  html[data-work-nav-layout='mini'] .sidebar-brand,
+  html[data-work-nav-layout='mini'] .sidebar-nav-item {
+    justify-content: flex-start;
+  }
+
+  html[data-work-nav-layout='mini'] .sidebar-nav-item {
+    width: 100%;
+    height: auto;
+    padding: 7px 10px;
+  }
+
+  html[data-work-theme='scholar'] .topbar {
+    height: 54px;
+    padding: 0 12px;
+  }
+
+  .mobile-menu-toggle {
+    display: grid;
+  }
+
+  .topbar-context-kicker,
+  .topbar-user-name,
+  .topbar-user-position {
+    display: none;
+  }
+
+  .topbar-context-title {
+    max-width: 120px;
+  }
+
+  html[data-work-theme='scholar'] .topbar-profile-trigger {
+    display: grid;
+    width: 34px;
+    min-height: 34px;
+    padding: 2px;
+  }
+
+  html[data-work-theme='scholar'] .topbar-profile-trigger .topbar-avatar {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  html[data-work-theme='scholar'] .main-content-body {
+    padding: 14px 12px 30px;
+  }
+
+  html[data-work-theme='scholar'] .page-header {
+    align-items: flex-start;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+  }
+
+  .page-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .dashboard-kpi-strip,
+  .dashboard-overview-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-management-overview {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .dashboard-overview-stat:first-child {
+    border-left: 0;
+  }
+
+  .dashboard-insights-stack {
+    grid-template-columns: 1fr;
+  }
+
+  .products-page {
+    gap: 10px !important;
+  }
+
+  .products-page > .page-header {
+    margin-bottom: 0 !important;
+    padding: 0 0 12px !important;
+    border-bottom: 1px solid var(--border-divider) !important;
+  }
+
+  .products-page-body .product-workbench-grid,
+  .products-page-body .management-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .products-page-body .product-list-pane,
+  .products-page-body .management-list-pane {
+    position: static !important;
+    top: auto !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--border-divider) !important;
+  }
+
+  .products-page-body .product-list,
+  .products-page-body .management-list {
+    max-height: 260px;
+    overflow-y: auto;
+  }
+
+  .product-hero,
+  .product-detail-grid,
+  .management-detail-grid,
+  .management-score-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .delivery-kpi-grid,
+  .delivery-gate-board,
+  .delivery-detail-grid,
+  .delivery-detail-sections,
+  .delivery-governance-grid,
+  .delivery-report-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .delivery-filter-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .delivery-record-card {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .delivery-record-side,
+  .delivery-record-actions {
+    grid-column: 2;
+  }
+
+  .delivery-record-actions,
+  .delivery-mini-metrics {
+    justify-content: flex-start;
+  }
+
+  .delivery-tabs,
+  .nav-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .delivery-tab,
+  .nav-tab {
+    flex: 0 0 auto;
+  }
+
+  html[data-work-theme='scholar'] .login-screen {
+    padding: 0;
+    background: #ffffff;
+  }
+
+  html[data-work-theme='scholar'] .login-shell {
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  html[data-work-theme='scholar'] .login-brand-panel {
+    min-height: 260px;
+  }
+
+  html[data-work-theme='scholar'] .login-brand-title {
+    font-size: 32px;
+  }
+}
+
+@media (max-width: 560px) {
+  html[data-work-theme='scholar'] .page-header {
+    flex-direction: column;
+  }
+
+  html[data-work-theme='scholar'] .metric-card-hero {
+    min-height: 104px;
+  }
+
+  .dashboard-kpi-strip,
+  .dashboard-overview-stats,
+  .delivery-kpi-grid,
+  .delivery-gate-board,
+  .delivery-detail-grid,
+  .delivery-detail-sections,
+  .delivery-governance-grid,
+  .delivery-report-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-overview-stat {
+    border-top: 1px solid var(--border-divider);
+    border-left: 0;
+    padding: 10px 0;
+  }
+
+  .dashboard-overview-stat:first-child {
+    border-top: 0;
+  }
+
+  .action-summary-row,
+  html[data-work-theme='scholar'] .action-summary-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .products-page-body .product-metric-strip,
+  .products-page-body .metric-grid.product-metric-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .dashboard-action-table .data-table,
+  .dashboard-risk-table .data-table {
+    min-width: 660px;
+  }
+
+  .delivery-record-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .delivery-record-icon,
+  .delivery-record-main,
+  .delivery-record-side,
+  .delivery-record-actions {
+    grid-column: 1;
+  }
+
+  .delivery-record-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .delivery-ai-main,
+  .delivery-detail-gates-head,
+  .delivery-governance-head {
+    flex-direction: column;
+  }
+
+  .topbar-actions > .btn-text {
+    display: none;
+  }
+}

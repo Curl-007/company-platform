@@ -27,7 +27,11 @@ export default function OverviewTab({
     loading: deliveryLoading,
     error: deliveryError,
     reload: reloadDelivery,
-  } = useAsync<ProjectDeliveryData>(() => fetchProjectDeliveryData(project), [project.id, project.productId ?? '']);
+  } = useAsync<ProjectDeliveryData>(
+    () => fetchProjectDeliveryData(project),
+    [project.id, project.productId ?? ''],
+    { cacheKey: 'projects:delivery' },
+  );
 
   return (
     <div className="project-overview-stack">

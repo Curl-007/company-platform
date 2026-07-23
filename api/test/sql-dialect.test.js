@@ -5,6 +5,7 @@ const {
   translateSqliteToPostgres,
   toPostgresQuery,
   buildUpsertSql,
+  buildInsertSql,
 } = require("../src/db/sql");
 
 test("named @params become positional $n values in declaration order of appearance", () => {
@@ -83,7 +84,7 @@ test("toPostgresQuery combines translation and params", () => {
 
 test("buildUpsertSql emits dialect-specific insert forms", () => {
   const sqlite = buildUpsertSql("items", ["id", "name"], { dialect: "sqlite" });
-  assert.match(sqlite.sql, /INSERT OR REPLACE INTO items/);
+  assert.match(sqlite.sql, /ON CONFLICT \(id\) DO UPDATE/);
   assert.match(sqlite.sql, /@id/);
 
   const postgres = buildUpsertSql("items", ["id", "name"], { dialect: "postgres" });
@@ -94,4 +95,34 @@ test("buildUpsertSql emits dialect-specific insert forms", () => {
   const settings = buildUpsertSql("app_settings", ["key", "value"], { dialect: "postgres" });
   assert.equal(settings.conflictTarget, "key");
   assert.match(settings.sql, /ON CONFLICT \(key\) DO UPDATE SET value = EXCLUDED\.value/);
+});
+
+test("buildUpsertSql supports composite natural keys and immutable columns", () => {
+  const columns = ["id", "user_id", "period_start", "period_end", "value", "created_at"];
+  const options = {
+    conflictTarget: ["user_id", "period_start", "period_end"],
+    excludeUpdateColumns: ["id", "created_at"],
+  };
+  const sqlite = buildUpsertSql("capacity_plans", columns, { dialect: "sqlite", ...options });
+  assert.deepEqual(sqlite.conflictTarget, ["user_id", "period_start", "period_end"]);
+  assert.match(sqlite.sql, /ON CONFLICT \(user_id, period_start, period_end\) DO UPDATE SET value = excluded\.value/);
+  assert.doesNotMatch(sqlite.sql, /id = excluded\.id|created_at = excluded\.created_at/);
+
+  const postgres = buildUpsertSql("capacity_plans", columns, { dialect: "postgres", ...options });
+  assert.match(postgres.sql, /ON CONFLICT \(user_id, period_start, period_end\) DO UPDATE SET value = EXCLUDED\.value/);
+  assert.doesNotMatch(postgres.sql, /id = EXCLUDED\.id|created_at = EXCLUDED\.created_at/);
+  assert.throws(
+    () => buildUpsertSql("items", ["id", "value"], { conflictTarget: ["missing"] }),
+    /conflictTarget/,
+  );
+  assert.throws(
+    () => buildUpsertSql("items", ["id", "value"], { excludeUpdateColumns: ["missing"] }),
+    /excludeUpdateColumns/,
+  );
+});
+
+test("buildInsertSql emits strict inserts and rejects unsafe identifiers", () => {
+  assert.equal(buildInsertSql("items", ["id", "name"], { dialect: "sqlite" }).sql, "INSERT INTO items (id, name) VALUES (@id, @name)");
+  assert.equal(buildInsertSql("items", ["id", "name"], { dialect: "postgres" }).sql, "INSERT INTO items (id, name) VALUES ($1, $2)");
+  assert.throws(() => buildInsertSql("items; DROP TABLE items", ["id"]), /safe SQL identifiers/);
 });

@@ -63,13 +63,34 @@ function createProjectsRepository({ insert, row, rows, run }) {
   return {
     createProject: (project) => insert("projects", project),
     softDeleteProject: ({ id, deletedAt }) => run(
-      "UPDATE projects SET deleted_at = @deletedAt, updated_at = @deletedAt WHERE id = @id AND deleted_at IS NULL",
+      "UPDATE projects SET deleted_at = @deletedAt, updated_at = @deletedAt, version = version + 1 WHERE id = @id AND deleted_at IS NULL",
       { id, deletedAt },
     ),
     deleteProjectMember: (id) => run("DELETE FROM project_members WHERE id = @id", { id }),
     findActiveUserByName: (name) => row("SELECT id, name FROM users WHERE name = @name AND status = 'active'", { name }),
     findProject: (id) => row("SELECT * FROM projects WHERE id = @id AND deleted_at IS NULL", { id }),
     findProjectId: (id) => row("SELECT id FROM projects WHERE id = @id AND deleted_at IS NULL", { id }),
+    findProgramId: (id) => row("SELECT id FROM programs WHERE id = @id", { id }),
+    findProductId: (id) => row("SELECT id FROM products WHERE id = @id", { id }),
+    findWorkflowBinding: (projectId) => row(
+      "SELECT template_id FROM project_workflow_bindings WHERE project_id = @projectId",
+      { projectId },
+    ),
+    listProjectIdsByProgram: (programId) => rows(
+      "SELECT id FROM projects WHERE program_id = @programId AND deleted_at IS NULL ORDER BY id",
+      { programId },
+    ),
+    syncProgramProjectIdsCache: async (programId, updatedAt) => {
+      const linked = await rows(
+        "SELECT id FROM projects WHERE program_id = @programId AND deleted_at IS NULL ORDER BY id",
+        { programId },
+      );
+      const projectIds = JSON.stringify(linked.map((item) => item.id));
+      return run(
+        "UPDATE programs SET project_ids = @projectIds, updated_at = @updatedAt WHERE id = @id",
+        { id: programId, projectIds, updatedAt },
+      );
+    },
     findProjectMember: (id, projectId) => row("SELECT * FROM project_members WHERE id = @id AND project_id = @projectId", { id, projectId }),
     findProjectMemberByIdentity: ({ projectId, userId, userName, role }) => row(
       "SELECT * FROM project_members WHERE project_id = @projectId AND (user_id = @userId OR (user_id IS NULL AND user_name = @userName)) AND role = @role",

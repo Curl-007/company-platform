@@ -1,5 +1,6 @@
 import { unwrap, unwrapDel, unwrapPatch, unwrapPost } from '../../services/apiClient';
-import type { Portfolio, Product, Program, StrategicGoal } from '../../types';
+import { ApiError, SessionSupersededError } from '../../services/api';
+import type { Portfolio, Product, ProductImage, Program, StrategicGoal } from '../../types';
 
 export function fetchProducts(): Promise<Product[]> {
   return unwrap<Product[]>('/api/products');
@@ -11,8 +12,6 @@ export interface CreateProductInput {
   version?: string;
   stage?: string;
   description?: string;
-  imageUrl?: string;
-  imageUrls?: string[];
   systemName?: string;
   systemVersion?: string;
   applicationVersion?: string;
@@ -36,6 +35,81 @@ export function updateProduct(id: string, input: Partial<CreateProductInput>): P
 
 export function deleteProduct(id: string): Promise<void> {
   return unwrapDel(`/api/products/${id}`);
+}
+
+export interface ProductImageUploadResult {
+  image: ProductImage;
+  product: Product;
+}
+
+export interface ProductImageDeletionResult {
+  deleted: boolean;
+  id: string;
+  product: Product;
+}
+
+export interface ProductImageChanges {
+  files: File[];
+  deleteIds: string[];
+}
+
+export interface ProductImageChangeFailure {
+  operation: 'upload' | 'delete';
+  subject: string;
+  error: unknown;
+}
+
+export interface ProductImageChangeResult {
+  uploaded: ProductImage[];
+  deletedIds: string[];
+  failures: ProductImageChangeFailure[];
+}
+
+export function uploadProductImage(productId: string, file: File): Promise<ProductImageUploadResult> {
+  const body = new FormData();
+  body.append('file', file, file.name);
+  return unwrapPost<ProductImageUploadResult>(`/api/products/${encodeURIComponent(productId)}/images`, body, {
+    timeoutMs: 30_000,
+  });
+}
+
+export function deleteProductImage(productId: string, imageId: string): Promise<ProductImageDeletionResult> {
+  return unwrapDel<ProductImageDeletionResult>(
+    `/api/products/${encodeURIComponent(productId)}/images/${encodeURIComponent(imageId)}`,
+  );
+}
+
+export async function applyProductImageChanges(
+  productId: string,
+  changes: ProductImageChanges,
+): Promise<ProductImageChangeResult> {
+  const result: ProductImageChangeResult = { uploaded: [], deletedIds: [], failures: [] };
+
+  const captureFailure = (failure: ProductImageChangeFailure) => {
+    if (failure.error instanceof SessionSupersededError) throw failure.error;
+    if (failure.error instanceof ApiError && failure.error.status === 401) throw failure.error;
+    result.failures.push(failure);
+  };
+
+  for (const imageId of new Set(changes.deleteIds)) {
+    try {
+      const deleted = await deleteProductImage(productId, imageId);
+      if (deleted.deleted) result.deletedIds.push(imageId);
+    } catch (error) {
+      captureFailure({ operation: 'delete', subject: imageId, error });
+    }
+  }
+
+  for (const file of changes.files) {
+    try {
+      const uploaded = await uploadProductImage(productId, file);
+      result.uploaded.push(uploaded.image);
+    } catch (error) {
+      captureFailure({ operation: 'upload', subject: file.name, error });
+    }
+  }
+
+  return result;
 }
 
 export interface StrategyInput {

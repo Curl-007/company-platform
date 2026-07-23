@@ -22,7 +22,7 @@ import { PROJECT_STATUS_LABELS, labelOf } from '../../../constants/enums';
 import type { Program } from '../../../types';
 
 export default function ProgramsTab() {
-  const { data, loading, error, reload } = useAsync<Program[]>(fetchPrograms, []);
+  const { data, loading, error, reload } = useAsync<Program[]>(fetchPrograms, [], { cacheKey: 'programs:list' });
   const toast = useToast();
   const confirm = useConfirm();
   const canManagePrograms = canOperate(getSessionUser(), 'projects:manage');

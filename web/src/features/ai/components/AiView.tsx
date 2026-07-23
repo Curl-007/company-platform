@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { confirmAiJob, fetchAiJob, fetchAiSummary, rejectAiJob, retryAiJob, sendAiChat } from '../api';
 import { fetchProjects } from '../../projects/api';
 import { useAsync } from '../../../hooks/useAsync';
+import { useAiJobPolling } from '../../../hooks/useAiJobPolling';
 import { ApiError } from '../../../services/api';
 import PageHeader from '../../../components/common/PageHeader';
 import PageState from '../../../components/common/PageState';
@@ -22,8 +23,8 @@ import AiChatPanel from './AiChatPanel';
 import AiSidePanel from './AiSidePanel';
 
 export default function AiView() {
-  const { data, loading, error, reload } = useAsync<AiSummaryExtended>(fetchAiSummary, []);
-  const projectsAsync = useAsync<Project[]>(fetchProjects, []);
+  const { data, loading, error, reload } = useAsync<AiSummaryExtended>(fetchAiSummary, [], { cacheKey: 'ai:summary' });
+  const projectsAsync = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
   const toast = useToast();
   const confirm = useConfirm();
   const [messages, setMessages] = useState<AiChatMessage[]>([
@@ -38,28 +39,17 @@ export default function AiView() {
   const [jobLoading, setJobLoading] = useState(false);
   const [jobAction, setJobAction] = useState<string | null>(null);
 
-  useEffect(() => {
-    const jobId = selectedJob?.jobId;
-    if (!jobId || !['queued', 'running', 'retried'].includes(selectedJob.status)) return;
-    let cancelled = false;
-    const timer = window.setTimeout(async () => {
-      try {
-        const latest = await fetchAiJob(jobId);
-        if (cancelled) return;
-        setSelectedJob((current) => current?.jobId === jobId ? latest : current);
-        if (latest.status === 'awaiting_review') {
-          setReviewDraft(buildReviewDraft(latest));
-          reload();
-        }
-      } catch {
-        // Keep the current status visible; the user can refresh manually.
-      }
-    }, 1200);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [reload, selectedJob?.jobId, selectedJob?.status]);
+  const jobPolling = useAiJobPolling({
+    job: selectedJob,
+    pollJob: fetchAiJob,
+    onUpdate: (latest) => {
+      setSelectedJob((current) => current?.jobId === latest.jobId ? latest : current);
+    },
+    onAwaitingReview: (latest) => {
+      setReviewDraft(buildReviewDraft(latest));
+      reload();
+    },
+  });
 
   const providerStatus = useMemo(() => {
     const provider = data?.aiProvider;
@@ -287,6 +277,7 @@ export default function AiView() {
           setReviewDraft={setReviewDraft}
           jobLoading={jobLoading}
           jobAction={jobAction}
+          pollingError={jobPolling.error}
           onOpenJob={openJob}
           onConfirm={handleConfirmJob}
           onReject={handleRejectJob}

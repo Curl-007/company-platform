@@ -5,7 +5,11 @@ import DefectFunnel from '../../../components/common/DefectFunnel';
 import type { ProjectFlow } from '../../../types';
 
 export default function ProjectFlowDetail({ projectId }: { projectId: string }) {
-  const { data, loading, error } = useAsync<ProjectFlow>(() => fetchProjectFlow(projectId), [projectId]);
+  const { data, loading, error } = useAsync<ProjectFlow>(
+    () => fetchProjectFlow(projectId),
+    [projectId],
+    { cacheKey: 'project:flow' },
+  );
   if (loading) return <div className="flow-detail"><p className="text-secondary">正在加载流程详情...</p></div>;
   if (error || !data) return <div className="flow-detail"><p className="form-error">{error ?? '加载失败'}</p></div>;
 

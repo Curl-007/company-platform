@@ -30,6 +30,7 @@ function createDocumentsRouter({
   rows,
   run,
   storageDir,
+  transaction,
   upload,
 }) {
   const router = express.Router();
@@ -80,9 +81,13 @@ function createDocumentsRouter({
     try { fs.unlinkSync(path.join(storageDir, storageKey)); } catch { /* may not exist */ }
   }
 
-  async function deleteObjectRow(storageKey) {
+  async function deleteObjectRow(storageKey, { ignoreErrors = false } = {}) {
     if (!storageKey) return;
-    try { await run("DELETE FROM objects WHERE storage_key = @key", { key: storageKey }); } catch { /* best effort */ }
+    try {
+      await run("DELETE FROM objects WHERE storage_key = @key", { key: storageKey });
+    } catch (error) {
+      if (!ignoreErrors) throw error;
+    }
   }
 
   router.post("/documents", requirePermission("document:*"), async (req, res) => {
@@ -110,17 +115,19 @@ function createDocumentsRouter({
       return fail(res, 400, uploadCheck.errorCode || "VALIDATION_FAILED", uploadCheck.message);
     }
     const id = await nextId("DOC", "documents");
-    const storageKey = `${id}_${String(fileName).replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")}`;
+    const storageKey = contentBase64
+      ? `${id}_${String(fileName).replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")}`
+      : null;
     let content = "";
     let wroteFile = false;
+    let buffer = null;
     try {
       if (contentBase64) {
         const base64 = String(contentBase64).includes(",") ? String(contentBase64).split(",").pop() : String(contentBase64);
-        const buffer = Buffer.from(base64, "base64");
+        buffer = Buffer.from(base64, "base64");
         fs.writeFileSync(path.join(storageDir, storageKey), buffer);
         wroteFile = true;
-        content = extractTextFromUpload(fileName, fileType, contentBase64);
-        await insert("objects", { id: `OBJ-${id}`, bucket: "documents", storage_key: storageKey, original_name: fileName, mime_type: fileType || "application/octet-stream", size: buffer.length, created_by: req.user.id, created_at: now() });
+        content = extractTextFromUpload(fileName, fileType, buffer);
       }
       const document = {
         id,
@@ -136,19 +143,25 @@ function createDocumentsRouter({
         linked_requirements: json([]),
         risks: json([]),
         file_name: fileName,
-        file_size: Number(fileSize) || 0,
+        file_size: buffer?.length || Number(fileSize) || 0,
         file_type: fileType || "application/octet-stream",
         storage_key: storageKey,
         content,
       };
-      await insert("documents", document);
-      reindexDocument?.(document);
-      await audit(req.user, "document.upload", "document", id, null, document, req.ip);
-      res.status(201).json(ok(mapDocument(await row("SELECT * FROM documents WHERE id = @id", { id }))));
+      const created = await transaction(async () => {
+        if (buffer) {
+          await insert("objects", { id: `OBJ-${id}`, bucket: "documents", storage_key: storageKey, original_name: fileName, mime_type: fileType || "application/octet-stream", size: buffer.length, created_by: req.user.id, created_at: now() });
+        }
+        await insert("documents", document);
+        if (reindexDocument) await reindexDocument(document);
+        await audit(req.user, "document.upload", "document", id, null, document, req.ip);
+        return await row("SELECT * FROM documents WHERE id = @id", { id });
+      });
+      res.status(201).json(ok(mapDocument(created)));
     } catch (error) {
       if (wroteFile) {
         safeUnlink(storageKey);
-        await deleteObjectRows(storageKey);
+        await deleteObjectRow(storageKey, { ignoreErrors: true });
       }
       throw error;
     }
@@ -191,38 +204,42 @@ function createDocumentsRouter({
     }));
   });
 
-  router.post("/documents/:id/object", requirePermission("document:*"), upload.single("file"), async (req, res) => {
+  async function authorizeObjectUpload(req, res, next) {
     const document = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
-    if (!document) {
-      if (req.file?.filename) safeUnlink(req.file.filename);
-      return fail(res, 404, "RESOURCE_NOT_FOUND", "Document not found.");
-    }
+    if (!document) return fail(res, 404, "RESOURCE_NOT_FOUND", "Document not found.");
     if (!(await canManage(req.user, document))) {
-      if (req.file?.filename) safeUnlink(req.file.filename);
       return fail(res, 403, "PERMISSION_DENIED", "You can only manage documents for allowed roles.");
     }
+    req.authorizedDocument = document;
+    return next();
+  }
+
+  router.post("/documents/:id/object", requirePermission("document:*"), authorizeObjectUpload, upload.single("file"), async (req, res) => {
     if (!req.file) return fail(res, 400, "VALIDATION_FAILED", "File is required.");
+    const document = req.authorizedDocument;
     const previousKey = document.storage_key || null;
     const newKey = req.file.filename;
+    let after;
     try {
-      await insert("objects", { id: `OBJ-${Date.now()}`, bucket: "documents", storage_key: newKey, original_name: req.file.originalname, mime_type: req.file.mimetype, size: req.file.size, created_by: req.user.id, created_at: now() });
       const buffer = fs.readFileSync(req.file.path);
-      const contentBase64 = `data:${req.file.mimetype};base64,${buffer.toString("base64")}`;
-      const content = extractTextFromUpload(req.file.originalname, req.file.mimetype, contentBase64);
-      await run("UPDATE documents SET storage_key = @key, file_name = @name, file_size = @size, file_type = @type, content = @content, updated_at = @updated WHERE id = @id", { id: req.params.id, key: newKey, name: req.file.originalname, size: req.file.size, type: req.file.mimetype, content, updated: now() });
-      if (previousKey && previousKey !== newKey) {
-        safeUnlink(previousKey);
-        await deleteObjectRows(previousKey);
-      }
-      const after = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
-      reindexDocument?.(after);
-      await audit(req.user, "object.upload", "document", req.params.id, null, { filename: req.file.filename, size: req.file.size, mimetype: req.file.mimetype }, req.ip);
-      res.json(ok({ objectKey: newKey }));
+      const content = extractTextFromUpload(req.file.originalname, req.file.mimetype, buffer);
+      after = await transaction(async () => {
+        await insert("objects", { id: `OBJ-${Date.now()}`, bucket: "documents", storage_key: newKey, original_name: req.file.originalname, mime_type: req.file.mimetype, size: req.file.size, created_by: req.user.id, created_at: now() });
+        await run("UPDATE documents SET storage_key = @key, file_name = @name, file_size = @size, file_type = @type, content = @content, updated_at = @updated WHERE id = @id", { id: req.params.id, key: newKey, name: req.file.originalname, size: req.file.size, type: req.file.mimetype, content, updated: now() });
+        const updated = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
+        if (deleteDocumentRagIndex) await deleteDocumentRagIndex(req.params.id);
+        if (reindexDocument) await reindexDocument(updated);
+        await audit(req.user, "object.upload", "document", req.params.id, document, updated, req.ip);
+        if (previousKey && previousKey !== newKey) await deleteObjectRow(previousKey);
+        return updated;
+      });
     } catch (error) {
       safeUnlink(newKey);
-      await deleteObjectRows(newKey);
+      await deleteObjectRow(newKey, { ignoreErrors: true });
       throw error;
     }
+    if (previousKey && previousKey !== newKey) safeUnlink(previousKey);
+    res.json(ok({ objectKey: newKey, document: mapDocument(after) }));
   });
 
   router.patch("/documents/:id", requirePermission("document:*"), async (req, res) => {
@@ -252,7 +269,7 @@ function createDocumentsRouter({
     if (projectId !== undefined) await run("UPDATE documents SET project_id = @projectId WHERE id = @id", { id: req.params.id, projectId: projectId || null });
     await run("UPDATE documents SET updated_at = @updated WHERE id = @id", { id: req.params.id, updated: now() });
     const after = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
-    reindexDocument?.(after);
+    if (reindexDocument) await reindexDocument(after);
     await audit(req.user, "document.update", "document", req.params.id, before, after, req.ip);
     res.json(ok(mapDocument(after)));
   });
@@ -263,13 +280,13 @@ function createDocumentsRouter({
     if (!(await canManage(req.user, before))) {
       return fail(res, 403, "PERMISSION_DENIED", "You can only manage documents for allowed roles.");
     }
-    deleteDocumentRagIndex?.(req.params.id);
-    await run("DELETE FROM documents WHERE id = @id", { id: req.params.id });
-    if (before.storage_key) {
-      safeUnlink(before.storage_key);
-      await deleteObjectRows(before.storage_key);
-    }
-    await audit(req.user, "document.delete", "document", req.params.id, before, null, req.ip);
+    await transaction(async () => {
+      if (deleteDocumentRagIndex) await deleteDocumentRagIndex(req.params.id);
+      await run("DELETE FROM documents WHERE id = @id", { id: req.params.id });
+      if (before.storage_key) await deleteObjectRow(before.storage_key);
+      await audit(req.user, "document.delete", "document", req.params.id, before, null, req.ip);
+    });
+    if (before.storage_key) safeUnlink(before.storage_key);
     res.json(ok({ deleted: true, id: req.params.id }));
   });
 

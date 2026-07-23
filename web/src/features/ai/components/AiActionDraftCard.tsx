@@ -26,6 +26,7 @@ import { getSessionUser } from '../../../services/auth';
 import { canOperate } from '../../../constants/roles';
 import { navigateTo } from '../../team/components/teamMeta';
 import { executeAiProposedAction } from '../aiActionExecutor';
+import { businessDateKey } from '../../../utils/businessDate';
 
 const ACTION_LABELS: Record<string, string> = {
   create_requirement: '新建需求', update_requirement: '修改需求', update_requirement_status: '变更需求状态', delete_requirement: '删除需求',
@@ -130,7 +131,7 @@ export default function AiActionDraftCard({
   const [taskType, setTaskType] = useState(action.taskType || 'task');
   const [estimatedHours, setEstimatedHours] = useState(action.estimatedHours != null ? String(action.estimatedHours) : '');
   const [hours, setHours] = useState(action.hours != null ? String(action.hours) : action.estimatedHours != null ? String(action.estimatedHours) : '');
-  const [workDate, setWorkDate] = useState(action.workDate || new Date().toISOString().slice(0, 10));
+  const [workDate, setWorkDate] = useState(action.workDate || businessDateKey());
   const [version, setVersion] = useState(action.version || '');
   const [buildId, setBuildId] = useState(action.buildId || '');
   const [objective, setObjective] = useState(action.objective || '');
@@ -157,7 +158,7 @@ export default function AiActionDraftCard({
     setTaskType(action.taskType || 'task');
     setEstimatedHours(action.estimatedHours != null ? String(action.estimatedHours) : '');
     setHours(action.hours != null ? String(action.hours) : '');
-    setWorkDate(action.workDate || new Date().toISOString().slice(0, 10));
+    setWorkDate(action.workDate || businessDateKey());
     setVersion(action.version || '');
     setBuildId(action.buildId || '');
     setObjective(action.objective || '');

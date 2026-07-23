@@ -8,9 +8,9 @@ import type { BurndownData, Sprint, SprintCommitment, SprintScopeChange } from '
 
 export default function SprintBurndownRow({ sprint }: { sprint: Sprint }) {
   const [open, setOpen] = useState(false);
-  const { data, loading, error } = useAsync<BurndownData>(() => fetchSprintBurndown(sprint.id), [sprint.id, open]);
-  const commitmentAsync = useAsync<SprintCommitment | null>(() => fetchSprintCommitment(sprint.id), [sprint.id, open]);
-  const scopeChangesAsync = useAsync<SprintScopeChange[]>(() => fetchSprintScopeChanges(sprint.id), [sprint.id, open]);
+  const { data, loading, error } = useAsync<BurndownData>(() => fetchSprintBurndown(sprint.id), [sprint.id, open], { cacheKey: 'sprints:burndown' });
+  const commitmentAsync = useAsync<SprintCommitment | null>(() => fetchSprintCommitment(sprint.id), [sprint.id, open], { cacheKey: 'sprints:commitment' });
+  const scopeChangesAsync = useAsync<SprintScopeChange[]>(() => fetchSprintScopeChanges(sprint.id), [sprint.id, open], { cacheKey: 'sprints:scope-changes' });
   return (
     <div>
       <div className="flex items-center justify-between">

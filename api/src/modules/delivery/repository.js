@@ -27,8 +27,26 @@ function createDeliveryRepository({ insert, row, rows, run }) {
     return await rows(`${sql} ORDER BY release_date DESC`, params);
   }
 
+  async function dependencySummary(sqlFrom, id) {
+    const count = Number((await row(`SELECT COUNT(*) AS count ${sqlFrom}`, { id }))?.count || 0);
+    const sample = count > 0 ? await rows(`SELECT id ${sqlFrom} ORDER BY id LIMIT 10`, { id }) : [];
+    return { count, sampleIds: sample.map((item) => item.id) };
+  }
+
+  async function buildDependencies(buildId) {
+    const [releases, defects, tasks] = await Promise.all([
+      dependencySummary("FROM releases WHERE build_id = @id", buildId),
+      dependencySummary("FROM defects WHERE found_in_build = @id", buildId),
+      dependencySummary("FROM tasks WHERE build_id = @id", buildId),
+    ]);
+    return { releases, defects, tasks };
+  }
+
   return {
     countReleasesForBuild: async (buildId) => Number((await row("SELECT COUNT(*) AS count FROM releases WHERE build_id = @id", { id: buildId }))?.count || 0),
+    countDefectsForBuild: async (buildId) => Number((await row("SELECT COUNT(*) AS count FROM defects WHERE found_in_build = @id", { id: buildId }))?.count || 0),
+    countTasksForBuild: async (buildId) => Number((await row("SELECT COUNT(*) AS count FROM tasks WHERE build_id = @id", { id: buildId }))?.count || 0),
+    buildDependencies,
     createApproval: (approval) => run(`INSERT INTO release_approvals
       (id, release_id, decision, comment, approver_id, approver_name, created_at)
       VALUES (@id, @release_id, @decision, @comment, @approver_id, @approver_name, @created_at)`, approval),
@@ -44,6 +62,11 @@ function createDeliveryRepository({ insert, row, rows, run }) {
     findBuild: (id) => row("SELECT * FROM builds WHERE id = @id", { id }),
     findDefectProject: (id) => row("SELECT project_id FROM defects WHERE id = @id", { id }),
     findProjectId: (id) => row("SELECT id FROM projects WHERE id = @id AND deleted_at IS NULL", { id }),
+    findProjectProduct: (id) => row(
+      "SELECT id, product_id FROM projects WHERE id = @id AND deleted_at IS NULL",
+      { id },
+    ),
+    findProduct: (id) => row("SELECT id FROM products WHERE id = @id", { id }),
     findRequirementProject: (id) => row("SELECT project_id FROM requirements WHERE id = @id AND deleted_at IS NULL", { id }),
     findRelease: (id) => row("SELECT * FROM releases WHERE id = @id", { id }),
     findApprovalByApprover: (releaseId, approverId) => row(
@@ -101,6 +124,7 @@ function createDeliveryRepository({ insert, row, rows, run }) {
     updateReleaseDate: (id, releaseDate) => run("UPDATE releases SET release_date = @d WHERE id = @id", { id, d: releaseDate }),
     updateReleaseName: (id, name) => run("UPDATE releases SET name = @name WHERE id = @id", { id, name }),
     updateReleaseNotes: (id, releaseNotes) => run("UPDATE releases SET release_notes = @n WHERE id = @id", { id, n: releaseNotes }),
+    updateReleaseProduct: (id, productId) => run("UPDATE releases SET product_id = @p WHERE id = @id", { id, p: productId }),
     updateReleaseStatus: (id, status) => run("UPDATE releases SET status = @status WHERE id = @id", { id, status }),
     updateReleaseStories: (id, linkedStories) => run("UPDATE releases SET linked_stories = @s WHERE id = @id", { id, s: linkedStories }),
     updateReleaseType: (id, releaseType) => run("UPDATE releases SET release_type = @t WHERE id = @id", { id, t: releaseType }),

@@ -56,7 +56,7 @@ export default function DeliveryOverview({
 }) {
   return (
     <div className="delivery-overview-grid">
-      <Panel title="交付流水线" subtitle="参考 Glass UI 的 Pipeline 阶段式视图，按构建到发布展示当前流转。">
+      <Panel title="交付流水线" subtitle="按构建、验证、候选、发布四个阶段展示当前流转。">
         <div className="delivery-pipeline">
           {pipelineStages.map((stage, index) => (
             <div className={`delivery-stage ${stage.tone}`} key={stage.id}>

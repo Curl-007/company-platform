@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  applyProductImageChanges,
   createProduct,
   deleteProduct,
   fetchProducts,
@@ -8,7 +9,7 @@ import {
 import {
   allProductMetrics,
   currentProductImage,
-  productImages,
+  productImageUrls,
   productStageTone,
 } from '../productModel';
 import ProductForm from './ProductForm';
@@ -31,13 +32,24 @@ import {
   labelOf,
 } from '../../../constants/enums';
 import type { Product } from '../../../types';
+import type { ProductImageChangeResult } from '../api';
+
+function productImageFailureMessage(result: ProductImageChangeResult): string {
+  const details = result.failures.slice(0, 2).map((failure) => {
+    const action = failure.operation === 'upload' ? `上传 ${failure.subject}` : `删除图片 ${failure.subject}`;
+    const message = failure.error instanceof ApiError ? failure.error.message : '操作失败';
+    return `${action}：${message}`;
+  });
+  const omitted = result.failures.length - details.length;
+  return `产品资料已保存，但有 ${result.failures.length} 个图片操作失败。${details.join('；')}${omitted > 0 ? `；另有 ${omitted} 项失败` : ''}`;
+}
 
 export default function ProductsTab() {
   const toast = useToast();
   const confirm = useConfirm();
   const user = getSessionUser();
   const canManageProducts = canOperate(user, 'products:manage');
-  const { data, loading, error, reload } = useAsync<Product[]>(fetchProducts, []);
+  const { data, loading, error, reload } = useAsync<Product[]>(fetchProducts, [], { cacheKey: 'products:list' });
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -55,6 +67,16 @@ export default function ProductsTab() {
       setSelectedId(products[0].id);
     }
   }, [products, selectedId]);
+
+  async function saveProductImages(
+    productId: string,
+    changes: Parameters<typeof applyProductImageChanges>[1],
+    successMessage: string,
+  ) {
+    const result = await applyProductImageChanges(productId, changes);
+    if (result.failures.length > 0) toast.error(productImageFailureMessage(result));
+    else toast.success(successMessage);
+  }
 
   async function handleDelete(product: Product) {
     if (!canManageProducts) {
@@ -176,9 +198,9 @@ export default function ProductsTab() {
                   </div>
                 </div>
 
-                {productImages(selectedProduct).length > 1 ? (
+                {productImageUrls(selectedProduct).length > 1 ? (
                   <div className="product-gallery-strip">
-                    {productImages(selectedProduct).slice(1).map((image, index) => (
+                    {productImageUrls(selectedProduct).slice(1).map((image, index) => (
                       <ProductImage key={`${selectedProduct.id}-gallery-${index}`} src={image} alt={`${selectedProduct.name} ${index + 2}`} />
                     ))}
                   </div>
@@ -284,9 +306,9 @@ export default function ProductsTab() {
         <ProductForm
           title="新建产品"
           onClose={() => setCreating(false)}
-          onSubmit={async (payload) => {
-            await createProduct(payload);
-            toast.success('产品已创建');
+          onSubmit={async ({ product, imageChanges }) => {
+            const created = await createProduct(product);
+            await saveProductImages(created.id, imageChanges, '产品已创建');
             setCreating(false);
             reload();
           }}
@@ -298,9 +320,9 @@ export default function ProductsTab() {
           title="编辑产品"
           initial={editing}
           onClose={() => setEditing(null)}
-          onSubmit={async (payload) => {
-            await updateProduct(editing.id, payload);
-            toast.success('产品已更新');
+          onSubmit={async ({ product, imageChanges }) => {
+            const updated = await updateProduct(editing.id, product);
+            await saveProductImages(updated.id, imageChanges, '产品已更新');
             setEditing(null);
             reload();
           }}

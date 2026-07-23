@@ -2,6 +2,7 @@ const express = require("express");
 const {
   boundedNumber,
   createCapacityService,
+  evaluateAllocationConcurrency,
   isoDate,
   mapAllocation,
   mapPlan,
@@ -110,8 +111,10 @@ function createCapacityRouter({
     const existing = await repository.findCalendarException({ calendarId: calendar.id, date });
     const exception = { id: existing?.id || await nextId("CALX", "work_calendar_exceptions"), calendar_id: calendar.id, calendar_date: date, is_working_day: body.isWorkingDay ? 1 : 0, name: String(body.name || "").trim(), created_at: existing?.created_at || now(), updated_at: now() };
     await repository.upsertCalendarException(exception);
-    await audit(req.user, "work_calendar.exception_upsert", "work_calendar_exception", exception.id, existing || null, exception, req.ip);
-    res.status(existing ? 200 : 201).json(ok({ id: exception.id, calendarId: exception.calendar_id, date: exception.calendar_date, isWorkingDay: Boolean(exception.is_working_day), name: exception.name, createdAt: exception.created_at, updatedAt: exception.updated_at }));
+    const stored = await repository.findCalendarException({ calendarId: calendar.id, date });
+    const created = !existing && stored.id === exception.id;
+    await audit(req.user, "work_calendar.exception_upsert", "work_calendar_exception", stored.id, existing || null, stored, req.ip);
+    res.status(created ? 201 : 200).json(ok({ id: stored.id, calendarId: stored.calendar_id, date: stored.calendar_date, isWorkingDay: Boolean(stored.is_working_day), name: stored.name, createdAt: stored.created_at, updatedAt: stored.updated_at }));
   });
 
   router.delete("/capacity/calendar/exceptions/:id", requirePermission("project:*"), async (req, res) => {
@@ -158,10 +161,11 @@ function createCapacityRouter({
       updated_at: now(),
     };
     await repository.upsertPlan(plan);
+    const stored = await repository.findPlan({ userId: req.params.userId, ...period });
     const calendar = await resolveCalendar(period);
     const before = existing ? mapPlan(existing, calendar.workingDays) : null;
-    const mapped = mapPlan(await repository.findPlanById(plan.id), calendar.workingDays);
-    await audit(req.user, "capacity.plan_upsert", "capacity_plan", plan.id, before, mapped, req.ip);
+    const mapped = mapPlan(stored, calendar.workingDays);
+    await audit(req.user, "capacity.plan_upsert", "capacity_plan", stored.id, before, mapped, req.ip);
     res.json(ok(mapped));
   });
 
@@ -190,19 +194,33 @@ function createCapacityRouter({
     const plan = await repository.findPlan({ userId, ...period });
     const calendar = await resolveCalendar(period);
     const effectiveHours = mapPlan(plan, calendar.workingDays)?.effectiveHours || 0;
-    const currentAllocations = await repository.listOtherAllocations({ userId, ...period, existingId: existing?.id || "" });
-    const projectedAllocationPercent = currentAllocations.reduce((sum, item) => sum + (Number(item.allocation_percent) || 0), allocationPercent);
-    const hoursFor = (item) => item.planned_hours === null || item.planned_hours === undefined
-      ? effectiveHours * (Number(item.allocation_percent) || 0) / 100
-      : Number(item.planned_hours) || 0;
-    const projectedPlannedHours = currentAllocations.reduce((sum, item) => sum + hoursFor(item), plannedHours === null ? effectiveHours * allocationPercent / 100 : plannedHours);
-    const needsOverrideApproval = projectedAllocationPercent > 100 || (effectiveHours > 0 && projectedPlannedHours > effectiveHours);
+    const currentAllocations = typeof repository.listOverlappingAllocations === "function"
+      ? await repository.listOverlappingAllocations({ userId, ...period, existingId: existing?.id || "" })
+      : await repository.listOtherAllocations({ userId, ...period, existingId: existing?.id || "" });
+    const concurrencyPeriod = currentAllocations.reduce((range, item) => ({
+      periodStart: item.period_start < range.periodStart ? item.period_start : range.periodStart,
+      periodEnd: item.period_end > range.periodEnd ? item.period_end : range.periodEnd,
+    }), period);
+    const concurrencyCalendar = concurrencyPeriod.periodStart === period.periodStart && concurrencyPeriod.periodEnd === period.periodEnd
+      ? calendar
+      : await resolveCalendar(concurrencyPeriod);
+    const concurrency = evaluateAllocationConcurrency({
+      period,
+      projectId,
+      allocationPercent,
+      plannedHours,
+      effectiveHours,
+      existingAllocations: currentAllocations,
+      isWorkingDate: concurrencyCalendar.isWorkingDate,
+    });
+    const needsOverrideApproval = concurrency.needsOverrideApproval;
     const overloadReason = String(req.body?.overloadReason || "").trim();
     if (needsOverrideApproval && !overloadReason) {
       return fail(res, 400, "ALLOCATION_OVERRIDE_REASON_REQUIRED", "投入超过成员有效容量或 100%，必须填写超配原因并提交独立审批。", {
-        projectedAllocationPercent,
-        projectedPlannedHours,
-        effectiveHours,
+        peakAllocationPercent: concurrency.peakAllocationPercent,
+        peakPlannedHours: concurrency.peakPlannedHours,
+        effectiveDailyHours: concurrency.effectiveDailyHours,
+        overloadedDates: concurrency.overloadedDates,
       });
     }
     const allocation = {
@@ -222,8 +240,9 @@ function createCapacityRouter({
       updated_at: now(),
     };
     await repository.upsertAllocation(allocation);
-    const mapped = mapAllocation(allocation, project, effectiveHours);
-    await audit(req.user, needsOverrideApproval ? "capacity.allocation_override_submitted" : "capacity.allocation_upsert", "project_allocation", allocation.id, existing || null, mapped, req.ip);
+    const stored = await repository.findAllocationForProject({ projectId, userId, ...period });
+    const mapped = mapAllocation(stored, project, effectiveHours);
+    await audit(req.user, needsOverrideApproval ? "capacity.allocation_override_submitted" : "capacity.allocation_upsert", "project_allocation", stored.id, existing || null, mapped, req.ip);
     res.json(ok(mapped));
   });
 
@@ -233,7 +252,17 @@ function createCapacityRouter({
     if (req.user.role !== "admin") return fail(res, 403, "PERMISSION_DENIED", "只有管理员可以审批超配例外。");
     if (allocation.approval_status !== "pending") return fail(res, 409, "ALLOCATION_OVERRIDE_NOT_PENDING", "该超配例外不处于待审批状态。");
     if (allocation.updated_by === req.user.id) return fail(res, 400, "ALLOCATION_SELF_APPROVAL_FORBIDDEN", "提交超配的人员不能审批自己的例外申请。");
-    await repository.approveAllocation({ id: allocation.id, approvedBy: req.user.id, approvedAt: now(), updatedAt: now() });
+    const stamp = now();
+    // CAS: only pending → approved succeeds; concurrent double-approve returns 409.
+    const approveResult = await repository.approveAllocation({
+      id: allocation.id,
+      approvedBy: req.user.id,
+      approvedAt: stamp,
+      updatedAt: stamp,
+    });
+    if (!approveResult || Number(approveResult.changes || 0) === 0) {
+      return fail(res, 409, "ALLOCATION_OVERRIDE_NOT_PENDING", "该超配例外不处于待审批状态或已被其他管理员处理。");
+    }
     const after = await repository.findAllocation(allocation.id);
     const project = await repository.findProject(after.project_id);
     const plan = await repository.findPlan({ userId: after.user_id, periodStart: after.period_start, periodEnd: after.period_end });

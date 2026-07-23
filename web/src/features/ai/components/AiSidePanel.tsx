@@ -12,6 +12,7 @@ export default function AiSidePanel({
   setReviewDraft,
   jobLoading,
   jobAction,
+  pollingError,
   onOpenJob,
   onConfirm,
   onReject,
@@ -23,6 +24,7 @@ export default function AiSidePanel({
   setReviewDraft: Dispatch<SetStateAction<JobReviewDraft | null>>;
   jobLoading: boolean;
   jobAction: string | null;
+  pollingError: string | null;
   onOpenJob: (jobId: string) => void;
   onConfirm: (mode?: 'original' | 'edited') => void;
   onReject: () => void;
@@ -68,15 +70,18 @@ export default function AiSidePanel({
       ) : null}
 
       {selectedJob ? (
-        <AiJobReviewPanel
-          selectedJob={selectedJob}
-          reviewDraft={reviewDraft}
-          setReviewDraft={setReviewDraft}
-          jobAction={jobAction}
-          onConfirm={onConfirm}
-          onReject={onReject}
-          onRetry={onRetry}
-        />
+        <>
+          {pollingError ? <div className="form-error" role="status">{pollingError}</div> : null}
+          <AiJobReviewPanel
+            selectedJob={selectedJob}
+            reviewDraft={reviewDraft}
+            setReviewDraft={setReviewDraft}
+            jobAction={jobAction}
+            onConfirm={onConfirm}
+            onReject={onReject}
+            onRetry={onRetry}
+          />
+        </>
       ) : null}
     </div>
   );

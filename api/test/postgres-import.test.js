@@ -89,11 +89,11 @@ test("splitSqlStatements keeps defaults with semicolons inside strings out of sp
   assert.match(statements[1], /DEFAULT 'a;b'/);
 });
 
-test("listMigrationFiles discovers 19 migrations with stable checksums", () => {
+test("listMigrationFiles discovers current migrations with stable checksums", () => {
   const migrations = listMigrationFiles(path.resolve(__dirname, "..", "migrations"));
-  assert.equal(migrations.length, 19);
+  assert.equal(migrations.length, 22);
   assert.equal(migrations[0].id, "20260713_01_work_calendar");
-  assert.equal(migrations[migrations.length - 1].id, "20260722_19_defect_version");
+  assert.equal(migrations[migrations.length - 1].id, "20260723_22_burndown_snapshot_uniqueness");
   assert.match(migrations[0].checksum, /^[a-f0-9]{64}$/);
 });
 
@@ -106,6 +106,12 @@ test("baseline schema file exists without SQL FK or jsonb", () => {
   assert.match(sql, /PRIMARY KEY \(actor_id, operation, idempotency_key\)/);
   assert.match(sql, /idx_release_approvals_release_approver/);
   assert.match(sql, /WHERE approver_id IS NOT NULL/);
+  assert.match(sql, /ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS scope_type TEXT NOT NULL DEFAULT 'global'/);
+  assert.match(sql, /ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS project_id TEXT/);
+  assert.match(sql, /ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS subject_user_id TEXT/);
+  assert.match(sql, /idx_audit_scope_project_created/);
+  assert.match(sql, /idx_audit_actor_created/);
+  assert.match(sql, /idx_audit_subject_created/);
   assert.doesNotMatch(sql, /\bREFERENCES\b/i);
   assert.doesNotMatch(sql, /\bFOREIGN KEY\b/i);
   assert.doesNotMatch(sql, /\bJSONB\b/i);

@@ -1,11 +1,21 @@
 const express = require("express");
 
-function createDashboardRouter({ ok, service }) {
+function createDashboardRouter({ ok, resolveAccessScope, service }) {
   const router = express.Router();
+
+  const isFresh = (req) => ["1", "true"].includes(String(req.query?.fresh || "").toLowerCase());
+  const buildForRequest = async (req, owner) => service.build({
+    accessScope: typeof resolveAccessScope === "function"
+      ? await resolveAccessScope(req.user)
+      : { projectIds: [] },
+    ...(owner ? { owner } : {}),
+    skipCache: isFresh(req),
+    user: req.user,
+  });
 
   router.get("/dashboard", async (req, res, next) => {
     try {
-      res.json(ok(await service.build({ user: req.user })));
+      res.json(ok(await buildForRequest(req)));
     } catch (error) {
       next(error);
     }
@@ -13,7 +23,7 @@ function createDashboardRouter({ ok, service }) {
 
   router.get("/dashboard/personal", async (req, res, next) => {
     try {
-      res.json(ok(await service.build({ owner: req.user?.name, user: req.user })));
+      res.json(ok(await buildForRequest(req, req.user?.name)));
     } catch (error) {
       next(error);
     }
@@ -22,7 +32,7 @@ function createDashboardRouter({ ok, service }) {
   // Thin reports read models (as-built): same aggregates as dashboard, separate URL surface.
   router.get("/reports/summary", async (req, res, next) => {
     try {
-      const dashboard = await service.build({ user: req.user });
+      const dashboard = await buildForRequest(req);
       res.json(ok({
         metrics: dashboard.metrics,
         riskyProjects: dashboard.riskyProjects,
@@ -37,7 +47,7 @@ function createDashboardRouter({ ok, service }) {
 
   router.get("/reports/personal", async (req, res, next) => {
     try {
-      const dashboard = await service.build({ owner: req.user?.name, user: req.user });
+      const dashboard = await buildForRequest(req, req.user?.name);
       res.json(ok({
         metrics: dashboard.metrics,
         focusTasks: dashboard.focusTasks,

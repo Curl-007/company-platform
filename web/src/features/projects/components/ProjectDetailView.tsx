@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type KeyboardEvent } from 'react';
 import { Clock3, FolderKanban, UserRound } from 'lucide-react';
 import { fetchProject, updateProjectStatus } from '../api';
 import {
@@ -32,8 +32,38 @@ import {
 } from '../../../constants/enums';
 import { canOperate } from '../../../constants/roles';
 
+const PROJECT_DETAIL_TABS: Array<{ key: DetailTab; label: string }> = [
+  { key: 'overview', label: '概览' },
+  { key: 'wbs', label: 'WBS' },
+  { key: 'kanban', label: '看板' },
+  { key: 'flow', label: '流程' },
+  { key: 'governance', label: '风险与决策' },
+];
+
+function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+  const tablist = event.currentTarget.closest('[role="tablist"]');
+  const tabs = tablist ? Array.from(tablist.querySelectorAll<HTMLButtonElement>('[role="tab"]')) : [];
+  const currentIndex = tabs.indexOf(event.currentTarget);
+  if (currentIndex < 0) return;
+
+  let nextIndex: number;
+  if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+  else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  else if (event.key === 'Home') nextIndex = 0;
+  else if (event.key === 'End') nextIndex = tabs.length - 1;
+  else return;
+
+  event.preventDefault();
+  tabs[nextIndex].focus();
+  tabs[nextIndex].click();
+}
+
 export default function ProjectDetailView({ id, onBack, user }: { id: string; onBack: () => void; user?: SessionUser | null }) {
-  const { data, loading, error, reload } = useAsync<ProjectDetail>(() => fetchProject(id), [id]);
+  const { data, loading, error, reload } = useAsync<ProjectDetail>(
+    () => fetchProject(id),
+    [id],
+    { cacheKey: 'projects:detail' },
+  );
   const [tab, setTab] = useState<DetailTab>(() => {
     const saved = window.localStorage.getItem(STORAGE_KEYS.detailTab);
     return saved === 'wbs' || saved === 'kanban' || saved === 'flow' || saved === 'governance' ? saved : 'overview';
@@ -232,19 +262,40 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
         />
       ) : null}
 
-      <div className="project-detail-tabs nav-tabs">
-        {(['overview', 'wbs', 'kanban', 'flow', 'governance'] as DetailTab[]).map((key) => (
-          <button key={key} className={`nav-tab ${tab === key ? 'active' : ''}`} onClick={() => setTab(key)}>
-            {key === 'overview' ? '概览' : key === 'wbs' ? 'WBS' : key === 'kanban' ? '看板' : key === 'flow' ? '流程' : '风险与决策'}
+      <div className="project-detail-tabs nav-tabs" role="tablist" aria-label="项目详情视图">
+        {PROJECT_DETAIL_TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            id={`project-detail-tab-${key}`}
+            type="button"
+            role="tab"
+            className={`nav-tab ${tab === key ? 'active' : ''}`}
+            aria-selected={tab === key}
+            aria-controls={`project-detail-panel-${key}`}
+            tabIndex={tab === key ? 0 : -1}
+            onClick={() => setTab(key)}
+            onKeyDown={handleTabKeyDown}
+          >
+            {label}
           </button>
         ))}
       </div>
 
-      {tab === 'overview' && <OverviewTab project={project} projectId={id} onReload={reload} canManageProject={canUpdateProject} />}
-      {tab === 'wbs' && <WbsTab tasks={project.tasks} projectId={id} onReload={reload} canManageProject={canUpdateProject} />}
-      {tab === 'kanban' && <KanbanTab projectId={id} canManageProject={canUpdateProject} />}
-      {tab === 'flow' && <FlowTab projectId={id} />}
-      {tab === 'governance' && <GovernanceTab projectId={id} canManageProject={canUpdateProject} onProjectReload={reload} />}
+      {PROJECT_DETAIL_TABS.map(({ key }) => (
+        <div
+          key={key}
+          id={`project-detail-panel-${key}`}
+          role="tabpanel"
+          aria-labelledby={`project-detail-tab-${key}`}
+          hidden={tab !== key}
+        >
+          {tab === key && key === 'overview' ? <OverviewTab project={project} projectId={id} onReload={reload} canManageProject={canUpdateProject} /> : null}
+          {tab === key && key === 'wbs' ? <WbsTab tasks={project.tasks} projectId={id} onReload={reload} canManageProject={canUpdateProject} /> : null}
+          {tab === key && key === 'kanban' ? <KanbanTab projectId={id} canManageProject={canUpdateProject} /> : null}
+          {tab === key && key === 'flow' ? <FlowTab projectId={id} /> : null}
+          {tab === key && key === 'governance' ? <GovernanceTab projectId={id} canManageProject={canUpdateProject} onProjectReload={reload} /> : null}
+        </div>
+      ))}
       {editing && canUpdateProject && (
         <EditProjectForm
           project={project as unknown as Project}

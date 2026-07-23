@@ -20,9 +20,29 @@ function createTestingRouter({
   run,
   syncTestCaseTask,
   testCaseStatuses,
+  transaction = async (work) => work(),
 }) {
   const router = express.Router();
   const openDefectStatuses = new Set(["new", "confirmed", "in_fix", "resolved", "verified"]);
+
+  async function testCaseDependencies(testCaseId) {
+    const [runCountRow, runSamples, taskCountRow, taskSamples] = await Promise.all([
+      row("SELECT COUNT(*) AS count FROM test_runs WHERE test_case_id = @id", { id: testCaseId }),
+      rows("SELECT id FROM test_runs WHERE test_case_id = @id ORDER BY id LIMIT 10", { id: testCaseId }),
+      row("SELECT COUNT(*) AS count FROM tasks WHERE source_type = 'test_case' AND source_id = @id", { id: testCaseId }),
+      rows("SELECT id FROM tasks WHERE source_type = 'test_case' AND source_id = @id ORDER BY id LIMIT 10", { id: testCaseId }),
+    ]);
+    return {
+      testRuns: {
+        count: Number(runCountRow?.count || 0),
+        sampleIds: runSamples.map((item) => item.id),
+      },
+      tasks: {
+        count: Number(taskCountRow?.count || 0),
+        sampleIds: taskSamples.map((item) => item.id),
+      },
+    };
+  }
 
   async function buildTestPlan(project) {
     const requirements = await rows("SELECT id, title, status, priority FROM requirements WHERE project_id = @projectId AND deleted_at IS NULL ORDER BY id", { projectId: project.id });
@@ -110,25 +130,28 @@ function createTestingRouter({
       const roleError = ensureRoleAllowed(assigneeRole, ["qa", "dev"], "assigneeRole");
       if (roleError) return fail(res, 400, "VALIDATION_FAILED", roleError);
     }
-    const testCase = {
-      id: await nextId("TC", "test_cases"),
-      name: String(title).trim(),
-      requirement_id: requirementId || null,
-      project_id: targetProjectId,
-      status: "active",
-      owner: owner || req.user.name,
-      assignee_role: assigneeRole || "qa",
-      total_cases: 0,
-      passed_cases: 0,
-      failed_cases: 0,
-      blocked_cases: 0,
-      description: String(description || ""),
-      steps: JSON.stringify(steps || []),
-      expected_result: String(expectedResult || ""),
-    };
-    await insert("test_cases", testCase);
-    await syncTestCaseTask(testCase);
-    await audit(req.user, "test_case.create", "test_case", testCase.id, null, testCase, req.ip);
+    const testCase = await transaction(async () => {
+      const record = {
+        id: await nextId("TC", "test_cases"),
+        name: String(title).trim(),
+        requirement_id: requirementId || null,
+        project_id: targetProjectId,
+        status: "active",
+        owner: owner || req.user.name,
+        assignee_role: assigneeRole || "qa",
+        total_cases: 0,
+        passed_cases: 0,
+        failed_cases: 0,
+        blocked_cases: 0,
+        description: String(description || ""),
+        steps: JSON.stringify(steps || []),
+        expected_result: String(expectedResult || ""),
+      };
+      await insert("test_cases", record);
+      await syncTestCaseTask(record);
+      await audit(req.user, "test_case.create", "test_case", record.id, null, record, req.ip);
+      return record;
+    });
     res.status(201).json(ok(mapTestCase(testCase)));
   });
 
@@ -141,10 +164,13 @@ function createTestingRouter({
     if (!status || !testCaseStatuses.includes(status)) {
       return fail(res, 400, "VALIDATION_FAILED", `Test case status must be one of: ${testCaseStatuses.join(", ")}`);
     }
-    await run("UPDATE test_cases SET status = @status WHERE id = @id", { id: req.params.id, status });
-    const after = await row("SELECT * FROM test_cases WHERE id = @id", { id: req.params.id });
-    await syncTestCaseTask(after);
-    await audit(req.user, "test_case.status_update", "test_case", req.params.id, before, after, req.ip);
+    const after = await transaction(async () => {
+      await run("UPDATE test_cases SET status = @status WHERE id = @id", { id: req.params.id, status });
+      const updated = await row("SELECT * FROM test_cases WHERE id = @id", { id: req.params.id });
+      await syncTestCaseTask(updated);
+      await audit(req.user, "test_case.status_update", "test_case", req.params.id, before, updated, req.ip);
+      return updated;
+    });
     res.json(ok(mapTestCase(after)));
   });
 
@@ -154,23 +180,54 @@ function createTestingRouter({
     if (!(await canWriteProject(req.user, before.project_id))) return fail(res, 403, "PROJECT_ARCHIVED_OR_ACCESS_DENIED", "Cannot update a test case in an archived or inaccessible project.");
     if (!(await canAccessProject(req.user, before.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权编辑该测试用例。");
     const { name, owner, description, steps, expectedResult, requirementId, assigneeRole } = req.body || {};
-    if (name !== undefined) await run("UPDATE test_cases SET name = @name WHERE id = @id", { id: req.params.id, name: String(name).trim() });
-    if (owner !== undefined) await run("UPDATE test_cases SET owner = @owner WHERE id = @id", { id: req.params.id, owner: String(owner).trim() });
-    if (assigneeRole !== undefined) await run("UPDATE test_cases SET assignee_role = @role WHERE id = @id", { id: req.params.id, role: assigneeRole || null });
-    if (description !== undefined) await run("UPDATE test_cases SET description = @desc WHERE id = @id", { id: req.params.id, desc: description });
-    if (steps !== undefined) await run("UPDATE test_cases SET steps = @steps WHERE id = @id", { id: req.params.id, steps: JSON.stringify(steps) });
-    if (expectedResult !== undefined) await run("UPDATE test_cases SET expected_result = @result WHERE id = @id", { id: req.params.id, result: expectedResult });
+    if (assigneeRole !== undefined && assigneeRole) {
+      const roleError = ensureRoleAllowed(assigneeRole, ["qa", "dev"], "assigneeRole");
+      if (roleError) return fail(res, 400, "VALIDATION_FAILED", roleError);
+    }
+    let nextRequirementId = before.requirement_id;
     if (requirementId !== undefined) {
       const requirement = requirementId ? await row("SELECT project_id FROM requirements WHERE id = @id AND deleted_at IS NULL", { id: requirementId }) : null;
       if (requirementId && !requirement) return fail(res, 404, "RESOURCE_NOT_FOUND", "Requirement not found.");
       if (requirement && requirement.project_id !== before.project_id) {
         return fail(res, 400, "VALIDATION_FAILED", "Requirement must belong to the same project as the test case.");
       }
-      await run("UPDATE test_cases SET requirement_id = @rid WHERE id = @id", { id: req.params.id, rid: requirementId || null });
+      nextRequirementId = requirementId || null;
     }
-    const after = await row("SELECT * FROM test_cases WHERE id = @id", { id: req.params.id });
-    await syncTestCaseTask(after);
-    await audit(req.user, "test_case.update", "test_case", req.params.id, before, after, req.ip);
+    const nextName = name === undefined ? before.name : String(name).trim();
+    if (!nextName) return fail(res, 400, "VALIDATION_FAILED", "Test case name is required.");
+    const nextOwner = owner === undefined ? before.owner : String(owner).trim();
+    const nextAssigneeRole = assigneeRole === undefined ? before.assignee_role : (assigneeRole || null);
+    const nextDescription = description === undefined ? before.description : description;
+    const nextSteps = steps === undefined ? before.steps : JSON.stringify(steps);
+    const nextExpectedResult = expectedResult === undefined ? before.expected_result : expectedResult;
+
+    const after = await transaction(async () => {
+      await run(
+        `UPDATE test_cases SET
+          name = @name,
+          owner = @owner,
+          assignee_role = @assigneeRole,
+          description = @description,
+          steps = @steps,
+          expected_result = @expectedResult,
+          requirement_id = @requirementId
+        WHERE id = @id`,
+        {
+          id: req.params.id,
+          name: nextName,
+          owner: nextOwner,
+          assigneeRole: nextAssigneeRole,
+          description: nextDescription,
+          steps: nextSteps,
+          expectedResult: nextExpectedResult,
+          requirementId: nextRequirementId,
+        },
+      );
+      const updated = await row("SELECT * FROM test_cases WHERE id = @id", { id: req.params.id });
+      await syncTestCaseTask(updated);
+      await audit(req.user, "test_case.update", "test_case", req.params.id, before, updated, req.ip);
+      return updated;
+    });
     res.json(ok(mapTestCase(after)));
   });
 
@@ -179,15 +236,16 @@ function createTestingRouter({
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Test case not found.");
     if (!(await canWriteProject(req.user, before.project_id))) return fail(res, 403, "PROJECT_ARCHIVED_OR_ACCESS_DENIED", "Cannot delete a test case in an archived or inaccessible project.");
     if (!(await canAccessProject(req.user, before.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权删除该测试用例。");
-    const runCount = Number((await row(
-      "SELECT COUNT(*) AS count FROM test_runs WHERE test_case_id = @id",
-      { id: req.params.id },
-    ))?.count || 0);
-    if (runCount > 0) {
-      return fail(res, 409, "TEST_CASE_HAS_RUNS", "测试用例仍有执行记录，不能直接删除。", { runCount });
+    const deletion = await transaction(async () => {
+      const dependencies = await testCaseDependencies(req.params.id);
+      if (dependencies.testRuns.count > 0 || dependencies.tasks.count > 0) return { dependencies };
+      await run("DELETE FROM test_cases WHERE id = @id", { id: req.params.id });
+      await audit(req.user, "test_case.delete", "test_case", req.params.id, before, null, req.ip);
+      return null;
+    });
+    if (deletion) {
+      return fail(res, 409, "TEST_CASE_HAS_DEPENDENCIES", "测试用例仍有执行记录或同步任务，不能直接删除。", deletion);
     }
-    await run("DELETE FROM test_cases WHERE id = @id", { id: req.params.id });
-    await audit(req.user, "test_case.delete", "test_case", req.params.id, before, null, req.ip);
     res.json(ok({ deleted: true, id: req.params.id }));
   });
 
@@ -207,20 +265,25 @@ function createTestingRouter({
     }
     if (!(await canWriteProject(req.user, projectId))) return fail(res, 403, "PROJECT_ARCHIVED_OR_ACCESS_DENIED", "Cannot create a test case in an archived or inaccessible project.");
     if (!(await canAccessProject(req.user, projectId))) return fail(res, 403, "PERMISSION_DENIED", "无权在该项目中创建测试用例。");
-    const testCase = {
-      id: await nextId("TEST", "test_cases"),
-      name: String(name).trim(),
-      requirement_id: requirementId || null,
-      project_id: projectId,
-      status: "active",
-      owner: owner || req.user.name,
-      total_cases: Number(totalCases) || 0,
-      passed_cases: 0,
-      failed_cases: 0,
-      blocked_cases: 0,
-    };
-    await insert("test_cases", testCase);
-    await audit(req.user, "test_case.create", "test_case", testCase.id, null, testCase, req.ip);
+    const testCase = await transaction(async () => {
+      const record = {
+        id: await nextId("TEST", "test_cases"),
+        name: String(name).trim(),
+        requirement_id: requirementId || null,
+        project_id: projectId,
+        status: "active",
+        owner: owner || req.user.name,
+        assignee_role: "qa",
+        total_cases: Number(totalCases) || 0,
+        passed_cases: 0,
+        failed_cases: 0,
+        blocked_cases: 0,
+      };
+      await insert("test_cases", record);
+      await syncTestCaseTask(record);
+      await audit(req.user, "test_case.create", "test_case", record.id, null, record, req.ip);
+      return record;
+    });
     res.status(201).json(ok(mapTestCase(testCase)));
   });
 
@@ -232,25 +295,28 @@ function createTestingRouter({
     if (!testCase) return fail(res, 404, "RESOURCE_NOT_FOUND", "Test case not found.");
     if (!(await canWriteProject(req.user, testCase.project_id))) return fail(res, 403, "PROJECT_ARCHIVED_OR_ACCESS_DENIED", "Cannot execute a test case in an archived or inaccessible project.");
     if (!(await canAccessProject(req.user, testCase.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权执行该测试用例。");
-    const id = await nextId("TR", "test_runs");
-    const testRun = {
-      id,
-      test_case_id: testCaseId,
-      result,
-      notes: notes || "",
-      executed_by: req.user.name || "Unknown",
-      created_at: now(),
-    };
-    await insert("test_runs", testRun);
-    await run(`UPDATE test_cases SET
-      passed_cases = passed_cases + CASE WHEN @result = 'passed' THEN 1 ELSE 0 END,
-      failed_cases = failed_cases + CASE WHEN @result = 'failed' THEN 1 ELSE 0 END,
-      blocked_cases = blocked_cases + CASE WHEN @result = 'blocked' THEN 1 ELSE 0 END,
-      status = @result
-    WHERE id = @id`, { id: testCaseId, result });
-    const after = await row("SELECT * FROM test_cases WHERE id = @id", { id: testCaseId });
-    await syncTestCaseTask(after);
-    await audit(req.user, "test_run.create", "test_run", id, null, testRun, req.ip);
+    const testRun = await transaction(async () => {
+      const id = await nextId("TR", "test_runs");
+      const record = {
+        id,
+        test_case_id: testCaseId,
+        result,
+        notes: notes || "",
+        executed_by: req.user.name || "Unknown",
+        created_at: now(),
+      };
+      await insert("test_runs", record);
+      await run(`UPDATE test_cases SET
+        passed_cases = passed_cases + CASE WHEN @result = 'passed' THEN 1 ELSE 0 END,
+        failed_cases = failed_cases + CASE WHEN @result = 'failed' THEN 1 ELSE 0 END,
+        blocked_cases = blocked_cases + CASE WHEN @result = 'blocked' THEN 1 ELSE 0 END,
+        status = @result
+      WHERE id = @id`, { id: testCaseId, result });
+      const after = await row("SELECT * FROM test_cases WHERE id = @id", { id: testCaseId });
+      await syncTestCaseTask(after);
+      await audit(req.user, "test_run.create", "test_run", id, null, record, req.ip);
+      return record;
+    });
     res.status(201).json(ok(mapTestRun(testRun)));
   });
 

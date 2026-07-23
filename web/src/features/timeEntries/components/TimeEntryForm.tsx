@@ -7,14 +7,11 @@ import Panel from '../../../components/common/Panel';
 import { ApiError } from '../../../services/api';
 import { createIdempotencyKey } from '../../../services/idempotency';
 import type { Project, TimeEntry } from '../../../types';
-
-function today() {
-  return new Date().toISOString().slice(0, 10);
-}
+import { businessDateKey } from '../../../utils/businessDate';
 
 export default function TimeEntryForm({ entry, onClose, onSaved }: { entry?: TimeEntry; onClose: () => void; onSaved: () => Promise<void> }) {
   const [projectId, setProjectId] = useState(entry?.projectId ?? '');
-  const [workDate, setWorkDate] = useState(entry?.workDate ?? today());
+  const [workDate, setWorkDate] = useState(entry?.workDate ?? businessDateKey());
   const [hours, setHours] = useState(entry ? String(entry.hours) : '1');
   const [category, setCategory] = useState<'delivery' | 'support' | 'meeting' | 'training' | 'other'>(
     entry && ['delivery', 'support', 'meeting', 'training', 'other'].includes(entry.category)
@@ -26,7 +23,7 @@ export default function TimeEntryForm({ entry, onClose, onSaved }: { entry?: Tim
   const [note, setNote] = useState(entry?.note ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const { data: projects } = useAsync<Project[]>(fetchProjects, []);
+  const { data: projects } = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();

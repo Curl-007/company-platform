@@ -4,7 +4,6 @@ import { fetchDashboard } from '../api';
 import { fallbackDashboard } from '../../../data/fallback';
 import { useAsync } from '../../../hooks/useAsync';
 import MetricStrip from '../../../components/common/MetricStrip';
-import DonutChart from '../../../components/common/DonutChart';
 import Panel from '../../../components/common/Panel';
 import PageHeader from '../../../components/common/PageHeader';
 import DataTable, { type DataTableColumn } from '../../../components/common/DataTable';
@@ -97,7 +96,7 @@ function PageHeaderShell({ children }: { children: ReactNode }) {
 }
 
 export default function DashboardView() {
-  const { data, loading, error, reload } = useAsync<DashboardData>(fetchDashboard, []);
+  const { data, loading, error, reload } = useAsync<DashboardData>(fetchDashboard, [], { cacheKey: 'dashboard:overview' });
   const dashboard = data ?? (error ? fallbackDashboard : null);
   const currentUser = getSessionUser();
   const canUseAi = canOperate(currentUser, 'ai:analyze');
@@ -136,13 +135,28 @@ export default function DashboardView() {
     ];
   }, [dashboard]);
 
-  const secondaryStats = useMemo(() => {
+  const managementOverview = useMemo(() => {
     if (!dashboard) return [];
     const { metrics } = dashboard;
     return [
-      { label: '需求完成率', value: `${metrics.requirementCompletionAverage}%`, direction: 'flat' as const },
-      { label: '开放风险', value: metrics.openRisks, direction: metrics.openRisks > 0 ? ('down' as const) : ('flat' as const) },
-      { label: '文档总数', value: metrics.documentCount, direction: 'flat' as const },
+      {
+        label: '需求完成率',
+        value: `${metrics.requirementCompletionAverage}%`,
+        caption: '当前需求平均完成进度',
+        tone: 'neutral' as const,
+      },
+      {
+        label: '开放风险',
+        value: metrics.openRisks,
+        caption: metrics.openRisks > 0 ? '需要持续跟进处置' : '当前没有开放风险',
+        tone: metrics.openRisks > 0 ? ('risk' as const) : ('success' as const),
+      },
+      {
+        label: '知识文档',
+        value: metrics.documentCount,
+        caption: '工作区已沉淀文档',
+        tone: 'neutral' as const,
+      },
     ];
   }, [dashboard]);
 
@@ -207,69 +221,91 @@ export default function DashboardView() {
         </div>
       )}
 
-      <MetricStrip variant="hero" items={heroCards} />
+      <MetricStrip variant="hero" items={heroCards} className="dashboard-kpi-strip" />
 
-      <div className="kpi-secondary">
-        {secondaryStats.map((stat) => (
-          <div key={stat.label} className="kpi-secondary-item">
-            <span className="kpi-secondary-label">{stat.label}</span>
-            <span className={`kpi-secondary-value ${stat.direction}`}>{stat.value}</span>
+      <section className="dashboard-management-overview" aria-labelledby="dashboard-overview-heading">
+        <header className="dashboard-section-heading dashboard-management-overview__heading">
+          <div>
+            <h2 id="dashboard-overview-heading" className="dashboard-section-title">管理概览</h2>
+            <p className="dashboard-section-description">需求推进、风险敞口与知识沉淀</p>
           </div>
-        ))}
-      </div>
-
-      <Panel title="健康概览" subtitle="关键指标的环形可视化" className="mt-20">
-        <div className="donut-row">
-          <div className="donut-cell">
-            <DonutChart value={dashboard.metrics.projectHealthAverage} label="项目健康" size={130} />
-            <span className="donut-caption">项目平均健康度</span>
-          </div>
-          <div className="donut-cell">
-            <DonutChart value={dashboard.metrics.testPassRate} label="测试通过" size={130} />
-            <span className="donut-caption">测试通过率</span>
-          </div>
-          <div className="donut-cell">
-            <DonutChart value={dashboard.metrics.requirementCompletionAverage} label="需求完成" size={130} />
-            <span className="donut-caption">需求完成率</span>
-          </div>
-        </div>
-      </Panel>
-
-      <div className="grid-2-1 mt-20">
-        <div className="stack">
-          <Panel
-            title="今日行动队列"
-            subtitle={`默认展示前 ${ACTION_TASK_LIMIT} 条，优先阻塞、逾期、评审与进行中事项`}
-          >
-            <div className="action-summary-row">
-              <ActionSummaryItem label="阻塞" value={actionQueue.blocked} tone="risk" />
-              <ActionSummaryItem label="逾期/今日到期" value={actionQueue.overdue} tone="warning" />
-              <ActionSummaryItem label="进行中" value={actionQueue.inFlight} tone="info" />
-              <ActionSummaryItem label="待确认" value={actionQueue.review} tone="success" />
+        </header>
+        <dl className="dashboard-overview-stats">
+          {managementOverview.map((stat) => (
+            <div
+              key={stat.label}
+              className={`dashboard-overview-stat dashboard-overview-stat--${stat.tone}`}
+            >
+              <dt className="dashboard-overview-stat__label">{stat.label}</dt>
+              <dd className="dashboard-overview-stat__value">{stat.value}</dd>
+              <dd className="dashboard-overview-stat__caption">{stat.caption}</dd>
             </div>
-            <DataTable
-              columns={taskColumns}
-              data={actionQueue.tasks}
-              rowKey="id"
-              emptyText="当前没有需要优先处理的任务。"
-            />
-          </Panel>
+          ))}
+        </dl>
+      </section>
 
-          <Panel title="风险项目" subtitle="以下项目存在开放风险或健康度偏低">
-            <DataTable
-              columns={riskyColumns}
-              data={dashboard.riskyProjects}
-              rowKey="id"
-              emptyText="当前没有标记为风险的项目。"
-            />
-          </Panel>
-        </div>
+      <div className="dashboard-workspace">
+        <section className="dashboard-workspace__primary" aria-labelledby="dashboard-priority-heading">
+          <header className="dashboard-section-heading">
+            <div>
+              <h2 id="dashboard-priority-heading" className="dashboard-section-title">今日优先事项</h2>
+              <p className="dashboard-section-description">先处理阻塞与到期事项，再关注项目风险</p>
+            </div>
+          </header>
 
-        <div className="stack">
-          {canUseAi ? <DashboardAiAdvisor data={dashboard} /> : null}
-          <AiSummaryPanel data={dashboard} />
-          <RequirementProgressPanel items={dashboard.requirementProgress} />
-        </div>
+          <div className="dashboard-primary-stack">
+            <Panel
+              title="行动队列"
+              subtitle={`展示前 ${ACTION_TASK_LIMIT} 条，按阻塞、逾期、待确认和进行中排序`}
+              className="dashboard-action-panel"
+            >
+              <div className="action-summary-row dashboard-action-summary">
+                <ActionSummaryItem label="阻塞" value={actionQueue.blocked} tone="risk" />
+                <ActionSummaryItem label="逾期/今日到期" value={actionQueue.overdue} tone="warning" />
+                <ActionSummaryItem label="进行中" value={actionQueue.inFlight} tone="info" />
+                <ActionSummaryItem label="待确认" value={actionQueue.review} tone="success" />
+              </div>
+              <div className="dashboard-action-table">
+                <DataTable
+                  columns={taskColumns}
+                  data={actionQueue.tasks}
+                  rowKey="id"
+                  emptyText="当前没有需要优先处理的任务。"
+                />
+              </div>
+            </Panel>
+
+            <Panel
+              title="风险项目"
+              subtitle="存在开放风险或健康度偏低的项目"
+              className="dashboard-risk-panel"
+            >
+              <div className="dashboard-risk-table">
+                <DataTable
+                  columns={riskyColumns}
+                  data={dashboard.riskyProjects}
+                  rowKey="id"
+                  emptyText="当前没有标记为风险的项目。"
+                />
+              </div>
+            </Panel>
+          </div>
+        </section>
+
+        <aside className="dashboard-workspace__insights" aria-labelledby="dashboard-insights-heading">
+          <header className="dashboard-section-heading">
+            <div>
+              <h2 id="dashboard-insights-heading" className="dashboard-section-title">分析与推进</h2>
+              <p className="dashboard-section-description">AI 建议、自动摘要和需求进度</p>
+            </div>
+          </header>
+
+          <div className="dashboard-insights-stack">
+            {canUseAi ? <DashboardAiAdvisor data={dashboard} /> : null}
+            <AiSummaryPanel data={dashboard} />
+            <RequirementProgressPanel items={dashboard.requirementProgress} />
+          </div>
+        </aside>
       </div>
     </PageHeaderShell>
   );

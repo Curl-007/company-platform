@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 
 export interface DataTableColumn<T> {
   key: string;
@@ -95,18 +96,30 @@ function DataTable<T>({
                 <th
                   key={col.key}
                   className={`${isSortable ? 'sortable' : ''} ${isSorted ? 'sorted' : ''}`}
+                  scope="col"
+                  aria-sort={isSortable ? (isSorted ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none') : undefined}
                   style={{
                     width: col.width,
                     textAlign: col.align ?? 'left',
                   }}
-                  onClick={() => isSortable && handleSort(col)}
                 >
-                  {col.title}
-                  {isSortable && (
-                    <span className="sort-indicator">
-                      {isSorted ? (sortDir === 'asc' ? '\u2191' : '\u2193') : '\u2195'}
-                    </span>
-                  )}
+                  {isSortable ? (
+                    <button
+                      className="data-table-sort-button"
+                      type="button"
+                      onClick={() => handleSort(col)}
+                      style={{
+                        justifyContent: col.align === 'right' ? 'flex-end' : col.align === 'center' ? 'center' : 'flex-start',
+                      }}
+                    >
+                      <span>{col.title}</span>
+                      <span className="sort-indicator" aria-hidden="true">
+                        {isSorted ? (
+                          sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />
+                        ) : <ArrowUpDown size={13} />}
+                      </span>
+                    </button>
+                  ) : col.title}
                 </th>
               );
             })}
@@ -125,6 +138,14 @@ function DataTable<T>({
                 key={getKeyForRow(row, rowIndex)}
                 className={onRowClick ? 'clickable' : ''}
                 onClick={() => onRowClick?.(row)}
+                tabIndex={onRowClick ? 0 : undefined}
+                onKeyDown={(event) => {
+                  if (!onRowClick || event.target !== event.currentTarget) return;
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onRowClick(row);
+                  }
+                }}
               >
                 {columns.map((col) => (
                   <td
