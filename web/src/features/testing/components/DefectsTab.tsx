@@ -103,7 +103,7 @@ export default function DefectsTab({
       render: (item) => (
         canManageTesting ? (
           <select className="form-select" value={item.status} onClick={(e) => e.stopPropagation()} onChange={async (e) => {
-            await updateDefectStatus(item.id, e.target.value);
+            await updateDefectStatus(item.id, e.target.value, item.version);
             toast.success('缺陷状态已更新');
             reload();
           }}>

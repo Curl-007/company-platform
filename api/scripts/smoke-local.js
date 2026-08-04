@@ -108,7 +108,7 @@ async function main() {
   }
 
   {
-    const { status, json } = await req("GET", "/api/projects", { token });
+    const { status } = await req("GET", "/api/projects", { token });
     record("GET /api/projects", status === 200, `status=${status}`);
   }
 

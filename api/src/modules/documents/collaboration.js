@@ -33,6 +33,22 @@ function broadcastPresence(rooms, documentId) {
   return peers;
 }
 
+function closeUserConnections(rooms, userId, code = 1008, reason = "Session revoked") {
+  let closed = 0;
+  for (const sockets of rooms.values()) {
+    for (const socket of sockets) {
+      if (socket.collabUser?.id !== userId) continue;
+      try {
+        socket.close(code, reason);
+        closed += 1;
+      } catch {
+        // The regular close handler will clean up sockets that are still registered.
+      }
+    }
+  }
+  return closed;
+}
+
 async function handleCollaborationUpdate({
   socket,
   rooms,
@@ -227,7 +243,11 @@ function createDocumentCollaborationServer({
       try { socket.close(1011, "Internal error"); } catch { /* ignore */ }
     });
   });
-  return { wss, rooms };
+  return {
+    wss,
+    rooms,
+    closeUserConnections: (userId, code, reason) => closeUserConnections(rooms, userId, code, reason),
+  };
 }
 
 module.exports = {
@@ -235,5 +255,6 @@ module.exports = {
   handleCollaborationUpdate,
   listRoomPresence,
   broadcastPresence,
+  closeUserConnections,
   sendJson,
 };

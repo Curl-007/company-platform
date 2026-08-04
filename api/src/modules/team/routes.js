@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const express = require("express");
+const { validatePassword } = require("../../lib/accountSecurity");
 
 const USER_STATUSES = new Set(["active", "disabled"]);
 
@@ -21,6 +22,7 @@ function createTeamRouter({
   row,
   rows,
   run,
+  revokeUserSessions,
   systemRoles,
   organizationRepository,
 }) {
@@ -54,6 +56,8 @@ function createTeamRouter({
     if (!name || !email || !password || !role) {
       return fail(res, 400, "VALIDATION_FAILED", "name、email、password、role 均为必填项。");
     }
+    const passwordError = validatePassword(password);
+    if (passwordError) return fail(res, 400, "VALIDATION_FAILED", passwordError);
     if (!isSystemRole(role)) {
       return fail(res, 400, "VALIDATION_FAILED", `role must be one of: ${systemRoles.join(", ")}`);
     }
@@ -131,6 +135,10 @@ function createTeamRouter({
     if (status !== undefined && !USER_STATUSES.has(status)) {
       return fail(res, 400, "VALIDATION_FAILED", "status must be active or disabled.");
     }
+    if (password !== undefined) {
+      const passwordError = validatePassword(password);
+      if (passwordError) return fail(res, 400, "VALIDATION_FAILED", passwordError);
+    }
     if (role !== undefined && before.id === req.user.id && role !== before.role) {
       return fail(res, 400, "VALIDATION_FAILED", "不能修改自己的角色。");
     }
@@ -157,7 +165,13 @@ function createTeamRouter({
       });
     }
     if (status !== undefined) await run("UPDATE users SET status = @val WHERE id = @id", { id: req.params.id, val: status });
-    if (password !== undefined) await run("UPDATE users SET password_hash = @val WHERE id = @id", { id: req.params.id, val: bcrypt.hashSync(String(password), 10) });
+    if (password !== undefined) {
+      await run(
+        "UPDATE users SET password_hash = @val, token_version = token_version + 1 WHERE id = @id",
+        { id: req.params.id, val: bcrypt.hashSync(String(password), 10) },
+      );
+      revokeUserSessions?.(req.params.id);
+    }
     if (phone !== undefined) await run("UPDATE users SET phone = @val WHERE id = @id", { id: req.params.id, val: String(phone).trim() });
     if (position !== undefined) await run("UPDATE users SET position = @val WHERE id = @id", { id: req.params.id, val: String(position).trim() });
     if (department !== undefined || departmentId !== undefined) await run("UPDATE users SET department = @department, department_id = @departmentId WHERE id = @id", { id: req.params.id, department: nextDepartmentName, departmentId: requestedDepartmentId });

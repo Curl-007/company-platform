@@ -590,7 +590,7 @@ export interface Defect {
   foundInBuild?: string | null;
   affectedVersion?: string | null;
   reporter?: string | null;
-  version?: number;
+  version: number;
 }
 
 export interface TestCase {

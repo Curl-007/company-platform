@@ -229,6 +229,45 @@ test("seed accounts remain disabled after restart, work logs keep authenticated 
   assert.equal(invalidUserStatus.response.status, 400);
   assert.equal(invalidUserStatus.body.errorCode, "VALIDATION_FAILED");
 
+  const weakPasswordUser = await request(api.port, "/api/users", {
+    method: "POST",
+    headers: { ...admin.headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Weak password", email: "weak-password@example.com", password: "", role: "dev" }),
+  });
+  assert.equal(weakPasswordUser.response.status, 400);
+  assert.equal(weakPasswordUser.body.errorCode, "VALIDATION_FAILED");
+
+  const securedUser = await request(api.port, "/api/users", {
+    method: "POST",
+    headers: { ...admin.headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Secured account", email: "secured-account@example.com", password: "SecurePassword@123", role: "dev" }),
+  });
+  assert.equal(securedUser.response.status, 201);
+
+  const emptyPasswordReset = await request(api.port, `/api/users/${securedUser.body.data.id}`, {
+    method: "PATCH",
+    headers: { ...admin.headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ password: "" }),
+  });
+  assert.equal(emptyPasswordReset.response.status, 400);
+  assert.equal(emptyPasswordReset.body.errorCode, "VALIDATION_FAILED");
+
+  const duplicateAdminCreate = await request(api.port, "/api/users", {
+    method: "POST",
+    headers: { ...admin.headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Duplicate", email: "secured-account@example.com", password: "AnotherPassword@123", role: "dev" }),
+  });
+  assert.equal(duplicateAdminCreate.response.status, 409);
+  assert.equal(duplicateAdminCreate.body.errorCode, "CONFLICT");
+
+  const duplicateProfileEmail = await request(api.port, "/api/auth/me", {
+    method: "PATCH",
+    headers: { ...developer.headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "secured-account@example.com" }),
+  });
+  assert.equal(duplicateProfileEmail.response.status, 409);
+  assert.equal(duplicateProfileEmail.body.errorCode, "CONFLICT");
+
   const project = await request(api.port, "/api/projects", {
     method: "POST",
     headers: { ...admin.headers, "Content-Type": "application/json" },

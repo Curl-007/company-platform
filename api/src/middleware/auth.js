@@ -22,6 +22,9 @@ function createAuthMiddleware({ jwtSecret, fail, row }) {
     try {
       const payload = jwt.verify(token, jwtSecret);
       const user = await row("SELECT * FROM users WHERE id = @id", { id: payload.sub });
+      if (user && Number(payload.tv ?? 0) !== Number(user.token_version ?? 0)) {
+        return fail(res, 401, "UNAUTHENTICATED", "Session expired. Please sign in again.");
+      }
       if (!user) return fail(res, 401, "UNAUTHENTICATED", "登录已失效。");
       if (user.status === "disabled") return fail(res, 403, "ACCOUNT_DISABLED", "该账号已被禁用。");
       req.user = publicUser(user);
@@ -79,7 +82,8 @@ function createAuthMiddleware({ jwtSecret, fail, row }) {
     try {
       const payload = jwt.verify(token, jwtSecret);
       const user = await row("SELECT * FROM users WHERE id = @id", { id: payload.sub });
-      return user && user.status === "active" ? publicUser(user) : null;
+      const tokenVersionMatches = user && Number(payload.tv ?? 0) === Number(user.token_version ?? 0);
+      return tokenVersionMatches && user.status === "active" ? publicUser(user) : null;
     } catch {
       return null;
     }

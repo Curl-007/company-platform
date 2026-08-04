@@ -91,9 +91,9 @@ test("splitSqlStatements keeps defaults with semicolons inside strings out of sp
 
 test("listMigrationFiles discovers current migrations with stable checksums", () => {
   const migrations = listMigrationFiles(path.resolve(__dirname, "..", "migrations"));
-  assert.equal(migrations.length, 22);
+  assert.equal(migrations.length, 23);
   assert.equal(migrations[0].id, "20260713_01_work_calendar");
-  assert.equal(migrations[migrations.length - 1].id, "20260723_22_burndown_snapshot_uniqueness");
+  assert.equal(migrations[migrations.length - 1].id, "20260723_23_user_token_version");
   assert.match(migrations[0].checksum, /^[a-f0-9]{64}$/);
 });
 

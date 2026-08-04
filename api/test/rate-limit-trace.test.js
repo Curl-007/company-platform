@@ -78,3 +78,47 @@ test("each rate-limited authentication response receives a distinct trace ID", a
   assert.match(limited[1].body.traceId, /^[0-9a-f-]{36}$/i);
   assert.notEqual(limited[0].body.traceId, limited[1].body.traceId);
 });
+
+test("global rate limiting rejects a request before malformed JSON is parsed", async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "pm-pre-body-rate-limit-"));
+  const port = await getFreePort();
+  let output = "";
+  const child = spawn(process.execPath, ["server.js"], {
+    cwd: apiRoot,
+    env: {
+      ...process.env,
+      API_RATE_LIMIT_MAX: "1",
+      DATABASE_FILE: path.join(directory, "app.db"),
+      JWT_SECRET: "pre-body-rate-limit-secret-at-least-16-chars",
+      AI_CONFIG_ENCRYPTION_KEY: "pre-body-rate-limit-ai-key-at-least-16",
+      NODE_ENV: "production",
+      PORT: String(port),
+      SEED_DEMO_DATA: "0",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  child.stdout.on("data", (chunk) => { output += chunk; });
+  child.stderr.on("data", (chunk) => { output += chunk; });
+  t.after(async () => {
+    if (child.exitCode === null) {
+      const exited = new Promise((resolve) => child.once("exit", resolve));
+      child.kill();
+      await exited;
+    }
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+
+  // The readiness request consumes the deliberately tiny one-request window.
+  await waitForHealth(port, () => output);
+  const response = await fetch(`http://127.0.0.1:${port}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" },
+    body: "{ malformed",
+  });
+  const body = await response.json();
+  assert.equal(response.status, 429);
+  assert.equal(body.errorCode, "RATE_LIMITED");
+  assert.match(body.traceId, /^[0-9a-f-]{36}$/i);
+  assert.match(response.headers.get("content-type") || "", /application\/json/i);
+  assert.equal(response.headers.get("access-control-allow-origin"), "http://localhost:5173");
+});

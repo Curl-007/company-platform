@@ -25,6 +25,7 @@ test("auth service never accepts invalid credentials and prevents duplicate prof
   });
 
   await assert.rejects(() => service.login({ email: "alice@example.com", password: "wrong" }), { code: "INVALID_CREDENTIALS" });
+  await assert.rejects(() => service.login({ email: "alice@example.com", password: "" }), { code: "INVALID_CREDENTIALS" });
   assert.deepEqual(await service.login({ email: "alice@example.com", password: "correct" }), {
     token: "token-USR-001",
     user: { id: "USR-001", email: "alice@example.com", name: "Alice" },
@@ -33,4 +34,27 @@ test("auth service never accepts invalid credentials and prevents duplicate prof
   const update = await service.updateProfile("USR-001", { name: "  Alice Updated ", email: "new@example.com" });
   assert.equal(update.after.name, "Alice Updated");
   assert.equal(update.after.email, "new@example.com");
+});
+
+test("auth service maps database unique violations during profile update to conflict", async () => {
+  for (const databaseError of [
+    Object.assign(new Error("UNIQUE constraint failed: users.email"), { code: "SQLITE_CONSTRAINT_UNIQUE" }),
+    Object.assign(new Error("duplicate key value violates unique constraint"), { code: "23505" }),
+  ]) {
+    const service = createAuthService({
+      comparePassword: () => true,
+      issueToken: () => "token",
+      publicUser: (user) => user,
+      repository: {
+        findById: () => ({ id: "USR-001", name: "Alice", email: "alice@example.com" }),
+        findOtherByEmail: () => null,
+        updateProfile: () => { throw databaseError; },
+      },
+    });
+    await assert.rejects(() => service.updateProfile("USR-001", { email: "race@example.com" }), {
+      code: "CONFLICT",
+      status: 409,
+      message: "The email address is already in use.",
+    });
+  }
 });

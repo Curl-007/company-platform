@@ -71,14 +71,14 @@ test("organization units persist member ownership, enforce authorization, protec
 
   const createdUser = await request(api.port, "/api/users", {
     method: "POST", headers,
-    body: JSON.stringify({ name: "Organization Test Developer", email: "organization-test@example.com", password: "Test@1234", role: "dev", departmentId }),
+    body: JSON.stringify({ name: "Organization Test Developer", email: "organization-test@example.com", password: "TestPassword@123", role: "dev", departmentId }),
   });
   assert.equal(createdUser.response.status, 201);
   assert.equal(createdUser.body.data.department, "Platform Engineering");
 
   const developerLogin = await request(api.port, "/api/auth/login", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "organization-test@example.com", password: "Test@1234" }),
+    body: JSON.stringify({ email: "organization-test@example.com", password: "TestPassword@123" }),
   });
   const developerHeaders = { Authorization: `Bearer ${developerLogin.body.data.token}`, "Content-Type": "application/json" };
   const unauthorizedCreate = await request(api.port, "/api/org/departments", {

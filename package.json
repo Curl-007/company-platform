@@ -17,6 +17,8 @@
     "start": "concurrently \"npm run start -w api\" \"npm run dev -w web\"",
     "start:prod": "node scripts/start-prod.js",
     "build": "npm run build -w web",
+    "verify:release-web": "node scripts/verify-release-web.js",
+    "package:runtime": "node scripts/package-runtime.js",
     "generate:enums": "npm run generate:enums -w web",
     "test": "npm run test -w api && npm run test -w web",
     "test:e2e": "npm run test:e2e -w web",
@@ -32,13 +34,16 @@
     "restore:sqlite": "npm run restore:sqlite -w api",
     "drill:sqlite-backup": "npm run drill:sqlite-backup -w api",
     "drill:graceful-shutdown": "npm run drill:graceful-shutdown -w api",
-    "check": "npm run audit:prod && npm run lint && npm run test && npm run build && npm run preflight:env && npm run drill:sqlite-backup && npm run drill:graceful-shutdown && npm run smoke:prod",
+    "check": "npm run audit:prod && npm run lint && npm run test && npm run build && npm run verify:release-web && npm run preflight:env && npm run drill:sqlite-backup && npm run drill:graceful-shutdown && npm run smoke:prod",
     "check:rc": "npm run check && npm run test:rc-e2e"
   },
   "overrides": {
     "body-parser": "1.20.6"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "@vitest/coverage-v8": "^3.2.6",
+    "concurrently": "^9.1.2",
+    "happy-dom": "^20.11.1",
+    "vitest": "^3.2.6"
   }
 }

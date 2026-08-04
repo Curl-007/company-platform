@@ -22,10 +22,12 @@ CREATE TABLE IF NOT EXISTS users (
   position TEXT DEFAULT '',
   department TEXT DEFAULT '',
   bio TEXT DEFAULT '',
-  department_id TEXT
+  department_id TEXT,
+  token_version INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_department_id ON users(department_id);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS org_units (
   id TEXT PRIMARY KEY,

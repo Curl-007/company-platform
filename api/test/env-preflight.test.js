@@ -53,3 +53,43 @@ test("env preflight rejects HTTP shutdown opt-in in production", () => {
   assert.equal(report.ok, false);
   assert.ok(report.issues.some((item) => item.code === "HTTP_SHUTDOWN_IN_PROD" && item.level === "error"));
 });
+
+test("env preflight requires a valid production bootstrap administrator pair", () => {
+  const base = {
+    NODE_ENV: "production",
+    JWT_SECRET: "production-jwt-secret-16",
+    AI_CONFIG_ENCRYPTION_KEY: "production-ai-key-16ch",
+  };
+
+  const missingEmail = preflightEnv({ ...base, SEED_ADMIN_PASSWORD: "strong-admin-password" });
+  assert.equal(missingEmail.ok, false);
+  assert.ok(missingEmail.issues.some((item) => item.code === "SEED_ADMIN_EMAIL_MISSING"));
+
+  const invalidEmail = preflightEnv({
+    ...base,
+    SEED_ADMIN_EMAIL: "not-an-email",
+    SEED_ADMIN_PASSWORD: "strong-admin-password",
+  });
+  assert.equal(invalidEmail.ok, false);
+  assert.ok(invalidEmail.issues.some((item) => item.code === "SEED_ADMIN_EMAIL_INVALID"));
+
+  const configured = preflightEnv({
+    ...base,
+    SEED_ADMIN_EMAIL: "owner@company.test",
+    SEED_ADMIN_PASSWORD: "strong-admin-password",
+  });
+  assert.equal(configured.ok, true);
+});
+
+test("env preflight rejects production demo seeds", () => {
+  const report = preflightEnv({
+    NODE_ENV: "production",
+    JWT_SECRET: "production-jwt-secret-16",
+    AI_CONFIG_ENCRYPTION_KEY: "production-ai-key-16ch",
+    SEED_DEMO_DATA: "1",
+    SEED_PM_PASSWORD: "unused-demo-password",
+  });
+  assert.equal(report.ok, false);
+  assert.ok(report.issues.some((item) => item.code === "SEED_DEMO_IN_PROD" && item.level === "error"));
+  assert.ok(report.issues.some((item) => item.code === "DEMO_ROLE_SEED_IN_PROD" && item.level === "error"));
+});

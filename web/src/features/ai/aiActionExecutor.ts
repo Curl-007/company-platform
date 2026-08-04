@@ -11,6 +11,7 @@ import {
 import {
   createDefect,
   deleteDefect,
+  fetchDefects,
   updateDefect,
   updateDefectStatus,
   createTestCase,
@@ -156,7 +157,10 @@ export async function executeAiProposedAction(
     }
     case 'update_defect': {
       if (!draft.resourceId.trim()) throw new Error('请填写缺陷编号 BUG-xxx。');
+      const current = (await fetchDefects()).find((item) => item.id === draft.resourceId.trim());
+      if (!current) throw new Error('Defect not found. Refresh and retry.');
       await updateDefect(draft.resourceId.trim(), {
+        version: current.version,
         title: draft.title.trim() || undefined,
         description: draft.description.trim() || undefined,
         severity: draft.severity || undefined,
@@ -168,7 +172,9 @@ export async function executeAiProposedAction(
     }
     case 'update_defect_status': {
       if (!draft.resourceId.trim() || !draft.status) throw new Error('请填写缺陷编号与目标状态。');
-      await updateDefectStatus(draft.resourceId.trim(), draft.status);
+      const current = (await fetchDefects()).find((item) => item.id === draft.resourceId.trim());
+      if (!current) throw new Error('Defect not found. Refresh and retry.');
+      await updateDefectStatus(draft.resourceId.trim(), draft.status, current.version);
       id = draft.resourceId.trim();
       break;
     }

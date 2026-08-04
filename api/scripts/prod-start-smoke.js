@@ -55,8 +55,6 @@ async function runSmoke() {
   const port = await getFreePort();
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "pm-prod-smoke-"));
   const databaseFile = path.join(workDir, "prod.db");
-  const shutdownToken = "prod-smoke-shutdown-token";
-
   const env = {
     ...process.env,
     NODE_ENV: "production",
@@ -64,7 +62,7 @@ async function runSmoke() {
     DATABASE_FILE: databaseFile,
     JWT_SECRET: process.env.JWT_SECRET || "prod-smoke-jwt-secret-16",
     AI_CONFIG_ENCRYPTION_KEY: process.env.AI_CONFIG_ENCRYPTION_KEY || "prod-smoke-ai-key-16",
-    SEED_DEMO_DATA: process.env.SEED_DEMO_DATA || "1",
+    SEED_DEMO_DATA: "0",
     AI_ENABLED: "false",
     SERVE_WEB: "1",
     WEB_DIST: webDist,

@@ -90,6 +90,94 @@ test("transaction commits async work and rolls back on failure", async () => {
   runtime.close();
 });
 
+test("overlapping transactions are serialized in FIFO order", async () => {
+  const { runtime, access } = createAccess();
+  let releaseFirst;
+  const firstMayFinish = new Promise((resolve) => { releaseFirst = resolve; });
+  const events = [];
+
+  const first = access.transaction(async () => {
+    events.push("first:start");
+    await access.insert("items", { id: "Q1", name: "first", qty: 1 });
+    await firstMayFinish;
+    events.push("first:end");
+  });
+  const second = access.transaction(async () => {
+    events.push("second:start");
+    await access.insert("items", { id: "Q2", name: "second", qty: 2 });
+    events.push("second:end");
+  });
+
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(events, ["first:start"]);
+  releaseFirst();
+  await Promise.all([first, second]);
+  assert.deepEqual(events, ["first:start", "first:end", "second:start", "second:end"]);
+  runtime.close();
+});
+
+test("ordinary access waits outside an active transaction and is not rolled back with it", async () => {
+  const { runtime, access } = createAccess();
+  let releaseTransaction;
+  const mayFail = new Promise((resolve) => { releaseTransaction = resolve; });
+
+  const failingTransaction = access.transaction(async () => {
+    await access.insert("items", { id: "TX", name: "rollback", qty: 1 });
+    await mayFail;
+    throw new Error("rollback owner only");
+  });
+  const ordinaryInsert = access.insert("items", { id: "OUT", name: "outside", qty: 2 });
+
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(access._sync.row("SELECT id FROM items WHERE id = @id", { id: "OUT" }), undefined);
+  releaseTransaction();
+  await assert.rejects(failingTransaction, /rollback owner only/);
+  await ordinaryInsert;
+  assert.equal(await access.row("SELECT id FROM items WHERE id = @id", { id: "TX" }), undefined);
+  assert.equal((await access.row("SELECT id FROM items WHERE id = @id", { id: "OUT" }))?.id, "OUT");
+  runtime.close();
+});
+
+test("nested transactions reuse the outer transaction without deadlock", async () => {
+  const { runtime, access } = createAccess();
+  await access.transaction(async () => {
+    await access.insert("items", { id: "N1", name: "outer", qty: 1 });
+    await access.transaction(async () => {
+      await access.insert("items", { id: "N2", name: "inner", qty: 2 });
+    });
+  });
+  assert.deepEqual((await access.rows("SELECT id FROM items ORDER BY id")).map(({ id }) => id), ["N1", "N2"]);
+
+  await assert.rejects(
+    access.transaction(async () => {
+      await access.insert("items", { id: "N3", name: "outer rollback", qty: 3 });
+      await access.transaction(async () => {
+        await access.insert("items", { id: "N4", name: "inner rollback", qty: 4 });
+        throw new Error("nested failure");
+      });
+    }),
+    /nested failure/,
+  );
+  assert.deepEqual(await access.rows("SELECT id FROM items WHERE id IN ('N3', 'N4')"), []);
+
+  await assert.rejects(
+    access.transaction(async () => {
+      await access.insert("items", { id: "N5", name: "outer caught", qty: 5 });
+      try {
+        await access.transaction(async () => {
+          await access.insert("items", { id: "N6", name: "inner caught", qty: 6 });
+          throw new Error("caught nested failure");
+        });
+      } catch {
+        // A shared transaction remains rollback-only after nested work fails.
+      }
+    }),
+    /caught nested failure/,
+  );
+  assert.deepEqual(await access.rows("SELECT id FROM items WHERE id IN ('N5', 'N6')"), []);
+  runtime.close();
+});
+
 test("rows returns an empty array when no rows match", async () => {
   const { runtime, access } = createAccess();
   await access.insert("items", { id: "E1", name: "exists", qty: 1 });

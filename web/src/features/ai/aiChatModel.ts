@@ -25,6 +25,18 @@ export interface JobReviewDraft {
 }
 
 export const MAX_ATTACHMENTS = 6;
+export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+export const MAX_ATTACHMENTS_TOTAL_BYTES = 12 * 1024 * 1024;
+
+export function validateAttachmentFiles(files: File[], currentBytes: number): string | null {
+  const oversized = files.find((file) => file.size > MAX_ATTACHMENT_BYTES);
+  if (oversized) return `文件“${oversized.name}”超过 5 MB 单文件上限。`;
+  const selectedBytes = files.reduce((total, file) => total + file.size, 0);
+  if (currentBytes + selectedBytes > MAX_ATTACHMENTS_TOTAL_BYTES) {
+    return '附件总大小超过 12 MB，请移除部分文件后重试。';
+  }
+  return null;
+}
 
 export function nowIso() {
   return new Date().toISOString();

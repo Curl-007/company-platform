@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Bot, FileText, Image as ImageIcon, Paperclip, Send, X } from 'lucide-react';
 import { sendAiChat } from '../../features/ai/api';
+import { validateAttachmentFiles } from '../../features/ai/aiChatModel';
 import type { AiChatAttachment, AiChatMessage, PageKey } from '../../types';
 
 interface AiSidebarProps {
@@ -88,6 +89,15 @@ function AiSidebar({ currentPage, contextLabel, onClose, className = '' }: AiSid
     const remaining = Math.max(0, MAX_ATTACHMENTS - attachments.length);
     const selected = Array.from(files).slice(0, remaining);
     if (selected.length < files.length) setFileError(`最多附加 ${MAX_ATTACHMENTS} 个文件。`);
+    const validationError = validateAttachmentFiles(
+      selected,
+      attachments.reduce((total, item) => total + item.size, 0),
+    );
+    if (validationError) {
+      setFileError(validationError);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
 
     try {
       const next = await Promise.all(selected.map(fileToAttachment));

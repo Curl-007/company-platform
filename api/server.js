@@ -128,6 +128,7 @@ const { createNextId } = require("./src/lib/nextId");
 const { createDateHelpers } = require("./src/lib/dates");
 const { createIdempotency } = require("./src/lib/idempotency");
 const { createProjectVersionGuard } = require("./src/lib/projectVersion");
+const { isUniqueConstraintError } = require("./src/lib/databaseErrors");
 const { createTeamRouter } = require("./src/modules/team/routes");
 const { createTeamService } = require("./src/modules/team/service");
 const { createTimeEntriesRouter } = require("./src/modules/timeEntries/routes");
@@ -328,7 +329,11 @@ const aiJobDispatcher = createAiJobDispatcher({
 let aiJobTimeoutTimer = null;
 const authService = createAuthService({
   comparePassword: (password, passwordHash) => require("bcryptjs").compareSync(password, passwordHash),
-  issueToken: (user) => require("jsonwebtoken").sign({ sub: user.id, role: user.role }, JWT_SECRET, { expiresIn: "8h" }),
+  issueToken: (user) => require("jsonwebtoken").sign({
+    sub: user.id,
+    role: user.role,
+    tv: Number(user.token_version || 0),
+  }, JWT_SECRET, { expiresIn: "8h" }),
   publicUser,
   repository: createAuthRepository({ row, run }),
 });
@@ -467,6 +472,7 @@ const teamService = createTeamService({
   normalizeRole,
   rows,
 });
+let revokeUserSessions = () => 0;
 
 // Same-origin SPA hosting for single-process SQLite trial / internal production.
 // Default: production + web/dist present, or SERVE_WEB=1. Disable with SERVE_WEB=0.
@@ -491,8 +497,6 @@ app.use(helmet({
 // CORS: only allow the configured web origins to carry credentials/tokens.
 // Same-origin SPA does not need CORS for browser XHR, but keep allowlist for split-origin trials.
 app.use(cors({ origin: ALLOWED_ORIGINS, methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"] }));
-// Ensure request/response JSON is interpreted as UTF-8 (Windows clients/tools may omit charset).
-app.use(express.json({ limit: "32mb", type: ["application/json", "application/*+json"] }));
 app.use((req, res, next) => {
   const originalJson = res.json.bind(res);
   res.json = (body) => {
@@ -508,6 +512,22 @@ app.use((req, res, next) => {
   };
   next();
 });
+
+// Reject abusive API request rates before allocating memory to parse request bodies.
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number.isInteger(Number(process.env.API_RATE_LIMIT_MAX)) && Number(process.env.API_RATE_LIMIT_MAX) > 0
+    ? Number(process.env.API_RATE_LIMIT_MAX)
+    : IS_PROD ? 600 : 5000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => !IS_PROD && isTrustedSessionRequest(req),
+  handler: rateLimitHandler("请求过于频繁，请稍后再试。"),
+});
+app.use("/api/", apiLimiter);
+
+// Ensure request/response JSON is interpreted as UTF-8 (Windows clients/tools may omit charset).
+app.use(express.json({ limit: "32mb", type: ["application/json", "application/*+json"] }));
 
 const { createMulterFileFilter, MAX_UPLOAD_BYTES } = require("./src/security/uploadPolicy");
 const upload = multer({
@@ -635,16 +655,6 @@ function rateLimitHandler(message) {
     traceId: crypto.randomUUID(),
   });
 }
-
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: IS_PROD ? 600 : 5000,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => !IS_PROD && isTrustedSessionRequest(req),
-  handler: rateLimitHandler("请求过于频繁，请稍后再试。"),
-});
-app.use("/api/", apiLimiter);
 
 // Stricter limit for auth (brute-force protection).
 const authLimiter = rateLimit({
@@ -1032,6 +1042,7 @@ app.use("/api", wrapRouterAsync(createDefectsRouter({
   requireAnyPermission,
   repository: createDefectsRepository({ insert, row, rows, run }),
   syncDefectTask,
+  transaction,
 })));
 app.use("/api", wrapRouterAsync(createGovernanceRouter({
   audit,
@@ -1073,6 +1084,7 @@ app.use("/api", wrapRouterAsync(createTeamRouter({
   row,
   rows,
   run,
+  revokeUserSessions: (userId) => revokeUserSessions(userId),
   systemRoles: SYSTEM_ROLES,
   organizationRepository,
 })));
@@ -1152,6 +1164,9 @@ if (SERVE_WEB) {
 }
 
 app.use((err, req, res, _next) => {
+  if (isUniqueConstraintError(err)) {
+    return fail(res, 409, "CONFLICT", "The value is already in use.");
+  }
   const isProductImageUpload = req.method === "POST"
     && /^\/api\/products\/[^/]+\/images\/?(?:\?|$)/.test(req.originalUrl || "");
   if (err?.code === "LIMIT_FILE_SIZE" && isProductImageUpload) {
@@ -1179,7 +1194,7 @@ app.use((err, req, res, _next) => {
 });
 app.use((req, res) => fail(res, 404, "RESOURCE_NOT_FOUND", "请求的资源不存在。"));
 
-const { wss } = createDocumentCollaborationServer({
+const collaborationServer = createDocumentCollaborationServer({
   WebSocketServer,
   server,
   authenticateSocket,
@@ -1193,6 +1208,8 @@ const { wss } = createDocumentCollaborationServer({
   reindexDocument: reindexDocumentForRag,
   transaction,
 });
+const { wss } = collaborationServer;
+revokeUserSessions = (userId) => collaborationServer.closeUserConnections(userId, 1008, "Session revoked");
 
 const { recoverPendingAiJobs } = createAiJobRecovery({
   aiJobsRepository,

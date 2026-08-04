@@ -252,6 +252,33 @@ test("PDM cannot edit requirements outside project membership; archived project 
   let defectVersion = defect.body.data.version;
   assert.equal(defectVersion, 1);
 
+  const patchWithoutVersion = await request(api.port, `/api/defects/${defectId}`, {
+    method: "PATCH",
+    headers: { ...admin.headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "missing CAS" }),
+  });
+  assert.equal(patchWithoutVersion.response.status, 400);
+  assert.equal(patchWithoutVersion.body.errorCode, "VERSION_REQUIRED");
+
+  const atomicPatch = await request(api.port, `/api/defects/${defectId}`, {
+    method: "PATCH",
+    headers: { ...admin.headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "交接约束缺陷（已编辑）", severity: "high", version: defectVersion }),
+  });
+  assert.equal(atomicPatch.response.status, 200);
+  assert.equal(atomicPatch.body.data.title, "交接约束缺陷（已编辑）");
+  assert.equal(atomicPatch.body.data.severity, "high");
+  assert.equal(atomicPatch.body.data.version, defectVersion + 1);
+
+  const stalePatch = await request(api.port, `/api/defects/${defectId}`, {
+    method: "PATCH",
+    headers: { ...admin.headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "stale overwrite", version: defectVersion }),
+  });
+  assert.equal(stalePatch.response.status, 409);
+  assert.equal(stalePatch.body.errorCode, "VERSION_CONFLICT");
+  defectVersion = atomicPatch.body.data.version;
+
   const freeStatus = await request(api.port, `/api/defects/${defectId}/handoff`, {
     method: "POST",
     headers: { ...qa.headers, "Content-Type": "application/json" },

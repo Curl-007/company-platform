@@ -1,3 +1,5 @@
+const { conflictError, isUniqueConstraintError } = require("../../lib/databaseErrors");
+
 function authError(code, message, status) {
   const error = new Error(message);
   error.code = code;
@@ -8,8 +10,11 @@ function authError(code, message, status) {
 function createAuthService({ comparePassword, issueToken, publicUser, repository }) {
   return {
     async login({ email, password }) {
+      if (typeof password !== "string" || password.length === 0) {
+        throw authError("INVALID_CREDENTIALS", "Invalid email or password.", 401);
+      }
       const user = await repository.findByEmail(email);
-      if (!user || !comparePassword(String(password || ""), user.password_hash)) {
+      if (!user || !comparePassword(password, user.password_hash)) {
         throw authError("INVALID_CREDENTIALS", "账号或密码错误。", 401);
       }
       if (user.status === "disabled") throw authError("ACCOUNT_DISABLED", "该账号已被禁用，请联系管理员。", 403);
@@ -32,7 +37,13 @@ function createAuthService({ comparePassword, issueToken, publicUser, repository
       if (!profile.name) throw authError("VALIDATION_FAILED", "姓名不能为空。", 400);
       if (!profile.email) throw authError("VALIDATION_FAILED", "邮箱不能为空。", 400);
       if (await repository.findOtherByEmail(profile.email, userId)) throw authError("CONFLICT", "该邮箱已被其他用户使用。", 409);
-      const after = await repository.updateProfile(userId, profile);
+      let after;
+      try {
+        after = await repository.updateProfile(userId, profile);
+      } catch (error) {
+        if (isUniqueConstraintError(error)) throw conflictError("The email address is already in use.");
+        throw error;
+      }
       return { before, after };
     },
   };

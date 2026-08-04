@@ -35,15 +35,27 @@ function createDefectsRepository({ insert, row, rows, run }) {
        WHERE id = @id AND version = @expectedVersion`,
       next,
     ),
-    updateDefectAffectedVersion: (id, affectedVersion) => run("UPDATE defects SET affected_version = @av, version = COALESCE(version, 1) + 1 WHERE id = @id", { id, av: affectedVersion }),
-    updateDefectAssignee: (id, assignee) => run("UPDATE defects SET assignee = @assignee, version = COALESCE(version, 1) + 1 WHERE id = @id", { id, assignee }),
-    updateDefectAssigneeRole: (id, assigneeRole) => run("UPDATE defects SET assignee_role = @assigneeRole, version = COALESCE(version, 1) + 1 WHERE id = @id", { id, assigneeRole }),
-    updateDefectBuild: (id, foundInBuild) => run("UPDATE defects SET found_in_build = @fb, version = COALESCE(version, 1) + 1 WHERE id = @id", { id, fb: foundInBuild }),
-    updateDefectDescription: (id, description) => run("UPDATE defects SET description = @desc, version = COALESCE(version, 1) + 1 WHERE id = @id", { id, desc: description }),
-    updateDefectRequirement: (id, requirementId) => run("UPDATE defects SET requirement_id = @rid, version = COALESCE(version, 1) + 1 WHERE id = @id", { id, rid: requirementId }),
-    updateDefectSeverity: (id, severity) => run("UPDATE defects SET severity = @severity, version = COALESCE(version, 1) + 1 WHERE id = @id", { id, severity }),
-    updateDefectStatus: (id, status) => run("UPDATE defects SET status = @status, version = COALESCE(version, 1) + 1 WHERE id = @id", { id, status }),
-    updateDefectTitle: (id, title) => run("UPDATE defects SET title = @title, version = COALESCE(version, 1) + 1 WHERE id = @id", { id, title }),
+    updateDefect: (id, expectedVersion, updates) => {
+      const columns = {
+        title: "title",
+        description: "description",
+        severity: "severity",
+        assignee: "assignee",
+        assigneeRole: "assignee_role",
+        requirementId: "requirement_id",
+        foundInBuild: "found_in_build",
+        affectedVersion: "affected_version",
+        status: "status",
+      };
+      const entries = Object.entries(updates).filter(([key, value]) => columns[key] && value !== undefined);
+      if (!entries.length) throw new Error("updateDefect requires at least one mutable field.");
+      const assignments = entries.map(([key]) => `${columns[key]} = @${key}`);
+      return run(
+        `UPDATE defects SET ${assignments.join(", ")}, version = COALESCE(version, 1) + 1
+         WHERE id = @id AND COALESCE(version, 1) = @expectedVersion`,
+        Object.assign({ id, expectedVersion }, Object.fromEntries(entries)),
+      );
+    },
   };
 }
 module.exports = { createDefectsRepository };

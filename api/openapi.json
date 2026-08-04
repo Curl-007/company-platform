@@ -3650,6 +3650,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
           }
         }
       },
@@ -3994,6 +3997,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
           }
         }
       }
@@ -4055,6 +4061,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
           }
         }
       }
@@ -6770,7 +6779,8 @@
           },
           "password": {
             "type": "string",
-            "minLength": 1,
+            "minLength": 12,
+            "maxLength": 128,
             "writeOnly": true
           },
           "role": {
@@ -6823,7 +6833,8 @@
           },
           "password": {
             "type": "string",
-            "minLength": 1,
+            "minLength": 12,
+            "maxLength": 128,
             "writeOnly": true
           },
           "role": {
@@ -9128,7 +9139,14 @@
       "DefectUpdateInput": {
         "type": "object",
         "minProperties": 1,
+        "required": [
+          "version"
+        ],
         "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
           "title": {
             "type": "string",
             "minLength": 1
@@ -9184,9 +9202,14 @@
       "DefectStatusUpdate": {
         "type": "object",
         "required": [
-          "status"
+          "status",
+          "version"
         ],
         "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
           "status": {
             "type": "string",
             "enum": [

@@ -10,16 +10,14 @@ export default tseslint.config(
   {
     ignores: [
       'dist/**',
+      'coverage/**',
       'node_modules/**',
       'test-results/**',
       'playwright-report/**',
-      'e2e/**',
-      '**/*.test.ts',
-      'vitest.config.ts',
     ],
   },
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}', 'e2e/**/*.{ts,tsx}', '*.config.ts'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
@@ -55,6 +53,14 @@ export default tseslint.config(
       'no-duplicate-case': 'error',
       'no-empty': ['error', { allowEmptyCatch: true }],
       'no-extra-boolean-cast': 'error',
+    },
+  },
+  {
+    files: ['e2e/**/*.{ts,tsx}', '*.config.ts'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
     },
   },
   // Session / HTTP / cache services: stricter unused handling.

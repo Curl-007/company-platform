@@ -6,21 +6,6 @@ const { createAccess } = require("./src/db/access");
 const { CORE_TABLES } = require("./src/db/migrationPreflight");
 const { applyCompatibilityColumns, inspectSqliteSchema } = require("./src/db/sqliteSchema");
 const bcrypt = require("bcryptjs");
-const {
-  programs,
-  portfolios,
-  tasks,
-  projects,
-  products,
-  requirements,
-  tests,
-  sprints,
-  defects,
-  documents,
-  aiSummaries,
-  builds,
-  releases,
-} = require("./data");
 
 // DATABASE_FILE is primarily used by isolated integration tests and local
 // environments. Production continues to use the configured persistent volume.
@@ -198,7 +183,8 @@ function initDbSqlite() {
       phone TEXT DEFAULT '',
       position TEXT DEFAULT '',
       department TEXT DEFAULT '',
-      bio TEXT DEFAULT ''
+      bio TEXT DEFAULT '',
+      token_version INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS programs (
       id TEXT PRIMARY KEY,
@@ -740,84 +726,49 @@ function alignDefaultOrganizationMembership() {
 }
 
 function seed() {
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD || (process.env.NODE_ENV === "production" ? null : "Admin@123");
-  const pmPassword = process.env.SEED_PM_PASSWORD || (process.env.NODE_ENV === "production" ? null : "Pm@12345");
-  const devPassword = process.env.SEED_DEV_PASSWORD || (process.env.NODE_ENV === "production" ? null : "Dev@12345");
-  const qaPassword = process.env.SEED_QA_PASSWORD || (process.env.NODE_ENV === "production" ? null : "Qa@12345");
-  const pdmPassword = process.env.SEED_PDM_PASSWORD || (process.env.NODE_ENV === "production" ? null : "Pdm@12345");
-  const adminExists = rowSync("SELECT id FROM users WHERE email = @email", { email: "admin@example.com" });
-  const pmExists = rowSync("SELECT id FROM users WHERE email = @email", { email: "pm@example.com" });
-  const devExists = rowSync("SELECT id FROM users WHERE email = @email", { email: "dev@example.com" });
-  const qaExists = rowSync("SELECT id FROM users WHERE email = @email", { email: "qa@example.com" });
-  const pdmExists = rowSync("SELECT id FROM users WHERE email = @email", { email: "pdm@example.com" });
-
-  // Seed accounts are bootstrap-only. Never overwrite an existing account's
-  // name, role, permissions, password, or disabled state on process restart.
-  if (!adminExists && adminPassword) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("Seeding demo admin (admin@example.com) — remove before production or set SEED_ADMIN_PASSWORD.");
-    }
-    insertSync("users", {
-      id: "USR-ADMIN",
-      name: "系统管理员",
-      email: "admin@example.com",
-      password_hash: bcrypt.hashSync(adminPassword, 10),
-      role: "admin",
-      permissions: json(["*"]),
-      status: "active",
-      created_at: now(),
-    });
+  const isProduction = process.env.NODE_ENV === "production";
+  const adminEmail = String(process.env.SEED_ADMIN_EMAIL || "")
+    .trim()
+    .toLowerCase();
+  const adminPassword = String(process.env.SEED_ADMIN_PASSWORD || "");
+  const productionDemoRoleSeeds = ["SEED_PM_PASSWORD", "SEED_DEV_PASSWORD", "SEED_QA_PASSWORD", "SEED_PDM_PASSWORD"]
+    .filter((name) => String(process.env[name] || "").length > 0);
+  if (isProduction && String(process.env.SEED_DEMO_DATA || "") === "1") {
+    throw new Error("SEED_DEMO_DATA=1 is not allowed in production.");
+  }
+  if (isProduction && productionDemoRoleSeeds.length > 0) {
+    throw new Error("Named demo role seed passwords are not allowed in production.");
+  }
+  if (isProduction && Boolean(adminEmail) !== Boolean(adminPassword)) {
+    throw new Error("SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD must be provided together in production.");
   }
 
-  if (!pmExists && pmPassword) {
-    insertSync("users", {
-      id: "USR-PM",
-      name: "项目经理",
-      email: "pm@example.com",
-      password_hash: bcrypt.hashSync(pmPassword, 10),
-      role: "pm",
-      permissions: json(["project:*", "requirement:*", "document:*", "ai:*", "audit:read", "source:read"]),
-      status: "active",
-      created_at: now(),
-    });
-  }
+  const seedAccounts = isProduction
+    ? (adminEmail && adminPassword ? [{
+        id: "USR-ADMIN",
+        name: "系统管理员",
+        email: adminEmail,
+        password: adminPassword,
+        role: "admin",
+        permissions: ["*"],
+      }] : [])
+    : require("./src/dev/demoSeedAccounts").resolveDemoSeedAccounts(process.env);
 
-  // Dev engineer: sees projects, requirements, builds, documents, my-work, dynamic.
-  if (!devExists && devPassword) {
-    insertSync("users", {
-      id: "USR-DEV",
-      name: "开发工程师",
-      email: "dev@example.com",
-      password_hash: bcrypt.hashSync(devPassword, 10),
-      role: "dev",
-      permissions: json(["project:read", "requirement:read", "build:*", "document:*", "audit:read"]),
-      status: "active",
-      created_at: now(),
+  // Bootstrap only: never overwrite persisted identity, permissions, password,
+  // or disabled state when the process restarts.
+  for (const account of seedAccounts) {
+    const exists = rowSync("SELECT id FROM users WHERE id = @id OR email = @email", {
+      id: account.id,
+      email: account.email,
     });
-  }
-
-  // QA engineer: sees testing, defects, documents, my-work, dynamic.
-  if (!qaExists && qaPassword) {
+    if (exists) continue;
     insertSync("users", {
-      id: "USR-QA",
-      name: "测试工程师",
-      email: "qa@example.com",
-      password_hash: bcrypt.hashSync(qaPassword, 10),
-      role: "qa",
-      permissions: json(["test:*", "defect:*", "document:read", "audit:read"]),
-      status: "active",
-      created_at: now(),
-    });
-  }
-
-  if (!pdmExists && pdmPassword) {
-    insertSync("users", {
-      id: "USR-PDM",
-      name: "产品经理",
-      email: "pdm@example.com",
-      password_hash: bcrypt.hashSync(pdmPassword, 10),
-      role: "pdm",
-      permissions: json(["product:*", "document:*", "project:read", "requirement:*", "audit:read"]),
+      id: account.id,
+      name: account.name,
+      email: account.email,
+      password_hash: bcrypt.hashSync(account.password, 10),
+      role: account.role,
+      permissions: json(account.permissions),
       status: "active",
       created_at: now(),
     });
@@ -828,11 +779,25 @@ function seed() {
   alignDefaultOrganizationMembership();
 
   if (count("users") === 0) {
-    console.warn("No seed users created (production mode without SEED_*_PASSWORD). Create users manually.");
+    console.warn("No users exist. For first production startup, set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD together.");
   }
   if (process.env.SEED_DEMO_DATA !== "1") {
     return;
   }
+  const {
+    programs,
+    portfolios,
+    tasks,
+    projects,
+    products,
+    requirements,
+    tests,
+    sprints,
+    defects,
+    documents,
+    builds,
+    releases,
+  } = require("./data");
   if (count("programs") === 0) {
     programs.forEach((item) =>
       insertSync("programs", {
@@ -1584,5 +1549,4 @@ module.exports = {
   mapBuild,
   mapRelease,
   STORAGE_DIR,
-  aiSummaries,
 };

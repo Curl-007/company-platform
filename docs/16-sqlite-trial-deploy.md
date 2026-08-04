@@ -37,7 +37,9 @@ export DATABASE_FILE='/var/lib/pm/app.db'   # 持久卷路径
 export SERVE_WEB=1                          # start:prod 默认开启
 export WEB_DIST='/path/to/web/dist'         # 可选；默认 monorepo web/dist
 export CORS_ORIGIN='http://localhost:4010'  # 同源可留默认；若反代域名需写入
-export SEED_DEMO_DATA=0                     # 试用空库不建议自动演示种子；仅空库首次需要账号时再评估
+export SEED_DEMO_DATA=0                     # 生产强制关闭演示业务数据
+export SEED_ADMIN_EMAIL='owner@company.com' # 仅全新空库首次启动使用
+export SEED_ADMIN_PASSWORD='one-time-strong-password'
 export AI_ENABLED=false                     # 无外网模型时可关
 # 纯 HTTP 部署不要开 HSTS / 不要让 CSP upgrade-insecure-requests
 # （Helmet 默认项已在 SERVE_WEB 路径关闭；仅 TLS 终止后可设 ENABLE_HSTS=1）
@@ -53,6 +55,9 @@ $env:JWT_SECRET='replace-with-long-random'
 $env:AI_CONFIG_ENCRYPTION_KEY='replace-with-other-long-random'
 $env:DATABASE_FILE='D:\data\pm\app.db'
 $env:SERVE_WEB='1'
+$env:SEED_DEMO_DATA='0'
+$env:SEED_ADMIN_EMAIL='owner@company.com'
+$env:SEED_ADMIN_PASSWORD='one-time-strong-password'
 ```
 
 ## 4. 启动 / 停止
@@ -92,8 +97,9 @@ npm run smoke:prod
    - `serveWeb == true`
 6. 确认响应头无 `upgrade-insecure-requests`、无 HSTS（纯 HTTP）：
    - `curl -sI http://127.0.0.1:$PORT/ | rg -i "content-security-policy|strict-transport"`
-7. 浏览器打开首页，登录（若 `SEED_DEMO_DATA=1` 空库会有演示账号，**试用请尽快改密或关种子**）
-8. （可选）`npm run preflight:database -w api -- --database "$DATABASE_FILE"`
+7. 浏览器打开首页；登录页应为空，且不显示任何演示账号或密码。
+8. 全新空库使用 `SEED_ADMIN_EMAIL` 与 `SEED_ADMIN_PASSWORD` 登录，立即修改密码；随后停止服务、移除这两个变量并重启。
+9. （可选）`npm run preflight:database -w api -- --database "$DATABASE_FILE"`
 
 ## 6. 备份与回滚
 

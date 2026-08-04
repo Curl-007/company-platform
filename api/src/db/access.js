@@ -61,25 +61,49 @@ function createSqliteAccess(databaseRuntime) {
     prepare(buildUpsertSql(table, keys, { ...options, dialect: "sqlite" }).sql).run(data);
   }
 
+  // node:sqlite exposes one synchronous connection. Keep every public access on
+  // one FIFO, while allowing the transaction owner to use that connection
+  // directly until its callback has committed or rolled back.
+  const txStorage = new AsyncLocalStorage();
+  let activeTransactionOwner = null;
+  let queueTail = Promise.resolve();
+
+  function enqueue(work) {
+    const result = queueTail.then(work, work);
+    queueTail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
+  function execute(work) {
+    const owner = txStorage.getStore();
+    if (owner && owner === activeTransactionOwner) {
+      return Promise.resolve().then(work);
+    }
+    return enqueue(work);
+  }
+
   async function row(sql, params = {}) {
-    return rowSync(sql, params);
+    return execute(() => rowSync(sql, params));
   }
 
   async function rows(sql, params = {}) {
-    return rowsSync(sql, params);
+    return execute(() => rowsSync(sql, params));
   }
 
   async function run(sql, params = {}) {
     // Preserve node:sqlite StatementResult shape (changes is required for idempotency).
-    return runSync(sql, params);
+    return execute(() => runSync(sql, params));
   }
 
   async function insert(table, data) {
-    insertSync(table, data);
+    return execute(() => insertSync(table, data));
   }
 
   async function upsert(table, data, options = {}) {
-    upsertSync(table, data, options);
+    return execute(() => upsertSync(table, data, options));
   }
 
   /**
@@ -88,19 +112,39 @@ function createSqliteAccess(databaseRuntime) {
    * @returns {Promise<T>}
    */
   async function transaction(work) {
-    execSync("BEGIN IMMEDIATE");
-    try {
-      const result = await work();
-      execSync("COMMIT");
-      return result;
-    } catch (error) {
+    const existingOwner = txStorage.getStore();
+    if (existingOwner && existingOwner === activeTransactionOwner) {
+      // Nested transactions share the outer atomic unit. Once nested work
+      // fails, that unit remains rollback-only even if its caller catches the
+      // error; committing a partially recovered unit would be ambiguous.
       try {
-        execSync("ROLLBACK");
-      } catch {
-        /* transaction was not opened or already closed */
+        return await work();
+      } catch (error) {
+        existingOwner.rollbackError ||= error;
+        throw error;
       }
-      throw error;
     }
+
+    return enqueue(async () => {
+      const owner = { rollbackError: null };
+      activeTransactionOwner = owner;
+      try {
+        execSync("BEGIN IMMEDIATE");
+        const result = await txStorage.run(owner, async () => work());
+        if (owner.rollbackError) throw owner.rollbackError;
+        execSync("COMMIT");
+        return result;
+      } catch (error) {
+        try {
+          execSync("ROLLBACK");
+        } catch {
+          /* transaction was not opened or already closed */
+        }
+        throw error;
+      } finally {
+        activeTransactionOwner = null;
+      }
+    });
   }
 
   return {

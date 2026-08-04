@@ -2886,53 +2886,6 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 650;
 }
 
-.login-card-hint {
-  margin-top: 20px;
-  padding: 14px 16px;
-  background: linear-gradient(180deg, rgba(247, 248, 250, 0.98), rgba(241, 243, 246, 0.92));
-  border: 1px solid rgba(216, 222, 228, 0.9);
-  border-radius: 14px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.55;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.login-card-hint-title {
-  color: var(--text-primary);
-  font-weight: 700;
-  font-size: 12px;
-}
-
-.login-card-hint-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.login-card-hint-row span {
-  color: var(--text-secondary);
-}
-
-.login-card-hint-row code {
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-  font-size: 11px;
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(216, 222, 228, 0.9);
-  border-radius: 8px;
-  padding: 3px 8px;
-}
-
-.login-card-hint strong {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
 /* Split-screen login */
 .login-brand-panel {
   flex: 1.05 1 0;
@@ -3043,10 +2996,6 @@ h1, h2, h3, h4, h5, h6 {
   }
   .login-card-title {
     font-size: 24px;
-  }
-  .login-card-hint-row {
-    flex-direction: column;
-    align-items: flex-start;
   }
 }
 

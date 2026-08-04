@@ -14,12 +14,9 @@ const HIGHLIGHTS = [
   '操作审计与动态追踪',
 ];
 
-const isDev = Boolean(import.meta.env.DEV);
-
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
-  // Prefill demo credentials only in local development builds.
-  const [email, setEmail] = useState(isDev ? 'admin@example.com' : '');
-  const [password, setPassword] = useState(isDev ? 'Admin@123' : '');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -109,19 +106,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               </button>
             </form>
 
-            {isDev ? (
-              <div className="login-card-hint">
-                <div className="login-card-hint-title">本地演示账号</div>
-                <div className="login-card-hint-row">
-                  <span>管理员</span>
-                  <code>admin@example.com / Admin@123</code>
-                </div>
-                <div className="login-card-hint-row">
-                  <span>项目经理</span>
-                  <code>pm@example.com / Pm@12345</code>
-                </div>
-              </div>
-            ) : null}
           </div>
         </div>
       </div>

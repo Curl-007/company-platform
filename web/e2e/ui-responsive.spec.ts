@@ -93,6 +93,23 @@ test.describe('professional workbench desktop shell', () => {
   test('login and dashboard use the production design preset', async ({ page }, testInfo) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: '欢迎回来' })).toBeVisible();
+    await expect(page.locator('#login-email')).toHaveValue('');
+    await expect(page.locator('#login-password')).toHaveValue('');
+    await expect(page.getByText('本地演示账号')).toHaveCount(0);
+    for (const credential of [
+      'admin@example.com',
+      'pm@example.com',
+      'pdm@example.com',
+      'dev@example.com',
+      'qa@example.com',
+      'Admin@123',
+      'Pm@12345',
+      'Pdm@12345',
+      'Dev@12345',
+      'Qa@12345',
+    ]) {
+      await expect(page.getByText(credential, { exact: false })).toHaveCount(0);
+    }
     await attachViewport(page, testInfo, 'desktop-login');
 
     await page.locator('#login-email').fill('admin@example.com');

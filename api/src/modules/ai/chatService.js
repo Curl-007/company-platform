@@ -32,6 +32,31 @@ function projectClause(projectIds, column = "project_id") {
   return `${column} IN (${projectIds.map((_, index) => `@projectId${index}`).join(", ")})`;
 }
 
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+const MAX_ATTACHMENTS_TOTAL_BYTES = 12 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
+  "image/jpeg", "image/png", "image/gif", "image/webp",
+  "text/plain", "text/markdown", "text/csv", "text/xml",
+  "application/json", "application/xml", "application/x-yaml",
+  "application/pdf", "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+
+function attachmentError(status, code, message) {
+  const error = new Error(message);
+  error.status = status;
+  error.code = code;
+  return error;
+}
+
+function decodeAttachmentBase64(value, name) {
+  const normalized = String(value || "").replace(/\s+/g, "");
+  if (!normalized || normalized.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) {
+    throw attachmentError(400, "INVALID_ATTACHMENT", `附件 ${name} 的 Base64 内容无效。`);
+  }
+  return Buffer.from(normalized, "base64");
+}
+
 function createAiChatService({
   extractTextFromUpload,
   mapBuild,
@@ -45,21 +70,33 @@ function createAiChatService({
 }) {
   function normalizeAttachments(attachments) {
     if (!Array.isArray(attachments)) return [];
-    return attachments
-      .map((item) => {
+    if (attachments.length > 6) {
+      throw attachmentError(400, "TOO_MANY_ATTACHMENTS", "单次对话最多附加 6 个文件。");
+    }
+    let totalBytes = 0;
+    return attachments.map((item) => {
         const mimeType = String(item?.mimeType || "").trim();
         const name = String(item?.name || "附件").trim().slice(0, 120);
-        const size = Number(item?.size) || 0;
         const contentBase64 = String(item?.contentBase64 || "").trim();
+        if (!ALLOWED_ATTACHMENT_MIME_TYPES.has(mimeType)) {
+          throw attachmentError(400, "UNSUPPORTED_ATTACHMENT_TYPE", `附件 ${name} 的类型不受支持。`);
+        }
+        const decoded = decodeAttachmentBase64(contentBase64, name);
+        const size = decoded.length;
+        if (size > MAX_ATTACHMENT_BYTES) {
+          throw attachmentError(413, "ATTACHMENT_TOO_LARGE", `附件 ${name} 超过 5 MB 单文件上限。`);
+        }
+        totalBytes += size;
+        if (totalBytes > MAX_ATTACHMENTS_TOTAL_BYTES) {
+          throw attachmentError(413, "ATTACHMENTS_TOO_LARGE", "附件总大小超过 12 MB。");
+        }
         const kind = mimeType.startsWith("image/") ? "image" : "document";
         const extracted = kind === "document" && contentBase64
           ? extractTextFromUpload(name, mimeType, contentBase64)
           : "";
         const contentText = String(item?.contentText || extracted || "").slice(0, 12000);
         return { kind, name, mimeType, size, contentText, contentBase64 };
-      })
-      .filter((item) => item.name && (item.contentText || item.contentBase64 || item.size))
-      .slice(0, 6);
+      });
   }
 
   async function buildContext(accessScope) {

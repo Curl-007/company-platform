@@ -2292,9 +2292,7 @@ html[data-work-mode='light'] textarea::placeholder {
   color: #f7fffd;
 }
 
-.login-card-subtitle,
-.login-card-hint,
-.login-card-hint-row span {
+.login-card-subtitle {
   color: var(--text-secondary);
 }
 
@@ -2312,17 +2310,6 @@ html[data-work-mode='light'] textarea::placeholder {
 
 .login-input-icon {
   color: rgba(210, 220, 230, 0.55);
-}
-
-.login-card-hint {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
-}
-
-.login-card-hint-row code {
-  background: rgba(10, 10, 15, 0.45);
-  border-color: rgba(255, 255, 255, 0.1);
-  color: rgba(230, 245, 255, 0.92);
 }
 
 .form-error {

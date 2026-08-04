@@ -782,17 +782,6 @@ html[data-work-theme='scholar'] .login-brand-highlights li {
   border-radius: 6px;
 }
 
-html[data-work-theme='scholar'] .login-card-hint {
-  border-color: var(--border-divider);
-  background: var(--bg-subtle);
-}
-
-html[data-work-theme='scholar'] .login-card-hint-row code {
-  border-color: var(--border-divider);
-  background: var(--bg-content);
-  color: var(--text-secondary);
-}
-
 /* Theme drawer and overlays */
 html[data-work-theme='scholar'] .theme-settings-drawer,
 html[data-work-theme='scholar'] .app-overlay-dialog > .panel {

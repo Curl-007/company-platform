@@ -17,7 +17,11 @@ const path = require("node:path");
 const repoRoot = path.resolve(__dirname, "..");
 const apiRoot = path.join(repoRoot, "api");
 
-if (!process.env.NODE_ENV) process.env.NODE_ENV = "production";
+if (process.env.NODE_ENV && process.env.NODE_ENV !== "production") {
+  console.error("FATAL: start:prod requires NODE_ENV=production.");
+  process.exit(1);
+}
+process.env.NODE_ENV = "production";
 if (process.env.SERVE_WEB == null || process.env.SERVE_WEB === "") {
   process.env.SERVE_WEB = "1";
 }

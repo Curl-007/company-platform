@@ -10,7 +10,6 @@ const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
 const { createPgPool, maskDatabaseUrl, resolveDatabaseUrl } = require("../src/db/postgres");
-const { buildUpsertSql } = require("../src/db/sql");
 const { applyPostgresSchema } = require("./apply-postgres-schema");
 
 const EXPORT_FORMAT = "company-project-management/sqlite-ndjson-export/v1";

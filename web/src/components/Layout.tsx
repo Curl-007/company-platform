@@ -65,9 +65,29 @@ const Layout: React.FC<LayoutProps> = ({
     focusTarget?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      setMobileNavOpen(false);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setMobileNavOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab' || !sidebar) return;
+
+      const focusable = Array.from(sidebar.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((element) => !element.hasAttribute('inert') && element.getAttribute('aria-hidden') !== 'true');
+      if (!focusable.length) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
 
     document.addEventListener('keydown', handleKeyDown);
@@ -157,7 +177,11 @@ const Layout: React.FC<LayoutProps> = ({
 
       </aside>
 
-      <div className="main-content">
+      <div
+        className="main-content"
+        aria-hidden={isMobileViewport && mobileNavOpen ? true : undefined}
+        inert={isMobileViewport && mobileNavOpen ? true : undefined}
+      >
         <header className="topbar">
           <IconButton
             ref={mobileMenuTriggerRef}

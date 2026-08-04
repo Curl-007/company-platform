@@ -133,11 +133,12 @@ export function createDefect(input: CreateDefectInput): Promise<Defect> {
   return unwrapPost<Defect>('/api/defects', input);
 }
 
-export function updateDefectStatus(id: string, status: string): Promise<Defect> {
-  return unwrapPatch<Defect>(`/api/defects/${id}/status`, { status });
+export function updateDefectStatus(id: string, status: string, version: number): Promise<Defect> {
+  return unwrapPatch<Defect>(`/api/defects/${id}/status`, { status, version });
 }
 
 export interface UpdateDefectInput {
+  version: number;
   title?: string;
   description?: string;
   severity?: string;

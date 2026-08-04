@@ -15,7 +15,6 @@ module.exports = [
       "data/**",
       "tmp/**",
       "coverage/**",
-      "scripts/**",
     ],
   },
   {

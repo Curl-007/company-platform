@@ -81,6 +81,33 @@ test("AI chat service normalizes messages and attachments for model-safe prompts
   assert.equal(dataUrlForAttachment(attachments[1]), "data:image/png;base64,aW1n");
 });
 
+test("AI chat service validates attachment MIME and decoded byte limits", () => {
+  const service = createService();
+  assert.throws(
+    () => service.normalizeAttachments([
+      { name: "script.exe", mimeType: "application/octet-stream", contentBase64: "YWJjZA==" },
+    ]),
+    (error) => error.status === 400 && error.code === "UNSUPPORTED_ATTACHMENT_TYPE",
+  );
+  assert.throws(
+    () => service.normalizeAttachments([
+      { name: "broken.png", mimeType: "image/png", contentBase64: "not base64!" },
+    ]),
+    (error) => error.status === 400 && error.code === "INVALID_ATTACHMENT",
+  );
+  assert.throws(
+    () => service.normalizeAttachments([
+      {
+        name: "large.png",
+        mimeType: "image/png",
+        size: 1,
+        contentBase64: Buffer.alloc(5 * 1024 * 1024 + 1).toString("base64"),
+      },
+    ]),
+    (error) => error.status === 413 && error.code === "ATTACHMENT_TOO_LARGE",
+  );
+});
+
 test("AI chat service builds project context and fallback replies without performance scoring", async () => {
   const service = createService();
   const context = await service.buildContext({ all: true });

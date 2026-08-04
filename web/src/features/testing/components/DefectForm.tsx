@@ -50,6 +50,7 @@ export default function DefectForm({
     setSubmitting(true);
     try {
       const payload: UpdateDefectInput & { title: string; projectId?: string; severity: string; assigneeRole: string } = {
+        version: item?.version ?? 1,
         title: title.trim(),
         projectId,
         severity,

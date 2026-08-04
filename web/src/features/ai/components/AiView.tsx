@@ -12,6 +12,7 @@ import { useConfirm } from '../../../components/common/ConfirmDialog';
 import type { AiChatAttachment, AiChatMessage, AiJob, Project } from '../../../types';
 import {
   MAX_ATTACHMENTS,
+  validateAttachmentFiles,
   buildReviewDraft,
   createWelcomeMessage,
   fileToAttachment,
@@ -64,6 +65,14 @@ export default function AiView() {
     const remaining = Math.max(0, MAX_ATTACHMENTS - attachments.length);
     const selected = Array.from(files).slice(0, remaining);
     if (selected.length < files.length) setFileError(`单次对话最多附加 ${MAX_ATTACHMENTS} 个文件。`);
+    const validationError = validateAttachmentFiles(
+      selected,
+      attachments.reduce((total, item) => total + item.size, 0),
+    );
+    if (validationError) {
+      setFileError(validationError);
+      return;
+    }
 
     try {
       const next = await Promise.all(selected.map(fileToAttachment));

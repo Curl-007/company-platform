@@ -37,6 +37,9 @@ npm run build -w web
 export JWT_SECRET='replace-me-16chars'
 export AI_CONFIG_ENCRYPTION_KEY='replace-me-ai-16'
 export NODE_ENV=production
+export SEED_DEMO_DATA=0
+export SEED_ADMIN_EMAIL='owner@company.com'
+export SEED_ADMIN_PASSWORD='replace-with-one-time-strong-password'
 npm run start:prod
 ```
 
@@ -53,9 +56,12 @@ npm run check          # audit+lint+test+build+preflight+drills+prod smoke
 npm run check:rc       # check + disposable SQLite E2E
 ```
 
-## 初始账号
+正式登录页不会展示或预填任何账号、邮箱或密码。全新数据库首次启动时，必须同时配置
+`SEED_ADMIN_EMAIL` 和 `SEED_ADMIN_PASSWORD` 创建首位管理员；首次登录并修改密码后，移除这两个环境变量再重启。
 
-本地开发环境会自动创建基础角色账号，业务数据为空：
+## 开发测试账号
+
+以下账号只用于本地开发和自动化测试，不用于生产交付，业务数据默认为空：
 
 - 管理员：`admin@example.com` / `Admin@123`
 - 项目经理：`pm@example.com` / `Pm@12345`
@@ -63,4 +69,4 @@ npm run check:rc       # check + disposable SQLite E2E
 - 开发：`dev@example.com` / `Dev@12345`
 - 测试：`qa@example.com` / `Qa@12345`
 
-生产部署时建议通过环境变量设置 `SEED_*_PASSWORD`，并配置 `JWT_SECRET`。若需在管理端持久化 AI 供应商 API Key，还必须单独配置 `AI_CONFIG_ENCRYPTION_KEY`（≥16 字符，且不得与 `JWT_SECRET` 相同）。试用环境建议 `SEED_DEMO_DATA=0`，自行创建账号。
+生产环境禁止 `SEED_DEMO_DATA=1` 和其他角色的 `SEED_*_PASSWORD`。若需在管理端持久化 AI 供应商 API Key，还必须单独配置 `AI_CONFIG_ENCRYPTION_KEY`（≥16 字符，且不得与 `JWT_SECRET` 相同）。

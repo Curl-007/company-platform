@@ -77,7 +77,8 @@ function hasPermission(user: SessionUser | null | undefined, permission: string)
 export function canOperate(user: SessionUser | null | undefined, operation: string): boolean {
   if (!user) return false;
   const operations = user.capabilities?.operations;
-  if (Array.isArray(operations) && operations.length > 0) return operations.includes(operation);
+  // A capabilities response is authoritative even when the server grants no operations.
+  if (Array.isArray(operations)) return operations.includes(operation);
 
   if (operation.startsWith('users:') || operation === 'aiProvider:manage') {
     return hasPermission(user, 'admin:*');

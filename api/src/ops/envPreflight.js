@@ -22,6 +22,8 @@ function preflightEnv(env = process.env, options = {}) {
   const jwt = String(env.JWT_SECRET || "").trim();
   const aiKey = String(env.AI_CONFIG_ENCRYPTION_KEY || "").trim();
   const rateLimitTrustLocal = String(env.RATE_LIMIT_TRUST_LOCAL || "").trim();
+  const seedAdminEmail = String(env.SEED_ADMIN_EMAIL || "").trim();
+  const seedAdminPassword = String(env.SEED_ADMIN_PASSWORD || "");
   const port = Number(env.PORT || 4010);
   const dialect = String(env.DB_DIALECT || env.DATABASE_DIALECT || "sqlite").toLowerCase();
   const checkFilesystem = options.checkFilesystem !== false;
@@ -87,11 +89,41 @@ function preflightEnv(env = process.env, options = {}) {
     for (const issue of fsReport.issues) issues.push(issue);
   }
 
+  if (isProd && Boolean(seedAdminEmail) !== Boolean(seedAdminPassword)) {
+    issues.push({
+      level: "error",
+      code: seedAdminEmail ? "SEED_ADMIN_PASSWORD_MISSING" : "SEED_ADMIN_EMAIL_MISSING",
+      message: "SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD must be provided together for first production startup.",
+    });
+  }
+
+  if (isProd && seedAdminEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(seedAdminEmail)) {
+    issues.push({ level: "error", code: "SEED_ADMIN_EMAIL_INVALID", message: "SEED_ADMIN_EMAIL must be a valid email address." });
+  }
+
+  if (isProd && seedAdminPassword && seedAdminPassword.length < 12) {
+    issues.push({
+      level: "error",
+      code: "SEED_ADMIN_PASSWORD_WEAK",
+      message: "SEED_ADMIN_PASSWORD must contain at least 12 characters.",
+    });
+  }
+
+  const productionDemoRoleSeeds = ["SEED_PM_PASSWORD", "SEED_DEV_PASSWORD", "SEED_QA_PASSWORD", "SEED_PDM_PASSWORD"]
+    .filter((name) => String(env[name] || "").length > 0);
+  if (isProd && productionDemoRoleSeeds.length > 0) {
+    issues.push({
+      level: "error",
+      code: "DEMO_ROLE_SEED_IN_PROD",
+      message: "Named demo role seed passwords are not allowed in production; create users from the administration UI.",
+    });
+  }
+
   if (isProd && String(env.SEED_DEMO_DATA || "") === "1") {
     issues.push({
-      level: "warn",
+      level: "error",
       code: "SEED_DEMO_IN_PROD",
-      message: "SEED_DEMO_DATA=1 is enabled in production; ensure demo accounts are intentional.",
+      message: "SEED_DEMO_DATA=1 is not allowed in production.",
     });
   }
 

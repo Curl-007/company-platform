@@ -7,10 +7,10 @@ const {
   resolveDefectHandoffAction,
 } = require("./service");
 
-function expectedDefectVersion(req, res, defect, fail) {
+function expectedDefectVersion(req, res, defect, fail, operation = "updating") {
   const version = Number(req.body?.version);
   if (!Number.isInteger(version) || version < 1) {
-    fail(res, 400, "VERSION_REQUIRED", "A positive integer version is required when handing off a defect.");
+    fail(res, 400, "VERSION_REQUIRED", `A positive integer version is required when ${operation} a defect.`);
     return null;
   }
   return version;
@@ -38,6 +38,7 @@ function createDefectsRouter({
   requireAnyPermission,
   repository,
   syncDefectTask,
+  transaction,
 }) {
   const router = express.Router();
 
@@ -90,10 +91,13 @@ function createDefectsRouter({
     }
     if (!(await validateRelatedResources(res, projectId, { requirementId, foundInBuild }))) return;
     const defect = buildDefectCreate({ title, severity, status, projectId, requirementId, assignee, assigneeRole, foundInBuild, affectedVersion }, { id: await nextId("BUG", "defects"), reporter: req.user.name });
-    await repository.createDefect(defect);
-    await syncDefectTask(defect);
-    await audit(req.user, "defect.create", "defect", defect.id, null, defect, req.ip);
-    res.status(201).json(ok(mapDefect(await repository.findDefect(defect.id))));
+    const created = await transaction(async () => {
+      await repository.createDefect(defect);
+      await syncDefectTask(defect);
+      await audit(req.user, "defect.create", "defect", defect.id, null, defect, req.ip);
+      return repository.findDefect(defect.id);
+    });
+    res.status(201).json(ok(mapDefect(created)));
   });
 
   router.patch("/defects/:id/status", requireAnyPermission(["project:*", "defect:*"]), async (req, res) => {
@@ -105,10 +109,18 @@ function createDefectsRouter({
     if (!status || !defectStatuses.includes(status)) {
       return fail(res, 400, "VALIDATION_FAILED", `Defect status must be one of: ${defectStatuses.join(", ")}`);
     }
-    await repository.updateDefectStatus(req.params.id, status);
-    const after = await repository.findDefect(req.params.id);
-    await syncDefectTask(after);
-    await audit(req.user, "defect.status_update", "defect", req.params.id, before, after, req.ip);
+    const expectedVersion = expectedDefectVersion(req, res, before, fail, "updating");
+    if (expectedVersion === null) return;
+    const result = await transaction(async () => {
+      const updateResult = await repository.updateDefect(req.params.id, expectedVersion, { status });
+      if (updateResult.changes === 0) return { conflict: true };
+      const after = await repository.findDefect(req.params.id);
+      await syncDefectTask(after);
+      await audit(req.user, "defect.status_update", "defect", req.params.id, before, after, req.ip);
+      return { after };
+    });
+    if (result.conflict) return await defectVersionConflict(res, before, expectedVersion, repository, fail);
+    const { after } = result;
     res.json(ok(mapDefect(after)));
   });
 
@@ -125,18 +137,32 @@ function createDefectsRouter({
       return fail(res, 400, "VALIDATION_FAILED", `Defect status must be one of: ${defectStatuses.join(", ")}`);
     }
     if (!(await validateRelatedResources(res, before.project_id, { requirementId, foundInBuild }))) return;
-    if (title !== undefined) await repository.updateDefectTitle(req.params.id, String(title).trim());
-    if (description !== undefined) await repository.updateDefectDescription(req.params.id, description || null);
-    if (severity !== undefined) await repository.updateDefectSeverity(req.params.id, severity);
-    if (assignee !== undefined) await repository.updateDefectAssignee(req.params.id, assignee);
-    if (assigneeRole !== undefined) await repository.updateDefectAssigneeRole(req.params.id, assigneeRole);
-    if (requirementId !== undefined) await repository.updateDefectRequirement(req.params.id, requirementId);
-    if (foundInBuild !== undefined) await repository.updateDefectBuild(req.params.id, foundInBuild || null);
-    if (affectedVersion !== undefined) await repository.updateDefectAffectedVersion(req.params.id, affectedVersion || null);
-    if (status !== undefined) await repository.updateDefectStatus(req.params.id, status);
-    const after = await repository.findDefect(req.params.id);
-    await syncDefectTask(after);
-    await audit(req.user, "defect.update", "defect", req.params.id, before, after, req.ip);
+    const expectedVersion = expectedDefectVersion(req, res, before, fail, "updating");
+    if (expectedVersion === null) return;
+    const updates = {
+      title: title === undefined ? undefined : String(title).trim(),
+      description: description === undefined ? undefined : description || null,
+      severity,
+      assignee,
+      assigneeRole,
+      requirementId,
+      foundInBuild: foundInBuild === undefined ? undefined : foundInBuild || null,
+      affectedVersion: affectedVersion === undefined ? undefined : affectedVersion || null,
+      status,
+    };
+    if (!Object.values(updates).some((value) => value !== undefined)) {
+      return fail(res, 400, "VALIDATION_FAILED", "At least one defect field must be provided for update.");
+    }
+    const result = await transaction(async () => {
+      const updateResult = await repository.updateDefect(req.params.id, expectedVersion, updates);
+      if (updateResult.changes === 0) return { conflict: true };
+      const after = await repository.findDefect(req.params.id);
+      await syncDefectTask(after);
+      await audit(req.user, "defect.update", "defect", req.params.id, before, after, req.ip);
+      return { after };
+    });
+    if (result.conflict) return await defectVersionConflict(res, before, expectedVersion, repository, fail);
+    const { after } = result;
     res.json(ok(mapDefect(after)));
   });
 
@@ -145,8 +171,10 @@ function createDefectsRouter({
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Defect not found.");
     if (!(await canWriteProject(req.user, before.project_id))) return fail(res, 403, "PROJECT_ARCHIVED_OR_ACCESS_DENIED", "Cannot delete a defect in an archived or inaccessible project.");
     if (!(await canAccessProject(req.user, before.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权删除该缺陷。");
-    await repository.deleteDefect(req.params.id);
-    await audit(req.user, "defect.delete", "defect", req.params.id, before, null, req.ip);
+    await transaction(async () => {
+      await repository.deleteDefect(req.params.id);
+      await audit(req.user, "defect.delete", "defect", req.params.id, before, null, req.ip);
+    });
     res.json(ok({ deleted: true, id: req.params.id }));
   });
 
@@ -220,12 +248,16 @@ function createDefectsRouter({
       assigneeRole: actionSpec.targetRole,
       status: nextStatus,
     });
-    const updateResult = await repository.handoffDefect(next);
-    if (updateResult.changes === 0) return await defectVersionConflict(res, before, expectedVersion, repository, fail);
-
-    const after = await repository.findDefect(req.params.id);
-    await syncDefectTask(after);
-    await audit(req.user, `defect.handoff.${req.body?.action}`, "defect", req.params.id, before, after, req.ip);
+    const result = await transaction(async () => {
+      const updateResult = await repository.handoffDefect(next);
+      if (updateResult.changes === 0) return { conflict: true };
+      const after = await repository.findDefect(req.params.id);
+      await syncDefectTask(after);
+      await audit(req.user, `defect.handoff.${req.body?.action}`, "defect", req.params.id, before, after, req.ip);
+      return { after };
+    });
+    if (result.conflict) return await defectVersionConflict(res, before, expectedVersion, repository, fail);
+    const { after } = result;
     res.json(ok(mapDefect(after)));
   });
 
