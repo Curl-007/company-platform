@@ -2,7 +2,7 @@
 
 > **文档版本**：v1.0（2026-07-23）  
 > **范围**：单进程 Node 托管 API + 前端静态资源 + 默认 SQLite；**非**多实例/负载均衡/PostgreSQL 生产切库。  
-> **分支基线**：`feature/configurable-workflow`
+> **分支基线**：`main`
 
 ## 1. 目标形态
 

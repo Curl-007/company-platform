@@ -33,7 +33,7 @@ export default function AppHeader({ currentPage, user, aiSidebarOpen, onAiToggle
         <SidebarTrigger />
         <span className="kaneo-header-divider" aria-hidden="true" />
         {/* Single source of page identity — content area does not repeat this title. */}
-        <span className="kaneo-app-header-title">{currentNavLabel}</span>
+        <h1 className="kaneo-app-header-title">{currentNavLabel}</h1>
       </div>
       <div className="kaneo-app-header-actions">
         <IconButton surface="topbar" icon={<Bot size={16} />} label={aiSidebarOpen ? '隐藏 AI 面板' : '显示 AI 面板'} onClick={onAiToggle} />

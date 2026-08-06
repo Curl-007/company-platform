@@ -6,7 +6,7 @@
 
 - monorepo workspaces：`api`（Express API）、`web`（React + Vite）
 - 文档台账：`docs/10-实现状态与差异清单.md`、`docs/15-项目审查一页摘要.md`
-- 当前主开发分支（as-built）：`feature/configurable-workflow`
+- 当前主开发分支（as-built）：`main`（GitHub 公开仓库 `company-platform` 默认分支）
 
 ## 约束提示
 
