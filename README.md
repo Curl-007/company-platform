@@ -2,11 +2,74 @@
 
 这是一个可交付使用的全栈项目管理平台，包含前端 Web 应用和后端 API 服务。
 
+## 功能简介
+
+AI 驱动的企业级项目协作工作台，覆盖项目、需求、任务、测试全流程闭环，支持看板拖拽与迭代燃尽图可视化、AI 文档分析与工作日志智能解读、操作审计与动态追踪。页面按四组组织：
+
+- **日常工作**：工作台总览、我的工作、团队管理、团队日报、团队容量、动态中心
+- **项目交付**：项目执行、需求管理、测试质量、交付中心
+- **知识与智能**：文档中心、AI 分析、报表中心
+- **管理配置**：产品管理、研发流程、系统设置
+
+## 界面预览
+
+以下截图基于本地开发环境（开发测试账号 `admin@example.com` 登录），完整截图位于 `docs/screenshots/`。
+
+### 登录与工作台
+
+| 登录页 | 工作台总览 |
+| --- | --- |
+| ![登录页](docs/screenshots/01-login.png) | ![工作台](docs/screenshots/02-dashboard.png) |
+
+### 日常工作
+
+| 我的工作 | 团队管理 |
+| --- | --- |
+| ![我的工作](docs/screenshots/03-mywork.png) | ![团队管理](docs/screenshots/04-team.png) |
+
+| 团队日报 | 团队容量 |
+| --- | --- |
+| ![团队日报](docs/screenshots/05-teamlogs.png) | ![团队容量](docs/screenshots/06-capacity.png) |
+
+| 动态中心 |
+| --- |
+| ![动态中心](docs/screenshots/07-dynamic.png) |
+
+### 项目交付
+
+| 项目执行 | 需求管理 |
+| --- | --- |
+| ![项目执行](docs/screenshots/08-projects.png) | ![需求管理](docs/screenshots/09-requirements.png) |
+
+| 测试质量 | 交付中心 |
+| --- | --- |
+| ![测试质量](docs/screenshots/10-testing.png) | ![交付中心](docs/screenshots/11-delivery.png) |
+
+### 知识与智能
+
+| 文档中心 | AI 分析 |
+| --- | --- |
+| ![文档中心](docs/screenshots/12-documents.png) | ![AI 分析](docs/screenshots/13-ai.png) |
+
+| 报表中心 |
+| --- |
+| ![报表中心](docs/screenshots/14-reports.png) |
+
+### 管理配置
+
+| 产品管理 | 研发流程 |
+| --- | --- |
+| ![产品管理](docs/screenshots/15-products.png) | ![研发流程](docs/screenshots/16-flow.png) |
+
+| 系统设置 |
+| --- |
+| ![系统设置](docs/screenshots/17-settings.png) |
+
 ## 目录
 
 - `web/`：React + TypeScript 前端应用
 - `api/`：Node.js + SQLite 后端 API 服务
-- `docs/`：设计文档与实施说明
+- `docs/`：设计文档与实施说明（含 `screenshots/` 页面截图）
 
 ## 启动
 
