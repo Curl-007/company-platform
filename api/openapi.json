@@ -33,7 +33,10 @@
                       "properties": {
                         "status": {
                           "type": "string",
-                          "enum": ["ok", "fail"]
+                          "enum": [
+                            "ok",
+                            "fail"
+                          ]
                         },
                         "service": {
                           "type": "string"
@@ -5999,6 +6002,94 @@
         "responses": {
           "200": {
             "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/admin/ai-provider/models": {
+      "get": {
+        "summary": "List model identifiers available from the active AI provider",
+        "responses": {
+          "200": {
+            "description": "Available model list from the active provider",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "models": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/ai/models": {
+      "get": {
+        "summary": "List model identifiers available from the active AI provider",
+        "responses": {
+          "200": {
+            "description": "Available model list from the active provider",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "models": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       }
