@@ -13,8 +13,9 @@ export type MetricCardSize = 'default' | 'hero';
 interface MetricCardProps {
   /** The metric label, e.g. "Active Tasks" */
   label: string;
-  /** The metric value, e.g. "42" or "87%" */
-  value: string | number;
+  /** The metric value. Accepts a ReactNode so animated counters (e.g. CountUp)
+     can be passed in directly, in addition to plain strings/numbers. */
+  value: React.ReactNode;
   /** Optional trend text, e.g. "+5 this week" */
   trend?: string;
   /** Trend direction for color coding */

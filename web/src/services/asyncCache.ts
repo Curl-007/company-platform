@@ -6,7 +6,16 @@
 //   api.ts  → asyncCache.ts
 //   useAsync.ts → asyncCache.ts
 //   auth.ts → asyncCache.ts / api.ts
+//
+// After the TanStack Query migration, this Map still seeds initialData and is
+// kept in sync on successful loads. clear/invalidate also bridge into the
+// QueryClient so both caches stay coherent.
 // ---------------------------------------------------------------------------
+
+import {
+  clearQueryClientCache,
+  invalidateQueryClientCache,
+} from '../lib/queryClient';
 
 export interface CacheEntry<T = unknown> {
   data: T;
@@ -77,6 +86,7 @@ export function deleteAsyncCacheEntry(key: string): void {
 /** Invalidate every cached entry (e.g. on logout / 401). */
 export function clearAsyncCache(): void {
   cache.clear();
+  clearQueryClientCache();
 }
 
 /**
@@ -104,6 +114,8 @@ export function invalidateAsyncCache(
       removed += 1;
     }
   }
+  // Keep React Query in sync so active observers refetch.
+  invalidateQueryClientCache(match, cacheUserKey);
   return removed;
 }
 

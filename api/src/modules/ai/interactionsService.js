@@ -12,13 +12,14 @@ function validateAdviceTarget(input = {}) {
   return { targetType, targetId };
 }
 
-function buildChatPayload({ attachments, config, content, fallback, now, proposedActions = [] }) {
+function buildChatPayload({ attachments, config, content, fallback, now, proposedActions = [], modelUsed } = {}) {
+  const resolvedModel = String(modelUsed || config?.model || "").trim();
   return {
     id: `CHAT-${Date.now()}`,
     role: "assistant",
     content,
     createdAt: now(),
-    modelUsed: fallback ? "local-rule-engine" : config.model,
+    modelUsed: fallback ? "local-rule-engine" : (resolvedModel || config.model),
     generatedBy: fallback ? "local-rule-engine" : config.provider,
     fallback,
     attachments: attachments.map((item) => ({ name: item.name, mimeType: item.mimeType, size: item.size, kind: item.kind })),

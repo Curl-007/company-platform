@@ -5,6 +5,7 @@ import {
   Plus,
   Rocket,
   ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 import {
   deleteBuild,
@@ -16,7 +17,6 @@ import {
   updateReleaseStatus,
 } from '../api';
 import DeliveryAiPanel from './DeliveryAiPanel';
-import DeliveryKpi from './DeliveryKpi';
 import DeliveryFilters from './DeliveryFilters';
 import DeliveryRecordList from './DeliveryRecordList';
 import GateBoard from './GateBoard';
@@ -43,7 +43,6 @@ import { fetchDefects } from '../../testing/api';
 import { ApiError } from '../../../services/api';
 import { getSessionUser } from '../../../services/auth';
 import { useAsync } from '../../../hooks/useAsync';
-import PageHeader from '../../../components/common/PageHeader';
 import Panel from '../../../components/common/Panel';
 import PageState from '../../../components/common/PageState';
 import { useToast } from '../../../components/common/Toast';
@@ -51,11 +50,11 @@ import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { canOperate } from '../../../constants/roles';
 import type { Build, Defect, DeliveryGateResult, Product, Project, Release, Requirement } from '../../../types';
 
-const DELIVERY_TABS: Array<{ key: DeliveryTab; label: string }> = [
-  { key: 'overview', label: '全链路' },
-  { key: 'builds', label: '构建' },
-  { key: 'releases', label: '发布' },
-  { key: 'gates', label: '质量门禁' },
+const DELIVERY_TABS: Array<{ key: DeliveryTab; label: string; icon: typeof Package }> = [
+  { key: 'overview', label: '全链路', icon: Sparkles },
+  { key: 'builds', label: '构建', icon: Package },
+  { key: 'releases', label: '发布', icon: Rocket },
+  { key: 'gates', label: '质量门禁', icon: ShieldCheck },
 ];
 
 function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
@@ -118,7 +117,6 @@ export default function DeliveryCenterView() {
     function syncRoute() {
       setRoute(currentDeliveryRoute());
     }
-
     syncRoute();
     window.addEventListener('hashchange', syncRoute);
     return () => window.removeEventListener('hashchange', syncRoute);
@@ -133,11 +131,7 @@ export default function DeliveryCenterView() {
     if (!route.focusId || loading) return;
     const focus = route.focusId.toLowerCase();
     const record = records.find((item) => {
-      return [
-        item.id,
-        item.buildId ?? '',
-        item.version ?? '',
-      ].some((value) => value.toLowerCase() === focus);
+      return [item.id, item.buildId ?? '', item.version ?? ''].some((value) => value.toLowerCase() === focus);
     });
     if (!record) return;
     setTab(record.kind === 'build' ? 'builds' : 'releases');
@@ -164,17 +158,36 @@ export default function DeliveryCenterView() {
 
   const summary = useMemo(() => {
     const released = releases.filter((item) => item.status === 'released').length;
-    const inValidation = builds.filter((item) => item.status === 'testing').length + releases.filter((item) => item.status === 'staging').length;
+    const inValidation = builds.filter((item) => item.status === 'testing').length
+      + releases.filter((item) => item.status === 'staging').length;
     const blockedGates = gateResults.filter((item) => !item.ready).length;
-    const risks = builds.filter((item) => item.status === 'failed').length + releases.filter((item) => item.status === 'rollback').length + blockedGates;
+    const failedBuilds = builds.filter((item) => item.status === 'failed').length;
+    const rollbacks = releases.filter((item) => item.status === 'rollback').length;
+    const risks = failedBuilds + rollbacks + blockedGates;
     const candidates = builds.filter((item) => item.status === 'released' && !releaseBuildIds.has(item.id)).length;
-    return { released, inValidation, risks, candidates, blockedGates };
+    return {
+      builds: builds.length,
+      releases: releases.length,
+      released,
+      inValidation,
+      risks,
+      candidates,
+      blockedGates,
+      failedBuilds,
+      rollbacks,
+    };
   }, [builds, gateResults, releaseBuildIds, releases]);
 
   const pipelineStages = useMemo(
     () => buildPipelineStages(records, releaseBuildIds),
     [records, releaseBuildIds],
   );
+
+  const tabRecords = useMemo(() => {
+    if (tab === 'builds') return filteredRecords.filter((item) => item.kind === 'build');
+    if (tab === 'releases') return filteredRecords.filter((item) => item.kind === 'release');
+    return filteredRecords;
+  }, [filteredRecords, tab]);
 
   function reloadAll() {
     buildsState.reload();
@@ -186,7 +199,6 @@ export default function DeliveryCenterView() {
 
   function openRecord(record: DeliveryRecord | null) {
     setStatusError(null);
-    // Normalize arrays so detail panels never crash on missing linked fields
     if (record) {
       setSelected({
         ...record,
@@ -245,57 +257,77 @@ export default function DeliveryCenterView() {
   const statusChoices = Array.from(new Set([...BUILD_STATUS_OPTIONS, ...RELEASE_STATUS_OPTIONS]));
 
   return (
-    <div className="delivery-center-page">
-      <PageHeader
-        title="构建发布中心"
-        description="把项目构建、质量验证、候选版本和对外发布放在同一条交付链路里管理。"
-        actions={canManageDelivery ? (
-          <div className="delivery-header-actions">
-            <button className="btn btn-secondary btn-sm" onClick={() => setCreatingBuild(true)}>
-              <Plus size={15} /> 新建构建
-            </button>
-            <button className="btn btn-primary btn-sm" onClick={() => setCreatingRelease(true)}>
-              <Rocket size={15} /> 新建发布
-            </button>
-          </div>
-        ) : undefined}
-      />
-
-      <div className="delivery-kpi-grid">
-        <DeliveryKpi icon={<Package size={18} />} label="构建总数" value={builds.length} meta={`${summary.candidates} 个候选发布`} />
-        <DeliveryKpi icon={<Rocket size={18} />} label="发布总数" value={releases.length} meta={`${summary.released} 个已发布`} tone="success" />
-        <DeliveryKpi icon={<ShieldCheck size={18} />} label="验证中" value={summary.inValidation} meta="构建测试 + 预发布" tone="info" />
-        <DeliveryKpi icon={<AlertTriangle size={18} />} label="门禁阻断" value={summary.risks} meta={`${summary.blockedGates} 条准入规则待处理`} tone={summary.risks > 0 ? 'risk' : 'success'} />
-      </div>
+    <div className="dl-workbench delivery-center-page">
+      <section className="dl-signal-strip" aria-label="交付概况">
+        <div className="dl-signal">
+          <span className="dl-signal-label"><Package size={13} aria-hidden="true" /> 构建</span>
+          <strong>{summary.builds}</strong>
+          <em>候选发布 {summary.candidates}</em>
+        </div>
+        <div className="dl-signal">
+          <span className="dl-signal-label"><Rocket size={13} aria-hidden="true" /> 发布</span>
+          <strong>{summary.releases}</strong>
+          <em>已发布 {summary.released}</em>
+        </div>
+        <div className={`dl-signal ${summary.inValidation > 0 ? 'is-info' : ''}`}>
+          <span className="dl-signal-label"><ShieldCheck size={13} aria-hidden="true" /> 验证中</span>
+          <strong>{summary.inValidation}</strong>
+          <em>测试 + 预发</em>
+        </div>
+        <div className={`dl-signal ${summary.blockedGates > 0 ? 'is-warn' : ''}`}>
+          <span className="dl-signal-label"><ShieldCheck size={13} aria-hidden="true" /> 门禁阻断</span>
+          <strong>{summary.blockedGates}</strong>
+          <em>准入规则待处理</em>
+        </div>
+        <div className={`dl-signal ${summary.risks > 0 ? 'is-risk' : ''}`}>
+          <span className="dl-signal-label"><AlertTriangle size={13} aria-hidden="true" /> 风险项</span>
+          <strong>{summary.risks}</strong>
+          <em>失败 {summary.failedBuilds} · 回滚 {summary.rollbacks}</em>
+        </div>
+      </section>
 
       {canUseAi ? (
         <DeliveryAiPanel
           prompt={buildDeliveryAiPrompt(records, gateResults, requirements, defects)}
-          candidateCount={records.filter((item) => item.kind === 'build' && item.status === 'released').length}
-          blockedGateCount={gateResults.filter((item) => !item.ready).length}
+          candidateCount={summary.candidates}
+          blockedGateCount={summary.blockedGates}
           openDefectCount={defects.filter((item) => item.status !== 'closed').length}
           loading={loading}
           error={error}
+          onReload={reloadAll}
         />
       ) : null}
 
-      <div className="delivery-tabs" role="tablist" aria-label="构建发布视图">
-        {DELIVERY_TABS.map(({ key, label }) => (
-          <button
-            key={key}
-            id={`delivery-tab-${key}`}
-            type="button"
-            role="tab"
-            className={`delivery-tab ${tab === key ? 'active' : ''}`}
-            aria-selected={tab === key}
-            aria-controls={`delivery-panel-${key}`}
-            tabIndex={tab === key ? 0 : -1}
-            onClick={() => setTab(key)}
-            onKeyDown={handleTabKeyDown}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="dl-toolbar">
+        <div className="dl-tab-row" role="tablist" aria-label="构建发布视图">
+          {DELIVERY_TABS.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              id={`delivery-tab-${key}`}
+              type="button"
+              role="tab"
+              className={`dl-tab-chip ${tab === key ? 'is-active' : ''}`}
+              aria-selected={tab === key}
+              aria-controls={`delivery-panel-${key}`}
+              tabIndex={tab === key ? 0 : -1}
+              onClick={() => setTab(key)}
+              onKeyDown={handleTabKeyDown}
+            >
+              <Icon size={14} aria-hidden="true" />
+              {label}
+            </button>
+          ))}
+        </div>
+        {canManageDelivery ? (
+          <div className="dl-actions">
+            <button className="btn btn-secondary btn-sm btn-with-icon" onClick={() => setCreatingBuild(true)}>
+              <Plus size={14} aria-hidden="true" /> 新建构建
+            </button>
+            <button className="btn btn-primary btn-sm btn-with-icon" onClick={() => setCreatingRelease(true)}>
+              <Rocket size={14} aria-hidden="true" /> 新建发布
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {DELIVERY_TABS.map(({ key }) => (
@@ -303,7 +335,7 @@ export default function DeliveryCenterView() {
           key={key}
           id={`delivery-panel-${key}`}
           role="tabpanel"
-          className={tab === key ? 'stack' : undefined}
+          className={tab === key ? 'dl-panel-stack' : undefined}
           aria-labelledby={`delivery-tab-${key}`}
           hidden={tab !== key}
         >
@@ -326,55 +358,90 @@ export default function DeliveryCenterView() {
                   />
                 ) : null}
 
-                {tab !== 'overview' ? (
-                  <Panel
-                    title={tab === 'builds' ? '构建清单' : tab === 'releases' ? '发布清单' : '质量门禁'}
-                    subtitle={`当前显示 ${filteredRecords.length} / ${records.length} 条交付记录`}
-                  >
-                    <DeliveryFilters
-                      keyword={keyword}
-                      onKeyword={setKeyword}
-                      kind={kindFilter}
-                      onKind={setKindFilter}
-                      status={statusFilter}
-                      onStatus={setStatusFilter}
-                      statusChoices={statusChoices}
+                <Panel
+                  className="dl-pool-panel"
+                  title={
+                    tab === 'overview'
+                      ? '最近交付记录'
+                      : tab === 'builds'
+                        ? '构建清单'
+                        : tab === 'releases'
+                          ? '发布清单'
+                          : '质量门禁'
+                  }
+                  subtitle={
+                    tab === 'gates'
+                      ? `显示 ${tabRecords.length} / ${records.length} 条 · 阻断 ${summary.blockedGates}`
+                      : `显示 ${tabRecords.length} / ${records.length} 条交付记录`
+                  }
+                >
+                  <DeliveryFilters
+                    keyword={keyword}
+                    onKeyword={setKeyword}
+                    kind={kindFilter}
+                    onKind={setKindFilter}
+                    status={statusFilter}
+                    onStatus={setStatusFilter}
+                    statusChoices={statusChoices}
+                    hideKind={tab === 'builds' || tab === 'releases'}
+                  />
+                  {tab === 'gates' ? (
+                    <GateBoard records={tabRecords} gateMap={gateMap} onOpen={openRecord} />
+                  ) : (
+                    <DeliveryRecordList
+                      records={tabRecords}
+                      gateMap={gateMap}
+                      onOpen={openRecord}
+                      onStatus={handleStatus}
+                      onDelete={handleDelete}
+                      canManageDelivery={canManageDelivery}
                     />
-                    {tab === 'gates' ? (
-                      <GateBoard records={filteredRecords} gateMap={gateMap} onOpen={openRecord} />
-                    ) : (
-                      <DeliveryRecordList
-                        records={filteredRecords.filter((record) => tab === 'builds' ? record.kind === 'build' : record.kind === 'release')}
-                        onOpen={openRecord}
-                        onStatus={handleStatus}
-                        onDelete={handleDelete}
-                        canManageDelivery={canManageDelivery}
-                      />
-                    )}
-                  </Panel>
-                ) : (
-                  <Panel title="最近交付记录" subtitle="构建、预发、正式发布和回滚统一追踪">
-                    <DeliveryFilters
-                      keyword={keyword}
-                      onKeyword={setKeyword}
-                      kind={kindFilter}
-                      onKind={setKindFilter}
-                      status={statusFilter}
-                      onStatus={setStatusFilter}
-                      statusChoices={statusChoices}
-                    />
-                    <DeliveryRecordList records={filteredRecords} onOpen={openRecord} onStatus={handleStatus} onDelete={handleDelete} canManageDelivery={canManageDelivery} />
-                  </Panel>
-                )}
+                  )}
+                </Panel>
               </>
             )
           ) : null}
         </div>
       ))}
 
-      {selected ? <DeliveryDetail record={selected} gate={gateMap.get(`${selected.kind}:${selected.id}`)} statusError={statusError} onClose={() => openRecord(null)} onStatus={handleStatus} onDelete={handleDelete} onChanged={reloadAll} canManageDelivery={canManageDelivery} canUseAi={canUseAi} /> : null}
-      {creatingBuild && canManageDelivery ? <CreateBuildDialog projects={projects} requirements={requirements} defects={defects} onClose={() => setCreatingBuild(false)} onCreated={() => { setCreatingBuild(false); reloadAll(); }} /> : null}
-      {creatingRelease && canManageDelivery ? <CreateReleaseDialog products={products} builds={builds} requirements={requirements} defects={defects} onClose={() => setCreatingRelease(false)} onCreated={() => { setCreatingRelease(false); reloadAll(); }} /> : null}
+      {selected ? (
+        <DeliveryDetail
+          record={selected}
+          gate={gateMap.get(`${selected.kind}:${selected.id}`)}
+          statusError={statusError}
+          onClose={() => openRecord(null)}
+          onStatus={handleStatus}
+          onDelete={handleDelete}
+          onChanged={reloadAll}
+          canManageDelivery={canManageDelivery}
+          canUseAi={canUseAi}
+        />
+      ) : null}
+      {creatingBuild && canManageDelivery ? (
+        <CreateBuildDialog
+          projects={projects}
+          requirements={requirements}
+          defects={defects}
+          onClose={() => setCreatingBuild(false)}
+          onCreated={() => {
+            setCreatingBuild(false);
+            reloadAll();
+          }}
+        />
+      ) : null}
+      {creatingRelease && canManageDelivery ? (
+        <CreateReleaseDialog
+          products={products}
+          builds={builds}
+          requirements={requirements}
+          defects={defects}
+          onClose={() => setCreatingRelease(false)}
+          onCreated={() => {
+            setCreatingRelease(false);
+            reloadAll();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

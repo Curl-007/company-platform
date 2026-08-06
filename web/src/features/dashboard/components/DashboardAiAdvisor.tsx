@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { sendAiChat } from '../../ai/api';
 import { ApiError } from '../../../services/api';
 import Panel from '../../../components/common/Panel';
+import { Button } from '../../../components/ui';
 import type { DashboardData } from '../../../types';
 import {
   TASK_STATUS_LABELS,
@@ -51,6 +52,12 @@ export default function DashboardAiAdvisor({ data }: { data: DashboardData }) {
   const [aiAdvice, setAiAdvice] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const ai = data.ai;
+  // The pre-generated AI summary (data.ai) is shown as the initial/fallback
+  // content until the user generates a fresh analysis. This consolidates the
+  // old AiSummaryPanel into this single AI panel.
+  const hasSummary = Boolean(ai?.summary || ai?.risks?.length || ai?.recommendations?.length);
+  const showGenerated = aiAdvice || aiLoading || aiError;
 
   async function handleAnalyze() {
     setAiError(null);
@@ -79,22 +86,37 @@ export default function DashboardAiAdvisor({ data }: { data: DashboardData }) {
       title="AI 管理参谋"
       subtitle="基于当前 KPI、行动队列、风险项目和需求推进生成"
       toolbar={(
-        <button className="btn btn-primary btn-sm" onClick={handleAnalyze} disabled={aiLoading}>
+        <Button size="sm" variant="primary" onClick={handleAnalyze} disabled={aiLoading}>
           {aiLoading ? 'AI 分析中...' : aiAdvice ? '重新分析' : '生成建议'}
-        </button>
+        </Button>
       )}
     >
-      <div className="dashboard-ai-signal-grid">
-        <span>健康 {data.metrics.projectHealthAverage}</span>
-        <span>需求 {data.metrics.requirementCompletionAverage}%</span>
-        <span>测试 {data.metrics.testPassRate}%</span>
-        <span>风险 {data.metrics.openRisks}</span>
-      </div>
-      {(aiAdvice || aiLoading || aiError) ? (
+      {showGenerated ? (
         <div className="dashboard-ai-result">
           {aiLoading ? <div className="body-text">AI 正在分析经营指标、任务阻塞和项目风险，请稍候...</div> : null}
           {aiError ? <div className="form-error">{aiError}</div> : null}
           {aiAdvice ? <div className="dashboard-ai-content">{aiAdvice}</div> : null}
+        </div>
+      ) : hasSummary ? (
+        <div className="dashboard-ai-summary">
+          <div className="dashboard-ai-summary-title">{ai?.title || 'AI 总结'}</div>
+          {ai?.summary ? <p className="body-text">{ai.summary}</p> : null}
+          {ai?.risks?.length ? (
+            <div className="dashboard-ai-summary-section">
+              <div className="dashboard-ai-summary-heading">风险提醒</div>
+              <ul className="dashboard-ai-summary-list">
+                {ai.risks.map((risk, index) => <li key={index}>{risk}</li>)}
+              </ul>
+            </div>
+          ) : null}
+          {ai?.recommendations?.length ? (
+            <div className="dashboard-ai-summary-section">
+              <div className="dashboard-ai-summary-heading">建议动作</div>
+              <ul className="dashboard-ai-summary-list">
+                {ai.recommendations.map((rec, index) => <li key={index}>{rec}</li>)}
+              </ul>
+            </div>
+          ) : null}
         </div>
       ) : (
         <p className="body-text dashboard-ai-empty">点击生成后，会给出本周优先动作、风险处置和需要补齐的数据。</p>

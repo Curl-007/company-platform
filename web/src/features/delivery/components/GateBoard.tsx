@@ -9,9 +9,12 @@ import {
 
 export function GateLine({ label, value, passed }: { label: string; value: string; passed: boolean }) {
   return (
-    <div className={`delivery-gate-line ${passed ? 'passed' : 'blocked'}`}>
-      <span>{passed ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}{label}</span>
-      <strong>{value}</strong>
+    <div className={`dl-gate-line delivery-gate-line ${passed ? 'passed' : 'blocked'}`}>
+      <span>
+        {passed ? <CheckCircle2 size={13} aria-hidden="true" /> : <AlertTriangle size={13} aria-hidden="true" />}
+        {label}
+      </span>
+      <strong title={value}>{value}</strong>
     </div>
   );
 }
@@ -26,32 +29,47 @@ export default function GateBoard({
   onOpen: (record: DeliveryRecord) => void;
 }) {
   return (
-    <div className="delivery-gate-board">
+    <div className="dl-gate-board delivery-gate-board">
       {records.map((record) => {
         const gate = gateMap.get(`${record.kind}:${record.id}`);
+        const score = gate?.score ?? releaseReadiness(record);
         return (
-          <button className={`delivery-gate-card ${gate?.ready ? 'ready' : 'blocked'}`} key={`${record.kind}-${record.id}`} onClick={() => onOpen(record)}>
-            <div className="delivery-gate-head">
-              <span className="delivery-version">{record.version ? `v${record.version}` : record.id}</span>
-              <strong>{record.title}</strong>
+          <button
+            className={`dl-gate-card delivery-gate-card ${gate?.ready ? 'ready' : 'blocked'}`}
+            key={`${record.kind}-${record.id}`}
+            onClick={() => onOpen(record)}
+          >
+            <div className="dl-gate-head delivery-gate-head">
+              <span className="dl-version delivery-version text-mono">
+                {record.version ? `v${record.version}` : record.id}
+              </span>
+              <strong className="dl-gate-title" title={record.title}>{record.title}</strong>
               <StatusBadge status={record.status} label={statusLabel(record.kind, record.status)} showDot={false} />
             </div>
-            <div className="delivery-gate-summary">
+
+            <div className="dl-gate-summary-row delivery-gate-summary">
               <span>{gate?.summary ?? '正在读取门禁结果'}</span>
-              <strong>{gate?.score ?? releaseReadiness(record)}%</strong>
+              <strong className="text-mono">{score}%</strong>
             </div>
-            {(gate?.gates ?? []).map((line) => (
-              <GateLine key={line.id} label={line.label} passed={line.passed} value={line.message} />
-            ))}
-            {!gate ? <GateLine label="门禁预检" passed={false} value="暂未获取到后端预检结果" /> : null}
-            <div className="delivery-linked-list">
+
+            <div className="dl-gate-lines">
+              {(gate?.gates ?? []).map((line) => (
+                <GateLine key={line.id} label={line.label} passed={line.passed} value={line.message} />
+              ))}
+              {!gate ? <GateLine label="门禁预检" passed={false} value="暂未获取到后端预检结果" /> : null}
+            </div>
+
+            <div className="dl-linked-list delivery-linked-list">
               {record.linkedStories.slice(0, 3).map((item) => <span key={item}>需求 {item}</span>)}
               {record.linkedBugs.slice(0, 3).map((item) => <span key={item}>缺陷 {item}</span>)}
+              {record.linkedStories.length === 0 && record.linkedBugs.length === 0 ? (
+                <span className="is-muted">暂无关联需求 / 缺陷</span>
+              ) : null}
             </div>
           </button>
         );
       })}
-      {records.length === 0 ? <div className="delivery-empty-block">暂无门禁记录。</div> : null}
+      {records.length === 0 ? <div className="dl-empty delivery-empty-block">暂无门禁记录。</div> : null}
     </div>
   );
 }

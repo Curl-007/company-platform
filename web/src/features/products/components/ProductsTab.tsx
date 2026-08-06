@@ -24,6 +24,7 @@ import PageState from '../../../components/common/PageState';
 import StatusBadge from '../../../components/common/StatusBadge';
 import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
+import { summarizeDependencies } from '../../../utils/dependencySummary';
 import { canOperate } from '../../../constants/roles';
 import {
   MODULE_STATUS_LABELS,
@@ -96,6 +97,32 @@ export default function ProductsTab() {
       toast.success('产品已删除');
       reload();
     } catch (error) {
+      // 409 = has dependencies (requirements/releases/images/portfolios); offer cascade.
+      if (error instanceof ApiError && error.status === 409) {
+        const summary = summarizeDependencies((error.body as { details?: { dependencies?: Record<string, unknown> } })?.details?.dependencies);
+        const cascade = await confirm({
+          title: summary ? '检测到关联记录' : '该产品存在关联记录',
+          description: summary
+            ? `“${product.name}”关联了 ${summary}。是否一并删除/解除这些记录？此操作不可恢复。`
+            : `“${product.name}”仍有关联记录。是否一并删除/解除？此操作不可恢复。`,
+          confirmText: '级联删除',
+          tone: 'danger',
+        });
+        if (!cascade) {
+          setDeletingId(null);
+          return;
+        }
+        try {
+          await deleteProduct(product.id, true);
+          toast.success(`已删除产品及其关联记录：${product.name}`);
+          reload();
+        } catch (cascadeErr) {
+          toast.error(cascadeErr instanceof ApiError ? cascadeErr.message : '级联删除失败');
+        } finally {
+          setDeletingId(null);
+        }
+        return;
+      }
       toast.error(error instanceof ApiError ? error.message : '删除失败');
     } finally {
       setDeletingId(null);
@@ -109,13 +136,27 @@ export default function ProductsTab() {
   return (
     <>
       {products.length === 0 ? (
-        <Panel
-          title="产品工作台"
-          subtitle="先建立一个产品，再维护版本、图片、能力模块、资产参数和路线图。"
-          toolbar={canManageProducts ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建产品</button> : undefined}
-        >
-          <PageState loading={false} error={null} isEmpty emptyTitle="暂无产品" emptyDescription="当前还没有录入任何产品信息。" />
-        </Panel>
+        <div className="product-workbench product-workbench-flush">
+          <Panel
+            className="product-workbench-main"
+            title="产品工作台"
+            subtitle="先建立一个产品，再维护版本、图片、能力模块、资产参数和路线图。"
+            toolbar={canManageProducts ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建产品</button> : undefined}
+            noPadding
+          >
+            <div className="product-workbench-grid">
+              <div className="product-list-pane">
+                <div className="product-list-pane-header">产品清单</div>
+                <div className="product-list">
+                  <div className="product-empty-line">暂无产品。</div>
+                </div>
+              </div>
+              <div className="product-detail-pane">
+                <PageState loading={false} error={null} isEmpty emptyTitle="暂无产品" emptyDescription="当前还没有录入任何产品信息。" />
+              </div>
+            </div>
+          </Panel>
+        </div>
       ) : (
         <div className="product-workbench product-workbench-flush">
           <Panel

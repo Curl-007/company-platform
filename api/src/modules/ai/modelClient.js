@@ -34,6 +34,7 @@ function createAiModelClient({
     const config = await getConfig();
     if (!config || !config.enabled) return null;
     if (!config.apiKey || !config.baseUrl || !config.model) return null;
+    const model = String(options.model || config.model || "").trim() || config.model;
     const system = options.system || "你是企业项目管理平台的分析助手，输出简洁、可审核、可落地的中文内容。";
     const imageAttachments = normalizeAttachments(options.attachments || []).filter((item) => item.kind === "image");
     const responseUserContent = [
@@ -46,7 +47,7 @@ function createAiModelClient({
     ];
     const buildBody = (wireApi) => wireApi === "responses"
       ? {
-          model: config.model,
+          model,
           input: [
             { role: "system", content: system },
             { role: "user", content: responseUserContent.length > 1 ? responseUserContent : prompt },
@@ -56,7 +57,7 @@ function createAiModelClient({
           store: !config.disableResponseStorage,
         }
       : {
-          model: config.model,
+          model,
           messages: [
             { role: "system", content: system },
             { role: "user", content: chatUserContent.length > 1 ? chatUserContent : prompt },

@@ -1,7 +1,18 @@
 import { useState } from 'react';
+import {
+  Bot,
+  CheckCircle2,
+  ListTree,
+  Save,
+  Sparkles,
+  UserRound,
+  X,
+} from 'lucide-react';
 import { fetchAiBusinessAdvice } from '../../ai/api';
 import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
+import StatusBadge from '../../../components/common/StatusBadge';
+import ProgressBar from '../../../components/common/ProgressBar';
 import { ApiError } from '../../../services/api';
 import { getSessionUser } from '../../../services/auth';
 import type { AiBusinessAdvice, Project, Requirement } from '../../../types';
@@ -49,14 +60,23 @@ function AdviceList({ title, items }: { title: string; items?: string[] }) {
   );
 }
 
-export default function RequirementDetail({ requirement, projects, allRequirements, onClose, onUpdated, canManage }: RequirementDetailProps) {
+export default function RequirementDetail({
+  requirement,
+  projects,
+  allRequirements,
+  onClose,
+  onUpdated,
+  canManage,
+}: RequirementDetailProps) {
   const [title, setTitle] = useState(requirement.title);
   const [description, setDescription] = useState(requirement.description ?? '');
   const [priority, setPriority] = useState(requirement.priority);
   const [status, setStatus] = useState(requirement.status);
   const [assignee, setAssignee] = useState(requirement.assignee ?? '');
   const [assigneeRole, setAssigneeRole] = useState(requirement.assigneeRole ?? 'dev');
-  const [assignmentStatus, setAssignmentStatus] = useState(requirement.assignmentStatus ?? (requirement.assignee ? 'assigned' : 'unassigned'));
+  const [assignmentStatus, setAssignmentStatus] = useState(
+    requirement.assignmentStatus ?? (requirement.assignee ? 'assigned' : 'unassigned'),
+  );
   const [completion, setCompletion] = useState(String(requirement.completion ?? 0));
   const [criteria, setCriteria] = useState((requirement.acceptanceCriteria ?? []).join('\n'));
   const [submitting, setSubmitting] = useState(false);
@@ -64,9 +84,14 @@ export default function RequirementDetail({ requirement, projects, allRequiremen
   const [aiAdvice, setAiAdvice] = useState<AiBusinessAdvice | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+
   const projectName = projects.find((item) => item.id === requirement.projectId)?.name ?? requirement.projectId;
   const childCount = allRequirements.filter((item) => item.parentId === requirement.id).length;
+  const linkedTaskCount = requirement.linkedTasks?.length ?? 0;
+  const completionNum = Math.max(0, Math.min(100, Number(completion) || 0));
   const canUseAi = canOperate(getSessionUser(), 'ai:analyze');
+  const assignmentLabel = ASSIGNMENT_STATUS_OPTIONS.find((item) => item.value === assignmentStatus)?.label
+    ?? assignmentStatus;
 
   async function handleSave() {
     if (!canManage) return setFormError('当前账号无权更新需求。');
@@ -106,10 +131,13 @@ export default function RequirementDetail({ requirement, projects, allRequiremen
         question: '请结合需求、任务、测试、缺陷和当前编辑草稿，给出需求拆解、验收补强、协作风险和下一步动作。',
         draft: {
           title: title.trim() || requirement.title,
-          description: description.trim(), status, priority,
+          description: description.trim(),
+          status,
+          priority,
           assignee: assignee.trim() || null,
           assigneeRole: assignee.trim() ? assigneeRole : null,
-          assignmentStatus, completion: Number(completion) || 0,
+          assignmentStatus,
+          completion: Number(completion) || 0,
           acceptanceCriteria: criteria.split('\n').map((item) => item.trim()).filter(Boolean),
         },
       });
@@ -122,34 +150,231 @@ export default function RequirementDetail({ requirement, projects, allRequiremen
   }
 
   return (
-    <Overlay onClose={onClose}>
-      <Panel title={requirement.title} subtitle={`${requirement.id} · ${projectName}`} toolbar={canUseAi ? (
-        <button className="btn btn-primary btn-sm" onClick={handleAiAdvice} disabled={aiLoading}>{aiLoading ? 'AI 分析中...' : 'AI 需求分析'}</button>
-      ) : undefined}>
-        {formError ? <div className="form-error" style={{ marginBottom: 8 }}>{formError}</div> : null}
-        {(aiAdvice || aiLoading || aiError) ? (
-          <section className="requirement-ai-advice-panel">
-            <div className="requirement-ai-advice-head"><div><div className="section-title">{aiAdvice?.title || 'AI 需求分析'}</div><div className="body-text">基于后端真实需求、任务、测试、缺陷和当前编辑草稿生成。{aiAdvice?.modelUsed ? ` · ${aiAdvice.modelUsed}` : ''}{aiAdvice?.fallback ? ' · 规则兜底' : ''}</div></div>
-              {aiAdvice ? <button className="btn btn-secondary btn-xs" onClick={handleAiAdvice} disabled={aiLoading}>重新分析</button> : null}
+    <Overlay onClose={onClose} maxWidth={760} ariaLabel={`需求详情：${requirement.title}`}>
+      <Panel
+        className="req-detail-panel"
+        title={requirement.title}
+        subtitle={`${requirement.id} · ${projectName}`}
+        toolbar={(
+          <div className="req-detail-toolbar">
+            {canUseAi ? (
+              <button
+                className="btn btn-secondary btn-sm btn-with-icon"
+                onClick={handleAiAdvice}
+                disabled={aiLoading}
+              >
+                <Sparkles size={14} aria-hidden="true" />
+                {aiLoading ? '分析中...' : 'AI 分析'}
+              </button>
+            ) : null}
+            <button className="btn btn-text btn-sm btn-with-icon" onClick={onClose} aria-label="关闭">
+              <X size={15} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+      >
+        <div className="req-detail-body">
+          <section className="req-detail-summary" aria-label="需求摘要">
+            <div className="req-detail-badges">
+              <StatusBadge status={priority} label={labelOf(PRIORITY_LABELS, priority)} showDot={false} />
+              <StatusBadge status={status} label={labelOf(REQUIREMENT_STATUS_LABELS, status)} />
+              <span className="req-detail-chip">{assignmentLabel}</span>
             </div>
-            {aiLoading ? <div className="body-text">AI 正在分析需求拆解、验收口径和交付风险，请稍候...</div> : null}
-            {aiError ? <div className="form-error">{aiError}</div> : null}
-            {aiAdvice ? <div className="requirement-ai-advice-content"><p>{aiAdvice.summary}</p><AdviceList title="风险" items={aiAdvice.risks} /><AdviceList title="建议" items={aiAdvice.suggestions} /><AdviceList title="下一步" items={aiAdvice.nextActions} /><AdviceList title="缺少信息" items={aiAdvice.missingInfo} /></div> : null}
+
+            <div className="req-detail-metrics">
+              <div className="req-detail-metric">
+                <span><UserRound size={13} aria-hidden="true" /> 负责人</span>
+                <strong>{requirement.owner || '未设置'}</strong>
+              </div>
+              <div className="req-detail-metric">
+                <span><UserRound size={13} aria-hidden="true" /> 执行人</span>
+                <strong>
+                  {requirement.assignee || '未分配'}
+                  {requirement.assigneeRole
+                    ? ` · ${labelOf(USER_ROLE_LABELS, requirement.assigneeRole)}`
+                    : ''}
+                </strong>
+              </div>
+              <div className="req-detail-metric">
+                <span><ListTree size={13} aria-hidden="true" /> 子需求</span>
+                <strong>{childCount}</strong>
+              </div>
+              <div className="req-detail-metric">
+                <span><CheckCircle2 size={13} aria-hidden="true" /> 关联任务</span>
+                <strong>{linkedTaskCount}</strong>
+              </div>
+            </div>
+
+            <div className="req-detail-progress">
+              <div className="req-detail-progress-head">
+                <span>完成度</span>
+                <strong className="text-mono">{completionNum}%</strong>
+              </div>
+              <ProgressBar percent={completionNum} height={7} showPercent={false} />
+            </div>
           </section>
-        ) : null}
-        <div className="detail-grid" style={{ marginBottom: 16 }}>
-          <div className="detail-field"><span className="detail-label">需求负责人</span><span>{requirement.owner || '-'}</span></div>
-          <div className="detail-field"><span className="detail-label">当前执行人</span><span>{requirement.assignee || '未分配'}</span></div>
-          <div className="detail-field"><span className="detail-label">执行角色</span><span>{requirement.assigneeRole ? labelOf(USER_ROLE_LABELS, requirement.assigneeRole) : '未设置'}</span></div>
-          <div className="detail-field"><span className="detail-label">关联子需求</span><span>{childCount}</span></div>
+
+          {formError ? <div className="form-error req-detail-error">{formError}</div> : null}
+
+          {(aiAdvice || aiLoading || aiError) ? (
+            <section className="requirement-ai-advice-panel req-detail-ai">
+              <div className="requirement-ai-advice-head">
+                <div>
+                  <div className="section-title req-ai-title">
+                    <Bot size={14} aria-hidden="true" />
+                    {aiAdvice?.title || 'AI 需求分析'}
+                  </div>
+                  <div className="body-text">
+                    基于需求、任务、测试、缺陷和当前草稿生成
+                    {aiAdvice?.modelUsed ? ` · ${aiAdvice.modelUsed}` : ''}
+                    {aiAdvice?.fallback ? ' · 规则兜底' : ''}
+                  </div>
+                </div>
+                {aiAdvice ? (
+                  <button className="btn btn-secondary btn-xs" onClick={handleAiAdvice} disabled={aiLoading}>
+                    重新分析
+                  </button>
+                ) : null}
+              </div>
+              {aiLoading ? <div className="body-text">AI 正在分析需求拆解、验收口径和交付风险…</div> : null}
+              {aiError ? <div className="form-error">{aiError}</div> : null}
+              {aiAdvice ? (
+                <div className="requirement-ai-advice-content">
+                  <p>{aiAdvice.summary}</p>
+                  <AdviceList title="风险" items={aiAdvice.risks} />
+                  <AdviceList title="建议" items={aiAdvice.suggestions} />
+                  <AdviceList title="下一步" items={aiAdvice.nextActions} />
+                  <AdviceList title="缺少信息" items={aiAdvice.missingInfo} />
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          <section className="req-detail-form" aria-label="需求编辑">
+            <div className="form-group">
+              <label className="form-label">需求标题</label>
+              <input
+                className="form-input"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                disabled={!canManage}
+              />
+            </div>
+
+            <div className="req-form-grid">
+              <div className="form-group">
+                <label className="form-label">状态</label>
+                <select
+                  className="form-select"
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value)}
+                  disabled={!canManage}
+                >
+                  {REQUIREMENT_STATUSES.map((item) => (
+                    <option key={item} value={item}>{labelOf(REQUIREMENT_STATUS_LABELS, item)}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">优先级</label>
+                <select
+                  className="form-select"
+                  value={priority}
+                  onChange={(event) => setPriority(event.target.value)}
+                  disabled={!canManage}
+                >
+                  {REQUIREMENT_PRIORITIES.map((item) => (
+                    <option key={item} value={item}>{labelOf(PRIORITY_LABELS, item)}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">执行人</label>
+                <input
+                  className="form-input"
+                  value={assignee}
+                  onChange={(event) => setAssignee(event.target.value)}
+                  disabled={!canManage}
+                  placeholder="开发 / 测试执行人"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">执行角色</label>
+                <select
+                  className="form-select"
+                  value={assigneeRole}
+                  onChange={(event) => setAssigneeRole(event.target.value)}
+                  disabled={!canManage}
+                >
+                  {EXEC_ROLE_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">指派状态</label>
+                <select
+                  className="form-select"
+                  value={assignmentStatus}
+                  onChange={(event) => setAssignmentStatus(event.target.value)}
+                  disabled={!canManage}
+                >
+                  {ASSIGNMENT_STATUS_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">完成度</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={completion}
+                  onChange={(event) => setCompletion(event.target.value)}
+                  disabled={!canManage}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">需求描述</label>
+              <textarea
+                className="form-textarea"
+                rows={4}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                disabled={!canManage}
+                placeholder="背景、目标、边界与约束"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">验收标准（每行一条）</label>
+              <textarea
+                className="form-textarea"
+                rows={4}
+                value={criteria}
+                onChange={(event) => setCriteria(event.target.value)}
+                disabled={!canManage}
+                placeholder={'例如：\n登录成功后跳转工作台\n失败时展示明确错误提示'}
+              />
+            </div>
+          </section>
+
+          <div className="req-detail-footer">
+            <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>
+              取消
+            </button>
+            {canManage ? (
+              <button className="btn btn-primary btn-sm btn-with-icon" onClick={handleSave} disabled={submitting}>
+                <Save size={14} aria-hidden="true" />
+                {submitting ? '保存中...' : '保存'}
+              </button>
+            ) : null}
+          </div>
         </div>
-        <div className="form-group"><label className="form-label">需求标题</label><input className="form-input" value={title} onChange={(event) => setTitle(event.target.value)} disabled={!canManage} /></div>
-        <div className="form-row"><div className="form-group"><label className="form-label">状态</label><select className="form-select" value={status} onChange={(event) => setStatus(event.target.value)} disabled={!canManage}>{REQUIREMENT_STATUSES.map((item) => <option key={item} value={item}>{labelOf(REQUIREMENT_STATUS_LABELS, item)}</option>)}</select></div><div className="form-group"><label className="form-label">优先级</label><select className="form-select" value={priority} onChange={(event) => setPriority(event.target.value)} disabled={!canManage}>{REQUIREMENT_PRIORITIES.map((item) => <option key={item} value={item}>{labelOf(PRIORITY_LABELS, item)}</option>)}</select></div></div>
-        <div className="form-row"><div className="form-group"><label className="form-label">执行人</label><input className="form-input" value={assignee} onChange={(event) => setAssignee(event.target.value)} disabled={!canManage} /></div><div className="form-group"><label className="form-label">执行角色</label><select className="form-select" value={assigneeRole} onChange={(event) => setAssigneeRole(event.target.value)} disabled={!canManage}>{EXEC_ROLE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div></div>
-        <div className="form-row"><div className="form-group"><label className="form-label">指派状态</label><select className="form-select" value={assignmentStatus} onChange={(event) => setAssignmentStatus(event.target.value)} disabled={!canManage}>{ASSIGNMENT_STATUS_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div><div className="form-group"><label className="form-label">完成度</label><input className="form-input" type="number" min={0} max={100} value={completion} onChange={(event) => setCompletion(event.target.value)} disabled={!canManage} /></div></div>
-        <div className="form-group"><label className="form-label">需求描述</label><textarea className="form-textarea" rows={4} value={description} onChange={(event) => setDescription(event.target.value)} disabled={!canManage} /></div>
-        <div className="form-group"><label className="form-label">验收标准</label><textarea className="form-textarea" rows={4} value={criteria} onChange={(event) => setCriteria(event.target.value)} disabled={!canManage} /></div>
-        <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end' }}><button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>取消</button>{canManage ? <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={submitting}>{submitting ? '保存中...' : '保存'}</button> : null}</div>
       </Panel>
     </Overlay>
   );

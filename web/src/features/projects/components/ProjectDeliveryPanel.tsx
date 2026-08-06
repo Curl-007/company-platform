@@ -8,15 +8,7 @@ import {
   REQUIREMENT_STATUS_LABELS,
   labelOf,
 } from '../../../constants/enums';
-import { deliverySummary } from '../deliveryModel';
-
-export interface ProjectDeliveryData {
-  requirements: Requirement[];
-  testCases: TestCase[];
-  defects: Defect[];
-  builds: Build[];
-  releases: Release[];
-}
+import { deliverySummary, type ProjectDeliveryData } from '../deliveryModel';
 
 export default function ProjectDeliveryPanel({
   project,
@@ -31,8 +23,23 @@ export default function ProjectDeliveryPanel({
   error: string | null;
   onRetry: () => void;
 }) {
-  const { delivery, openRequirements, acceptedRequirements, openDefects, severeDefects, failedBuilds, releasedBuilds, releasedReleases, passedCases, testPassRate, latestBuild, latestRelease, actionItems } = deliverySummary(project, data);
-  const traceRows = delivery.requirements.slice(0, 6).map((requirement) => {
+  const {
+    delivery,
+    openRequirements,
+    acceptedRequirements,
+    openDefects,
+    severeDefects,
+    failedBuilds,
+    releasedBuilds,
+    releasedReleases,
+    passedCases,
+    testPassRate,
+    latestBuild,
+    latestRelease,
+    actionItems,
+  } = deliverySummary(project, data);
+
+  const traceRows = delivery.requirements.slice(0, 8).map((requirement) => {
     const tasks = project.tasks.filter(
       (task) => task.requirementId === requirement.id || requirement.linkedTasks.includes(task.id),
     );
@@ -47,116 +54,167 @@ export default function ProjectDeliveryPanel({
     return { requirement, tasks, tests, defects, builds, releases };
   });
 
+  const signals = [
+    {
+      label: '需求验收',
+      value: `${acceptedRequirements.length}/${delivery.requirements.length}`,
+      meta: `${openRequirements.length} 未关闭`,
+      tone: 'info' as const,
+    },
+    {
+      label: '任务进度',
+      value: `${project.progress}%`,
+      meta: `${project.tasks.length} 个任务`,
+      tone: project.progress >= 80 ? 'success' as const : 'info' as const,
+    },
+    {
+      label: '测试通过',
+      value: `${testPassRate}%`,
+      meta: `${passedCases.length}/${delivery.testCases.length}`,
+      tone: testPassRate >= 90 ? 'success' as const : testPassRate >= 70 ? 'warning' as const : 'risk' as const,
+    },
+    {
+      label: '开放缺陷',
+      value: String(openDefects.length),
+      meta: `${severeDefects.length} 高严重`,
+      tone: severeDefects.length > 0 ? 'risk' as const : openDefects.length > 0 ? 'warning' as const : 'success' as const,
+    },
+    {
+      label: '构建',
+      value: `${releasedBuilds.length}/${delivery.builds.length}`,
+      meta: latestBuild?.version || latestBuild?.name || '暂无',
+      tone: failedBuilds.length > 0 ? 'risk' as const : 'success' as const,
+    },
+    {
+      label: '发布',
+      value: String(releasedReleases.length),
+      meta: latestRelease?.version || latestRelease?.name || '暂无',
+      tone: releasedReleases.length > 0 ? 'success' as const : 'warning' as const,
+    },
+  ];
+
   return (
-    <Panel
-      title="项目交付总览"
-      subtitle="需求、任务、测试、缺陷、构建和发布的同屏追踪"
-      toolbar={<button className="btn btn-secondary btn-sm" onClick={onRetry}>刷新</button>}
-    >
+    <div className="pd-overview">
       {loading && !data ? (
         <PageState loading error={null} onRetry={onRetry} />
       ) : error && !data ? (
         <PageState loading={false} error={error} onRetry={onRetry} />
       ) : (
         <>
-          {error && (
-            <div className="helper-text" style={{ marginBottom: 12, color: 'var(--color-warning, #BF8700)' }}>
-              部分交付数据刷新失败，当前展示上一次缓存结果。
-            </div>
-          )}
+          {error ? (
+            <div className="pd-banner-warn">部分交付数据刷新失败，当前展示缓存结果。</div>
+          ) : null}
 
-          <div className="project-delivery-grid">
-            <DeliverySignal label="需求验收" value={`${acceptedRequirements.length}/${delivery.requirements.length}`} meta={`${openRequirements.length} 个未关闭`} tone="info" />
-            <DeliverySignal label="任务进度" value={`${project.progress}%`} meta={`${project.tasks.length} 个 WBS 任务`} tone={project.progress >= 80 ? 'success' : 'info'} />
-            <DeliverySignal label="测试通过" value={`${testPassRate}%`} meta={`${passedCases.length}/${delivery.testCases.length} 个用例`} tone={testPassRate >= 90 ? 'success' : testPassRate >= 70 ? 'warning' : 'risk'} />
-            <DeliverySignal label="开放缺陷" value={openDefects.length} meta={`${severeDefects.length} 个高严重级别`} tone={severeDefects.length > 0 ? 'risk' : openDefects.length > 0 ? 'warning' : 'success'} />
-            <DeliverySignal label="构建发布" value={`${releasedBuilds.length}/${delivery.builds.length}`} meta={latestBuild ? `${latestBuild.name} ${latestBuild.version ?? ''}` : '暂无构建'} tone={failedBuilds.length > 0 ? 'risk' : 'success'} />
-            <DeliverySignal label="正式发布" value={releasedReleases.length} meta={latestRelease ? `${latestRelease.name} ${latestRelease.version ?? ''}` : '暂无发布'} tone={releasedReleases.length > 0 ? 'success' : 'warning'} />
-          </div>
+          <section className="pd-signal-strip">
+            {signals.map((item) => (
+              <div key={item.label} className={`pd-signal tone-${item.tone}`}>
+                <span className="pd-signal-label">{item.label}</span>
+                <strong className="pd-signal-value">{item.value}</strong>
+                <span className="pd-signal-meta">{item.meta}</span>
+              </div>
+            ))}
+            <button type="button" className="pd-signal-refresh btn btn-secondary btn-sm" onClick={onRetry}>
+              刷新
+            </button>
+          </section>
 
-          <div className="delivery-focus-grid">
-            <div className="delivery-focus-card">
-              <div className="section-title">下一步动作</div>
+          <section className="pd-focus-row">
+            <div className="pd-focus-card">
+              <div className="pd-focus-title">下一步动作</div>
               {actionItems.length === 0 ? (
-                <p className="body-text" style={{ marginBottom: 0 }}>当前交付链路没有明显阻塞项，继续保持需求验收和构建发布节奏。</p>
+                <p className="pd-empty">当前链路无明显阻塞，保持验收与发布节奏。</p>
               ) : (
-                <ul className="delivery-action-list">
-                  {actionItems.map((item) => <li key={item}>{item}</li>)}
-                </ul>
+                <ol className="pd-action-list">
+                  {actionItems.slice(0, 3).map((item, index) => (
+                    <li key={item}>
+                      <span className="pd-action-index">{index + 1}</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ol>
               )}
             </div>
-            <div className="delivery-focus-card">
-              <div className="section-title">最新交付物</div>
-              <div className="delivery-artifact-row">
+            <div className="pd-focus-card">
+              <div className="pd-focus-title">最新交付物</div>
+              <div className="pd-artifact">
                 <span>构建</span>
-                <strong>{latestBuild ? latestBuild.name : '暂无构建'}</strong>
-                {latestBuild && <StatusBadge label={labelOf(BUILD_STATUS_LABELS, latestBuild.status)} status={latestBuild.status} />}
+                <strong className="truncate">{latestBuild?.name || '暂无构建'}</strong>
+                {latestBuild ? <StatusBadge label={labelOf(BUILD_STATUS_LABELS, latestBuild.status)} status={latestBuild.status} /> : null}
               </div>
-              <div className="delivery-artifact-row">
+              <div className="pd-artifact">
                 <span>发布</span>
-                <strong>{latestRelease ? latestRelease.name : '暂无发布'}</strong>
-                {latestRelease && <StatusBadge label={labelOf(RELEASE_STATUS_LABELS, latestRelease.status)} status={latestRelease.status} />}
+                <strong className="truncate">{latestRelease?.name || '暂无发布'}</strong>
+                {latestRelease ? <StatusBadge label={labelOf(RELEASE_STATUS_LABELS, latestRelease.status)} status={latestRelease.status} /> : null}
               </div>
             </div>
-          </div>
+          </section>
 
-          <div className="trace-matrix">
-            <div className="trace-matrix-header">
-              <span>需求</span>
-              <span>任务</span>
-              <span>测试</span>
-              <span>缺陷</span>
-              <span>构建</span>
-              <span>发布</span>
-            </div>
+          <Panel title="需求交付追踪" subtitle={`展示前 ${traceRows.length} 条需求链路`} className="pd-trace-panel" noPadding>
             {traceRows.length === 0 ? (
-              <div className="trace-matrix-empty">该项目暂无需求，先从需求管理录入业务条目。</div>
+              <div className="pd-empty pd-empty-pad">该项目暂无需求，先从需求管理录入业务条目。</div>
             ) : (
-              traceRows.map((row) => (
-                <div className="trace-matrix-row" key={row.requirement.id}>
-                  <div>
-                    <div className="font-medium">{row.requirement.title}</div>
-                    <StatusBadge label={labelOf(REQUIREMENT_STATUS_LABELS, row.requirement.status)} status={row.requirement.status} />
-                  </div>
-                  <TraceMetric count={row.tasks.length} complete={row.tasks.filter((item) => item.status === 'done').length} label="任务" />
-                  <TraceMetric count={row.tests.length} complete={row.tests.filter((item) => item.status === 'passed').length} label="通过" />
-                  <TraceMetric count={row.defects.length} complete={row.defects.filter((item) => ['closed', 'rejected'].includes(item.status)).length} label="关闭" />
-                  <TraceStatus items={row.builds} empty="未构建" label={(item) => item.name} status={(item) => item.status} labels={BUILD_STATUS_LABELS} />
-                  <TraceStatus items={row.releases} empty="未发布" label={(item) => item.name} status={(item) => item.status} labels={RELEASE_STATUS_LABELS} />
+              <div className="pd-trace-table">
+                <div className="pd-trace-head">
+                  <span>需求</span>
+                  <span>任务</span>
+                  <span>测试</span>
+                  <span>缺陷</span>
+                  <span>构建</span>
+                  <span>发布</span>
                 </div>
-              ))
+                {traceRows.map((row) => (
+                  <div className="pd-trace-row" key={row.requirement.id}>
+                    <div className="pd-trace-req">
+                      <strong className="truncate" title={row.requirement.title}>{row.requirement.title}</strong>
+                      <StatusBadge
+                        label={labelOf(REQUIREMENT_STATUS_LABELS, row.requirement.status)}
+                        status={row.requirement.status}
+                      />
+                    </div>
+                    <TraceMetric
+                      complete={row.tasks.filter((item) => item.status === 'done').length}
+                      total={row.tasks.length}
+                      label="完成"
+                    />
+                    <TraceMetric
+                      complete={row.tests.filter((item) => item.status === 'passed').length}
+                      total={row.tests.length}
+                      label="通过"
+                    />
+                    <TraceMetric
+                      complete={row.defects.filter((item) => ['closed', 'rejected'].includes(item.status)).length}
+                      total={row.defects.length}
+                      label="关闭"
+                    />
+                    <TraceStatus
+                      items={row.builds}
+                      empty="未构建"
+                      label={(item) => item.name}
+                      status={(item) => item.status}
+                      labels={BUILD_STATUS_LABELS}
+                    />
+                    <TraceStatus
+                      items={row.releases}
+                      empty="未发布"
+                      label={(item) => item.name}
+                      status={(item) => item.status}
+                      labels={RELEASE_STATUS_LABELS}
+                    />
+                  </div>
+                ))}
+              </div>
             )}
-          </div>
+          </Panel>
         </>
       )}
-    </Panel>
-  );
-}
-
-function DeliverySignal({
-  label,
-  value,
-  meta,
-  tone,
-}: {
-  label: string;
-  value: string | number;
-  meta: string;
-  tone: 'success' | 'warning' | 'risk' | 'info';
-}) {
-  return (
-    <div className={`delivery-signal ${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{meta}</small>
     </div>
   );
 }
 
-function TraceMetric({ count, complete, label }: { count: number; complete: number; label: string }) {
+function TraceMetric({ complete, total, label }: { complete: number; total: number; label: string }) {
   return (
-    <div className="trace-metric">
-      <strong>{complete}/{count}</strong>
+    <div className="pd-trace-metric">
+      <strong>{complete}/{total}</strong>
       <span>{label}</span>
     </div>
   );
@@ -176,13 +234,12 @@ function TraceStatus<T>({
   labels: Record<string, string>;
 }) {
   const item = items[0];
-  if (!item) return <span className="trace-empty">{empty}</span>;
+  if (!item) return <span className="pd-trace-empty">{empty}</span>;
   const itemStatus = status(item);
   return (
-    <div className="trace-status">
-      <span>{label(item)}</span>
+    <div className="pd-trace-status">
+      <span className="truncate" title={label(item)}>{label(item)}</span>
       <StatusBadge label={labelOf(labels, itemStatus)} status={itemStatus} />
     </div>
   );
 }
-

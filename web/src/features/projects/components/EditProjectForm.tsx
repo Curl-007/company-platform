@@ -5,6 +5,7 @@ import { useAsync } from '../../../hooks/useAsync';
 import { ApiError } from '../../../services/api';
 import Panel from '../../../components/common/Panel';
 import Overlay from '../../../components/common/Overlay';
+import { DatePicker } from '../../../components/ui';
 import type { Project, Milestone } from '../../../types';
 import {
   PROJECT_STATUSES,
@@ -147,11 +148,11 @@ export default function EditProjectForm({
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">开始日期</label>
-              <input className="form-input" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+              <DatePicker value={startDate} onChange={(v) => setStartDate(v ?? '')} />
             </div>
             <div className="form-group">
               <label className="form-label">结束日期</label>
-              <input className="form-input" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+              <DatePicker value={endDate} onChange={(v) => setEndDate(v ?? '')} />
             </div>
           </div>
           <div className="form-row">

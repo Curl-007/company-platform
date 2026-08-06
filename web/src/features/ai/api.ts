@@ -1,5 +1,17 @@
 import { unwrap, unwrapDel, unwrapPatch, unwrapPost } from '../../services/apiClient';
-import type { AiBusinessAdvice, AiBusinessAdviceInput, AiChatInput, AiChatMessage, AiJob, AiProviderConfig, AiProviderTestResult, AiSummary, ConfirmAiJobInput, UpdateAiProviderInput } from '../../types';
+import type {
+  AiBusinessAdvice,
+  AiBusinessAdviceInput,
+  AiChatInput,
+  AiChatMessage,
+  AiJob,
+  AiModelListResult,
+  AiProviderConfig,
+  AiProviderTestResult,
+  AiSummary,
+  ConfirmAiJobInput,
+  UpdateAiProviderInput,
+} from '../../types';
 
 export function fetchAiBusinessAdvice(input: AiBusinessAdviceInput): Promise<AiBusinessAdvice> {
   return unwrapPost<AiBusinessAdvice>('/api/ai/business-advice', input, {
@@ -58,4 +70,8 @@ export function deleteAiProviderConfig(id: string): Promise<AiProviderConfig> {
 
 export function testAiProviderConfig(): Promise<AiProviderTestResult> {
   return unwrapPost<AiProviderTestResult>('/api/admin/ai-provider/test', {}, { invalidateCache: false });
+}
+
+export function fetchAiModels(): Promise<AiModelListResult> {
+  return unwrap<AiModelListResult>('/api/ai/models');
 }

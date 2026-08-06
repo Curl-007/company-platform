@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   createProgram,
   deleteProgram,
@@ -9,6 +9,7 @@ import ManagementEmptyState from './ManagementEmptyState';
 import ManagementListItem from './ManagementListItem';
 import ManagementSummaryStrip from './ManagementSummaryStrip';
 import StrategyForm from './StrategyForm';
+import { fetchProjects } from '../../projects/api';
 import { getSessionUser } from '../../../services/auth';
 import { useAsync } from '../../../hooks/useAsync';
 import { ApiError } from '../../../services/api';
@@ -19,10 +20,15 @@ import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { canOperate } from '../../../constants/roles';
 import { PROJECT_STATUS_LABELS, labelOf } from '../../../constants/enums';
-import type { Program } from '../../../types';
+import type { Program, Project } from '../../../types';
 
 export default function ProgramsTab() {
   const { data, loading, error, reload } = useAsync<Program[]>(fetchPrograms, [], { cacheKey: 'programs:list' });
+  const projects = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
+  const projectNameById = useMemo(
+    () => new Map((projects.data ?? []).map((project) => [project.id, project.name])),
+    [projects.data],
+  );
   const toast = useToast();
   const confirm = useConfirm();
   const canManagePrograms = canOperate(getSessionUser(), 'projects:manage');
@@ -167,7 +173,9 @@ export default function ProgramsTab() {
                       </div>
                     </div>
                     <div className="management-chip-list">
-                      {selected.projectIds.length ? selected.projectIds.map((id) => <span key={id}>{id}</span>) : <div className="product-empty-line">暂无关联项目。</div>}
+                      {selected.projectIds.length ? selected.projectIds.map((id) => (
+                        <span key={id} title={projectNameById.has(id) ? `编号 ${id}` : undefined}>{projectNameById.get(id) ?? id}</span>
+                      )) : <div className="product-empty-line">暂无关联项目。</div>}
                     </div>
                   </div>
                   <div className="product-section">

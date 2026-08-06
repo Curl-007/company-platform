@@ -1,24 +1,17 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import ProjectList from '../features/projects/components/ProjectList';
 import ProjectDetailView from '../features/projects/components/ProjectDetailView';
-import PageHeader from '../components/common/PageHeader';
+import PageFrame from '../components/common/PageFrame';
 import type { SessionUser } from '../types';
 
 function ProjectsPage({ user }: { user?: SessionUser | null }) {
+  const location = useLocation();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
-    const syncFocus = () => {
-      const hash = window.location.hash;
-      const query = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
-      const focusId = new URLSearchParams(query).get('focus');
-      if (focusId) setSelectedId(focusId);
-    };
-
-    syncFocus();
-    window.addEventListener('hashchange', syncFocus);
-    return () => window.removeEventListener('hashchange', syncFocus);
-  }, []);
+    setSelectedId(new URLSearchParams(location.search).get('focus'));
+  }, [location.search]);
 
   function handleBack() {
     const [pathPart] = window.location.hash.split('?');
@@ -27,17 +20,16 @@ function ProjectsPage({ user }: { user?: SessionUser | null }) {
   }
 
   return (
-    <div>
-      <PageHeader
-        title="项目管理"
-        description="管理项目、工作分解结构、流程看板和源码浏览。"
-      />
+    <PageFrame
+      className="page-frame-projects"
+      contentClassName="page-frame-projects-content"
+    >
       {selectedId ? (
         <ProjectDetailView id={selectedId} onBack={handleBack} user={user} />
       ) : (
         <ProjectList onOpen={setSelectedId} currentUser={user} />
       )}
-    </div>
+    </PageFrame>
   );
 }
 

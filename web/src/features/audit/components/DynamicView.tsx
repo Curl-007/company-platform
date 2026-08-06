@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { Activity, AlertTriangle, Clock3, ExternalLink, Eye, Radar, RefreshCw, Search, SlidersHorizontal } from 'lucide-react';
 import { fetchAuditLogs, type AuditLogFilters } from '../api';
 import { useAsync } from '../../../hooks/useAsync';
-import PageHeader from '../../../components/common/PageHeader';
 import PageState from '../../../components/common/PageState';
 import StatusBadge from '../../../components/common/StatusBadge';
 import FilterBar from '../../../components/common/FilterBar';
@@ -109,21 +108,15 @@ export default function DynamicView() {
   }
 
   if (loading || error || !data) {
-    return (
-      <div>
-        <PageHeader title="动态中心" description="按时间查看谁进入了哪些页面、做了什么操作，以及关键对象发生了哪些变化。" />
-        <PageState loading={loading} error={error} isEmpty={!loading && !error && !data} onRetry={reload} />
-      </div>
-    );
+    return <PageState loading={loading} error={error} isEmpty={!loading && !error && !data} onRetry={reload} />;
   }
 
   return (
-    <div className="stack dynamic-glass-page">
-      <PageHeader
-        title="动态中心"
-        description={`按时间倒序查看所有角色的登录、增删改、日报和文档操作，共 ${timeline.length} 条记录。`}
-        actions={<button className="btn btn-secondary btn-sm" onClick={reload}><RefreshCw size={14} /> 刷新</button>}
-      />
+    <div className="stack dynamic-page">
+      <div className="page-inline-actions mb-1 flex items-center justify-between gap-3">
+        <p className="text-secondary text-sm m-0">共 {timeline.length} 条记录</p>
+        <button className="btn btn-secondary btn-sm" onClick={reload}><RefreshCw size={14} /> 刷新</button>
+      </div>
 
       <MetricStrip
         className="dynamic-summary-grid"
@@ -184,7 +177,6 @@ export default function DynamicView() {
         <section className="dynamic-timeline-stage">
           <div className="dynamic-stage-toolbar">
             <FilterBar
-              label={<span className="dynamic-filter-label"><Search size={14} /> 筛选</span>}
               trailing={
                 <button
                   className={`btn btn-sm ${importantOnly ? 'btn-primary' : 'btn-secondary'}`}
@@ -194,20 +186,23 @@ export default function DynamicView() {
                 </button>
               }
             >
-              <input
-                className="input"
-                style={{ minWidth: 220 }}
-                placeholder="搜索人员、页面、对象、动作"
-                value={keyword}
-                onChange={(event) => setKeyword(event.target.value)}
-              />
-              <select className="select" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
+              <div className="input-with-icon filter-search" style={{ minHeight: 34, flex: '1 1 220px', maxWidth: 320 }}>
+                <Search size={14} className="shrink-0 text-secondary" aria-hidden="true" />
+                <input
+                  className="form-input border-0 bg-transparent shadow-none"
+                  placeholder="搜索人员、页面、对象、动作"
+                  value={keyword}
+                  onChange={(event) => setKeyword(event.target.value)}
+                  aria-label="搜索动态"
+                />
+              </div>
+              <select className="form-select" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} aria-label="角色">
                 <option value="all">全部角色</option>
                 {roleOptions.map((role) => (
                   <option key={role} value={role}>{role}</option>
                 ))}
               </select>
-              <select className="select" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+              <select className="form-select" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} aria-label="分类">
                 <option value="all">全部分类</option>
                 {Object.entries(CATEGORY_META).map(([key, meta]) => (
                   <option key={key} value={key}>{meta.label}</option>

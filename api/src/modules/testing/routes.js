@@ -44,6 +44,24 @@ function createTestingRouter({
     };
   }
 
+  // Cascade delete a test case together with its leaf dependencies
+  // (test execution records and sync tasks). All deletes run inside the
+  // caller's transaction; audit snapshots are captured before deletion.
+  // Shared by the test-case route and the requirement cascade.
+  async function cascadeDeleteTestCase(testCaseId, { audit: auditLog, user, ip }) {
+    const before = await row("SELECT * FROM test_cases WHERE id = @id", { id: testCaseId });
+    const runs = await rows("SELECT id FROM test_runs WHERE test_case_id = @id ORDER BY id", { id: testCaseId });
+    const tasks = await rows("SELECT id FROM tasks WHERE source_type = 'test_case' AND source_id = @id ORDER BY id", { id: testCaseId });
+    await run("DELETE FROM test_runs WHERE test_case_id = @id", { id: testCaseId });
+    await run("DELETE FROM tasks WHERE source_type = 'test_case' AND source_id = @id", { id: testCaseId });
+    await run("DELETE FROM test_cases WHERE id = @id", { id: testCaseId });
+    if (auditLog) {
+      await auditLog(user, "test_case.cascade_delete", "test_case", testCaseId, before, null, ip);
+      for (const item of runs) await auditLog(user, "test_case.cascade_delete", "test_run", item.id, { id: item.id, testCaseId }, null, ip);
+      for (const item of tasks) await auditLog(user, "test_case.cascade_delete", "task", item.id, { id: item.id, testCaseId }, null, ip);
+    }
+  }
+
   async function buildTestPlan(project) {
     const requirements = await rows("SELECT id, title, status, priority FROM requirements WHERE project_id = @projectId AND deleted_at IS NULL ORDER BY id", { projectId: project.id });
     const testCases = await rows("SELECT * FROM test_cases WHERE project_id = @projectId ORDER BY id", { projectId: project.id });
@@ -236,6 +254,13 @@ function createTestingRouter({
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Test case not found.");
     if (!(await canWriteProject(req.user, before.project_id))) return fail(res, 403, "PROJECT_ARCHIVED_OR_ACCESS_DENIED", "Cannot delete a test case in an archived or inaccessible project.");
     if (!(await canAccessProject(req.user, before.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权删除该测试用例。");
+    const wantsCascade = req.query.cascade === "true";
+    if (wantsCascade) {
+      await transaction(async () => {
+        await cascadeDeleteTestCase(req.params.id, { audit, user: req.user, ip: req.ip });
+      });
+      return res.json(ok({ deleted: true, id: req.params.id, cascaded: true }));
+    }
     const deletion = await transaction(async () => {
       const dependencies = await testCaseDependencies(req.params.id);
       if (dependencies.testRuns.count > 0 || dependencies.tasks.count > 0) return { dependencies };

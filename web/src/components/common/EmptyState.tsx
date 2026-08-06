@@ -1,9 +1,18 @@
 import React from 'react';
+import {
+  cn,
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '../ui';
 
-interface EmptyStateProps {
+export interface EmptyStateProps {
   icon?: React.ReactNode;
   title?: string;
-  description?: string;
+  description?: React.ReactNode;
   action?: React.ReactNode;
   compact?: boolean;
 }
@@ -16,12 +25,14 @@ const EmptyState: React.FC<EmptyStateProps> = ({
   compact = false,
 }) => {
   return (
-    <div className={`empty-state-block ${compact ? 'compact' : ''}`}>
-      {icon && <div className="empty-state-icon">{icon}</div>}
-      <div className="empty-state-title">{title}</div>
-      {description && <div className="empty-state-desc">{description}</div>}
-      {action && <div className="empty-state-action">{action}</div>}
-    </div>
+    <Empty className={cn('empty-state-block ui-empty-state', compact && 'compact')}>
+      {icon && <EmptyMedia className="empty-state-icon">{icon}</EmptyMedia>}
+      <EmptyHeader>
+        <EmptyTitle className="empty-state-title">{title}</EmptyTitle>
+        {description && <EmptyDescription className="empty-state-desc">{description}</EmptyDescription>}
+      </EmptyHeader>
+      {action && <EmptyContent className="empty-state-action">{action}</EmptyContent>}
+    </Empty>
   );
 };
 

@@ -34,7 +34,7 @@ export default function OverviewTab({
   );
 
   return (
-    <div className="project-overview-stack">
+    <div className="pd-tab pd-overview-tab">
       <ProjectDeliveryPanel
         project={project}
         data={delivery}
@@ -43,19 +43,24 @@ export default function OverviewTab({
         onRetry={reloadDelivery}
       />
 
-      <div className="grid-2">
-        <Panel title="里程碑" subtitle={project.milestones.length ? `共 ${project.milestones.length} 个` : '暂无里程碑'}>
+      <div className="pd-side-grid">
+        <Panel
+          title="里程碑"
+          subtitle={project.milestones.length ? `${project.milestones.length} 个节点` : '暂无'}
+          className="pd-side-panel"
+          noPadding
+        >
           {project.milestones.length === 0 ? (
-            <div className="text-secondary">暂未定义里程碑。</div>
+            <div className="pd-empty pd-empty-pad">暂未定义里程碑</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="pd-side-list">
               {project.milestones.map((milestone, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <span className="font-medium">{milestone.name}</span>
-                  <span className="flex items-center gap-2">
-                    <span className="text-secondary text-mono">{milestone.date}</span>
-                    <StatusBadge label={labelOf(MILESTONE_STATUS_LABELS, milestone.status)} status={milestone.status} />
-                  </span>
+                <div key={`${milestone.name}-${index}`} className="pd-side-row">
+                  <div className="min-w-0">
+                    <div className="pd-side-name truncate">{milestone.name}</div>
+                    <div className="pd-side-meta text-mono">{milestone.date || '未设日期'}</div>
+                  </div>
+                  <StatusBadge label={labelOf(MILESTONE_STATUS_LABELS, milestone.status)} status={milestone.status} />
                 </div>
               ))}
             </div>
@@ -64,22 +69,28 @@ export default function OverviewTab({
 
         <Panel
           title="迭代"
-          subtitle={`${project.sprints.length} 个迭代`}
-          toolbar={canManageProject ? <button className="btn btn-primary btn-sm" onClick={() => setCreatingSprint(true)}>新建迭代</button> : undefined}
+          subtitle={`${project.sprints.length} 个冲刺`}
+          className="pd-side-panel"
+          noPadding
+          toolbar={canManageProject ? (
+            <button className="btn btn-primary btn-sm" onClick={() => setCreatingSprint(true)}>新建迭代</button>
+          ) : undefined}
         >
           {project.sprints.length === 0 ? (
-            <div className="text-secondary">该项目暂无迭代。</div>
+            <div className="pd-empty pd-empty-pad">该项目暂无迭代</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="pd-side-list">
               {project.sprints.map((sprint) => (
-                <SprintBurndownRow key={sprint.id} sprint={sprint} />
+                <div key={sprint.id} className="pd-sprint-row">
+                  <SprintBurndownRow sprint={sprint} />
+                </div>
               ))}
             </div>
           )}
         </Panel>
       </div>
 
-      {creatingSprint && canManageProject && (
+      {creatingSprint && canManageProject ? (
         <CreateSprintForm
           projectId={projectId}
           onClose={() => setCreatingSprint(false)}
@@ -88,7 +99,7 @@ export default function OverviewTab({
             onReload();
           }}
         />
-      )}
+      ) : null}
     </div>
   );
 }

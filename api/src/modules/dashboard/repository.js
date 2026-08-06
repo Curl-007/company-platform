@@ -88,4 +88,8 @@ function createDashboardRepository({ row, rows }) {
   };
 }
 
-module.exports = { createDashboardRepository, normalizeAccessScope, scopedQuery };
+module.exports = {
+  createDashboardRepository,
+  normalizeAccessScope,
+  scopedQuery,
+};

@@ -1,15 +1,23 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { confirmAiJob, fetchAiJob, fetchAiSummary, rejectAiJob, retryAiJob, sendAiChat } from '../api';
+import {
+  confirmAiJob,
+  fetchAiJob,
+  fetchAiModels,
+  fetchAiSummary,
+  rejectAiJob,
+  retryAiJob,
+  sendAiChat,
+  testAiProviderConfig,
+} from '../api';
 import { fetchProjects } from '../../projects/api';
 import { useAsync } from '../../../hooks/useAsync';
 import { useAiJobPolling } from '../../../hooks/useAiJobPolling';
 import { ApiError } from '../../../services/api';
-import PageHeader from '../../../components/common/PageHeader';
 import PageState from '../../../components/common/PageState';
 import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
-import type { AiChatAttachment, AiChatMessage, AiJob, Project } from '../../../types';
+import type { AiChatAttachment, AiChatMessage, AiJob, AiModelOption, Project } from '../../../types';
 import {
   MAX_ATTACHMENTS,
   validateAttachmentFiles,
@@ -39,6 +47,14 @@ export default function AiView() {
   const [reviewDraft, setReviewDraft] = useState<JobReviewDraft | null>(null);
   const [jobLoading, setJobLoading] = useState(false);
   const [jobAction, setJobAction] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState('');
+  const [models, setModels] = useState<AiModelOption[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [connectionTesting, setConnectionTesting] = useState(false);
+  const [connectionOnline, setConnectionOnline] = useState<boolean | null>(null);
+  const [connectionLatencyMs, setConnectionLatencyMs] = useState<number | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const jobPolling = useAiJobPolling({
     job: selectedJob,
@@ -52,12 +68,82 @@ export default function AiView() {
     },
   });
 
+  useEffect(() => {
+    const configuredModel = data?.aiProvider?.model || '';
+    if (!selectedModel && configuredModel) setSelectedModel(configuredModel);
+  }, [data?.aiProvider?.model, selectedModel]);
+
   const providerStatus = useMemo(() => {
     const provider = data?.aiProvider;
     if (!provider) return '读取中';
     if (!provider.configured) return '未配置';
-    return `${provider.model} · ${provider.wireApi === 'responses' ? 'Responses' : 'Chat Completions'}`;
-  }, [data]);
+    const model = selectedModel || provider.model;
+    return `${model} · ${provider.wireApi === 'responses' ? 'Responses' : 'Chat Completions'}`;
+  }, [data, selectedModel]);
+
+  async function refreshModels(preferredModel?: string) {
+    setModelsLoading(true);
+    setModelsError(null);
+    try {
+      const result = await fetchAiModels();
+      const nextModels = result.models || [];
+      setModels(nextModels);
+      const nextModel = preferredModel
+        || selectedModel
+        || result.currentModel
+        || nextModels[0]?.id
+        || data?.aiProvider?.model
+        || '';
+      if (nextModel) setSelectedModel(nextModel);
+      return result;
+    } catch (err) {
+      setModels([]);
+      setModelsError(err instanceof ApiError ? err.message : '拉取模型列表失败');
+      throw err;
+    } finally {
+      setModelsLoading(false);
+    }
+  }
+
+  async function refreshConnection() {
+    setConnectionTesting(true);
+    setConnectionError(null);
+    try {
+      // 1) Always resolve models via /api/ai/models (ai:*). This is the source of the selector.
+      const modelResult = await refreshModels();
+      // 2) Optional live chat probe for latency (admin only). Non-admin keeps model-list connectivity.
+      try {
+        const probe = await testAiProviderConfig();
+        setConnectionOnline(Boolean(probe.ok) && Boolean(modelResult.ok));
+        setConnectionLatencyMs(probe.latencyMs ?? null);
+        if (!probe.ok) setConnectionError('模型服务探测失败');
+      } catch (err) {
+        // 403 / no admin permission: treat successful model list as online.
+        if (err instanceof ApiError && (err.status === 403 || err.status === 401)) {
+          setConnectionOnline(Boolean(modelResult.ok));
+          setConnectionLatencyMs(null);
+        } else {
+          // Admin probe failed for real connectivity reasons → red.
+          setConnectionOnline(false);
+          setConnectionLatencyMs(null);
+          setConnectionError(err instanceof ApiError ? err.message : '接入检测失败');
+        }
+      }
+    } catch (err) {
+      setConnectionOnline(false);
+      setConnectionLatencyMs(null);
+      setConnectionError(err instanceof ApiError ? err.message : '接入检测失败');
+    } finally {
+      setConnectionTesting(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!data?.aiProvider) return;
+    // Auto probe once summary is ready so the light is not stuck grey.
+    void refreshConnection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.aiProvider?.configured, data?.aiProvider?.model, data?.aiProvider?.baseUrlHost]);
 
   async function handleFiles(files: FileList | null) {
     setFileError(null);
@@ -105,6 +191,7 @@ export default function AiView() {
         attachments: userMessage.attachments,
         scope: 'project-management',
         currentPage: window.location.hash || '/ai',
+        model: selectedModel || undefined,
       });
       setMessages((prev) => [...prev, reply]);
     } catch (err) {
@@ -241,26 +328,17 @@ export default function AiView() {
   }
 
   if (loading || error || !data) {
-    return (
-      <div>
-        <PageHeader title="AI 助手" description="通过对话分析项目数据、截图和文档。" />
-        <PageState loading={loading} error={error} isEmpty={!loading && !error && !data} onRetry={reload} />
-      </div>
-    );
+    return <PageState loading={loading} error={error} isEmpty={!loading && !error && !data} onRetry={reload} />;
   }
 
   return (
     <div className="ai-chat-page">
-      <PageHeader
-        title="AI 助手"
-        description="对话分析 + 全业务写操作草稿（创建/修改/删除/改状态）；确认后走正式 API，从不静默写库。"
-        actions={(
-          <button className="btn btn-secondary btn-sm" onClick={resetChat}>
-            <RefreshCw size={15} />
-            新对话
-          </button>
-        )}
-      />
+      <div className="page-inline-actions mb-4 flex justify-end">
+        <button className="btn btn-secondary btn-sm" onClick={resetChat}>
+          <RefreshCw size={15} />
+          新对话
+        </button>
+      </div>
 
       <div className="ai-chat-layout">
         <AiChatPanel
@@ -281,6 +359,16 @@ export default function AiView() {
 
         <AiSidePanel
           data={data}
+          selectedModel={selectedModel}
+          onModelChange={setSelectedModel}
+          models={models}
+          modelsLoading={modelsLoading}
+          modelsError={modelsError}
+          connectionTesting={connectionTesting}
+          connectionOnline={connectionOnline}
+          connectionLatencyMs={connectionLatencyMs}
+          connectionError={connectionError}
+          onRefreshConnection={() => { void refreshConnection(); }}
           selectedJob={selectedJob}
           reviewDraft={reviewDraft}
           setReviewDraft={setReviewDraft}

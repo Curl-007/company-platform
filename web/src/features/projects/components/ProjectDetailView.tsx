@@ -1,5 +1,17 @@
-import { useEffect, useState, type KeyboardEvent } from 'react';
-import { Clock3, FolderKanban, UserRound } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+  ArrowLeft,
+  CalendarDays,
+  FolderKanban,
+  GitBranch,
+  ListTree,
+  Pencil,
+  ShieldAlert,
+  SquareKanban,
+  UserRound,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import { fetchProject, updateProjectStatus } from '../api';
 import {
   activationGateMissing,
@@ -22,6 +34,8 @@ import ProgressBar from '../../../components/common/ProgressBar';
 import BusinessAdvicePanel from '../../../components/common/BusinessAdvicePanel';
 import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/Tabs';
+import { ComboSelect } from '../../../components/ui';
 import type { Project, ProjectDetail, SessionUser } from '../../../types';
 import {
   PROJECT_STATUSES,
@@ -32,31 +46,13 @@ import {
 } from '../../../constants/enums';
 import { canOperate } from '../../../constants/roles';
 
-const PROJECT_DETAIL_TABS: Array<{ key: DetailTab; label: string }> = [
-  { key: 'overview', label: '概览' },
-  { key: 'wbs', label: 'WBS' },
-  { key: 'kanban', label: '看板' },
-  { key: 'flow', label: '流程' },
-  { key: 'governance', label: '风险与决策' },
+const PROJECT_DETAIL_TABS: Array<{ key: DetailTab; label: string; icon: LucideIcon }> = [
+  { key: 'overview', label: '概览', icon: FolderKanban },
+  { key: 'wbs', label: 'WBS', icon: ListTree },
+  { key: 'kanban', label: '看板', icon: SquareKanban },
+  { key: 'flow', label: '流程', icon: GitBranch },
+  { key: 'governance', label: '风险与决策', icon: ShieldAlert },
 ];
-
-function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
-  const tablist = event.currentTarget.closest('[role="tablist"]');
-  const tabs = tablist ? Array.from(tablist.querySelectorAll<HTMLButtonElement>('[role="tab"]')) : [];
-  const currentIndex = tabs.indexOf(event.currentTarget);
-  if (currentIndex < 0) return;
-
-  let nextIndex: number;
-  if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
-  else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-  else if (event.key === 'Home') nextIndex = 0;
-  else if (event.key === 'End') nextIndex = tabs.length - 1;
-  else return;
-
-  event.preventDefault();
-  tabs[nextIndex].focus();
-  tabs[nextIndex].click();
-}
 
 export default function ProjectDetailView({ id, onBack, user }: { id: string; onBack: () => void; user?: SessionUser | null }) {
   const { data, loading, error, reload } = useAsync<ProjectDetail>(
@@ -124,7 +120,9 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
   if (loading || error || !data) {
     return (
       <>
-        <button className="btn btn-text btn-sm" onClick={onBack} style={{ marginBottom: 12 }}>← 返回项目列表</button>
+        <button className="btn btn-text btn-sm btn-with-icon" onClick={onBack} style={{ marginBottom: 12 }}>
+          <ArrowLeft size={15} aria-hidden="true" /> 项目列表
+        </button>
         <PageState loading={loading} error={error} isEmpty={!loading && !error && !data} onRetry={reload} />
       </>
     );
@@ -139,116 +137,180 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
     : '未设置排期';
 
   return (
-    <div className="project-detail-page">
-      <button className="btn btn-text btn-sm project-detail-back" onClick={onBack}>← 返回项目列表</button>
+    <div className="project-detail-page min-w-0">
+      <nav className="flex min-w-0 max-w-full flex-wrap items-center gap-1 text-sm" aria-label="项目路径">
+        <button className="btn btn-text btn-sm btn-with-icon shrink-0" onClick={onBack}>
+          <ArrowLeft size={15} aria-hidden="true" /> 项目
+        </button>
+        <span className="text-secondary" aria-hidden="true">/</span>
+        <span className="min-w-0 truncate font-medium" title={project.name}>{project.name}</span>
+      </nav>
 
-      <section className="project-detail-hero">
-        <div className="project-detail-main">
-          <div className="project-detail-title-row">
-            <div className="project-detail-icon">
-              <FolderKanban size={20} />
+      <section className="pd-hero">
+        <div className="pd-hero-top">
+          <div className="pd-hero-main min-w-0">
+            <div className="pd-hero-eyebrow">
+              <span className="pd-hero-code">
+                <FolderKanban size={13} aria-hidden="true" />
+                {project.code || project.id}
+              </span>
+              <span className="pd-hero-dot" aria-hidden="true" />
+              <span>{labelOf(PROCESS_MODE_LABELS, project.processMode)}</span>
+              <StatusBadge label={labelOf(PROJECT_STATUS_LABELS, project.status)} status={project.status} />
             </div>
-            <div>
-              <div className="project-detail-eyebrow">
-                <span>{project.code || project.id}</span>
-                <span>{labelOf(PROCESS_MODE_LABELS, project.processMode)}</span>
-              </div>
-              <h2>{project.name}</h2>
-            </div>
+            <h2 className="pd-hero-title">{project.name}</h2>
+            {(project.description || project.objective) ? (
+              <p className="pd-hero-desc">{project.objective || project.description}</p>
+            ) : null}
           </div>
 
-          <p className="project-detail-description">
-            {project.description || '暂无项目描述。'}
-          </p>
-          <div className="detail-field" style={{ marginBottom: 12 }}>
-            <span className="detail-label">项目目标</span>
-            <span>{project.objective || '尚未定义项目目标。'}</span>
-          </div>
-
-          <div className="project-detail-meta">
-            <span><UserRound size={14} /> {project.owner}</span>
-            <span><Clock3 size={14} /> {scheduleText}</span>
-          </div>
-        </div>
-
-        <div className="project-detail-actions">
-          <StatusBadge label={labelOf(PROJECT_STATUS_LABELS, project.status)} status={project.status} />
-          {canUpdateProject ? <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>编辑</button> : null}
-          {canManageMembers ? <button className="btn btn-secondary btn-sm" onClick={() => setManagingMembers(true)}>成员管理</button> : null}
-          {canUpdateProject ? (
-            <select
-              className="form-select"
-              value={status}
-              disabled={saving}
-              onChange={(event) => handleStatusChange(event.target.value)}
-            >
-              <option value="">变更状态...</option>
-              {PROJECT_STATUSES.filter((item) => item !== project.status).map((item) => (
-                <option key={item} value={item}>{labelOf(PROJECT_STATUS_LABELS, item)}</option>
-              ))}
-            </select>
-          ) : null}
-        </div>
-
-        {actionError && <div className="form-error project-detail-error">{actionError}</div>}
-        {activationMissing.length > 0 && (
-          <div className="project-detail-error flex gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
-            {activationMissing.some((item) => ['projectObjective', 'plannedDates', 'milestoneOrSprint'].includes(item)) && (
-              <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>完善项目基础信息</button>
-            )}
-            {activationMissing.includes('projectMembers') && canManageMembers && (
-              <button className="btn btn-secondary btn-sm" onClick={() => setManagingMembers(true)}>管理项目成员</button>
-            )}
-            {activationMissing.includes('riskOwners') && (
-              <button className="btn btn-secondary btn-sm" onClick={() => setTab('governance')}>补充风险责任人</button>
-            )}
-            {activationMissing.some((item) => ['capacityAllocations', 'capacityPlans', 'capacityApprovals'].includes(item)) && (
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => {
-                  const params = new URLSearchParams({ projectId: project.id });
-                  if (project.startDate) params.set('periodStart', project.startDate);
-                  if (project.endDate) params.set('periodEnd', project.endDate);
-                  window.location.hash = `#/capacity?${params.toString()}`;
-                }}
-              >
-                配置容量与投入
+          <div className="pd-hero-actions">
+            {canUpdateProject ? (
+              <button className="btn btn-secondary btn-sm btn-with-icon" onClick={() => setEditing(true)}>
+                <Pencil size={14} aria-hidden="true" /> 编辑
               </button>
-            )}
+            ) : null}
+            {canManageMembers ? (
+              <button className="btn btn-secondary btn-sm btn-with-icon" onClick={() => setManagingMembers(true)}>
+                <Users size={14} aria-hidden="true" /> 成员
+              </button>
+            ) : null}
+            {canUpdateProject ? (
+              <div className="pd-hero-status-select">
+                <ComboSelect
+                  options={PROJECT_STATUSES
+                    .filter((item) => item !== project.status)
+                    .map((item) => ({ value: item, label: labelOf(PROJECT_STATUS_LABELS, item) }))}
+                  value=""
+                  onChange={(next) => handleStatusChange(next)}
+                  placeholder="变更状态"
+                  disabled={saving}
+                  ariaLabel="变更项目状态"
+                  className="w-full"
+                />
+              </div>
+            ) : null}
           </div>
-        )}
+        </div>
 
-        <div className="project-detail-metrics">
-          <div className={`project-detail-metric ${healthVariant(project.healthScore)}`}>
-            <span>健康评分</span>
-            <strong>{project.healthScore}</strong>
+        <div className="pd-hero-metrics">
+          <div className="pd-hero-metric">
+            <span className="pd-hero-metric-label">
+              <UserRound size={13} aria-hidden="true" />
+              负责人
+            </span>
+            <strong className="pd-hero-metric-value truncate">{project.owner || '未设置'}</strong>
           </div>
-          <div className="project-detail-metric">
-            <span>项目进度</span>
-            <strong>{project.progress}%</strong>
-            <ProgressBar percent={project.progress ?? 0} height={6} />
+          <div className="pd-hero-metric">
+            <span className="pd-hero-metric-label">
+              <CalendarDays size={13} aria-hidden="true" />
+              排期
+            </span>
+            <strong className="pd-hero-metric-value truncate" title={scheduleText}>{scheduleText}</strong>
           </div>
-          <div className={project.riskCount > 0 || blockedTasks > 0 ? 'project-detail-metric risk' : 'project-detail-metric'}>
-            <span>风险 / 阻塞</span>
-            <strong>{project.riskCount} / {blockedTasks}</strong>
+          <div className="pd-hero-metric">
+            <span className="pd-hero-metric-label">任务 / 风险</span>
+            <strong className="pd-hero-metric-value">
+              <span>{project.tasks.length} 任务</span>
+              <span className={project.riskCount > 0 || blockedTasks > 0 ? 'is-risk' : 'is-muted'}>
+                风险 {project.riskCount}
+              </span>
+              <span className={blockedTasks > 0 ? 'is-risk' : 'is-muted'}>
+                阻塞 {blockedTasks}
+              </span>
+            </strong>
           </div>
-          <div className="project-detail-metric">
-            <span>任务总数</span>
-            <strong>{project.tasks.length}</strong>
-          </div>
-          <div className="project-detail-metric">
-            <span>迭代</span>
-            <strong>{activeSprints} / {project.sprints.length}</strong>
+          <div className="pd-hero-metric pd-hero-metric-progress">
+            <span className="pd-hero-metric-label">
+              进度
+              <span className="pd-hero-health">
+                健康
+                <StatusBadge label={String(project.healthScore)} variant={healthVariant(project.healthScore)} showDot={false} />
+              </span>
+            </span>
+            <div className="pd-hero-progress-row">
+              <ProgressBar percent={project.progress ?? 0} height={6} showPercent={false} className="min-w-0 flex-1" />
+              <span className="pd-hero-progress-num text-mono">{project.progress ?? 0}%</span>
+            </div>
           </div>
         </div>
       </section>
 
+      {(actionError || activationMissing.length > 0) && (
+        <div
+          className="flex min-w-0 flex-wrap items-center gap-2 border-l-2 border-[var(--destructive)] bg-[var(--muted)] px-3 py-2 text-sm"
+          role="alert"
+        >
+          {actionError ? <span className="min-w-0 flex-1 break-words text-[var(--destructive)]">{actionError}</span> : null}
+          {activationMissing.some((item) => ['projectObjective', 'plannedDates', 'milestoneOrSprint'].includes(item)) && (
+            <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>完善项目基础信息</button>
+          )}
+          {activationMissing.includes('projectMembers') && canManageMembers && (
+            <button className="btn btn-secondary btn-sm" onClick={() => setManagingMembers(true)}>管理项目成员</button>
+          )}
+          {activationMissing.includes('riskOwners') && (
+            <button className="btn btn-secondary btn-sm" onClick={() => setTab('governance')}>补充风险责任人</button>
+          )}
+          {activationMissing.some((item) => ['capacityAllocations', 'capacityPlans', 'capacityApprovals'].includes(item)) && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                const params = new URLSearchParams({ projectId: project.id });
+                if (project.startDate) params.set('periodStart', project.startDate);
+                if (project.endDate) params.set('periodEnd', project.endDate);
+                window.location.hash = `#/capacity?${params.toString()}`;
+              }}
+            >
+              配置容量与投入
+            </button>
+          )}
+        </div>
+      )}
+
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as DetailTab)}
+        className="project-detail-tabs min-w-0"
+      >
+        <TabsList className="project-detail-tablist" aria-label="项目详情视图">
+          {PROJECT_DETAIL_TABS.map(({ key, label, icon: Icon }) => (
+            <TabsTrigger
+              key={key}
+              id={`project-detail-tab-${key}`}
+              value={key}
+              className="project-detail-tab-trigger"
+              aria-controls={`project-detail-panel-${key}`}
+            >
+              <Icon size={14} aria-hidden="true" />
+              <span>{label}</span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        {PROJECT_DETAIL_TABS.map(({ key }) => (
+          <TabsContent
+            key={key}
+            value={key}
+            id={`project-detail-panel-${key}`}
+            className="project-detail-tab-panel"
+            aria-labelledby={`project-detail-tab-${key}`}
+          >
+            {key === 'overview' ? <OverviewTab project={project} projectId={id} onReload={reload} canManageProject={canUpdateProject} /> : null}
+            {key === 'wbs' ? <WbsTab tasks={project.tasks} projectId={id} onReload={reload} canManageProject={canUpdateProject} /> : null}
+            {key === 'kanban' ? <KanbanTab projectId={id} canManageProject={canUpdateProject} /> : null}
+            {key === 'flow' ? <FlowTab projectId={id} /> : null}
+            {key === 'governance' ? <GovernanceTab projectId={id} canManageProject={canUpdateProject} onProjectReload={reload} /> : null}
+          </TabsContent>
+        ))}
+      </Tabs>
+
       {canUseAi ? (
         <BusinessAdvicePanel
+          className="project-detail-ai-panel"
           targetType="project"
           targetId={project.id}
           title="AI 项目建议"
-          description="基于后端项目、需求、任务、测试、缺陷、构建和交付上下文生成。"
+          description="基于项目、需求、任务、测试、缺陷与交付上下文生成执行建议。"
           buttonText="AI 分析项目"
           question="请分析该项目的执行状态、主要风险、交付缺口和下一步动作。"
           draft={() => ({
@@ -261,41 +323,6 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
           })}
         />
       ) : null}
-
-      <div className="project-detail-tabs nav-tabs" role="tablist" aria-label="项目详情视图">
-        {PROJECT_DETAIL_TABS.map(({ key, label }) => (
-          <button
-            key={key}
-            id={`project-detail-tab-${key}`}
-            type="button"
-            role="tab"
-            className={`nav-tab ${tab === key ? 'active' : ''}`}
-            aria-selected={tab === key}
-            aria-controls={`project-detail-panel-${key}`}
-            tabIndex={tab === key ? 0 : -1}
-            onClick={() => setTab(key)}
-            onKeyDown={handleTabKeyDown}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {PROJECT_DETAIL_TABS.map(({ key }) => (
-        <div
-          key={key}
-          id={`project-detail-panel-${key}`}
-          role="tabpanel"
-          aria-labelledby={`project-detail-tab-${key}`}
-          hidden={tab !== key}
-        >
-          {tab === key && key === 'overview' ? <OverviewTab project={project} projectId={id} onReload={reload} canManageProject={canUpdateProject} /> : null}
-          {tab === key && key === 'wbs' ? <WbsTab tasks={project.tasks} projectId={id} onReload={reload} canManageProject={canUpdateProject} /> : null}
-          {tab === key && key === 'kanban' ? <KanbanTab projectId={id} canManageProject={canUpdateProject} /> : null}
-          {tab === key && key === 'flow' ? <FlowTab projectId={id} /> : null}
-          {tab === key && key === 'governance' ? <GovernanceTab projectId={id} canManageProject={canUpdateProject} onProjectReload={reload} /> : null}
-        </div>
-      ))}
       {editing && canUpdateProject && (
         <EditProjectForm
           project={project as unknown as Project}

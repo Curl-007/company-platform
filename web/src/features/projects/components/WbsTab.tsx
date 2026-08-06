@@ -14,7 +14,17 @@ import { useConfirm } from '../../../components/common/ConfirmDialog';
 import type { Task } from '../../../types';
 import { TASK_STATUS_LABELS, labelOf } from '../../../constants/enums';
 
-export default function WbsTab({ tasks, projectId, onReload, canManageProject }: { tasks: Task[]; projectId: string; onReload: () => void; canManageProject: boolean }) {
+export default function WbsTab({
+  tasks,
+  projectId,
+  onReload,
+  canManageProject,
+}: {
+  tasks: Task[];
+  projectId: string;
+  onReload: () => void;
+  canManageProject: boolean;
+}) {
   const [creating, setCreating] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -44,19 +54,20 @@ export default function WbsTab({ tasks, projectId, onReload, canManageProject }:
   const roots = filteredTasks
     .filter((task) => !task.parentId)
     .sort((a, b) => a.wbsCode.localeCompare(b.wbsCode, undefined, { numeric: true }));
-  const byParent: Record<string, Task[]> = {};
 
+  const byParent: Record<string, Task[]> = {};
   filteredTasks.forEach((task) => {
     if (!task.parentId) return;
     if (!byParent[task.parentId]) byParent[task.parentId] = [];
     byParent[task.parentId].push(task);
   });
-
   for (const parentId of Object.keys(byParent)) {
     byParent[parentId].sort((a, b) => a.wbsCode.localeCompare(b.wbsCode, undefined, { numeric: true }));
   }
 
   const ownerOptions = Array.from(new Set(tasks.map((task) => task.owner).filter(Boolean)));
+  const doneCount = filteredTasks.filter((task) => task.status === 'done').length;
+  const blockedCount = filteredTasks.filter((task) => task.status === 'blocked').length;
 
   function getChildren(task: Task): Task[] {
     return byParent[task.id] ?? [];
@@ -66,32 +77,50 @@ export default function WbsTab({ tasks, projectId, onReload, canManageProject }:
     {
       key: 'title',
       title: '任务',
-      width: 220,
-      render: (task) => <span className="font-medium">{task.wbsCode} {task.title}</span>,
+      width: '36%',
+      render: (task) => (
+        <div className="pd-wbs-task">
+          <span className="pd-wbs-code">{task.wbsCode}</span>
+          <span className="pd-wbs-title" title={task.title}>{task.title}</span>
+        </div>
+      ),
     },
-    { key: 'owner', title: '负责人', render: (task) => task.owner || '-' },
+    {
+      key: 'owner',
+      title: '负责人',
+      width: 110,
+      render: (task) => <span className="pd-wbs-owner">{task.owner || '未指派'}</span>,
+    },
     {
       key: 'status',
       title: '状态',
+      width: 100,
       render: (task) => <StatusBadge label={labelOf(TASK_STATUS_LABELS, task.status)} status={task.status} />,
     },
     {
       key: 'estimatedHours',
-      title: '预估(h)',
+      title: '预估',
+      width: 64,
       align: 'right',
-      render: (task) => task.estimatedHours ?? '-',
+      render: (task) => <span className="text-mono">{task.estimatedHours ?? '-'}</span>,
     },
     {
       key: 'remainingHours',
-      title: '剩余(h)',
+      title: '剩余',
+      width: 64,
       align: 'right',
       render: (task) => <span className="text-mono">{task.remainingHours ?? 0}</span>,
     },
     {
       key: 'progress',
       title: '进度',
-      width: 160,
-      render: (task) => <ProgressBar percent={task.progress ?? 0} height={6} />,
+      width: 150,
+      render: (task) => (
+        <div className="pd-wbs-progress">
+          <ProgressBar percent={task.progress ?? 0} height={5} showPercent={false} className="min-w-0 flex-1" />
+          <span className="text-mono">{task.progress ?? 0}%</span>
+        </div>
+      ),
     },
   ];
 
@@ -118,28 +147,43 @@ export default function WbsTab({ tasks, projectId, onReload, canManageProject }:
   }
 
   return (
-    <>
-      <Panel
-        title="WBS"
-        subtitle={`当前显示 ${filteredTasks.length} 个任务`}
-        toolbar={
-          <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
-            <select className="form-select" value={ownerFilter} onChange={(event) => setOwnerFilter(event.target.value)}>
-              <option value="">全部负责人</option>
-              {ownerOptions.map((owner) => (
-                <option key={owner} value={owner}>{owner}</option>
-              ))}
-            </select>
-            <select className="form-select" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="">全部状态</option>
-              {Object.entries(TASK_STATUS_LABELS).map(([key, value]) => (
-                <option key={key} value={key}>{value}</option>
-              ))}
-            </select>
-            {canManageProject ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建任务</button> : null}
-          </div>
-        }
-      >
+    <div className="pd-tab pd-wbs-tab">
+      <div className="pd-wbs-toolbar">
+        <div className="pd-wbs-stats">
+          <span><strong>{filteredTasks.length}</strong>任务</span>
+          <span><strong>{doneCount}</strong>完成</span>
+          <span className={blockedCount > 0 ? 'is-risk' : ''}><strong>{blockedCount}</strong>阻塞</span>
+        </div>
+        <div className="pd-wbs-filters">
+          <select
+            className="form-select"
+            value={ownerFilter}
+            onChange={(event) => setOwnerFilter(event.target.value)}
+            aria-label="负责人"
+          >
+            <option value="">全部负责人</option>
+            {ownerOptions.map((owner) => (
+              <option key={owner} value={owner}>{owner}</option>
+            ))}
+          </select>
+          <select
+            className="form-select"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            aria-label="任务状态"
+          >
+            <option value="">全部状态</option>
+            {Object.entries(TASK_STATUS_LABELS).map(([key, value]) => (
+              <option key={key} value={key}>{value}</option>
+            ))}
+          </select>
+          {canManageProject ? (
+            <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建任务</button>
+          ) : null}
+        </div>
+      </div>
+
+      <Panel className="pd-wbs-panel" noPadding>
         <TreeTable<Task>
           columns={columns}
           data={roots}
@@ -164,21 +208,27 @@ export default function WbsTab({ tasks, projectId, onReload, canManageProject }:
           selectedIds={selectedId ? new Set([selectedId]) : undefined}
           onRowClick={(task) => setSelectedId(task.id)}
           rowActions={(task) => (
-            <div className="flex items-center gap-1">
+            <div className="pd-wbs-actions">
+              <button className="btn btn-text btn-xs" onClick={() => setDetailTask(task)}>详情</button>
               {canManageProject ? (
                 <>
                   <button className="btn btn-text btn-xs" onClick={() => setEditingTask(task)}>编辑</button>
-                  <button className="btn btn-text btn-xs" onClick={() => handleDelete(task.id)} style={{ color: 'var(--color-red, #dc2626)' }}>删除</button>
+                  <button
+                    className="btn btn-text btn-xs"
+                    onClick={() => handleDelete(task.id)}
+                    style={{ color: 'var(--color-red, #dc2626)' }}
+                  >
+                    删除
+                  </button>
                 </>
               ) : null}
-              <button className="btn btn-text btn-xs" onClick={() => setDetailTask(task)}>详情</button>
             </div>
           )}
           emptyText="该项目下还没有匹配的 WBS 任务。"
         />
       </Panel>
 
-      {creating && canManageProject && (
+      {creating && canManageProject ? (
         <CreateWbsTaskForm
           projectId={projectId}
           onClose={() => setCreating(false)}
@@ -187,8 +237,8 @@ export default function WbsTab({ tasks, projectId, onReload, canManageProject }:
             onReload();
           }}
         />
-      )}
-      {editingTask && canManageProject && (
+      ) : null}
+      {editingTask && canManageProject ? (
         <EditTaskForm
           task={editingTask}
           onClose={() => setEditingTask(null)}
@@ -197,8 +247,14 @@ export default function WbsTab({ tasks, projectId, onReload, canManageProject }:
             onReload();
           }}
         />
-      )}
-      {detailTask && <TaskDetailView task={detailTask} onClose={() => setDetailTask(null)} onUpdated={() => onReload()} />}
-    </>
+      ) : null}
+      {detailTask ? (
+        <TaskDetailView
+          task={detailTask}
+          onClose={() => setDetailTask(null)}
+          onUpdated={() => onReload()}
+        />
+      ) : null}
+    </div>
   );
 }

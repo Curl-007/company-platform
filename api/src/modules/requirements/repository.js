@@ -36,6 +36,50 @@ function createRequirementsRepository({ insert, row, rows, run }) {
     return Object.fromEntries(entries);
   }
 
+  // Cascade delete a requirement and its leaf dependencies.
+  // Strategy (mixed): hard-delete tasks / defects / test cases (+ their test
+  // runs and sync tasks), soft-delete child requirements and the requirement
+  // itself (preserves audit history via deleted_at). Returns before-snapshots
+  // of everything removed so the caller can write audit entries.
+  //
+  // NOTE: the @name binder maps each placeholder to a single positional value,
+  // so we loop per-id for test-case-scoped deletes instead of using IN(@list).
+  async function cascadeDeleteRequirement({ id, now: deletedAt }) {
+    const params = { id };
+    const [tasks, defects, testCases, children] = await Promise.all([
+      rows("SELECT id FROM tasks WHERE requirement_id = @id ORDER BY id", params),
+      rows("SELECT id FROM defects WHERE requirement_id = @id ORDER BY id", params),
+      rows("SELECT id FROM test_cases WHERE requirement_id = @id ORDER BY id", params),
+      rows("SELECT id FROM requirements WHERE parent_id = @id AND deleted_at IS NULL ORDER BY id", params),
+    ]);
+
+    const deletedTestRuns = [];
+    const deletedSyncTasks = [];
+    for (const testCase of testCases) {
+      const tcParams = { id: testCase.id };
+      const runList = await rows("SELECT id FROM test_runs WHERE test_case_id = @id ORDER BY id", tcParams);
+      const syncTaskList = await rows("SELECT id FROM tasks WHERE source_type = 'test_case' AND source_id = @id ORDER BY id", tcParams);
+      for (const item of runList) deletedTestRuns.push({ id: item.id, testCaseId: testCase.id });
+      for (const item of syncTaskList) deletedSyncTasks.push({ id: item.id, testCaseId: testCase.id });
+      await run("DELETE FROM test_runs WHERE test_case_id = @id", tcParams);
+      await run("DELETE FROM tasks WHERE source_type = 'test_case' AND source_id = @id", tcParams);
+    }
+    await run("DELETE FROM test_cases WHERE requirement_id = @id", params);
+    await run("DELETE FROM tasks WHERE requirement_id = @id", params);
+    await run("DELETE FROM defects WHERE requirement_id = @id", params);
+    await run("UPDATE requirements SET deleted_at = @deletedAt WHERE parent_id = @id AND deleted_at IS NULL", { id, deletedAt });
+    await run("UPDATE requirements SET deleted_at = @deletedAt WHERE id = @id AND deleted_at IS NULL", { id, deletedAt });
+
+    return {
+      tasks,
+      defects,
+      testCases,
+      children,
+      testRuns: deletedTestRuns,
+      syncTasks: deletedSyncTasks,
+    };
+  }
+
   return {
     createRequirement: (requirement) => insert("requirements", requirement),
     softDeleteRequirement: ({ id, deletedAt }) => run("UPDATE requirements SET deleted_at = @deletedAt WHERE id = @id AND deleted_at IS NULL", { id, deletedAt }),
@@ -46,6 +90,7 @@ function createRequirementsRepository({ insert, row, rows, run }) {
     listChildren: (parentId) => rows("SELECT * FROM requirements WHERE parent_id = @pid AND deleted_at IS NULL ORDER BY id", { pid: parentId }),
     listRequirements,
     requirementDependencies,
+    cascadeDeleteRequirement,
     updateRequirement: (next) => run(
       `UPDATE requirements SET title=@title, description=@description, priority=@priority,
        acceptance_criteria=@acceptanceCriteria, parent_id=@parentId, assignee=@assignee,

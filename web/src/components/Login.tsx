@@ -1,7 +1,13 @@
-import React, { useState, FormEvent } from 'react';
+import React, { Suspense, lazy, useState, type FormEvent } from 'react';
 import { Check, LockKeyhole, Mail } from 'lucide-react';
 import { login } from '../services/auth';
+import { lazyWithRetry } from '../app/lazyWithRetry';
+import { GradientText, MotionGuard } from './reactbits';
 import type { SessionUser } from '../types';
+
+// Aurora uses ogl (WebGL). Keep it lazy so the ~150kb webgl-ogl chunk only
+// loads on the login screen, never on the authenticated app shell.
+const Aurora = lazyWithRetry(() => import('./reactbits/Aurora/Aurora'));
 
 interface LoginProps {
   onLoginSuccess: (user: SessionUser) => void;
@@ -42,10 +48,30 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
   return (
     <div className="login-screen">
+      <div className="login-aurora" aria-hidden="true">
+        <MotionGuard fallback={<div className="login-aurora-static" />}>
+          <Suspense fallback={null}>
+            <Aurora
+              colorStops={['#339cff', '#1f7fdf', '#0a3d7a']}
+              amplitude={0.8}
+              blend={0.6}
+            />
+          </Suspense>
+        </MotionGuard>
+      </div>
       <div className="login-shell">
         <div className="login-brand-panel">
           <div className="login-brand-logo-lg">P</div>
-          <h1 className="login-brand-title">项目管理平台</h1>
+          <h1 className="login-brand-title">
+            <MotionGuard fallback={<span>项目管理平台</span>}>
+              <GradientText
+                colors={['#339cff', '#7cc4ff', '#1f7fdf', '#339cff']}
+                animationSpeed={6}
+              >
+                项目管理平台
+              </GradientText>
+            </MotionGuard>
+          </h1>
           <p className="login-brand-subtitle">AI 驱动的企业级项目协作工作台</p>
           <ul className="login-brand-highlights">
             {HIGHLIGHTS.map((item) => (

@@ -1,18 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { createPortal } from 'react-dom';
-import { Check, Contrast, Maximize2, Minus, Moon, Palette, PanelLeftClose, PanelLeftOpen, PanelTop, Plus, RotateCcw, SlidersHorizontal, Sparkles, Sun, Type, X, ZapOff } from 'lucide-react';
+import { Contrast, Maximize2, Minus, Moon, Palette, Plus, RotateCcw, SlidersHorizontal, Sun, Type, X, ZapOff } from 'lucide-react';
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+  SheetTrigger,
+} from '../ui';
 import {
   WORK_FONT_LABELS,
   WORK_THEME_STORAGE_KEY,
-  WORK_THEMES,
   applyWorkTheme,
   defaultWorkThemeSettings,
   readWorkThemeSettings,
   resetWorkThemeSettings,
   saveWorkThemeSettings,
+  saveWorkThemeSettingsWithTransition,
   type WorkThemeFont,
-  type WorkThemeNavLayout,
   type WorkThemeSettings,
 } from '../../theme/workTheme';
 
@@ -26,9 +32,17 @@ const CONTENT_GUTTER_MAJOR = 40;
 export default function ThemeSettings() {
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState<WorkThemeSettings>(() => readWorkThemeSettings());
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const drawerRef = useRef<HTMLElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  // Track the last pointer position so theme-mode toggles can reveal from the
+  // click point (View Transitions radial wipe).
+  const lastPointer = useRef<{ x: number; y: number } | undefined>(undefined);
+
+  useEffect(() => {
+    const recordPointer = (event: PointerEvent) => {
+      lastPointer.current = { x: event.clientX, y: event.clientY };
+    };
+    window.addEventListener('pointerdown', recordPointer);
+    return () => window.removeEventListener('pointerdown', recordPointer);
+  }, []);
 
   useEffect(() => {
     const syncAcrossTabs = (event: StorageEvent) => {
@@ -41,98 +55,65 @@ export default function ThemeSettings() {
     return () => window.removeEventListener('storage', syncAcrossTabs);
   }, []);
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    closeButtonRef.current?.focus();
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        setOpen(false);
-        return;
-      }
-      if (event.key !== 'Tab') return;
-
-      const focusable = Array.from(drawerRef.current?.querySelectorAll<HTMLElement>(
-        'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
-      ) ?? []);
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      triggerRef.current?.focus();
-    };
-  }, [open]);
-
   const changed = useMemo(() => {
     return JSON.stringify(settings) !== JSON.stringify(defaultWorkThemeSettings);
   }, [settings]);
 
   function update(partial: Partial<WorkThemeSettings>) {
-    setSettings((current) => saveWorkThemeSettings({ ...current, ...partial }));
+    // Theme mode toggles get the View Transition radial reveal; every other
+    // setting (font, density, contrast) applies instantly as before.
+    if ('mode' in partial) {
+      const origin = lastPointer.current;
+      setSettings((current) => saveWorkThemeSettingsWithTransition({ ...current, ...partial }, origin));
+    } else {
+      setSettings((current) => saveWorkThemeSettings({ ...current, ...partial }));
+    }
   }
 
   function reset() {
     setSettings(resetWorkThemeSettings());
   }
 
-  const drawer = open ? (
-    <>
-      <div className="theme-settings-scrim" onClick={() => setOpen(false)} />
-      <aside
-        ref={drawerRef}
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <button
+          type="button"
+          className="topbar-icon-button"
+          aria-label="打开主题设置"
+          title="主题设置"
+        >
+          <Palette size={18} />
+          {changed ? <span className="topbar-notification-dot" /> : null}
+        </button>
+      </SheetTrigger>
+      <SheetContent
+        side="right"
+        showClose={false}
         className="theme-settings-drawer"
-        role="dialog"
-        aria-modal="true"
         aria-labelledby="theme-settings-title"
       >
         <div className="theme-settings-header">
           <div>
-            <div className="theme-settings-title" id="theme-settings-title">
+            <SheetTitle className="theme-settings-title" id="theme-settings-title">
               <SlidersHorizontal size={16} />
               主题设置
-            </div>
-            <div className="theme-settings-subtitle">工作台的主题、密度与布局偏好</div>
+          </SheetTitle>
+            <SheetDescription className="theme-settings-subtitle">工作台的主题与辅助偏好</SheetDescription>
           </div>
           <div className="theme-settings-actions">
+            <SheetClose asChild>
+              <button type="button" className="topbar-icon-button theme-settings-close" aria-label="关闭主题设置">
+                <X size={16} />
+              </button>
+            </SheetClose>
             <button type="button" className="topbar-icon-button" onClick={reset} aria-label="恢复默认">
               <RotateCcw size={16} />
-            </button>
-            <button ref={closeButtonRef} type="button" className="topbar-icon-button" onClick={() => setOpen(false)} aria-label="关闭主题设置">
-              <X size={16} />
             </button>
           </div>
         </div>
 
         <div className="theme-settings-body">
-          <OptionBlock title="主题" canReset={settings.theme !== defaultWorkThemeSettings.theme} onReset={() => update({ theme: defaultWorkThemeSettings.theme })}>
-            <div className="theme-preset-grid">
-              {WORK_THEMES.map((theme) => (
-                <ThemeCard
-                  key={theme.id}
-                  theme={theme}
-                  mode={settings.mode}
-                  active={settings.theme === theme.id}
-                  onClick={() => update({ theme: theme.id })}
-                />
-              ))}
-            </div>
-          </OptionBlock>
-
           <OptionBlock title="明暗">
             <div className="theme-segmented">
               <button type="button" className={settings.mode === 'dark' ? 'active' : ''} aria-pressed={settings.mode === 'dark'} onClick={() => update({ mode: 'dark' })}>
@@ -162,12 +143,6 @@ export default function ThemeSettings() {
               label="减少动效"
               active={settings.reduceMotion}
               onClick={() => update({ reduceMotion: !settings.reduceMotion })}
-            />
-            <ToggleTile
-              icon={<Sparkles size={16} />}
-              label="环境光"
-              active={settings.ambient}
-              onClick={() => update({ ambient: !settings.ambient })}
             />
           </section>
 
@@ -200,36 +175,9 @@ export default function ThemeSettings() {
             onReset={() => update({ contentPadding: defaultWorkThemeSettings.contentPadding })}
             onChange={(contentPadding) => update({ contentPadding })}
           />
-
-          <NavLayoutSetting
-            value={settings.navLayout}
-            canReset={settings.navLayout !== defaultWorkThemeSettings.navLayout}
-            onReset={() => update({ navLayout: defaultWorkThemeSettings.navLayout })}
-            onChange={(navLayout) => update({ navLayout })}
-          />
-
-          <ThemeTokenSummary themeId={settings.theme} />
         </div>
-      </aside>
-    </>
-  ) : null;
-
-  return (
-    <>
-      <button
-        ref={triggerRef}
-        type="button"
-        className="topbar-icon-button"
-        onClick={() => setOpen(true)}
-        aria-label="打开主题设置"
-        title="主题设置"
-      >
-        <Palette size={18} />
-        {changed ? <span className="topbar-notification-dot" /> : null}
-      </button>
-
-      {drawer ? createPortal(drawer, document.body) : null}
-    </>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -256,30 +204,6 @@ function OptionBlock({
       </h2>
       {children}
     </section>
-  );
-}
-
-function ThemeCard({
-  theme,
-  mode,
-  active,
-  onClick,
-}: {
-  theme: (typeof WORK_THEMES)[number];
-  mode: 'dark' | 'light';
-  active: boolean;
-  onClick: () => void;
-}) {
-  const preview = theme.preview[mode];
-  return (
-    <button type="button" className={`theme-preset-card ${active ? 'active' : ''}`} onClick={onClick} aria-pressed={active}>
-      <span className="theme-preset-preview" style={{ background: preview.bg }}>
-        <span style={{ background: `linear-gradient(90deg, ${preview.gradient.join(', ')})` }} />
-      </span>
-      <span className="theme-preset-label">{theme.label}</span>
-      <small>{theme.blurb}</small>
-      {active ? <Check size={14} /> : null}
-    </button>
   );
 }
 
@@ -400,68 +324,5 @@ function GutterSetting({
         <span className="theme-gutter-thumb" style={{ left: `${pct}%` }} />
       </div>
     </OptionBlock>
-  );
-}
-
-function NavLayoutSetting({
-  value,
-  canReset,
-  onReset,
-  onChange,
-}: {
-  value: WorkThemeNavLayout;
-  canReset: boolean;
-  onReset: () => void;
-  onChange: (value: WorkThemeNavLayout) => void;
-}) {
-  const options: Array<{ value: WorkThemeNavLayout; label: string; icon: ReactNode; kind: WorkThemeNavLayout }> = [
-    { value: 'mini', label: '迷你', icon: <PanelLeftClose size={16} />, kind: 'mini' },
-    { value: 'expanded', label: '展开', icon: <PanelLeftOpen size={16} />, kind: 'expanded' },
-    { value: 'horizontal', label: '横向', icon: <PanelTop size={16} />, kind: 'horizontal' },
-  ];
-
-  return (
-    <OptionBlock title="导航布局" canReset={canReset} onReset={onReset}>
-      <div className="theme-layout-grid">
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            className={`theme-layout-option ${value === option.value ? 'active' : ''}`}
-            onClick={() => onChange(option.value)}
-            aria-pressed={value === option.value}
-          >
-            <span className="theme-layout-preview" data-kind={option.kind}>
-              <i />
-              <b />
-            </span>
-            <span className="theme-layout-label">
-              {option.icon}
-              {option.label}
-            </span>
-          </button>
-        ))}
-      </div>
-    </OptionBlock>
-  );
-}
-
-function ThemeTokenSummary({ themeId }: { themeId: string }) {
-  const theme = WORK_THEMES.find((item) => item.id === themeId) ?? WORK_THEMES[0];
-  return (
-    <section className="theme-token-summary">
-      <div>
-        <span>圆角</span>
-        <strong>{theme.signature.radius}px</strong>
-      </div>
-      <div>
-        <span>玻璃</span>
-        <strong>{theme.signature.glassBlur ? `${theme.signature.glassBlur}px` : '关闭'}</strong>
-      </div>
-      <div>
-        <span>强调</span>
-        <strong>{theme.signature.gradient[0]}</strong>
-      </div>
-    </section>
   );
 }

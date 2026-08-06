@@ -1,7 +1,12 @@
 import ReportsView from '../features/reports/components/ReportsView';
+import PageFrame from '../components/common/PageFrame';
 
 function ReportsPage() {
-  return <ReportsView />;
+  return (
+    <PageFrame className="page-frame-reports">
+      <ReportsView />
+    </PageFrame>
+  );
 }
 
 export default ReportsPage;

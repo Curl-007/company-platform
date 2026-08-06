@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { EditorContent, useEditor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
 import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
 import StatusBadge from '../../../components/common/StatusBadge';
@@ -75,6 +77,43 @@ export default function DocumentCollaborationEditor({
   const [peers, setPeers] = useState<CollabPeer[]>([]);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [serverSnapshot, setServerSnapshot] = useState<{ content: string; revision: number } | null>(null);
+
+  function updateContent(value: string) {
+    dirtyRef.current = true;
+    contentRef.current = value;
+    setStatus((current) => (current === 'saved' ? 'connected' : current));
+    setContent(value);
+  }
+
+  // Tiptap editor for a richer editing surface. The collab protocol still
+  // exchanges plain text, so we serialize with getText() and rehydrate with
+  // setContent() so remote updates stay compatible with the existing backend.
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+      }),
+    ],
+    content: doc.content ?? '',
+    editorProps: {
+      attributes: {
+        class: 'collab-editor-prose form-textarea',
+        'data-slot': 'collab-editor',
+        'aria-label': '文档正文',
+      },
+    },
+    onUpdate: ({ editor: current }) => {
+      updateContent(current.getText({ blockSeparator: '\n' }));
+    },
+  });
+
+  useEffect(() => {
+    if (!editor) return;
+    const current = editor.getText({ blockSeparator: '\n' });
+    if (current === content) return;
+    // Programmatic remote/server updates must not re-fire onUpdate dirty flags.
+    editor.commands.setContent(content, { emitUpdate: false });
+  }, [content, editor]);
 
   useEffect(() => {
     const token = getToken();
@@ -234,13 +273,6 @@ export default function DocumentCollaborationEditor({
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, []);
 
-  function updateContent(value: string) {
-    dirtyRef.current = true;
-    contentRef.current = value;
-    setStatus((current) => current === 'saved' ? 'connected' : current);
-    setContent(value);
-  }
-
   function save() {
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
@@ -333,15 +365,57 @@ export default function DocumentCollaborationEditor({
         ) : null}
         <div className="form-group">
           <label className="form-label">文档正文</label>
-          <textarea
-            className="form-textarea"
-            rows={16}
-            value={content}
-            onChange={(event) => updateContent(event.target.value)}
-            placeholder="在这里编辑文档正文；保存后会广播给同一文档的在线编辑者。"
-          />
+          <div className="collab-editor-toolbar" role="toolbar" aria-label="格式工具栏">
+            <button
+              type="button"
+              className={`btn btn-text btn-xs ${editor?.isActive('bold') ? 'active' : ''}`}
+              onClick={() => editor?.chain().focus().toggleBold().run()}
+              disabled={!editor}
+            >
+              粗体
+            </button>
+            <button
+              type="button"
+              className={`btn btn-text btn-xs ${editor?.isActive('italic') ? 'active' : ''}`}
+              onClick={() => editor?.chain().focus().toggleItalic().run()}
+              disabled={!editor}
+            >
+              斜体
+            </button>
+            <button
+              type="button"
+              className={`btn btn-text btn-xs ${editor?.isActive('bulletList') ? 'active' : ''}`}
+              onClick={() => editor?.chain().focus().toggleBulletList().run()}
+              disabled={!editor}
+            >
+              列表
+            </button>
+            <button
+              type="button"
+              className={`btn btn-text btn-xs ${editor?.isActive('heading', { level: 2 }) ? 'active' : ''}`}
+              onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+              disabled={!editor}
+            >
+              标题
+            </button>
+            <button
+              type="button"
+              className={`btn btn-text btn-xs ${editor?.isActive('codeBlock') ? 'active' : ''}`}
+              onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+              disabled={!editor}
+            >
+              代码块
+            </button>
+          </div>
+          <div className="collab-editor-surface">
+            {editor ? (
+              <EditorContent editor={editor} />
+            ) : (
+              <div className="form-textarea collab-editor-fallback" aria-busy="true">编辑器加载中…</div>
+            )}
+          </div>
           <div className="form-help-text">
-            保存使用服务器 revision 做冲突检测；顶部会显示当前在线人数与最近保存时间。冲突与远端更新不会覆盖本地未保存草稿。
+            保存使用服务器 revision 做冲突检测；顶部会显示当前在线人数与最近保存时间。冲突与远端更新不会覆盖本地未保存草稿。协同通道仍以纯文本同步，格式工具仅增强本地编辑体验。
           </div>
         </div>
         <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end' }}>

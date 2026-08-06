@@ -1,0 +1,42 @@
+/* ---------------------------------------------------------------------------
+   Flow workbench
+   Page-level container for the R&D process page. The shared KPI signal-strip
+   visual (label / value / caption triad + emphasis states) is defined once in
+   reports-workbench.css under the shared .flow-signal-strip selectors.
+   --------------------------------------------------------------------------- */
+.flow-workbench {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* Toolbar holds the page summary line + refresh action. */
+.flow-toolbar {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.flow-toolbar-summary {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.flow-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Legend now lives inside the matrix panel body; give it a little air
+   before the matrix grid. Base .flow-legend-bar styles stay in global.css. */
+.flow-matrix-panel .flow-legend-bar {
+  margin-bottom: 12px;
+}

@@ -33,8 +33,8 @@ export function updateProduct(id: string, input: Partial<CreateProductInput>): P
   return unwrapPatch<Product>(`/api/products/${id}`, input);
 }
 
-export function deleteProduct(id: string): Promise<void> {
-  return unwrapDel(`/api/products/${id}`);
+export function deleteProduct(id: string, cascade?: boolean): Promise<void> {
+  return unwrapDel(`/api/products/${id}${cascade ? '?cascade=true' : ''}`);
 }
 
 export interface ProductImageUploadResult {

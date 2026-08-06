@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
+import { Bug, ClipboardCheck } from 'lucide-react';
 import { getSessionUser } from '../../../services/auth';
-import PageHeader from '../../../components/common/PageHeader';
 import { canOperate } from '../../../constants/roles';
 import { clearTestingFocusFromHash, type TestingTab } from './testingHelpers';
 import TestingQualityAiPanel from './TestingQualityAiPanel';
@@ -8,7 +8,10 @@ import TestCasesTab from './TestCasesTab';
 import DefectsTab from './DefectsTab';
 
 export default function TestingView() {
-  const [routeState, setRouteState] = useState<{ tab: TestingTab; focusId: string | null }>({ tab: 'cases', focusId: null });
+  const [routeState, setRouteState] = useState<{ tab: TestingTab; focusId: string | null }>({
+    tab: 'cases',
+    focusId: null,
+  });
   const [tab, setTab] = useState<TestingTab>('cases');
   const sessionUser = getSessionUser();
   const canUseAi = canOperate(sessionUser, 'ai:analyze');
@@ -38,17 +41,52 @@ export default function TestingView() {
     clearTestingFocusFromHash();
   }
 
+  function switchTab(next: TestingTab) {
+    setTab(next);
+    const hash = window.location.hash;
+    const [pathPart, queryPart] = hash.split('?');
+    const params = new URLSearchParams(queryPart || '');
+    if (next === 'defects') params.set('tab', 'defects');
+    else params.delete('tab');
+    // Keep focus only when it belongs to the destination tab route.
+    if (routeState.tab !== next) params.delete('focus');
+    const nextQuery = params.toString();
+    const base = pathPart || '#/testing';
+    window.location.hash = nextQuery ? `${base}?${nextQuery}` : base;
+  }
+
   return (
-    <div>
-      <PageHeader title="测试管理" description="集中管理测试用例、测试执行和缺陷闭环，支撑测试与开发之间的交接流转。" />
+    <div className="qa-workbench">
       {canUseAi ? <TestingQualityAiPanel /> : null}
-      <div className="nav-tabs" style={{ marginBottom: 16 }}>
-        <button className={`nav-tab ${tab === 'cases' ? 'active' : ''}`} onClick={() => setTab('cases')}>测试用例</button>
-        <button className={`nav-tab ${tab === 'defects' ? 'active' : ''}`} onClick={() => setTab('defects')}>缺陷列表</button>
+
+      <div className="qa-tab-row" role="tablist" aria-label="测试质量视图">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'cases'}
+          className={`qa-tab-chip ${tab === 'cases' ? 'is-active' : ''}`}
+          onClick={() => switchTab('cases')}
+        >
+          <ClipboardCheck size={14} aria-hidden="true" />
+          测试用例
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'defects'}
+          className={`qa-tab-chip ${tab === 'defects' ? 'is-active' : ''}`}
+          onClick={() => switchTab('defects')}
+        >
+          <Bug size={14} aria-hidden="true" />
+          缺陷列表
+        </button>
       </div>
-      {tab === 'cases'
-        ? <TestCasesTab focusId={tab === 'cases' ? routeState.focusId : null} onClearFocus={handleClearFocus} />
-        : <DefectsTab focusId={tab === 'defects' ? routeState.focusId : null} onClearFocus={handleClearFocus} />}
+
+      {tab === 'cases' ? (
+        <TestCasesTab focusId={routeState.focusId} onClearFocus={handleClearFocus} />
+      ) : (
+        <DefectsTab focusId={routeState.focusId} onClearFocus={handleClearFocus} />
+      )}
     </div>
   );
 }

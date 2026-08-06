@@ -1,312 +1,368 @@
-import { useMemo, type ReactNode } from 'react';
-import { ListChecks, HeartPulse, FlaskConical } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  ClipboardList,
+  FileText,
+  FolderKanban,
+  HeartPulse,
+  ListTodo,
+  Search,
+  TestTube2,
+} from 'lucide-react';
 import { fetchDashboard } from '../api';
+import { fetchProjects } from '../../projects/api';
 import { fallbackDashboard } from '../../../data/fallback';
 import { useAsync } from '../../../hooks/useAsync';
-import MetricStrip from '../../../components/common/MetricStrip';
 import Panel from '../../../components/common/Panel';
-import PageHeader from '../../../components/common/PageHeader';
 import DataTable, { type DataTableColumn } from '../../../components/common/DataTable';
+import PageState from '../../../components/common/PageState';
 import StatusBadge from '../../../components/common/StatusBadge';
 import ProgressBar from '../../../components/common/ProgressBar';
-import PageState from '../../../components/common/PageState';
-import type { DashboardData, Task, Project } from '../../../types';
+import MetricStrip, { type MetricStripItem } from '../../../components/common/MetricStrip';
+import DonutChart from '../../../components/common/DonutChart';
+import { Button, Input } from '../../../components/ui';
+import { CountUp, FadeContent, MotionGuard } from '../../../components/reactbits';
+import type { DashboardData, Project, Task } from '../../../types';
 import {
-  healthVariant,
-  HEALTH_THRESHOLD_OK,
-  TASK_STATUS_LABELS,
+  PROCESS_MODE_LABELS,
   PROJECT_STATUS_LABELS,
+  TASK_STATUS_LABELS,
   labelOf,
 } from '../../../constants/enums';
-import { canOperate } from '../../../constants/roles';
-import { getSessionUser } from '../../../services/auth';
-import ActionSummaryItem from './ActionSummaryItem';
 import DashboardAiAdvisor from './DashboardAiAdvisor';
-import AiSummaryPanel from './AiSummaryPanel';
 import RequirementProgressPanel from './RequirementProgressPanel';
-
-const ACTION_TASK_LIMIT = 12;
 
 const taskColumns: DataTableColumn<Task>[] = [
   {
     key: 'title',
     title: '任务',
-    render: (task) => <span className="font-medium">{task.title}</span>,
+    render: (task) => (
+      <div className="min-w-0">
+        <div className="truncate font-medium">{task.title}</div>
+        <div className="truncate text-secondary">{task.owner || '未分配负责人'}</div>
+      </div>
+    ),
   },
   {
     key: 'status',
     title: '状态',
     render: (task) => <StatusBadge label={labelOf(TASK_STATUS_LABELS, task.status)} status={task.status} />,
   },
-  { key: 'owner', title: '负责人', render: (task) => task.owner || '未分配' },
   { key: 'dueDate', title: '截止日期', render: (task) => task.dueDate || '未设置' },
   {
     key: 'progress',
     title: '进度',
     width: 160,
-    render: (task) => <ProgressBar percent={task.progress ?? 0} height={6} />,
+    render: (task) => (
+      <div className="flex min-w-[120px] items-center gap-2">
+        <ProgressBar percent={task.progress ?? 0} height={5} showPercent={false} />
+        <span className="text-secondary text-mono">{task.progress ?? 0}%</span>
+      </div>
+    ),
   },
 ];
 
-const riskyColumns: DataTableColumn<Project>[] = [
-  {
-    key: 'name',
-    title: '项目',
-    render: (project) => <span className="font-medium">{project.name}</span>,
-  },
-  {
-    key: 'status',
-    title: '状态',
-    render: (project) => (
-      <StatusBadge label={labelOf(PROJECT_STATUS_LABELS, project.status)} status={project.status} />
-    ),
-  },
-  {
-    key: 'healthScore',
-    title: '健康度',
-    align: 'center',
-    render: (project) => (
-      <StatusBadge label={String(project.healthScore)} variant={healthVariant(project.healthScore)} showDot={false} />
-    ),
-  },
-  {
-    key: 'riskCount',
-    title: '风险数',
-    align: 'center',
-    render: (project) => <span className="text-mono">{project.riskCount}</span>,
-  },
-  {
-    key: 'progress',
-    title: '进度',
-    width: 160,
-    render: (project) => <ProgressBar percent={project.progress ?? 0} height={6} />,
-  },
-];
+function projectDates(project: Project) {
+  if (!project.startDate && !project.endDate) return '未设置日期';
+  return `${project.startDate || '未开始'} - ${project.endDate || '未结束'}`;
+}
 
-function PageHeaderShell({ children }: { children: ReactNode }) {
+function HealthBucket({
+  label,
+  count,
+  tone,
+  hint,
+}: {
+  label: string;
+  count: number;
+  tone: 'success' | 'warning' | 'risk';
+  hint: string;
+}) {
+  const toneClass =
+    tone === 'success' ? 'text-[var(--color-success)]' :
+    tone === 'warning' ? 'text-[var(--color-warning)]' :
+    'text-[var(--color-risk)]';
   return (
-    <div>
-      <PageHeader
-        title="工作台"
-        description="集中查看任务、项目健康度、需求推进和 AI 总结。"
-      />
-      {children}
+    <div className="flex min-w-0 items-center justify-between gap-2 text-sm">
+      <span className="min-w-0 truncate text-secondary">
+        <span className={`mr-1.5 inline-block size-1.5 rounded-full align-middle ${tone === 'success' ? 'bg-[var(--color-success)]' : tone === 'warning' ? 'bg-[var(--color-warning)]' : 'bg-[var(--color-risk)]'}`} />
+        {label}
+        <span className="ml-1 text-xs opacity-70">{hint}</span>
+      </span>
+      <strong className={`text-mono ${toneClass}`}>{count}</strong>
     </div>
   );
 }
 
 export default function DashboardView() {
-  const { data, loading, error, reload } = useAsync<DashboardData>(fetchDashboard, [], { cacheKey: 'dashboard:overview' });
-  const dashboard = data ?? (error ? fallbackDashboard : null);
-  const currentUser = getSessionUser();
-  const canUseAi = canOperate(currentUser, 'ai:analyze');
+  const dashboardRequest = useAsync<DashboardData>(fetchDashboard, [], { cacheKey: 'dashboard:overview' });
+  const projectsRequest = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
+  const [keyword, setKeyword] = useState('');
 
-  const heroCards = useMemo(() => {
-    if (!dashboard) return [];
-    const { metrics } = dashboard;
-    const completed = metrics.tasks.done ?? 0;
-    const blocked = metrics.tasks.blocked ?? 0;
+  const dashboard = dashboardRequest.data ?? (dashboardRequest.error ? fallbackDashboard : null);
+  const projects = projectsRequest.data ?? dashboard?.riskyProjects ?? [];
+  const filteredProjects = useMemo(() => {
+    const query = keyword.trim().toLowerCase();
+    if (!query) return projects;
+    return projects.filter((project) => [
+      project.name,
+      project.code || '',
+      project.owner,
+      project.description || '',
+    ].some((value) => value.toLowerCase().includes(query)));
+  }, [keyword, projects]);
 
-    return [
-      {
-        label: '活跃任务',
-        value: metrics.tasks.total,
-        icon: <ListChecks size={16} />,
-        tone: 'info' as const,
-        trend: `${completed} 已完成 · ${blocked} 阻塞中`,
-        trendDirection: 'flat' as const,
-      },
-      {
-        label: '项目平均健康度',
-        value: metrics.projectHealthAverage,
-        icon: <HeartPulse size={16} />,
-        tone: metrics.projectHealthAverage >= HEALTH_THRESHOLD_OK ? ('success' as const) : ('warning' as const),
-        trend: metrics.projectHealthAverage >= HEALTH_THRESHOLD_OK ? '整体稳定' : '需要关注',
-        trendDirection: metrics.projectHealthAverage >= HEALTH_THRESHOLD_OK ? ('up' as const) : ('down' as const),
-      },
-      {
-        label: '测试通过率',
-        value: `${metrics.testPassRate}%`,
-        icon: <FlaskConical size={16} />,
-        tone: metrics.testPassRate >= 90 ? ('success' as const) : ('risk' as const),
-        trend: metrics.testPassRate >= 90 ? '达到目标' : '低于目标',
-        trendDirection: metrics.testPassRate >= 90 ? ('up' as const) : ('down' as const),
-      },
-    ];
-  }, [dashboard]);
+  const projectColumns: DataTableColumn<Project>[] = [
+    {
+      key: 'name',
+      title: '项目',
+      sorter: (left, right) => left.name.localeCompare(right.name),
+      render: (project) => (
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <FolderKanban size={15} className="shrink-0 text-secondary" aria-hidden="true" />
+            <span className="truncate font-medium">{project.name}</span>
+          </div>
+          <div className="truncate text-secondary">
+            {labelOf(PROCESS_MODE_LABELS, project.processMode)} · {project.owner || '未分配负责人'}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'progress',
+      title: '进度',
+      width: 220,
+      sorter: (left, right) => left.progress - right.progress,
+      render: (project) => (
+        <div className="flex min-w-[160px] items-center gap-2">
+          <ProgressBar percent={project.progress ?? 0} height={5} showPercent={false} />
+          <span className="shrink-0 text-secondary text-mono">{project.progress ?? 0}%</span>
+        </div>
+      ),
+    },
+    { key: 'dates', title: '日期', render: (project) => projectDates(project) },
+    {
+      key: 'status',
+      title: '状态',
+      render: (project) => <StatusBadge label={labelOf(PROJECT_STATUS_LABELS, project.status)} status={project.status} />,
+    },
+  ];
 
-  const managementOverview = useMemo(() => {
-    if (!dashboard) return [];
-    const { metrics } = dashboard;
-    return [
-      {
-        label: '需求完成率',
-        value: `${metrics.requirementCompletionAverage}%`,
-        caption: '当前需求平均完成进度',
-        tone: 'neutral' as const,
-      },
-      {
-        label: '开放风险',
-        value: metrics.openRisks,
-        caption: metrics.openRisks > 0 ? '需要持续跟进处置' : '当前没有开放风险',
-        tone: metrics.openRisks > 0 ? ('risk' as const) : ('success' as const),
-      },
-      {
-        label: '知识文档',
-        value: metrics.documentCount,
-        caption: '工作区已沉淀文档',
-        tone: 'neutral' as const,
-      },
-    ];
-  }, [dashboard]);
-
-  const actionQueue = useMemo(() => {
-    if (!dashboard) return { tasks: [] as Task[], blocked: 0, overdue: 0, inFlight: 0, review: 0 };
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-
-    const isOverdue = (task: Task) => {
-      if (!task.dueDate) return false;
-      const due = new Date(task.dueDate);
-      return !Number.isNaN(due.getTime()) && due <= today && !['done', 'cancelled'].includes(task.status);
-    };
-
-    const weight = (task: Task) => {
-      if (task.status === 'blocked') return 0;
-      if (isOverdue(task)) return 1;
-      if (['code_review', 'testing', 'acceptance'].includes(task.status)) return 2;
-      if (task.status === 'in_progress') return 3;
-      if (task.status === 'todo') return 4;
-      return 9;
-    };
-
-    const activeTasks = dashboard.focusTasks
-      .filter((task) => !['done', 'cancelled'].includes(task.status))
-      .sort((a, b) => {
-        const priority = weight(a) - weight(b);
-        if (priority !== 0) return priority;
-        return String(a.dueDate || '').localeCompare(String(b.dueDate || ''));
-      });
-
-    return {
-      tasks: activeTasks.slice(0, ACTION_TASK_LIMIT),
-      blocked: activeTasks.filter((task) => task.status === 'blocked').length,
-      overdue: activeTasks.filter(isOverdue).length,
-      inFlight: activeTasks.filter((task) => task.status === 'in_progress').length,
-      review: activeTasks.filter((task) => ['code_review', 'testing', 'acceptance'].includes(task.status)).length,
-    };
-  }, [dashboard]);
-
-  if (loading) {
-    return (
-      <PageHeaderShell>
-        <PageState loading error={null} onRetry={reload} />
-      </PageHeaderShell>
-    );
+  if (dashboardRequest.loading || !dashboard) {
+    return <PageState loading={dashboardRequest.loading} error={dashboardRequest.error} onRetry={dashboardRequest.reload} />;
   }
 
-  if (!dashboard) {
-    return (
-      <PageHeaderShell>
-        <PageState loading={false} error={error} onRetry={reload} />
-      </PageHeaderShell>
-    );
-  }
+  const openProject = (project: Project) => {
+    window.location.hash = `#/projects?focus=${encodeURIComponent(project.id)}`;
+  };
+
+  const m = dashboard.metrics;
+  // KPI hero strip. Values use CountUp for an animated count-in, wrapped in
+  // MotionGuard so reduced-motion users see the plain number instead.
+  const kpiItems: MetricStripItem[] = [
+    {
+      label: '任务总数',
+      value: <MotionGuard fallback={<>{m.tasks.total}</>}>
+        <CountUp to={m.tasks.total} duration={1.2} />
+      </MotionGuard>,
+      icon: <ClipboardList size={16} aria-hidden="true" />,
+      tone: 'info',
+      caption: `${labelOf(TASK_STATUS_LABELS, 'done')} ${m.tasks.done ?? 0}`,
+    },
+    {
+      label: '项目健康度',
+      value: <MotionGuard fallback={<>{m.projectHealthAverage}</>}>
+        <CountUp to={m.projectHealthAverage} duration={1.2} />
+      </MotionGuard>,
+      icon: <HeartPulse size={16} aria-hidden="true" />,
+      tone: m.projectHealthAverage >= 75 ? 'success' : m.projectHealthAverage >= 50 ? 'warning' : 'risk',
+      caption: '平均健康分',
+    },
+    {
+      label: '需求完成率',
+      value: <MotionGuard fallback={<>{m.requirementCompletionAverage}%</>}>
+        <CountUp to={m.requirementCompletionAverage} duration={1.2} />%
+      </MotionGuard>,
+      icon: <TestTube2 size={16} aria-hidden="true" />,
+      tone: m.requirementCompletionAverage >= 75 ? 'success' : 'warning',
+      caption: '平均完成率',
+    },
+    {
+      label: '测试通过率',
+      value: <MotionGuard fallback={<>{m.testPassRate}%</>}>
+        <CountUp to={m.testPassRate} duration={1.2} />%
+      </MotionGuard>,
+      icon: <TestTube2 size={16} aria-hidden="true" />,
+      tone: m.testPassRate >= 75 ? 'success' : m.testPassRate >= 50 ? 'warning' : 'risk',
+      caption: '用例通过',
+    },
+    {
+      label: '开放风险',
+      value: <MotionGuard fallback={<>{m.openRisks}</>}>
+        <CountUp to={m.openRisks} duration={1.2} />
+      </MotionGuard>,
+      icon: <AlertTriangle size={16} aria-hidden="true" />,
+      tone: m.openRisks > 0 ? 'risk' : 'success',
+      caption: m.openRisks > 0 ? '需处理' : '无风险',
+    },
+    {
+      label: '文档总数',
+      value: <MotionGuard fallback={<>{m.documentCount}</>}>
+        <CountUp to={m.documentCount} duration={1.2} />
+      </MotionGuard>,
+      icon: <FileText size={16} aria-hidden="true" />,
+      tone: 'default',
+      caption: '知识库',
+    },
+  ];
 
   return (
-    <PageHeaderShell>
-      {error && (
-        <div className="helper-text" style={{ marginBottom: 12, color: 'var(--color-warning, #BF8700)' }}>
-          当前展示的是离线兜底数据，暂时未连接到实时接口。
-        </div>
-      )}
-
-      <MetricStrip variant="hero" items={heroCards} className="dashboard-kpi-strip" />
-
-      <section className="dashboard-management-overview" aria-labelledby="dashboard-overview-heading">
-        <header className="dashboard-section-heading dashboard-management-overview__heading">
-          <div>
-            <h2 id="dashboard-overview-heading" className="dashboard-section-title">管理概览</h2>
-            <p className="dashboard-section-description">需求推进、风险敞口与知识沉淀</p>
-          </div>
-        </header>
-        <dl className="dashboard-overview-stats">
-          {managementOverview.map((stat) => (
-            <div
-              key={stat.label}
-              className={`dashboard-overview-stat dashboard-overview-stat--${stat.tone}`}
-            >
-              <dt className="dashboard-overview-stat__label">{stat.label}</dt>
-              <dd className="dashboard-overview-stat__value">{stat.value}</dd>
-              <dd className="dashboard-overview-stat__caption">{stat.caption}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-
-      <div className="dashboard-workspace">
-        <section className="dashboard-workspace__primary" aria-labelledby="dashboard-priority-heading">
-          <header className="dashboard-section-heading">
-            <div>
-              <h2 id="dashboard-priority-heading" className="dashboard-section-title">今日优先事项</h2>
-              <p className="dashboard-section-description">先处理阻塞与到期事项，再关注项目风险</p>
-            </div>
-          </header>
-
-          <div className="dashboard-primary-stack">
-            <Panel
-              title="行动队列"
-              subtitle={`展示前 ${ACTION_TASK_LIMIT} 条，按阻塞、逾期、待确认和进行中排序`}
-              className="dashboard-action-panel"
-            >
-              <div className="action-summary-row dashboard-action-summary">
-                <ActionSummaryItem label="阻塞" value={actionQueue.blocked} tone="risk" />
-                <ActionSummaryItem label="逾期/今日到期" value={actionQueue.overdue} tone="warning" />
-                <ActionSummaryItem label="进行中" value={actionQueue.inFlight} tone="info" />
-                <ActionSummaryItem label="待确认" value={actionQueue.review} tone="success" />
-              </div>
-              <div className="dashboard-action-table">
-                <DataTable
-                  columns={taskColumns}
-                  data={actionQueue.tasks}
-                  rowKey="id"
-                  emptyText="当前没有需要优先处理的任务。"
-                />
-              </div>
-            </Panel>
-
-            <Panel
-              title="风险项目"
-              subtitle="存在开放风险或健康度偏低的项目"
-              className="dashboard-risk-panel"
-            >
-              <div className="dashboard-risk-table">
-                <DataTable
-                  columns={riskyColumns}
-                  data={dashboard.riskyProjects}
-                  rowKey="id"
-                  emptyText="当前没有标记为风险的项目。"
-                />
-              </div>
-            </Panel>
-          </div>
-        </section>
-
-        <aside className="dashboard-workspace__insights" aria-labelledby="dashboard-insights-heading">
-          <header className="dashboard-section-heading">
-            <div>
-              <h2 id="dashboard-insights-heading" className="dashboard-section-title">分析与推进</h2>
-              <p className="dashboard-section-description">AI 建议、自动摘要和需求进度</p>
-            </div>
-          </header>
-
-          <div className="dashboard-insights-stack">
-            {canUseAi ? <DashboardAiAdvisor data={dashboard} /> : null}
-            <AiSummaryPanel data={dashboard} />
-            <RequirementProgressPanel items={dashboard.requirementProgress} />
-          </div>
-        </aside>
+    <MotionGuard fallback={
+      <div className="flex min-w-0 flex-col gap-4">
+        {renderDashboardBody(dashboard)}
       </div>
-    </PageHeaderShell>
+    }>
+      <FadeContent blur duration={0.4} threshold={0.05}>
+        <div className="flex min-w-0 flex-col gap-4">
+          {renderDashboardBody(dashboard)}
+        </div>
+      </FadeContent>
+    </MotionGuard>
   );
+
+  // Hoisted so both the animated and static (reduced-motion) branches share it.
+  // Takes dashboard as a parameter so the non-null narrowing from the guard
+  // above carries into the closure (TS won't preserve it for captured locals).
+  function renderDashboardBody(data: DashboardData) {
+    return (
+      <>
+        {(dashboardRequest.error || projectsRequest.error) && (
+          <div className="helper-text border-b border-[var(--border)] pb-3" role="status">
+            当前显示可用数据，部分实时资源暂时无法连接。可稍后重试。
+          </div>
+        )}
+
+        <MetricStrip variant="hero" items={kpiItems} className="dashboard-kpi-strip" />
+
+        <div className="dashboard-main-grid grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,1fr)]">
+          <Panel
+            title="项目"
+            subtitle={`当前显示 ${filteredProjects.length} / ${projects.length} 个可访问项目`}
+            icon={<FolderKanban size={16} aria-hidden="true" />}
+            toolbar={(
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<ArrowUpRight size={15} aria-hidden="true" />}
+                onClick={() => { window.location.hash = '#/projects'; }}
+              >
+                查看全部
+              </Button>
+            )}
+            className="dashboard-projects-panel"
+            noPadding
+          >
+            <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-[var(--border)] px-4 py-3">
+              <label className="sr-only" htmlFor="dashboard-project-search">搜索项目</label>
+              <div className="input-with-icon min-w-0 flex-1 basis-56" style={{ minHeight: 32, padding: '0 10px' }}>
+                <Search size={15} className="shrink-0 text-secondary" aria-hidden="true" />
+                <Input
+                  id="dashboard-project-search"
+                  value={keyword}
+                  onChange={(event) => setKeyword(event.target.value)}
+                  placeholder="搜索项目"
+                  className="h-8 border-0 bg-transparent shadow-none focus:shadow-none"
+                />
+              </div>
+              <span className="text-secondary text-xs hidden sm:inline">项目、进度、日期和状态</span>
+            </div>
+            <DataTable
+              columns={projectColumns}
+              data={filteredProjects}
+              rowKey="id"
+              loading={projectsRequest.loading}
+              onRowClick={openProject}
+              emptyText={keyword ? '没有匹配的项目' : '暂无可访问项目'}
+              pageSize={8}
+            />
+          </Panel>
+
+          <Panel title="健康分布" subtitle={`平均健康分 ${m.projectHealthAverage}`} icon={<HeartPulse size={16} aria-hidden="true" />}>
+            {(() => {
+              const healthy = projects.filter((p) => (p.healthScore ?? 0) >= 75).length;
+              const watch = projects.filter((p) => {
+                const score = p.healthScore ?? 0;
+                return score >= 50 && score < 75;
+              }).length;
+              const risk = projects.filter((p) => (p.healthScore ?? 0) < 50).length;
+              const topRisk = [...projects]
+                .sort((a, b) => (a.healthScore ?? 0) - (b.healthScore ?? 0) || (b.riskCount ?? 0) - (a.riskCount ?? 0))
+                .slice(0, 4);
+              return (
+                <div className="dashboard-health-panel flex min-w-0 flex-col gap-4">
+                  <div className="flex items-center gap-4">
+                    <DonutChart value={m.projectHealthAverage} label="健康" size={112} />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <HealthBucket label="健康" count={healthy} tone="success" hint="≥ 75" />
+                      <HealthBucket label="关注" count={watch} tone="warning" hint="50–74" />
+                      <HealthBucket label="风险" count={risk} tone="risk" hint="< 50" />
+                    </div>
+                  </div>
+                  <div className="dashboard-health-list border-t border-[var(--border)] pt-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-secondary">需关注项目</span>
+                      <span className="text-[11px] text-secondary">按健康分升序</span>
+                    </div>
+                    {topRisk.length === 0 ? (
+                      <p className="text-secondary text-xs m-0">暂无项目数据</p>
+                    ) : (
+                      <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                        {topRisk.map((project) => {
+                          const score = project.healthScore ?? 0;
+                          const tone = score >= 75 ? 'success' : score >= 50 ? 'warning' : 'risk';
+                          return (
+                            <li key={project.id}>
+                              <button
+                                type="button"
+                                className="dashboard-health-item"
+                                onClick={() => openProject(project)}
+                              >
+                                <span className={`dashboard-health-dot tone-${tone}`} aria-hidden="true" />
+                                <span className="min-w-0 flex-1">
+                                  <span className="dashboard-health-name">{project.name}</span>
+                                  <span className="dashboard-health-meta">
+                                    {project.owner || '未分配'} · 风险 {project.riskCount ?? 0}
+                                  </span>
+                                </span>
+                                <span className={`dashboard-health-score tone-${tone}`}>{score}</span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </Panel>
+        </div>
+
+        <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+          <Panel title="近期工作" subtitle="保持任务与截止日期可见" icon={<ListTodo size={16} aria-hidden="true" />} noPadding>
+            <DataTable
+              columns={taskColumns}
+              data={data.focusTasks.filter((task) => !['done', 'cancelled'].includes(task.status)).slice(0, 8)}
+              rowKey="id"
+              emptyText="当前没有待处理任务"
+            />
+          </Panel>
+          <RequirementProgressPanel items={data.requirementProgress} />
+          <DashboardAiAdvisor data={data} />
+        </div>
+      </>
+    );
+  }
 }

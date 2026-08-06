@@ -3,7 +3,6 @@ import { Download, RefreshCw, RotateCcw } from 'lucide-react';
 import { fetchProjects } from '../../projects/api';
 import { fetchTeamWeeklySummary, fetchTeamWorkLogs } from '../api';
 import { useAsync } from '../../../hooks/useAsync';
-import PageHeader from '../../../components/common/PageHeader';
 import Panel from '../../../components/common/Panel';
 import PageState from '../../../components/common/PageState';
 import StatusBadge from '../../../components/common/StatusBadge';
@@ -158,102 +157,69 @@ export default function TeamLogsView() {
   ];
 
   if (teamLogsAsync.loading || summaryAsync.loading) {
-    return (
-      <div>
-        <PageHeader title="团队日报" description="项目经理查看产品、开发、测试的日报与周报。" />
-        <PageState loading error={null} isEmpty={false} />
-      </div>
-    );
+    return <PageState loading error={null} isEmpty={false} />;
   }
 
   if (teamLogsAsync.error || summaryAsync.error) {
     return (
-      <div>
-        <PageHeader title="团队日报" description="项目经理查看产品、开发、测试的日报与周报。" />
-        <PageState
-          loading={false}
-          error={teamLogsAsync.error || summaryAsync.error}
-          isEmpty={false}
-          onRetry={() => {
-            teamLogsAsync.reload();
-            summaryAsync.reload();
-          }}
-        />
-      </div>
+      <PageState
+        loading={false}
+        error={teamLogsAsync.error || summaryAsync.error}
+        isEmpty={false}
+        onRetry={() => {
+          teamLogsAsync.reload();
+          summaryAsync.reload();
+        }}
+      />
     );
   }
 
   return (
     <div>
-      <PageHeader
-        title="团队日报"
-        description="按项目、角色、成员、日期查看团队日报，并自动汇总团队周报。"
-        actions={(
-          <>
-            <button className="btn btn-secondary btn-sm" onClick={reloadAll}>
-              <RefreshCw size={14} />
-              刷新
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={resetFilters}>
-              <RotateCcw size={14} />
-              重置
-            </button>
-            <button className="btn btn-primary btn-sm" onClick={exportVisibleLogs} disabled={visibleLogs.length === 0}>
-              <Download size={14} />
-              导出日报
-            </button>
-          </>
-        )}
-      />
+      <div className="page-inline-actions mb-4 flex flex-wrap justify-end gap-2">
+        <button className="btn btn-secondary btn-sm" onClick={reloadAll}>
+          <RefreshCw size={14} />
+          刷新
+        </button>
+        <button className="btn btn-secondary btn-sm" onClick={resetFilters}>
+          <RotateCcw size={14} />
+          重置
+        </button>
+        <button className="btn btn-primary btn-sm" onClick={exportVisibleLogs} disabled={visibleLogs.length === 0}>
+          <Download size={14} />
+          导出日报
+        </button>
+      </div>
 
-      <Panel title="筛选条件" subtitle="支持按项目、角色、成员和日期快速定位。" className="panel-muted">
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label" htmlFor="teamlogs-project">项目</label>
-            <select id="teamlogs-project" className="form-select" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-              <option value="">全部项目</option>
-              {(projects ?? []).map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label" htmlFor="teamlogs-role">角色</label>
-            <select id="teamlogs-role" className="form-select" value={role} onChange={(e) => setRole(e.target.value)}>
-              <option value="">全部角色</option>
-              <option value="pdm">产品经理</option>
-              <option value="dev">开发</option>
-              <option value="qa">测试</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label" htmlFor="teamlogs-author">成员</label>
-            <select id="teamlogs-author" className="form-select" value={author} onChange={(e) => setAuthor(e.target.value)}>
-              <option value="">全部成员</option>
-              {authors.map((item) => (
-                <option key={item} value={item}>{item}</option>
-              ))}
-            </select>
+      <div className="filter-bar teamlogs-filter-bar">
+        <div className="filter-bar-controls">
+          <select id="teamlogs-project" className="form-select" aria-label="项目" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+            <option value="">全部项目</option>
+            {(projects ?? []).map((item) => (
+              <option key={item.id} value={item.id}>{item.name}</option>
+            ))}
+          </select>
+          <select id="teamlogs-role" className="form-select" aria-label="角色" value={role} onChange={(e) => setRole(e.target.value)}>
+            <option value="">全部角色</option>
+            <option value="pdm">产品经理</option>
+            <option value="dev">开发</option>
+            <option value="qa">测试</option>
+          </select>
+          <select id="teamlogs-author" className="form-select" aria-label="成员" value={author} onChange={(e) => setAuthor(e.target.value)}>
+            <option value="">全部成员</option>
+            {authors.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+          <input id="teamlogs-date" className="form-input" type="date" aria-label="日报日期" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input id="teamlogs-week" className="form-input" type="date" aria-label="周报周起始" value={week} onChange={(e) => setWeek(e.target.value)} />
+          <div className="quick-filter-bar" role="group" aria-label="快捷筛选">
+            <button className={`btn btn-sm ${quickFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setQuickFilter('all')}>全部</button>
+            <button className={`btn btn-sm ${quickFilter === 'missing' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setQuickFilter('missing')}>未提交</button>
+            <button className={`btn btn-sm ${quickFilter === 'blocked' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setQuickFilter('blocked')}>有阻塞</button>
           </div>
         </div>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label" htmlFor="teamlogs-date">日报日期</label>
-            <input id="teamlogs-date" className="form-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label" htmlFor="teamlogs-week">周报周起始</label>
-            <input id="teamlogs-week" className="form-input" type="date" value={week} onChange={(e) => setWeek(e.target.value)} />
-          </div>
-        </div>
-
-        <div className="quick-filter-bar">
-          <button className={`btn btn-sm ${quickFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setQuickFilter('all')}>全部</button>
-          <button className={`btn btn-sm ${quickFilter === 'missing' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setQuickFilter('missing')}>未提交</button>
-          <button className={`btn btn-sm ${quickFilter === 'blocked' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setQuickFilter('blocked')}>有阻塞</button>
-        </div>
-      </Panel>
+      </div>
 
       <div className="metric-grid" style={{ marginTop: 16 }}>
         <div className="metric-card">

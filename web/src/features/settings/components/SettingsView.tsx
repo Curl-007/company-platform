@@ -11,7 +11,6 @@ import {
 import { ApiError } from '../../../services/api';
 import type { AiProviderConfig, UpdateAiProviderInput } from '../../../types';
 import { useAsync } from '../../../hooks/useAsync';
-import PageHeader from '../../../components/common/PageHeader';
 import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { canOperate } from '../../../constants/roles';
@@ -252,11 +251,6 @@ export default function SettingsView() {
 
   return (
     <div>
-      <PageHeader
-        title="系统设置"
-        description="维护平台连接、AI 模型、分析策略和通知偏好。成员账号请在团队管理中维护。"
-      />
-
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <AccountPanel sessionUser={sessionUser} />
 

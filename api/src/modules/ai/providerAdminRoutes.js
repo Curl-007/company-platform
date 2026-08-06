@@ -9,6 +9,17 @@ function createAiProviderAdminRouter({ audit, callRealModel, fail, ok, publicCon
       res.json(ok(await service.get()));
     } catch (error) { return handle(res, error); }
   });
+  router.get("/admin/ai-provider/models", requirePermission("admin:*"), async (req, res) => {
+    try {
+      res.json(ok(await service.listModels()));
+    } catch (error) { return handle(res, error); }
+  });
+  // AI analysis page also needs model discovery without full admin surface.
+  router.get("/ai/models", requirePermission("ai:*"), async (req, res) => {
+    try {
+      res.json(ok(await service.listModels()));
+    } catch (error) { return handle(res, error); }
+  });
   router.patch("/admin/ai-provider", requirePermission("admin:*"), async (req, res) => {
     try {
       const result = await service.update(req.body);

@@ -1,0 +1,310 @@
+@import "tailwindcss";
+
+/* Brand fonts (Cal Sans) — geometric sans for headings, numerals, and Latin
+   UI text. CJK glyphs fall through to the system font stack (--font-cn). */
+@font-face {
+  font-family: "Cal Sans Heading";
+  src: url("./assets/fonts/CalSans-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Cal Sans UI";
+  src: url("./assets/fonts/CalSansUI.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Keep the existing theme attribute contract while enabling Tailwind's class mode. */
+@custom-variant dark (&:where(.dark, .dark *, [data-work-mode='dark'], [data-work-mode='dark'] *));
+
+/* ---------------------------------------------------------------------------
+   View Transitions: radial reveal when switching dark/light theme.
+   The click origin is set as --theme-transition-x/y by saveWorkThemeSettings
+   WithTransition(). Falls back gracefully when unsupported or no origin.
+   --------------------------------------------------------------------------- */
+::view-transition-old(theme-root),
+::view-transition-new(theme-root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(theme-root) {
+  animation: theme-reveal 380ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes theme-reveal {
+  from {
+    clip-path: circle(0% at var(--theme-transition-x, 50%) var(--theme-transition-y, 50%));
+  }
+  to {
+    clip-path: circle(150% at var(--theme-transition-x, 50%) var(--theme-transition-y, 50%));
+  }
+}
+
+/* Reduced motion: skip the radial wipe, just swap. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-new(theme-root) {
+    animation: none;
+  }
+}
+[data-work-motion='reduced'] ::view-transition-new(theme-root) {
+  animation: none;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: var(--font-cn, var(--font-family-sans));
+  --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Code", Consolas, monospace;
+  /* Cal Sans for headings/numerals/Latin; CJK glyphs fall through to the
+     system stack so Chinese text stays in PingFang/YaHei. */
+  --font-heading: "Cal Sans Heading", var(--font-cn, var(--font-family-sans));
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+
+  --text-body: var(--font-size-body);
+  --text-page-title: var(--font-size-page-title);
+  --text-section-title: var(--font-size-section-title);
+  --text-helper: var(--font-size-helper);
+  --text-table: var(--font-size-table);
+}
+
+:root {
+  /* Tag the root for View Transitions so the theme-swap radial reveal can
+     target ::view-transition-old/new(theme-root). */
+  view-transition-name: theme-root;
+  color-scheme: light;
+
+  /* Codex light palette: white surfaces, restrained ink, blue accent.
+     MUST stay in sync with KANEO_LIGHT in src/theme/workTheme.ts — this block
+     is the no-JS fallback (e.g. first paint), workTheme.ts is the runtime truth. */
+  --background: #ffffff;
+  --foreground: #1a1c1f;
+  --card: #ffffff;
+  --card-foreground: #1a1c1f;
+  --popover: #ffffff;
+  --popover-foreground: #1a1c1f;
+  --primary: #1f7fdf;
+  --primary-foreground: #ffffff;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #1a1c1f;
+  --muted: #f5f5f5;
+  --muted-foreground: #656d76;
+  --accent: #e8f2ff;
+  --accent-foreground: #1a1c1f;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: #339cff;
+  --destructive: #ba2623;
+  --destructive-foreground: #ffffff;
+  --success: #00a240;
+  --success-foreground: #ffffff;
+  --warning: #9a6700;
+  --warning-foreground: #ffffff;
+  --info: #1f7fdf;
+  --info-foreground: #ffffff;
+
+  --sidebar: #fafafa;
+  --sidebar-foreground: #1a1c1f;
+  --sidebar-primary: #1f7fdf;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f0f0f0;
+  --sidebar-accent-foreground: #1a1c1f;
+  --sidebar-border: #e5e5e5;
+  --sidebar-ring: #339cff;
+
+  /* Runtime settings retained for density, type, contrast, and motion controls. */
+  --density-scale: 1;
+  --density-content-padding: 24px;
+  --density-control-height: 36px;
+  --density-row-height: 46px;
+  --font-family-sans: "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-size-body: var(--fs-body, 15px);
+  --font-size-page-title: var(--fs-page-title, 22px);
+  --font-size-section-title: var(--fs-section-title, 17px);
+  --font-size-helper: var(--fs-helper, 13px);
+  --font-size-table: var(--fs-table-body, 14px);
+  --contrast-border-width: 1px;
+  --focus-ring-width: 2px;
+  --motion-duration-fast: 130ms;
+  --motion-duration-normal: 200ms;
+  --motion-duration-slow: 300ms;
+  --motion-ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-work-mode='light'] {
+  color-scheme: light;
+}
+
+.dark,
+[data-work-mode='dark'] {
+  color-scheme: dark;
+
+  /* Codex dark palette (dark-first). MUST stay in sync with KANEO_DARK in
+     src/theme/workTheme.ts. */
+  --background: #181818;
+  --foreground: #ffffff;
+  --card: #1f1f1f;
+  --card-foreground: #ffffff;
+  --popover: #242424;
+  --popover-foreground: #ffffff;
+  --primary: #339cff;
+  --primary-foreground: #0a0a0a;
+  --secondary: #262626;
+  --secondary-foreground: #e5e5e5;
+  --muted: #262626;
+  --muted-foreground: #a0a0a0;
+  --accent: #339cff;
+  --accent-foreground: #0a0a0a;
+  --border: #2e2e2e;
+  --input: #2e2e2e;
+  --ring: #339cff;
+  --destructive: #fa423e;
+  --destructive-foreground: #0a0a0a;
+  --success: #40c977;
+  --success-foreground: #0a1a0e;
+  --warning: #fbbf24;
+  --warning-foreground: #1a1403;
+  --info: #339cff;
+  --info-foreground: #0a1a2a;
+
+  --sidebar: #141414;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #339cff;
+  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-accent: #1f1f1f;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #2e2e2e;
+  --sidebar-ring: #339cff;
+}
+
+[data-work-density='compact'] {
+  --density-scale: 0.9;
+  --density-content-padding: 16px;
+  --density-control-height: 32px;
+  --density-row-height: 40px;
+}
+
+[data-work-density='standard'] {
+  --density-scale: 1;
+  --density-content-padding: 24px;
+  --density-control-height: 36px;
+  --density-row-height: 46px;
+}
+
+[data-work-contrast='high'] {
+  --contrast-border-width: 2px;
+  --focus-ring-width: 3px;
+  --border: color-mix(in srgb, var(--foreground) 32%, transparent);
+  --input: color-mix(in srgb, var(--foreground) 42%, transparent);
+  --muted-foreground: color-mix(in srgb, var(--foreground) 86%, transparent);
+  --ring: var(--foreground);
+}
+
+[data-work-motion='reduced'],
+[data-reduce-motion='true'] {
+  --motion-duration-fast: 0ms;
+  --motion-duration-normal: 0ms;
+  --motion-ease: linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-fast: 0ms;
+    --motion-duration-normal: 0ms;
+    --motion-ease: linear;
+  }
+  /* Also neutralize any literal animation/transition durations that bypass the
+     motion tokens (e.g. .ui-spinner's 0.6s, toast-in, etc.). */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+[data-work-motion='reduced'] *,
+[data-work-motion='reduced'] *::before,
+[data-work-motion='reduced'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+.sidebar-nav-group-label {
+  min-height: 28px;
+  padding: 6px 10px 4px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sidebar-collapsed .sidebar-brand {
+  justify-content: center;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.sidebar-collapsed .sidebar-brand button {
+  margin-left: 0;
+}
+
+.sidebar-collapsed .sidebar-nav {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.sidebar-collapsed .sidebar-nav-item {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.sidebar-collapsed .sidebar-nav-group-label {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}

@@ -1,20 +1,9 @@
 import { useMemo, useState } from 'react';
-import {
-  Activity,
-  BriefcaseBusiness,
-  Building2,
-  KeyRound,
-  Mail,
-  Search,
-  ShieldCheck,
-  UserPlus,
-  Users,
-} from 'lucide-react';
-import PageHeader from '../../../components/common/PageHeader';
+import { Building2, ChevronRight, FileText, Search, UserPlus } from 'lucide-react';
 import Panel from '../../../components/common/Panel';
 import PageState from '../../../components/common/PageState';
 import StatusBadge from '../../../components/common/StatusBadge';
-import MetricStrip from '../../../components/common/MetricStrip';
+import DataTable, { type DataTableColumn } from '../../../components/common/DataTable';
 import { useAsync } from '../../../hooks/useAsync';
 import {
   createUser,
@@ -28,7 +17,7 @@ import { ApiError } from '../../../services/api';
 import { getSessionUser } from '../../../services/auth';
 import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
-import { Button } from '../../../components/ui';
+import { Avatar, AvatarFallback, Button, ComboSelect, IconButton, Input } from '../../../components/ui';
 import { canOperate } from '../../../constants/roles';
 import type { OrganizationUnit, TeamMemberOverview } from '../../../types';
 import CreateMemberDialog from './CreateMemberDialog';
@@ -58,6 +47,7 @@ export default function TeamView() {
   const departmentsAsync = useAsync<OrganizationUnit[]>(fetchDepartments, [], { cacheKey: 'organization:departments' });
   const members = data ?? [];
   const organizationUnits = departmentsAsync.data ?? [];
+  // 工作量信息仅用于资源协调和风险提示，不用于个人绩效评价。
   const [keyword, setKeyword] = useState('');
   const [role, setRole] = useState('');
   const [department, setDepartment] = useState('');
@@ -88,20 +78,6 @@ export default function TeamView() {
       return matchesKeyword && matchesRole && matchesDepartment && matchesPresence;
     });
   }, [department, keyword, members, presence, role]);
-
-  const summary = useMemo(() => {
-    const activeMembers = members.filter((item) => item.status !== 'disabled');
-    const projectIds = new Set(members.flatMap((item) => item.projects.map((project) => project.id)));
-    const activeTaskMembers = members.filter((item) => item.stats.activeTasks > 0).length;
-    return {
-      total: members.length,
-      active: activeMembers.length,
-      online: members.filter((item) => item.presence === 'online').length,
-      projects: projectIds.size,
-      activeTaskMembers,
-      blockers: members.reduce((sum, item) => sum + item.stats.blockers, 0),
-    };
-  }, [members]);
 
   async function handleCreate(input: CreateUserInput) {
     try {
@@ -159,156 +135,150 @@ export default function TeamView() {
     await Promise.all([departmentsAsync.reload(), reload()]);
   }
 
+  const columns = useMemo<DataTableColumn<TeamMemberOverview>[]>(() => [
+    {
+      key: 'member',
+      title: '成员',
+      width: '42%',
+      render: (member) => (
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar size="sm" className="border border-[var(--border)]">
+            <AvatarFallback className="text-[11px] font-medium">{initials(member.name)}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="min-w-0 truncate font-medium">{member.name}</span>
+              {member.id === sessionUser?.id ? <span className="shrink-0 text-xs text-[var(--muted-foreground)]">当前账号</span> : null}
+            </div>
+            <div className="truncate text-xs text-[var(--muted-foreground)]">
+              {member.email} · {member.department || '未设置部门'}
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'role',
+      title: '角色',
+      width: '20%',
+      render: (member) => (
+        <StatusBadge
+          status={member.role}
+          label={statusLabel(ROLE_LABELS, member.role)}
+          showDot={false}
+        />
+      ),
+    },
+    {
+      key: 'status',
+      title: '状态',
+      width: '28%',
+      render: (member) => (
+        <div className="flex min-w-0 flex-col gap-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <StatusBadge
+              status={member.status ?? 'active'}
+              label={statusLabel(USER_STATUS_LABELS, member.status ?? 'active')}
+              showDot={false}
+            />
+            <span className="text-xs text-[var(--muted-foreground)]">{PRESENCE_LABELS[member.presence]}</span>
+          </div>
+          <span className="truncate text-xs text-[var(--muted-foreground)]">
+            {member.stats.activeTasks} 项进行中 · {member.projects.length} 个项目
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: 'actions',
+      title: '操作',
+      width: 56,
+      align: 'right',
+      render: (member) => (
+        <div className="flex justify-end">
+          <IconButton
+            icon={<ChevronRight size={16} />}
+            label={`查看${member.name}详情`}
+            onClick={(event) => {
+              event.stopPropagation();
+              setSelected(member);
+            }}
+          />
+        </div>
+      ),
+    },
+  ], [sessionUser?.id]);
+
   return (
     <div className="team-page">
-      <PageHeader
-        title="团队管理"
-        description="统一维护成员账号、职责权限、项目参与和协作风险；工时、容量、WIP 与任务信息仅用于资源协调和风险提示，不用于个人绩效评价。"
-        actions={canCreateUsers ? (
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm" icon={<Building2 size={16} />} onClick={() => setManagingDepartments(true)}>
-              部门目录
-            </Button>
-            <Button variant="primary" size="sm" icon={<UserPlus size={16} />} onClick={() => setCreating(true)}>
-              新建成员
-            </Button>
-          </div>
-        ) : null}
-      />
-
-      <MetricStrip
-        className="team-summary-grid"
-        items={[
-          {
-            icon: <Users size={18} />,
-            label: '团队成员',
-            value: summary.total,
-            caption: `${summary.active} 个可用账号`,
-            tone: 'info',
-            className: 'team-summary-card info',
-          },
-          {
-            icon: <Activity size={18} />,
-            label: '在线/活跃',
-            value: summary.online,
-            caption: '最近 30 分钟有操作',
-            tone: 'info',
-            className: 'team-summary-card info',
-          },
-          {
-            icon: <BriefcaseBusiness size={18} />,
-            label: '参与项目',
-            value: summary.projects,
-            caption: `${summary.activeTaskMembers} 人有进行中任务`,
-            tone: 'info',
-            className: 'team-summary-card info',
-          },
-          {
-            icon: <ShieldCheck size={18} />,
-            label: '风险阻塞',
-            value: summary.blockers,
-            caption: '阻塞任务、缺陷与日报阻塞',
-            tone: summary.blockers > 0 ? 'risk' : 'success',
-            className: `team-summary-card ${summary.blockers > 0 ? 'risk' : 'success'}`,
-          },
-        ]}
-      />
-
-      <div className="team-governance-strip">
-        <div className="team-governance-item">
-          <span className="team-governance-icon" aria-hidden="true"><KeyRound size={16} /></span>
-          <div className="team-governance-copy">
-            <strong>账号治理</strong>
-            <span>管理员维护账号、角色和状态；停用保留历史数据。</span>
-          </div>
+      {canCreateUsers ? (
+        <div className="team-page-actions mb-4 flex justify-end gap-2">
+          <Button variant="secondary" size="sm" icon={<Building2 size={16} />} onClick={() => setManagingDepartments(true)}>
+            部门目录
+          </Button>
+          <Button variant="primary" size="sm" icon={<UserPlus size={16} />} onClick={() => setCreating(true)}>
+            新建成员
+          </Button>
         </div>
-        <div className="team-governance-item">
-          <span className="team-governance-icon" aria-hidden="true"><BriefcaseBusiness size={16} /></span>
-          <div className="team-governance-copy">
-            <strong>团队协作</strong>
-            <span>项目经理查看资源协调、项目参与、任务和日报风险，不形成个人绩效结论。</span>
-          </div>
-        </div>
-        <div className="team-governance-item">
-          <span className="team-governance-icon" aria-hidden="true"><ShieldCheck size={16} /></span>
-          <div className="team-governance-copy">
-            <strong>权限边界</strong>
-            <span>{canCreateUsers || canUpdateUsers || canDisableUsers ? '当前账号可执行账号治理。' : '当前账号仅可查看团队协作数据。'}</span>
-          </div>
-        </div>
-      </div>
+      ) : null}
 
       <Panel
-        title="成员视图"
+        title="成员"
         subtitle={`当前显示 ${filteredMembers.length} / ${members.length} 人`}
         toolbar={
-          <Button variant="secondary" size="sm" onClick={() => navigateTo('teamlogs')}>
+          <Button variant="secondary" size="sm" icon={<FileText size={14} />} onClick={() => navigateTo('teamlogs')}>
             查看团队日报
           </Button>
         }
+        noPadding
       >
-        <div className="team-filter-bar">
+        <div className="team-filter-bar px-4 pt-4">
           <div className="team-search-box">
             <Search size={16} />
-            <input className="form-input" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索姓名、邮箱、手机号、职责或部门" />
+            <Input
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+              placeholder="搜索姓名、邮箱、手机号、职责或部门"
+              aria-label="搜索成员"
+            />
           </div>
-          <select className="form-select" value={role} onChange={(event) => setRole(event.target.value)}>
-            {ROLE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-          </select>
-          <select className="form-select" value={department} onChange={(event) => setDepartment(event.target.value)}>
-            <option value="">全部部门</option>
-            {departments.map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
-          <select className="form-select" value={presence} onChange={(event) => setPresence(event.target.value as PresenceFilter)}>
-            {PRESENCE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-          </select>
+          <ComboSelect
+            options={ROLE_OPTIONS}
+            value={role}
+            onChange={(v) => setRole(v)}
+            ariaLabel="按角色筛选"
+            className="min-w-[8rem]"
+          />
+          <ComboSelect
+            options={[{ value: '', label: '全部部门' }, ...departments.map((d) => ({ value: d, label: d }))]}
+            value={department}
+            onChange={(v) => setDepartment(v)}
+            searchPlaceholder="搜索部门..."
+            ariaLabel="按部门筛选"
+            className="min-w-[8rem]"
+          />
+          <ComboSelect
+            options={PRESENCE_OPTIONS}
+            value={presence}
+            onChange={(v) => setPresence(v as PresenceFilter)}
+            ariaLabel="按活跃状态筛选"
+            className="min-w-[8rem]"
+          />
         </div>
 
         {loading || error ? (
-          <PageState loading={loading} error={error} onRetry={reload} />
+          <div className="px-4 pb-4"><PageState loading={loading} error={error} onRetry={reload} /></div>
         ) : filteredMembers.length === 0 ? (
-          <PageState loading={false} error={null} isEmpty emptyTitle="暂无成员" emptyDescription="当前筛选条件下没有匹配的团队成员。" />
+          <div className="px-4 pb-4"><PageState loading={false} error={null} isEmpty emptyTitle="暂无成员" emptyDescription="当前筛选条件下没有匹配的团队成员。" /></div>
         ) : (
-          <div className="team-member-grid">
-            {filteredMembers.map((member) => (
-              <button className="team-member-card" key={member.id} onClick={() => setSelected(member)}>
-                <div className="team-member-top">
-                  <div className="team-avatar-wrap">
-                    <div className="team-avatar">{initials(member.name)}</div>
-                    <span className={`team-presence-dot ${member.presence}`} title={PRESENCE_LABELS[member.presence]} />
-                  </div>
-                  <div className="team-member-title">
-                    <div className="team-member-name">{member.name}</div>
-                    <div className="team-member-email"><Mail size={13} />{member.email}</div>
-                  </div>
-                  <StatusBadge status={member.role} label={statusLabel(ROLE_LABELS, member.role)} showDot={false} />
-                </div>
-
-                <div className="team-member-meta">
-                  <span>{member.department || '未设置部门'}</span>
-                  <StatusBadge status={member.status ?? 'active'} label={statusLabel(USER_STATUS_LABELS, member.status ?? 'active')} showDot={false} />
-                </div>
-
-                <div className="team-card-progress">
-                  <div className="team-progress-head">
-                    <span>协作状态</span>
-                    <strong>{member.stats.blockers > 0 ? `${member.stats.blockers} 项需协调` : '无阻塞提示'}</strong>
-                  </div>
-                  <div className="text-secondary" style={{ fontSize: 12 }}>进行中 {member.stats.activeTasks} 项 · 未关闭缺陷 {member.stats.openDefects} 项</div>
-                </div>
-
-                <div className="team-stat-row">
-                  <span><strong>{member.stats.activeTasks}</strong> 进行中</span>
-                  <span><strong>{member.stats.openDefects}</strong> 未关缺陷</span>
-                  <span><strong>{member.projects.length}</strong> 项目</span>
-                </div>
-
-                <div className="team-skill-row">
-                  {member.skills.slice(0, 3).map((skill) => <span key={skill} className="team-skill">{skill}</span>)}
-                </div>
-              </button>
-            ))}
-          </div>
+          <DataTable
+            columns={columns}
+            data={filteredMembers}
+            rowKey="id"
+            onRowClick={setSelected}
+            className="rounded-none border-x-0 border-b-0"
+            emptyText="暂无成员"
+          />
         )}
       </Panel>
 

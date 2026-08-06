@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Clock3, GripVertical, KanbanSquare, Plus, UserRound } from 'lucide-react';
 import { fetchProjectKanban, updateTaskKanban } from '../../tasks/api';
 import { useAsync } from '../../../hooks/useAsync';
@@ -9,7 +9,15 @@ import { useToast } from '../../../components/common/Toast';
 import type { KanbanColumn } from '../../../types';
 import { TASK_STATUS_LABELS, labelOf } from '../../../constants/enums';
 
-export default function KanbanTab({ projectId, canManageProject }: { projectId: string; canManageProject: boolean }) {
+const PRIMARY_COLUMNS = new Set(['todo', 'in_progress', 'blocked', 'done', 'testing', 'code_review', 'acceptance']);
+
+export default function KanbanTab({
+  projectId,
+  canManageProject,
+}: {
+  projectId: string;
+  canManageProject: boolean;
+}) {
   const { data, loading, error, reload } = useAsync<KanbanColumn[]>(
     () => fetchProjectKanban(projectId),
     [projectId],
@@ -19,11 +27,24 @@ export default function KanbanTab({ projectId, canManageProject }: { projectId: 
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   const [movingError, setMovingError] = useState<string | null>(null);
+  const [showEmpty, setShowEmpty] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
     setColumns(data);
   }, [data]);
+
+  const visibleColumns = useMemo(() => {
+    if (!columns) return [];
+    if (showEmpty) return columns;
+    const filled = columns.filter((column) => column.tasks.length > 0);
+    // Keep a few primary empty drop targets so drag still works.
+    const emptyPrimary = columns.filter(
+      (column) => column.tasks.length === 0 && PRIMARY_COLUMNS.has(column.id),
+    ).slice(0, 2);
+    const ids = new Set([...filled, ...emptyPrimary].map((item) => item.id));
+    return columns.filter((column) => ids.has(column.id));
+  }, [columns, showEmpty]);
 
   function handleDragStart(taskId: string) {
     if (!canManageProject) return;
@@ -35,13 +56,13 @@ export default function KanbanTab({ projectId, canManageProject }: { projectId: 
     setDragOverColumn(null);
   }
 
-  function handleDragOver(columnId: string, event: React.DragEvent<HTMLDivElement>) {
+  function handleDragOver(columnId: string, event: React.DragEvent) {
     if (!canManageProject) return;
     event.preventDefault();
     if (dragOverColumn !== columnId) setDragOverColumn(columnId);
   }
 
-  async function handleDrop(targetColumnId: string, event: React.DragEvent<HTMLDivElement>) {
+  async function handleDrop(targetColumnId: string, event: React.DragEvent) {
     if (!canManageProject) return;
     event.preventDefault();
     const taskId = dragTaskId;
@@ -85,86 +106,110 @@ export default function KanbanTab({ projectId, canManageProject }: { projectId: 
   const doneTasks = columns.find((column) => column.id === 'done')?.tasks.length ?? 0;
   const blockedTasks = columns.find((column) => column.id === 'blocked')?.tasks.length ?? 0;
   const activeTasks = Math.max(0, totalTasks - doneTasks);
+  const hiddenEmpty = columns.filter((column) => column.tasks.length === 0).length;
 
   return (
-    <div className="project-board-shell">
-      <div className="project-board-toolbar">
-        <div className="project-board-toolbar-left">
-          <span className="project-board-icon"><KanbanSquare size={17} /></span>
+    <div className="pd-tab pd-kanban-tab">
+      <div className="pd-kanban-toolbar">
+        <div className="pd-kanban-toolbar-main">
+          <span className="pd-kanban-icon"><KanbanSquare size={16} /></span>
           <div>
-            <div className="project-board-title">项目看板</div>
-            <div className="project-board-subtitle">{canManageProject ? '拖拽卡片即可在列之间移动任务，状态会自动同步。' : '当前账号为只读模式，可查看任务流转状态。'}</div>
+            <div className="pd-kanban-title">项目看板</div>
+            <div className="pd-kanban-subtitle">
+              {canManageProject ? '拖拽卡片即可流转状态' : '只读模式'}
+            </div>
           </div>
         </div>
-        <div className="project-board-stats">
-          <span><strong>{totalTasks}</strong> 全部</span>
-          <span><strong>{activeTasks}</strong> 进行中</span>
-          <span className={blockedTasks > 0 ? 'risk' : ''}><strong>{blockedTasks}</strong> 阻塞</span>
+        <div className="pd-kanban-toolbar-right">
+          <div className="pd-kanban-stats">
+            <span><strong>{totalTasks}</strong>全部</span>
+            <span><strong>{activeTasks}</strong>进行中</span>
+            <span className={blockedTasks > 0 ? 'is-risk' : ''}><strong>{blockedTasks}</strong>阻塞</span>
+            <span><strong>{doneTasks}</strong>完成</span>
+          </div>
+          {hiddenEmpty > 0 ? (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setShowEmpty((value) => !value)}
+            >
+              {showEmpty ? '隐藏空列' : `显示空列 (${hiddenEmpty})`}
+            </button>
+          ) : null}
         </div>
       </div>
-      {movingError && <div className="form-error" style={{ marginBottom: 12 }}>{movingError}</div>}
-      <div className="kanban-board">
-        {columns.map((column) => {
+
+      {movingError ? <div className="form-error pd-kanban-error">{movingError}</div> : null}
+
+      <div className="pd-kanban-board">
+        {visibleColumns.map((column) => {
           const isDropTarget = dragOverColumn === column.id;
           const averageProgress = column.tasks.length
             ? Math.round(column.tasks.reduce((sum, task) => sum + (task.progress ?? 0), 0) / column.tasks.length)
             : 0;
+
           return (
-            <div
+            <section
               key={column.id}
-              className={`kanban-column${isDropTarget ? ' kanban-column-drop' : ''}`}
+              className={`pd-kanban-column${isDropTarget ? ' is-drop' : ''}${column.tasks.length === 0 ? ' is-empty' : ''}`}
               onDragOver={(event) => handleDragOver(column.id, event)}
               onDragLeave={() => setDragOverColumn((current) => (current === column.id ? null : current))}
               onDrop={(event) => handleDrop(column.id, event)}
             >
-              <div className="kanban-column-header">
-                <div className="kanban-column-heading">
-                  <span className={`kanban-column-dot ${column.id}`} />
-                  <div>
-                    <div className="kanban-column-title">{labelOf(TASK_STATUS_LABELS, column.id)}</div>
-                    <div className="kanban-column-meta">{averageProgress}% 平均进度</div>
+              <header className="pd-kanban-column-head">
+                <div className="pd-kanban-column-title-wrap">
+                  <span className={`pd-kanban-dot status-${column.id}`} />
+                  <div className="min-w-0">
+                    <div className="pd-kanban-column-title">{labelOf(TASK_STATUS_LABELS, column.id)}</div>
+                    <div className="pd-kanban-column-meta">
+                      {column.tasks.length ? `${averageProgress}% 均进度` : '可拖入'}
+                    </div>
                   </div>
                 </div>
-                <span className="tag">{column.tasks.length}</span>
-              </div>
-              <div className="kanban-column-body">
+                <span className="pd-kanban-count">{column.tasks.length}</span>
+              </header>
+
+              <div className="pd-kanban-column-body">
                 {column.tasks.length === 0 ? (
-                  <div className="kanban-empty">
-                    <Plus size={18} />
-                    <span>暂无卡片</span>
+                  <div className="pd-kanban-empty">
+                    <Plus size={14} />
+                    <span>空列</span>
                   </div>
                 ) : (
                   column.tasks.map((task) => (
-                    <div
+                    <article
                       key={task.id}
-                      className={`card kanban-card${dragTaskId === task.id ? ' kanban-card-dragging' : ''}`}
-                       draggable={canManageProject}
+                      className={`pd-kanban-card${dragTaskId === task.id ? ' is-dragging' : ''}`}
+                      draggable={canManageProject}
                       onDragStart={() => handleDragStart(task.id)}
                       onDragEnd={handleDragEnd}
                     >
-                      <div className="kanban-card-grip"><GripVertical size={14} /></div>
-                      <div className="kanban-card-title">
-                        <span className="font-medium">{task.title}</span>
-                      </div>
-                      <div className="kanban-card-code text-mono">{task.wbsCode}</div>
-                      <ProgressBar percent={task.progress ?? 0} height={4} showPercent={false} />
-                      <div className="kanban-card-meta">
-                        <span className="flex items-center gap-1">
-                          {task.owner && <span className="kanban-avatar">{(task.owner || '?').slice(0, 1)}</span>}
-                          <span className="text-secondary" style={{ fontSize: 12 }}>{task.owner || '未指派'}</span>
+                      {canManageProject ? (
+                        <span className="pd-kanban-grip" aria-hidden="true">
+                          <GripVertical size={13} />
                         </span>
-                        <span className="text-mono text-secondary" style={{ fontSize: 12 }}>{task.progress}%</span>
+                      ) : null}
+                      <div className="pd-kanban-card-title" title={task.title}>{task.title}</div>
+                      <div className="pd-kanban-card-code">{task.wbsCode}</div>
+                      <ProgressBar percent={task.progress ?? 0} height={4} showPercent={false} />
+                      <div className="pd-kanban-card-meta">
+                        <span>
+                          {task.owner
+                            ? <span className="pd-kanban-avatar">{task.owner.slice(0, 1)}</span>
+                            : <UserRound size={12} />}
+                          {task.owner || '未指派'}
+                        </span>
+                        <span className="text-mono">{task.progress ?? 0}%</span>
+                        {task.dueDate ? <span><Clock3 size={12} />{task.dueDate.slice(5)}</span> : null}
+                        {task.status === 'blocked' ? (
+                          <span className="is-risk"><AlertTriangle size={12} />阻塞</span>
+                        ) : null}
                       </div>
-                      <div className="kanban-card-footer">
-                        <span><UserRound size={12} /> {task.owner || '未指派'}</span>
-                        {task.dueDate ? <span><Clock3 size={12} /> {task.dueDate.slice(5)}</span> : null}
-                        {task.status === 'blocked' ? <span className="risk"><AlertTriangle size={12} /> 阻塞</span> : null}
-                      </div>
-                    </div>
+                    </article>
                   ))
                 )}
               </div>
-            </div>
+            </section>
           );
         })}
       </div>

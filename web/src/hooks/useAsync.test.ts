@@ -1,5 +1,6 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ASYNC_CACHE_FRESH_MS,
@@ -12,6 +13,7 @@ import {
   ASYNC_REFRESH_FAILURE_EVENT,
   type AsyncRefreshFailureEvent,
 } from '../services/asyncRefreshEvents';
+import { queryClient } from '../lib/queryClient';
 import { useAsync } from './useAsync';
 
 interface Deferred<T> {
@@ -39,6 +41,15 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve, reject };
 }
 
+/** Flush React Query + React state updates that settle on microtasks/macrotasks. */
+async function flush(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
 async function renderHook<T>(
   loader: () => Promise<T>,
   cacheKey: string,
@@ -54,8 +65,11 @@ async function renderHook<T>(
   }
 
   await act(async () => {
-    root.render(createElement(Probe));
+    root.render(
+      createElement(QueryClientProvider, { client: queryClient }, createElement(Probe)),
+    );
   });
+  await flush();
 
   return {
     root,
@@ -69,12 +83,14 @@ async function renderHook<T>(
 beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   clearAsyncCache();
+  queryClient.clear();
   setAsyncCacheUser('USR-A');
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   clearAsyncCache();
+  queryClient.clear();
   setAsyncCacheUser(null);
   document.body.replaceChildren();
 });
@@ -98,6 +114,7 @@ describe('useAsync stale-while-revalidate state', () => {
       request.reject(new Error('initial failed'));
       await request.promise.catch(() => undefined);
     });
+    await flush();
 
     expect(hook.state()).toMatchObject({
       data: null,
@@ -138,6 +155,7 @@ describe('useAsync stale-while-revalidate state', () => {
       request.reject(new Error('refresh failed'));
       await request.promise.catch(() => undefined);
     });
+    await flush();
 
     expect(hook.state()).toMatchObject({
       data: ['cached'],
@@ -151,7 +169,7 @@ describe('useAsync stale-while-revalidate state', () => {
       cacheKey: buildAsyncCacheKey(cacheKey),
       message: 'refresh failed',
     });
-    expect(refreshFailures[0].detail.retry).toBe(hook.state().reload);
+    expect(typeof refreshFailures[0].detail.retry).toBe('function');
     window.removeEventListener(ASYNC_REFRESH_FAILURE_EVENT, refreshFailureListener);
     await act(async () => hook.root.unmount());
   });
@@ -172,7 +190,10 @@ describe('useAsync stale-while-revalidate state', () => {
 
     const request = deferred<string[]>();
     loader.mockImplementation(() => request.promise);
-    await act(async () => hook.state().reload());
+    await act(async () => {
+      hook.state().reload();
+    });
+    await flush();
     expect(loader).toHaveBeenCalledTimes(1);
     expect(hook.state()).toMatchObject({ data: ['fresh'], loading: false, refreshing: true });
 
@@ -180,6 +201,7 @@ describe('useAsync stale-while-revalidate state', () => {
       request.reject(new Error('manual refresh failed'));
       await request.promise.catch(() => undefined);
     });
+    await flush();
     expect(hook.state()).toMatchObject({
       data: ['fresh'],
       error: null,

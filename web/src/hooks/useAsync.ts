@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ApiError } from '../services/api';
 import {
   ASYNC_CACHE_FRESH_MS,
@@ -10,16 +11,22 @@ import {
   setAsyncCacheUser,
 } from '../services/asyncCache';
 import { dispatchAsyncRefreshFailure } from '../services/asyncRefreshEvents';
+import { asyncQueryKey } from '../lib/queryClient';
 
 // ---------------------------------------------------------------------------
-// useAsync: run an async loader on mount (and on dependency change), exposing
-// loading / error / data / reload. Keeps every page's fetch lifecycle uniform.
+// useAsync: progressive adapter over TanStack Query.
 //
-// Cache storage lives in services/asyncCache.ts so session expiry can clear
-// and re-scope entries without a circular import with the HTTP client.
+// External contract is unchanged so the ~40 call sites keep working:
+//   useAsync(loader, deps, { cacheKey }) →
+//     { data, loading, error, refreshing, refreshError, reload }
 //
-// Every caller supplies an explicit cache namespace. Cached data remains visible
-// while stale entries refresh, with refresh failures reported separately.
+// Behaviour preserved from the hand-rolled SWR implementation:
+// - explicit cacheKey namespace + deps → stable cache key
+// - stale-while-revalidate (staleTime = ASYNC_CACHE_FRESH_MS)
+// - first-load failures → error; background failures → refreshError + event
+// - reload() forces a refetch even when the entry is still fresh
+// - asyncCache Map still seeds initialData and is written on success so
+//   auth/apiClient clear+invalidate keep working across both caches
 // ---------------------------------------------------------------------------
 
 interface AsyncState<T> {
@@ -47,86 +54,77 @@ export function useAsync<T>(
   deps: readonly unknown[],
   options: UseAsyncOptions,
 ): AsyncState<T> {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
-  const [nonce, setNonce] = useState(0);
-  const visibleDataKey = useRef<string | null>(null);
-  const hasVisibleData = useRef(false);
-  const forceRefreshKey = useRef<string | null>(null);
-
   const key = buildAsyncCacheKey(options.cacheKey, deps);
-  const reload = useCallback(() => {
-    forceRefreshKey.current = key;
-    setNonce((value) => value + 1);
-  }, [key]);
+  const queryKey = asyncQueryKey(key);
+
+  // Keep the latest loader without putting it in the queryKey (callers pass a
+  // new function every render; deps already encode the inputs that matter).
+  const loaderRef = useRef(loader);
+  loaderRef.current = loader;
+
+  const seed = getAsyncCacheEntry<T>(key);
+
+  const query = useQuery<T, Error>({
+    queryKey,
+    queryFn: async () => {
+      const result = await loaderRef.current();
+      setAsyncCacheEntry(key, result);
+      return result;
+    },
+    initialData: seed?.data,
+    initialDataUpdatedAt: seed?.at,
+    staleTime: ASYNC_CACHE_FRESH_MS,
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+  const hasData = query.data !== undefined;
+  const data = hasData ? (query.data as T) : null;
+
+  // Dual error channel: first load → error; background refresh → refreshError.
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const lastFailureAt = useRef<number>(0);
+  const reloadRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
-    let active = true;
-
-    const cached = getAsyncCacheEntry<T>(key);
-    const isFresh = cached ? Date.now() - cached.at < ASYNC_CACHE_FRESH_MS : false;
-    const forceRefresh = forceRefreshKey.current === key;
-    if (forceRefresh) forceRefreshKey.current = null;
-    const canKeepVisibleData = visibleDataKey.current === key && hasVisibleData.current;
-    const hasData = Boolean(cached) || canKeepVisibleData;
-
-    if (cached) {
-      setData(cached.data);
-      visibleDataKey.current = key;
-      hasVisibleData.current = true;
-    } else if (!canKeepVisibleData) {
-      setData(null);
-      visibleDataKey.current = key;
-      hasVisibleData.current = false;
+    if (query.isFetching) {
+      setRefreshError(null);
+      return;
     }
+    if (!query.isError || !query.error) return;
 
-    setError(null);
+    const message = messageFromError(query.error);
+    if (hasData) {
+      setRefreshError(message);
+      // Dedupe: React Query may re-notify the same failure across renders.
+      if (query.errorUpdatedAt !== lastFailureAt.current) {
+        lastFailureAt.current = query.errorUpdatedAt;
+        dispatchAsyncRefreshFailure({
+          cacheKey: key,
+          message,
+          retry: () => {
+            reloadRef.current();
+          },
+        });
+      }
+    } else {
+      setRefreshError(null);
+    }
+  }, [query.isFetching, query.isError, query.error, query.errorUpdatedAt, hasData, key]);
+
+  const reload = useCallback(() => {
     setRefreshError(null);
-    setLoading(!hasData);
-    setRefreshing(hasData && (forceRefresh || !isFresh));
+    void query.refetch();
+  }, [query.refetch]);
+  reloadRef.current = reload;
 
-    if (isFresh && !forceRefresh) {
-      setRefreshing(false);
-      return () => {
-        active = false;
-      };
-    }
-
-    loader()
-      .then((result) => {
-        if (active) {
-          setData(result);
-          setAsyncCacheEntry(key, result);
-          visibleDataKey.current = key;
-          hasVisibleData.current = true;
-          setError(null);
-          setRefreshError(null);
-        }
-      })
-      .catch((err: unknown) => {
-        if (!active) return;
-        const message = messageFromError(err);
-        if (hasData) {
-          setRefreshError(message);
-          dispatchAsyncRefreshFailure({ cacheKey: key, message, retry: reload });
-        } else {
-          setError(message);
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setLoading(false);
-          setRefreshing(false);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [key, nonce]);
+  const loading = !hasData && (query.isPending || query.isFetching);
+  const refreshing = hasData && query.isFetching;
+  const error =
+    !hasData && query.isError && query.error
+      ? messageFromError(query.error)
+      : null;
 
   return { data, loading, error, refreshing, refreshError, reload };
 }

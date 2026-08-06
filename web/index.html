@@ -5,6 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="%23202124"/><text x="16" y="22" text-anchor="middle" font-family="Arial" font-size="18" font-weight="700" fill="white">C</text></svg>' />
     <title>公司项目管理平台</title>
+    <script>
+      // FOUC guard: apply the persisted theme mode to <html> before CSS paints.
+      // Without this, dark-mode users see a flash of light theme on first paint
+      // because the theme is otherwise injected by main.tsx after the bundle loads.
+      // Keys must stay in sync with src/theme/workTheme.ts (WORK_THEME_STORAGE_KEY
+      // + legacy fallbacks). Default to dark for first-time visitors (dark-first).
+      (function () {
+        try {
+          var keys = ['work-theme-settings', 'work-glass-theme-settings'];
+          var mode = 'dark';
+          var reduceMotion = false;
+          for (var i = 0; i < keys.length; i++) {
+            var raw = localStorage.getItem(keys[i]);
+            if (!raw) continue;
+            var parsed = JSON.parse(raw);
+            if (parsed && (parsed.mode === 'light' || parsed.mode === 'dark')) {
+              mode = parsed.mode;
+              if (typeof parsed.reduceMotion === 'boolean') reduceMotion = parsed.reduceMotion;
+              break;
+            }
+          }
+          var root = document.documentElement;
+          root.setAttribute('data-work-mode', mode);
+          root.setAttribute('data-theme', 'kaneo');
+          if (mode === 'dark') root.classList.add('dark');
+          if (reduceMotion) root.setAttribute('data-work-motion', 'reduced');
+          root.style.colorScheme = mode;
+        } catch (e) {
+          /* localStorage blocked or malformed: fall through to JS-driven defaults */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

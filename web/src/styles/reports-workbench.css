@@ -1,0 +1,158 @@
+/* ---------------------------------------------------------------------------
+   Shared workbench signal-strip
+   Common KPI strip pattern shared by the reports / flow / product pages.
+   Each page renders <section class="<page>-signal-strip"> with children
+   <div class="<page>-signal [tone]">label / strong / em</div>.
+   The base rules below are grouped so all three pages stay visually in sync.
+   --------------------------------------------------------------------------- */
+.reports-signal-strip,
+.flow-signal-strip,
+.product-signal-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.reports-signal,
+.flow-signal,
+.product-signal {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--card) 92%, transparent), color-mix(in srgb, var(--muted) 35%, var(--card)));
+}
+
+.reports-signal-label,
+.flow-signal-label,
+.product-signal-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.reports-signal strong,
+.flow-signal strong,
+.product-signal strong {
+  font-size: 22px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--card-foreground);
+}
+
+.reports-signal em,
+.flow-signal em,
+.product-signal em {
+  font-style: normal;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* Emphasis states mirror the doc-workbench signal strip.
+   is-success is kept for parity even where a page only needs warn/risk/info. */
+.reports-signal.is-success,
+.flow-signal.is-success,
+.product-signal.is-success {
+  border-color: color-mix(in srgb, var(--color-success, #40c977) 40%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-success, #40c977) 10%, var(--card)), var(--card));
+}
+
+.reports-signal.is-warn,
+.flow-signal.is-warn,
+.product-signal.is-warn {
+  border-color: color-mix(in srgb, var(--color-warning, #fbbf24) 40%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-warning, #fbbf24) 10%, var(--card)), var(--card));
+}
+
+.reports-signal.is-risk,
+.flow-signal.is-risk,
+.product-signal.is-risk {
+  border-color: color-mix(in srgb, var(--color-risk, #f87171) 40%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-risk, #f87171) 10%, var(--card)), var(--card));
+}
+
+.reports-signal.is-info,
+.flow-signal.is-info,
+.product-signal.is-info {
+  border-color: color-mix(in srgb, var(--color-info, #60a5fa) 40%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-info, #60a5fa) 10%, var(--card)), var(--card));
+}
+
+@media (max-width: 1100px) {
+  .reports-signal-strip,
+  .flow-signal-strip,
+  .product-signal-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .reports-signal-strip,
+  .flow-signal-strip,
+  .product-signal-strip {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .reports-signal-strip,
+  .flow-signal-strip,
+  .product-signal-strip {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Reports workbench
+   Toolbar + view body layout specific to the reports page.
+   --------------------------------------------------------------------------- */
+.reports-workbench {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.reports-toolbar {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reports-toolbar-actions,
+.reports-view-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.reports-view-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* The overview stack already uses .grid-2 / .action-summary-row children;
+   reset their top margins so the workbench gap drives the rhythm. */
+.reports-overview-stack > .grid-2,
+.reports-overview-stack > .action-summary-row {
+  margin-top: 0;
+}

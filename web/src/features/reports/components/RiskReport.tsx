@@ -16,7 +16,7 @@ export default function RiskReport({
 }) {
   return (
     <>
-      <Panel title="风险项目健康度排名" subtitle="按健康度降序" className="mt-20">
+      <Panel title="风险项目健康度排名" subtitle="按健康度降序">
         {healthRankData.length === 0 ? (
           <p className="text-secondary" style={{ margin: 0 }}>当前没有风险项目数据。</p>
         ) : (
@@ -37,7 +37,7 @@ export default function RiskReport({
         )}
       </Panel>
 
-      <div className="grid-2 mt-20">
+      <div className="grid-2">
         <Panel title="风险项目" subtitle="存在开放风险的项目">
           <DataTable columns={riskyColumns} data={reportModel.riskProjects} rowKey="id" emptyText="当前没有风险项目。" />
         </Panel>

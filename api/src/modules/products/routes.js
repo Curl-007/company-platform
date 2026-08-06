@@ -172,6 +172,88 @@ function createProductsRouter({
     };
   }
 
+  // Cascade delete a product and its dependencies (mixed strategy).
+  //   - requirements: soft-delete each (+ hard-delete its tasks/defects/test
+  //     cases and their test runs/sync tasks), reusing the same SQL surface as
+  //     the requirements module. We loop per-id because the @name binder maps
+  //     each placeholder to a single positional value (no IN(@list) expansion).
+  //   - releases: hard-delete approvals + rollbacks + release rows.
+  //   - product images: capture storage keys, delete product_images + objects
+  //     rows in-transaction; the caller unlinks the physical files AFTER commit.
+  //   - projects: null out product_id (keep the project).
+  //   - portfolios: remove the productId from each portfolio.product_ids array.
+  //   - product itself: hard-delete.
+  // Returns { imageStorageKeys, snapshots } so the route can unlink files and
+  // write audit entries after the transaction commits.
+  async function cascadeDeleteProduct(productId, { now: deletedAt }) {
+    const params = { id: productId };
+
+    const requirementRows = await rows(
+      "SELECT id FROM requirements WHERE product_id = @id AND deleted_at IS NULL ORDER BY id",
+      params,
+    );
+    const releaseRows = await rows("SELECT id FROM releases WHERE product_id = @id ORDER BY id", params);
+    const imageRows = await rows(
+      `SELECT image.id AS image_id, image.object_id, object.storage_key
+         FROM product_images image
+         INNER JOIN objects object ON object.id = image.object_id
+        WHERE image.product_id = @id ORDER BY image.id`,
+      params,
+    );
+    const portfolioRows = await rows("SELECT id, product_ids FROM portfolios ORDER BY id");
+
+    // Requirement subtree: per-requirement cascade (leaf hard-deletes + soft-delete).
+    for (const requirement of requirementRows) {
+      const reqParams = { id: requirement.id };
+      const reqTestCases = await rows("SELECT id FROM test_cases WHERE requirement_id = @id ORDER BY id", reqParams);
+      for (const testCase of reqTestCases) {
+        const tcParams = { id: testCase.id };
+        await run("DELETE FROM test_runs WHERE test_case_id = @id", tcParams);
+        await run("DELETE FROM tasks WHERE source_type = 'test_case' AND source_id = @id", tcParams);
+      }
+      await run("DELETE FROM test_cases WHERE requirement_id = @id", reqParams);
+      await run("DELETE FROM tasks WHERE requirement_id = @id", reqParams);
+      await run("DELETE FROM defects WHERE requirement_id = @id", reqParams);
+      await run("UPDATE requirements SET deleted_at = @deletedAt WHERE parent_id = @id AND deleted_at IS NULL", { id: requirement.id, deletedAt });
+      await run("UPDATE requirements SET deleted_at = @deletedAt WHERE id = @id AND deleted_at IS NULL", reqParams);
+    }
+
+    // Releases (+ approvals + rollbacks).
+    for (const release of releaseRows) {
+      await run("DELETE FROM release_approvals WHERE release_id = @id", { id: release.id });
+      await run("DELETE FROM rollback_records WHERE release_id = @id", { id: release.id });
+    }
+    await run("DELETE FROM releases WHERE product_id = @id", params);
+
+    // Product images + object blobs (rows only; files unlinked after commit).
+    for (const image of imageRows) {
+      await run("DELETE FROM product_images WHERE id = @id", { id: image.image_id });
+      await run("DELETE FROM objects WHERE id = @id", { id: image.object_id });
+    }
+
+    // Projects: keep, just detach.
+    await run("UPDATE projects SET product_id = NULL WHERE product_id = @id", params);
+
+    // Portfolios: remove productId from the JSON array.
+    for (const portfolio of portfolioRows) {
+      const productIds = parse(portfolio.product_ids, []);
+      if (!Array.isArray(productIds) || !productIds.includes(productId)) continue;
+      const next = productIds.filter((value) => value !== productId);
+      await run("UPDATE portfolios SET product_ids = @productIds WHERE id = @id", { id: portfolio.id, productIds: JSON.stringify(next) });
+    }
+
+    await run("DELETE FROM products WHERE id = @id", params);
+
+    return {
+      imageStorageKeys: imageRows.map((image) => image.storage_key).filter(Boolean),
+      snapshots: {
+        requirements: requirementRows.map((item) => item.id),
+        releases: releaseRows.map((item) => item.id),
+        images: imageRows.map((image) => image.image_id),
+      },
+    };
+  }
+
   router.get("/programs", requireAnyPermission(["product:*", "project:*", "project:read"]), async (req, res) => {
     const __src_projects = await rows("SELECT * FROM projects WHERE deleted_at IS NULL");
     const __mid_projects = await filterAsync(__src_projects, async (project) => await canAccessProject(req.user, project.id));
@@ -434,6 +516,20 @@ function createProductsRouter({
   router.delete("/products/:id", requirePermission("product:*"), async (req, res) => {
     const before = await row("SELECT * FROM products WHERE id = @id", { id: req.params.id });
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Product not found.");
+    const wantsCascade = req.query.cascade === "true";
+    if (wantsCascade) {
+      const result = await transaction(async () => {
+        return cascadeDeleteProduct(req.params.id, { now: now() });
+      });
+      // Unlink physical image files only after the transaction commits,
+      // so a rollback does not leave us with deleted DB rows but live files.
+      for (const storageKey of result.imageStorageKeys) safeUnlink(storageKey);
+      await audit(req.user, "product.cascade_delete", "product", req.params.id, before, null, req.ip);
+      for (const item of result.snapshots.requirements) await audit(req.user, "product.cascade_delete", "requirement", item, { id: item, productId: req.params.id }, null, req.ip);
+      for (const item of result.snapshots.releases) await audit(req.user, "product.cascade_delete", "release", item, { id: item, productId: req.params.id }, null, req.ip);
+      for (const item of result.snapshots.images) await audit(req.user, "product.cascade_delete", "product_image", item, { id: item, productId: req.params.id }, null, req.ip);
+      return res.json(ok({ success: true, cascaded: true }));
+    }
     const outcome = await transaction(async () => {
       const dependencies = await productDependencies(req.params.id);
       if (Object.values(dependencies).some((dependency) => dependency.count > 0)) {

@@ -30,3 +30,12 @@ playwright/.cache/
 .claude/
 .codex/
 .omo/
+
+# IDE / tooling workspace state
+.idea/
+.zcode/
+outputs/
+
+# Windows PowerShell module analysis cache (machine-generated)
+Microsoft/
+api/Microsoft/

@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { AiProviderConfig, UpdateAiProviderInput } from '../../../types';
 import Panel from '../../../components/common/Panel';
 import StatusBadge from '../../../components/common/StatusBadge';
-import { Button, FormField, SelectInput, TextInput } from '../../../components/ui';
+import { Button, Checkbox, FormField, SelectInput, TextInput } from '../../../components/ui';
 import type { AiTestState } from '../settingsModel';
 import AiProviderHealthCard from './AiProviderHealthCard';
 import AiProviderTestResultCard from './AiProviderTestResultCard';
@@ -131,10 +131,12 @@ export default function AiProviderPanel({
             <strong>{aiDraft.createNew ? '新增模型配置' : '编辑模型配置'}</strong>
             <span>{aiDraft.createNew ? '保存后会加入列表，并可设为当前使用。' : '修改后会更新选中的模型连接配置。'}</span>
           </div>
-          <label className="form-checkbox">
-            <input type="checkbox" checked={Boolean(aiDraft.activate)} onChange={(e) => setAiDraft((prev) => ({ ...prev, activate: e.target.checked }))} disabled={!canManageAiProvider} />
-            <span>保存后设为当前使用</span>
-          </label>
+          <Checkbox
+            checked={Boolean(aiDraft.activate)}
+            onChange={(e) => setAiDraft((prev) => ({ ...prev, activate: e.target.checked }))}
+            disabled={!canManageAiProvider}
+            label="保存后设为当前使用"
+          />
         </div>
 
         <div className="form-row">
@@ -160,25 +162,22 @@ export default function AiProviderPanel({
           <FormField label="Model" htmlFor="settings-ai-model" required>
             <TextInput id="settings-ai-model" value={aiDraft.model} onChange={(e) => setAiDraft((prev) => ({ ...prev, model: e.target.value }))} placeholder="gpt-5.5" disabled={!canManageAiProvider} />
           </FormField>
-          <label className="form-checkbox" style={{ marginTop: 24 }}>
-            <input type="checkbox" checked={Boolean(aiDraft.enabled)} onChange={(e) => setAiDraft((prev) => ({ ...prev, enabled: e.target.checked }))} disabled={!canManageAiProvider} />
-            <span>启用这条模型配置</span>
-          </label>
+          <FormField label="启用状态" htmlFor="settings-ai-enabled" helpText="禁用后该配置不会被 AI 对话和分析使用。">
+            <Checkbox id="settings-ai-enabled" checked={Boolean(aiDraft.enabled)} onChange={(e) => setAiDraft((prev) => ({ ...prev, enabled: e.target.checked }))} disabled={!canManageAiProvider} />
+          </FormField>
         </div>
         <FormField label="API Key" htmlFor="settings-ai-api-key" helpText="保存后页面只显示脱敏状态，不会回显完整密钥。你贴的示例建议使用 Responses API。">
           <TextInput id="settings-ai-api-key" type="password" value={aiDraft.apiKey} onChange={(e) => setAiDraft((prev) => ({ ...prev, apiKey: e.target.value, clearApiKey: false }))} placeholder={aiProvider?.apiKeyMasked ? '留空表示继续使用当前密钥' : '填写 API Key'} autoComplete="off" disabled={!canManageAiProvider} />
         </FormField>
         <div className="form-row">
-          <label className="form-checkbox" style={{ marginTop: 4 }}>
-            <input type="checkbox" checked={aiDraft.disableResponseStorage} onChange={(e) => setAiDraft((prev) => ({ ...prev, disableResponseStorage: e.target.checked }))} disabled={!canManageAiProvider} />
-            <span>禁用模型服务响应存储</span>
-          </label>
-          <label className="form-checkbox">
-            <input type="checkbox" checked={Boolean(aiDraft.clearApiKey)} onChange={(e) => setAiDraft((prev) => ({ ...prev, clearApiKey: e.target.checked, apiKey: e.target.checked ? '' : prev.apiKey }))} disabled={!canManageAiProvider} />
-            <span>清除已保存密钥</span>
-          </label>
+          <FormField label="响应存储" htmlFor="settings-ai-disable-storage" helpText="开启后不保存模型返回内容，降低敏感信息留存。">
+            <Checkbox id="settings-ai-disable-storage" checked={aiDraft.disableResponseStorage} onChange={(e) => setAiDraft((prev) => ({ ...prev, disableResponseStorage: e.target.checked }))} disabled={!canManageAiProvider} />
+          </FormField>
+          <FormField label="已保存密钥" htmlFor="settings-ai-clear-key" helpText="勾选后保存时将清除后端保存的 API Key。">
+            <Checkbox id="settings-ai-clear-key" checked={Boolean(aiDraft.clearApiKey)} onChange={(e) => setAiDraft((prev) => ({ ...prev, clearApiKey: e.target.checked, apiKey: e.target.checked ? '' : prev.apiKey }))} disabled={!canManageAiProvider} />
+          </FormField>
         </div>
-        <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end' }}>
+        <div className="flex items-center justify-end gap-2">
           <Button variant="secondary" size="sm" onClick={handleTestAiProvider} disabled={!canManageAiProvider || testingAiProvider || savingAiProvider || !aiProvider?.configured}>
             {testingAiProvider ? '测试中...' : '测试连接'}
           </Button>

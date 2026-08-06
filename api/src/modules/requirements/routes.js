@@ -263,6 +263,18 @@ function createRequirementsRouter({
     const before = await repository.findRequirement(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Requirement not found.");
     if (!(await canAccessProject(req.user, before.project_id))) return fail(res, 403, "PERMISSION_DENIED", "无权删除该需求。");
+    const wantsCascade = req.query.cascade === "true";
+    if (wantsCascade) {
+      const removed = await transaction(() => repository.cascadeDeleteRequirement({ id: req.params.id, now: now() }));
+      await audit(req.user, "requirement.cascade_delete", "requirement", req.params.id, before, null, req.ip);
+      for (const item of removed.tasks) await audit(req.user, "requirement.cascade_delete", "task", item.id, { id: item.id, requirementId: req.params.id }, null, req.ip);
+      for (const item of removed.defects) await audit(req.user, "requirement.cascade_delete", "defect", item.id, { id: item.id, requirementId: req.params.id }, null, req.ip);
+      for (const item of removed.testCases) await audit(req.user, "requirement.cascade_delete", "test_case", item.id, { id: item.id, requirementId: req.params.id }, null, req.ip);
+      for (const item of removed.testRuns) await audit(req.user, "requirement.cascade_delete", "test_run", item.id, { id: item.id, testCaseId: item.testCaseId }, null, req.ip);
+      for (const item of removed.syncTasks) await audit(req.user, "requirement.cascade_delete", "task", item.id, { id: item.id, testCaseId: item.testCaseId }, null, req.ip);
+      for (const item of removed.children) await audit(req.user, "requirement.cascade_delete", "requirement", item.id, { id: item.id, parentId: req.params.id }, null, req.ip);
+      return res.json(ok({ deleted: true, id: req.params.id, cascaded: true }));
+    }
     const dependencies = await repository.requirementDependencies(req.params.id);
     if (Object.keys(dependencies).length > 0) {
       return fail(

@@ -1,0 +1,30 @@
+/* ---------------------------------------------------------------------------
+   Settings 页布局（设置页特有）
+   表单、按钮、checkbox、ai-provider 等视觉样式统一由 global.css / ui 组件库提供。
+   --------------------------------------------------------------------------- */
+
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--background);
+}
+
+/* Tab 栏：视觉样式使用全站 nav-tabs 规范，这里只处理页面内间距 */
+.settings-page-tabs {
+  margin-bottom: 4px;
+}
+
+.settings-content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  padding: 24px;
+  gap: 24px;
+  background: var(--background);
+}
+
+.page-frame-settings {
+  background: var(--background);
+}

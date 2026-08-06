@@ -46,7 +46,7 @@ export default function ReportAiInsight({
     <Panel
       title="AI 报表解读"
       subtitle={`当前视图：${viewLabel} · 面向管理层输出结论与动作`}
-      className="mt-20 report-ai-panel"
+      className="report-ai-panel"
       toolbar={(
         <button className="btn btn-primary btn-sm" onClick={handleAnalyze} disabled={aiLoading}>
           {aiLoading ? 'AI 解读中...' : aiInsight ? '重新解读' : '生成解读'}

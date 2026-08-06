@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CalendarDays, Plus, RefreshCw, Users } from 'lucide-react';
-import PageHeader from '../../../components/common/PageHeader';
 import PageState from '../../../components/common/PageState';
 import Panel from '../../../components/common/Panel';
 import ProgressBar from '../../../components/common/ProgressBar';
@@ -100,11 +99,12 @@ export default function CapacityView({ user }: { user?: SessionUser | null }) {
   }
   return (
     <div className="page capacity-page">
-      <PageHeader
-        title="团队容量"
-        description="基于有效容量与项目投入识别资源风险；该页面不生成个人绩效评分。"
-        actions={<div className="flex gap-2"><button className="btn btn-secondary btn-sm" onClick={overviewAsync.reload}><RefreshCw size={15} /> 刷新</button>{user?.role === 'admin' ? <button className="btn btn-secondary btn-sm" onClick={() => setEditingThresholds(true)}>风险阈值</button> : null}<button className="btn btn-secondary btn-sm" onClick={() => setEditingCalendar(true)}>工作日历</button><button className="btn btn-primary btn-sm" onClick={() => { setEditingAllocation(null); setAllocating(true); }}><Plus size={15} /> 分配项目投入</button></div>}
-      />
+      <div className="page-inline-actions mb-4 flex flex-wrap justify-end gap-2">
+        <button className="btn btn-secondary btn-sm" onClick={overviewAsync.reload}><RefreshCw size={15} /> 刷新</button>
+        {user?.role === 'admin' ? <button className="btn btn-secondary btn-sm" onClick={() => setEditingThresholds(true)}>风险阈值</button> : null}
+        <button className="btn btn-secondary btn-sm" onClick={() => setEditingCalendar(true)}>工作日历</button>
+        <button className="btn btn-primary btn-sm" onClick={() => { setEditingAllocation(null); setAllocating(true); }}><Plus size={15} /> 分配项目投入</button>
+      </div>
 
       <Panel title="规划周期" icon={<CalendarDays size={18} />}>
         <div className="flex gap-3" style={{ alignItems: 'end', flexWrap: 'wrap' }}>

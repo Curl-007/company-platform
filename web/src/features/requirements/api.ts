@@ -65,6 +65,6 @@ export function updateRequirementStatus(id: string, status: string, version: num
   return unwrapPatch<Requirement>(`/api/requirements/${id}/status`, { status, version });
 }
 
-export function deleteRequirement(id: string): Promise<{ deleted: boolean }> {
-  return unwrapDel<{ deleted: boolean }>(`/api/requirements/${id}`);
+export function deleteRequirement(id: string, cascade?: boolean): Promise<{ deleted: boolean }> {
+  return unwrapDel<{ deleted: boolean }>(`/api/requirements/${id}${cascade ? '?cascade=true' : ''}`);
 }

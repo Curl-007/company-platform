@@ -84,6 +84,7 @@ function createAiInteractionsRouter({
       const attachments = normalizeAttachments(req.body?.attachments);
       const scope = String(req.body?.scope || "project-management").slice(0, 80);
       const currentPage = String(req.body?.currentPage || "").slice(0, 120);
+      const requestedModel = String(req.body?.model || "").trim().slice(0, 120);
       const accessScope = await accessScopeFor(req.user);
       if (!messages.length && !attachments.length) return fail(res, 400, "VALIDATION_FAILED", "请输入问题或上传附件。");
       const prompt = await buildAiChatPrompt({ messages, attachments, scope, currentPage, accessScope });
@@ -94,6 +95,7 @@ function createAiInteractionsRouter({
         temperature: 0.25,
         maxTokens: 1800,
         timeoutMs: 45000,
+        ...(requestedModel ? { model: requestedModel } : {}),
       }).catch((error) => {
         console.warn("AI chat fallback:", error.message);
         return null;
@@ -114,13 +116,15 @@ function createAiInteractionsRouter({
         }
       }
 
+      const providerConfig = await publicAiProviderConfig();
       const payload = buildChatPayload({
         attachments,
-        config: await publicAiProviderConfig(),
+        config: providerConfig,
         content,
         fallback,
         now,
         proposedActions,
+        modelUsed: requestedModel || providerConfig.model,
       });
       await audit(req.user, "ai.chat", "ai_chat", payload.id, null, {
         scope,

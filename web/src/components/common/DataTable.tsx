@@ -1,5 +1,18 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
+import {
+  cn,
+  Empty,
+  EmptyDescription,
+  Spinner,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../ui';
+import { Pagination } from './Pagination';
 
 export interface DataTableColumn<T> {
   key: string;
@@ -23,6 +36,12 @@ interface DataTableProps<T> {
   className?: string;
   defaultSortKey?: string;
   defaultSortDirection?: SortDirection;
+  /**
+   * Client-side page size. When set and the sorted row count exceeds it,
+   * rows are windowed and a pagination bar is shown under the table.
+   * Pass `false` / omit to keep the previous unpaginated behavior.
+   */
+  pageSize?: number;
 }
 
 function DataTable<T>({
@@ -36,9 +55,11 @@ function DataTable<T>({
   className = '',
   defaultSortKey,
   defaultSortDirection = 'asc',
+  pageSize,
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | undefined>(defaultSortKey);
   const [sortDir, setSortDir] = useState<SortDirection>(defaultSortDirection);
+  const [page, setPage] = useState(1);
 
   const handleSort = useCallback(
     (column: DataTableColumn<T>) => {
@@ -64,6 +85,32 @@ function DataTable<T>({
     return sortDir === 'desc' ? sorted.reverse() : sorted;
   }, [data, columns, sortKey, sortDir]);
 
+  const effectivePageSize = pageSize && pageSize > 0 ? pageSize : 0;
+  const pageCount = effectivePageSize > 0
+    ? Math.max(1, Math.ceil(sortedData.length / effectivePageSize))
+    : 1;
+
+  // Keep page in range when filters / data shrink the result set.
+  useEffect(() => {
+    setPage((current) => Math.min(Math.max(current, 1), pageCount));
+  }, [pageCount]);
+
+  // Reset to first page when the underlying dataset identity changes meaningfully
+  // (e.g. new search keyword produces a shorter list).
+  useEffect(() => {
+    setPage(1);
+  }, [data, sortKey, sortDir, effectivePageSize]);
+
+  const pagedData = useMemo(() => {
+    if (!effectivePageSize) return sortedData;
+    const start = (page - 1) * effectivePageSize;
+    return sortedData.slice(start, start + effectivePageSize);
+  }, [sortedData, page, effectivePageSize]);
+
+  const showPagination = effectivePageSize > 0 && sortedData.length > effectivePageSize;
+  const rangeStart = sortedData.length === 0 ? 0 : (page - 1) * effectivePageSize + 1;
+  const rangeEnd = Math.min(page * effectivePageSize, sortedData.length);
+
   const getKeyForRow = useCallback(
     (row: T, index: number): string => {
       if (typeof rowKey === 'function') return rowKey(row);
@@ -74,28 +121,53 @@ function DataTable<T>({
 
   if (loading) {
     return (
-      <div className={`data-table-wrapper ${className}`}>
-        <div className="data-table-loading">
-          <div className="spinner" />
-          <div style={{ marginTop: 8 }}>加载中...</div>
+      <div
+        className={cn(
+          'data-table-wrapper ui-data-table-wrapper min-w-0 max-w-full border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)]',
+          className,
+        )}
+        data-slot="data-table"
+        data-state="loading"
+      >
+        <div
+          className="data-table-loading ui-data-table-loading flex min-h-32 flex-col items-center justify-center gap-3 bg-[var(--card)] p-6 text-[var(--muted-foreground)]"
+          role="status"
+          aria-live="polite"
+        >
+          <Spinner
+            size={28}
+            className="ui-data-table-spinner"
+          />
+          <span className="data-table-loading-text">加载中...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`data-table-wrapper ${className}`}>
-      <table className="data-table">
-        <thead>
-          <tr>
+    <div
+      className={cn(
+        'data-table-wrapper ui-data-table-wrapper min-w-0 max-w-full border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)]',
+        className,
+      )}
+      data-slot="data-table"
+      data-state="ready"
+    >
+      <Table className="data-table ui-table-surface bg-[var(--card)] text-[var(--card-foreground)]">
+        <TableHeader className="data-table-header bg-[var(--muted)] text-[var(--muted-foreground)]">
+          <TableRow className="data-table-header-row bg-[var(--muted)]">
             {columns.map((col) => {
               const isSorted = sortKey === col.key;
               const isSortable = !!col.sorter;
 
               return (
-                <th
+                <TableHead
                   key={col.key}
-                  className={`${isSortable ? 'sortable' : ''} ${isSorted ? 'sorted' : ''}`}
+                  className={cn(
+                    isSortable && 'sortable',
+                    isSorted && 'sorted',
+                    'data-table-head text-[var(--muted-foreground)]',
+                  )}
                   scope="col"
                   aria-sort={isSortable ? (isSorted ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none') : undefined}
                   style={{
@@ -107,6 +179,7 @@ function DataTable<T>({
                     <button
                       className="data-table-sort-button"
                       type="button"
+                      data-slot="data-table-sort-button"
                       onClick={() => handleSort(col)}
                       style={{
                         justifyContent: col.align === 'right' ? 'flex-end' : col.align === 'center' ? 'center' : 'flex-start',
@@ -120,23 +193,29 @@ function DataTable<T>({
                       </span>
                     </button>
                   ) : col.title}
-                </th>
+                </TableHead>
               );
             })}
-          </tr>
-        </thead>
-        <tbody>
-          {sortedData.length === 0 ? (
-            <tr>
-              <td colSpan={columns.length}>
-                {emptyContent ?? <div className="data-table-empty">{emptyText}</div>}
-              </td>
-            </tr>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {pagedData.length === 0 ? (
+            <TableRow className="data-table-empty-row">
+              <TableCell className="data-table-empty-cell" colSpan={columns.length}>
+                {emptyContent ?? (
+                  <Empty className="data-table-empty ui-data-table-empty bg-[var(--card)] text-[var(--muted-foreground)]">
+                    <EmptyDescription className="data-table-empty-text text-[var(--muted-foreground)]">
+                      {emptyText}
+                    </EmptyDescription>
+                  </Empty>
+                )}
+              </TableCell>
+            </TableRow>
           ) : (
-            sortedData.map((row, rowIndex) => (
-              <tr
+            pagedData.map((row, rowIndex) => (
+              <TableRow
                 key={getKeyForRow(row, rowIndex)}
-                className={onRowClick ? 'clickable' : ''}
+                className={cn(onRowClick && 'clickable', 'data-table-row')}
                 onClick={() => onRowClick?.(row)}
                 tabIndex={onRowClick ? 0 : undefined}
                 onKeyDown={(event) => {
@@ -148,20 +227,34 @@ function DataTable<T>({
                 }}
               >
                 {columns.map((col) => (
-                  <td
+                  <TableCell
                     key={col.key}
+                    className="data-table-cell text-[var(--card-foreground)]"
                     style={{ textAlign: col.align ?? 'left' }}
                   >
                     {col.render
-                      ? col.render(row, rowIndex)
+                      ? col.render(row, (page - 1) * (effectivePageSize || 0) + rowIndex)
                       : String((row as Record<string, unknown>)[col.key] ?? '')}
-                  </td>
+                  </TableCell>
                 ))}
-              </tr>
+              </TableRow>
             ))
           )}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
+
+      {showPagination ? (
+        <div className="data-table-pagination" data-slot="data-table-pagination">
+          <span className="data-table-pagination-meta text-secondary">
+            第 {rangeStart}–{rangeEnd} 条，共 {sortedData.length} 条
+          </span>
+          <Pagination
+            page={page}
+            pageCount={pageCount}
+            onPageChange={setPage}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

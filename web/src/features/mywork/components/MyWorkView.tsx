@@ -7,7 +7,6 @@ import { fetchWeeklyWorkSummary } from '../../workLogs/api';
 import TimeEntryForm from '../../timeEntries/components/TimeEntryForm';
 import DailyLogForm from '../../workLogs/components/DailyLogForm';
 import { useAsync } from '../../../hooks/useAsync';
-import PageHeader from '../../../components/common/PageHeader';
 import PageState from '../../../components/common/PageState';
 import MetricStrip from '../../../components/common/MetricStrip';
 import { useToast } from '../../../components/common/Toast';
@@ -122,12 +121,7 @@ export default function MyWorkView({ user }: { user?: SessionUser | null }) {
   }, [visibleTasks, selectedTaskId]);
 
   if (loading || error || !data) {
-    return (
-      <div>
-        <PageHeader title="我的工作" description={`${user?.name ?? ''} 的工作台与任务队列`} />
-        <PageState loading={loading} error={error} isEmpty={!loading && !error && !data} onRetry={reload} />
-      </div>
-    );
+    return <PageState loading={loading} error={error} isEmpty={!loading && !error && !data} onRetry={reload} />;
   }
 
   const metricCards = [
@@ -138,11 +132,6 @@ export default function MyWorkView({ user }: { user?: SessionUser | null }) {
 
   return (
     <div className="mywork-page">
-      <PageHeader
-        title="我的工作"
-        description={`${user?.name ?? ''} 的任务、缺陷、需求与日报入口`}
-      />
-
       <MetricStrip variant="bar" className="mywork-metric-bar" items={metricCards} />
 
       <MyWorkCapacityPanel

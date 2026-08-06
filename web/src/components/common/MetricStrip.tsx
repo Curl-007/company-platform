@@ -12,7 +12,8 @@ import MetricCard, {
 
 export type MetricStripItem = {
   label: string;
-  value: string | number;
+  /** ReactNode so animated counters (e.g. CountUp) can be passed directly. */
+  value: ReactNode;
   caption?: string;
   trend?: string;
   trendDirection?: MetricTrendDirection;

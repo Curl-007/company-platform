@@ -1,10 +1,15 @@
 import { useMemo, useState } from 'react';
+import {
+  FileText,
+  FolderOpen,
+  RefreshCw,
+  Sparkles,
+} from 'lucide-react';
 import { analyzeDocument, deleteDocument, fetchDocuments } from '../api';
 import { fetchProjects } from '../../projects/api';
 import { getSessionUser } from '../../../services/auth';
 import { useAsync } from '../../../hooks/useAsync';
 import { ApiError } from '../../../services/api';
-import PageHeader from '../../../components/common/PageHeader';
 import PageState from '../../../components/common/PageState';
 import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
@@ -15,16 +20,22 @@ import DocumentDetail from './DocumentDetail';
 import DocumentsList from './DocumentsList';
 import EditDocumentForm from './EditDocumentForm';
 import UploadDocumentForm from './UploadDocumentForm';
-import { shouldAutoAnalyzeDocuments } from './documentMeta';
+import {
+  extensionOf,
+  formatLabel,
+  shouldAutoAnalyzeDocuments,
+} from './documentMeta';
 
 export default function DocumentsView() {
   const toast = useToast();
   const confirm = useConfirm();
   const sessionUser = getSessionUser();
   const canManageDocuments = canOperate(sessionUser, 'documents:manage');
+  const canUseAi = canOperate(sessionUser, 'ai:analyze');
   const [typeFilter, setTypeFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
+  const [keyword, setKeyword] = useState('');
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [editing, setEditing] = useState<Document | null>(null);
   const [collaborating, setCollaborating] = useState<Document | null>(null);
@@ -44,6 +55,36 @@ export default function DocumentsView() {
   const documents = data ?? [];
   const projectMap = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
 
+  const signals = useMemo(() => {
+    const total = documents.length;
+    const projectDocs = documents.filter((item) => item.category === 'project' || item.projectId).length;
+    const analyzed = documents.filter((item) => /done|completed|success|passed/i.test(item.aiStatus || '')).length;
+    const pendingAi = documents.filter((item) => /pending|processing|running|uploaded/i.test(item.aiStatus || '')).length;
+    const formats = new Set(
+      documents
+        .map((item) => extensionOf(item.fileName || ''))
+        .filter(Boolean),
+    );
+    return { total, projectDocs, analyzed, pendingAi, formats: formats.size };
+  }, [documents]);
+
+  const visibleDocuments = useMemo(() => {
+    const q = keyword.trim().toLowerCase();
+    if (!q) return documents;
+    return documents.filter((item) => {
+      const hay = [
+        item.title,
+        item.fileName,
+        item.owner,
+        item.type,
+        item.category,
+        item.projectId ? projectMap.get(item.projectId) : '',
+        formatLabel(item.fileName || ''),
+      ].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }, [documents, keyword, projectMap]);
+
   async function handleDelete(doc: Document) {
     if (!canManageDocuments) {
       toast.error('当前账号无权删除文档。');
@@ -59,66 +100,96 @@ export default function DocumentsView() {
     try {
       await deleteDocument(doc.id);
       toast.success(`已删除文档“${doc.title}”`);
+      if (selectedDoc?.id === doc.id) setSelectedDoc(null);
       reload();
     } catch (err: unknown) {
       toast.error(err instanceof ApiError ? err.message : '删除失败');
     }
   }
 
-  async function handleUploaded(doc: Document) {
+  async function handleUploaded(docs: Document[]) {
     setUploading(false);
     reload();
-    toast.success(`已上传文档“${doc.title}”`);
+    if (docs.length === 1) toast.success(`已上传文档“${docs[0].title}”`);
+    else toast.success(`已上传 ${docs.length} 份文档`);
 
     if (!shouldAutoAnalyzeDocuments()) return;
-    if (!canOperate(sessionUser, 'ai:analyze')) {
+    if (!canUseAi) {
       toast.info('已开启自动分析，但当前账号没有 AI 分析权限。');
       return;
     }
 
-    try {
-      const job = await analyzeDocument({
-        documentId: doc.id,
-        type: doc.type,
-        projectId: doc.projectId || undefined,
-      });
-      toast.success(`已自动创建 AI 分析任务：${job.jobId}`);
+    let ok = 0;
+    for (const doc of docs) {
+      try {
+        await analyzeDocument({
+          documentId: doc.id,
+          type: doc.type,
+          projectId: doc.projectId || undefined,
+        });
+        ok += 1;
+      } catch {
+        // keep going for remaining docs
+      }
+    }
+    if (ok > 0) {
+      toast.success(`已自动创建 ${ok} 个 AI 分析任务`);
       reload();
-    } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '文档已上传，但自动 AI 分析启动失败');
+    } else {
+      toast.error('文档已上传，但自动 AI 分析启动失败');
     }
   }
 
   if (loading || error) {
-    return (
-      <div>
-        <PageHeader title="文档中心" description="按项目、文档分类和责任角色统一整理文档。" />
-        <PageState loading={loading} error={error} onRetry={reload} />
-      </div>
-    );
+    return <PageState loading={loading} error={error} onRetry={reload} />;
   }
 
   return (
-    <div>
-      <PageHeader
-        title="文档中心"
-        description="项目经理、产品经理、开发和测试各自维护对应项目与职责范围内的文档。"
-        actions={canManageDocuments ? (
-          <button className="btn btn-primary btn-sm" onClick={() => setUploading(true)}>上传文档</button>
-        ) : undefined}
-      />
+    <div className="doc-workbench">
+      <section className="doc-signal-strip" aria-label="文档中心概况">
+        <div className="doc-signal">
+          <span className="doc-signal-label"><FileText size={13} aria-hidden="true" /> 文档总数</span>
+          <strong>{signals.total}</strong>
+          <em>当前筛选范围</em>
+        </div>
+        <div className="doc-signal">
+          <span className="doc-signal-label"><FolderOpen size={13} aria-hidden="true" /> 项目文档</span>
+          <strong>{signals.projectDocs}</strong>
+          <em>已关联项目</em>
+        </div>
+        <div className="doc-signal">
+          <span className="doc-signal-label"><Sparkles size={13} aria-hidden="true" /> 已分析</span>
+          <strong>{signals.analyzed}</strong>
+          <em>AI 完成</em>
+        </div>
+        <div className={`doc-signal ${signals.pendingAi > 0 ? 'is-warn' : ''}`}>
+          <span className="doc-signal-label"><RefreshCw size={13} aria-hidden="true" /> 待分析</span>
+          <strong>{signals.pendingAi}</strong>
+          <em>上传 / 处理中</em>
+        </div>
+        <div className="doc-signal">
+          <span className="doc-signal-label"><FileText size={13} aria-hidden="true" /> 格式种类</span>
+          <strong>{signals.formats}</strong>
+          <em>多格式附件池</em>
+        </div>
+      </section>
 
       <DocumentsList
-        documents={documents}
+        documents={visibleDocuments}
+        totalCount={documents.length}
         projects={projects}
         projectMap={projectMap}
         typeFilter={typeFilter}
         categoryFilter={categoryFilter}
         projectFilter={projectFilter}
+        keyword={keyword}
         canManageDocuments={canManageDocuments}
         onTypeFilterChange={setTypeFilter}
         onCategoryFilterChange={setCategoryFilter}
         onProjectFilterChange={setProjectFilter}
+        onKeywordChange={setKeyword}
+        onReload={reload}
+        onUpload={() => setUploading(true)}
         onRowClick={setSelectedDoc}
         onEdit={setEditing}
         onCollaborate={setCollaborating}
@@ -129,7 +200,7 @@ export default function DocumentsView() {
         <DocumentDetail
           doc={selectedDoc}
           projectMap={projectMap}
-          canUseAi={canOperate(sessionUser, 'ai:analyze')}
+          canUseAi={canUseAi}
           onClose={() => setSelectedDoc(null)}
         />
       )}

@@ -898,6 +898,22 @@ export interface AiChatInput {
   attachments?: AiChatAttachment[];
   scope?: string;
   currentPage?: string;
+  /** Optional model override for this turn (must exist on provider). */
+  model?: string;
+}
+
+export interface AiModelOption {
+  id: string;
+  name: string;
+  ownedBy?: string | null;
+}
+
+export interface AiModelListResult {
+  ok: boolean;
+  count: number;
+  currentModel?: string | null;
+  models: AiModelOption[];
+  provider?: AiProviderConfig;
 }
 
 export interface AiJobRequirementDraft {

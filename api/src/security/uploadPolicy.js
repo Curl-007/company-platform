@@ -3,12 +3,24 @@ const path = require("path");
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 const ALLOWED_EXTENSIONS = new Set([
-  ".txt", ".md", ".csv", ".json", ".xml", ".yaml", ".yml", ".log",
+  // plain / structured text
+  ".txt", ".md", ".markdown", ".csv", ".tsv", ".json", ".xml", ".html", ".htm",
+  ".yaml", ".yml", ".log", ".rtf",
+  // documents
   ".pdf",
-  ".doc", ".docx",
-  ".xls", ".xlsx",
-  ".ppt", ".pptx",
-  ".png", ".jpg", ".jpeg", ".gif", ".webp",
+  ".doc", ".docx", ".dot", ".dotx",
+  ".odt",
+  ".wps",
+  // spreadsheets
+  ".xls", ".xlsx", ".xlt", ".xltx",
+  ".ods",
+  ".et",
+  // presentations
+  ".ppt", ".pptx", ".pot", ".potx",
+  ".odp",
+  ".dps",
+  // images
+  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff",
 ]);
 
 const ALLOWED_MIME_PREFIXES = ["text/"];
@@ -16,19 +28,34 @@ const ALLOWED_MIME_TYPES = new Set([
   "application/json",
   "application/xml",
   "text/xml",
+  "text/html",
+  "text/csv",
+  "text/tab-separated-values",
+  "text/rtf",
+  "application/rtf",
   "application/x-yaml",
   "application/yaml",
   "application/pdf",
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
   "application/vnd.ms-powerpoint",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.presentationml.template",
+  "application/vnd.oasis.opendocument.text",
+  "application/vnd.oasis.opendocument.spreadsheet",
+  "application/vnd.oasis.opendocument.presentation",
+  "application/kswps",
+  "application/msword-template",
   "image/png",
   "image/jpeg",
   "image/gif",
   "image/webp",
+  "image/bmp",
+  "image/tiff",
   "application/octet-stream",
 ]);
 

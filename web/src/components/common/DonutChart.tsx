@@ -42,7 +42,6 @@ export default function DonutChart({ value, label, size = 120, color }: DonutCha
     <div className="donut-chart" style={{ width: size, height: size, position: 'relative' }}>
       <RC.ResponsiveContainer width="100%" height="100%">
         <RC.PieChart>
-          {/* @ts-expect-error recharts v2 Pie vs React 19 JSX type */}
           <Pie
             data={data}
             dataKey="value"

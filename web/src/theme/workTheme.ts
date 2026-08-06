@@ -1,23 +1,65 @@
-export type WorkThemeId = 'aurora' | 'cyber' | 'sunset' | 'forest' | 'scholar';
+export type WorkThemeId = 'kaneo';
 export type WorkThemeMode = 'dark' | 'light';
 export type WorkThemeDensity = 'standard' | 'compact';
 export type WorkThemeContrast = 'default' | 'high';
 export type WorkThemeFont = 'system' | 'sans' | 'noto' | 'misans' | 'puhui';
-export type WorkThemeNavLayout = 'expanded' | 'mini' | 'horizontal';
 
 export interface WorkThemeSettings {
+  // Keep the neutral theme id in the persisted shape for compatibility with callers.
   theme: WorkThemeId;
   mode: WorkThemeMode;
   density: WorkThemeDensity;
   contrast: WorkThemeContrast;
   reduceMotion: boolean;
-  ambient: boolean;
   fontSize: number;
   fontFamily: WorkThemeFont;
-  navLayout: WorkThemeNavLayout;
-  radius: number;
-  glassBlur: number;
   contentPadding: number;
+}
+
+interface WorkThemePalette {
+  background: string;
+  foreground: string;
+  card: string;
+  cardForeground: string;
+  popover: string;
+  popoverForeground: string;
+  primary: string;
+  primaryForeground: string;
+  secondary: string;
+  secondaryForeground: string;
+  muted: string;
+  mutedForeground: string;
+  accent: string;
+  accentForeground: string;
+  accentHover: string;
+  border: string;
+  input: string;
+  ring: string;
+  destructive: string;
+  destructiveForeground: string;
+  success: string;
+  successForeground: string;
+  warning: string;
+  warningForeground: string;
+  info: string;
+  infoForeground: string;
+  blocked: string;
+  sidebar: string;
+  sidebarForeground: string;
+  sidebarPrimary: string;
+  sidebarPrimaryForeground: string;
+  sidebarAccent: string;
+  sidebarAccentForeground: string;
+  sidebarBorder: string;
+  sidebarRing: string;
+  accentRgb: string;
+  successRgb: string;
+  warningRgb: string;
+  blockedRgb: string;
+  page: string;
+  content: string;
+  topbar: string;
+  tertiary: string;
 }
 
 export interface WorkThemePreset {
@@ -28,292 +70,128 @@ export interface WorkThemePreset {
     dark: { bg: string; gradient: [string, string, string] };
     light: { bg: string; gradient: [string, string, string] };
   };
-  signature: {
-    gradient: [string, string, string];
-    accentRgb: string;
-    magentaRgb: string;
-    amberRgb: string;
-    holoForeground: string;
-    radius: number;
-    glassBlur: number;
-  };
-  dark: {
-    page: string;
-    content: string;
-    sidebar: string;
-    topbar: string;
-    border: string;
-    borderStrong: string;
-    text: string;
-    secondary: string;
-    tertiary: string;
-    accent: string;
-    accentHover: string;
-    accentRgb: string;
-  };
-  light: {
-    page: string;
-    content: string;
-    sidebar: string;
-    topbar: string;
-    border: string;
-    borderStrong: string;
-    text: string;
-    secondary: string;
-    tertiary: string;
-    accent: string;
-    accentHover: string;
-    accentRgb: string;
-  };
+  dark: WorkThemePalette;
+  light: WorkThemePalette;
 }
 
-export const WORK_THEME_STORAGE_KEY = 'work-glass-theme-settings';
+export const WORK_THEME_STORAGE_KEY = 'work-theme-settings';
+const LEGACY_WORK_THEME_STORAGE_KEYS = ['work-glass-theme-settings'] as const;
+const ALL_WORK_THEME_STORAGE_KEYS = [WORK_THEME_STORAGE_KEY, ...LEGACY_WORK_THEME_STORAGE_KEYS] as const;
 
 export const defaultWorkThemeSettings: WorkThemeSettings = {
-  theme: 'scholar',
-  mode: 'light',
+  theme: 'kaneo',
+  mode: 'dark',
   density: 'standard',
   contrast: 'default',
   reduceMotion: false,
-  ambient: false,
   fontSize: 15,
   fontFamily: 'system',
-  navLayout: 'expanded',
-  radius: 6,
-  glassBlur: 0,
   contentPadding: 24,
+};
+
+const KANEO_LIGHT: WorkThemePalette = {
+  background: '#ffffff',
+  foreground: '#1a1c1f',
+  card: '#ffffff',
+  cardForeground: '#1a1c1f',
+  popover: '#ffffff',
+  popoverForeground: '#1a1c1f',
+  primary: '#1f7fdf',
+  primaryForeground: '#ffffff',
+  secondary: '#f5f5f5',
+  secondaryForeground: '#1a1c1f',
+  muted: '#f5f5f5',
+  mutedForeground: '#656d76',
+  accent: '#e8f2ff',
+  accentForeground: '#1a1c1f',
+  accentHover: '#d0e7ff',
+  border: '#e5e5e5',
+  input: '#e5e5e5',
+  ring: '#339cff',
+  destructive: '#ba2623',
+  destructiveForeground: '#ffffff',
+  success: '#00a240',
+  successForeground: '#ffffff',
+  warning: '#9a6700',
+  warningForeground: '#ffffff',
+  info: '#1f7fdf',
+  infoForeground: '#ffffff',
+  blocked: '#924ff7',
+  sidebar: '#fafafa',
+  sidebarForeground: '#1a1c1f',
+  sidebarPrimary: '#1f7fdf',
+  sidebarPrimaryForeground: '#ffffff',
+  sidebarAccent: '#f0f0f0',
+  sidebarAccentForeground: '#1a1c1f',
+  sidebarBorder: '#e5e5e5',
+  sidebarRing: '#339cff',
+  accentRgb: '31, 127, 223',
+  successRgb: '0, 162, 64',
+  warningRgb: '154, 103, 0',
+  blockedRgb: '146, 79, 247',
+  page: '#ffffff',
+  content: '#ffffff',
+  topbar: '#ffffff',
+  tertiary: '#8c959f',
+};
+
+const KANEO_DARK: WorkThemePalette = {
+  background: '#181818',
+  foreground: '#ffffff',
+  card: '#1f1f1f',
+  cardForeground: '#ffffff',
+  popover: '#242424',
+  popoverForeground: '#ffffff',
+  primary: '#339cff',
+  primaryForeground: '#0a0a0a',
+  secondary: '#262626',
+  secondaryForeground: '#e5e5e5',
+  muted: '#262626',
+  mutedForeground: '#a0a0a0',
+  accent: '#339cff',
+  accentForeground: '#0a0a0a',
+  accentHover: '#1f7fdf',
+  border: '#2e2e2e',
+  input: '#2e2e2e',
+  ring: '#339cff',
+  destructive: '#fa423e',
+  destructiveForeground: '#0a0a0a',
+  success: '#40c977',
+  successForeground: '#0a1a0e',
+  warning: '#fbbf24',
+  warningForeground: '#1a1403',
+  info: '#339cff',
+  infoForeground: '#0a1a2a',
+  blocked: '#ad7bf9',
+  sidebar: '#141414',
+  sidebarForeground: '#ffffff',
+  sidebarPrimary: '#339cff',
+  sidebarPrimaryForeground: '#0a0a0a',
+  sidebarAccent: '#1f1f1f',
+  sidebarAccentForeground: '#ffffff',
+  sidebarBorder: '#2e2e2e',
+  sidebarRing: '#339cff',
+  accentRgb: '51, 156, 255',
+  successRgb: '64, 201, 119',
+  warningRgb: '251, 191, 36',
+  blockedRgb: '173, 123, 249',
+  page: '#181818',
+  content: '#1f1f1f',
+  topbar: '#1f1f1f',
+  tertiary: '#a0a0a0',
 };
 
 export const WORK_THEMES: WorkThemePreset[] = [
   {
-    id: 'aurora',
-    label: '极光全息',
-    blurb: '冷·玻璃·全息',
+    id: 'kaneo',
+    label: 'Codex',
+    blurb: '深色蓝调',
     preview: {
-      dark: { bg: '#0a0a0f', gradient: ['#00d4ff', '#ff2d92', '#ffb347'] },
-      light: { bg: '#eef1f6', gradient: ['#00d4ff', '#ff2d92', '#ffb347'] },
+      dark: { bg: KANEO_DARK.background, gradient: [KANEO_DARK.primary, KANEO_DARK.primary, KANEO_DARK.ring] },
+      light: { bg: KANEO_LIGHT.background, gradient: [KANEO_LIGHT.primary, KANEO_LIGHT.primary, KANEO_LIGHT.border] },
     },
-    signature: {
-      gradient: ['#00d4ff', '#ff2d92', '#ffb347'],
-      accentRgb: '0, 212, 255',
-      magentaRgb: '255, 45, 146',
-      amberRgb: '255, 179, 71',
-      holoForeground: '#0a0a0f',
-      radius: 14,
-      glassBlur: 24,
-    },
-    dark: {
-      page: '#0a0a0f',
-      content: 'rgba(255, 255, 255, 0.07)',
-      sidebar: 'rgba(10, 10, 15, 0.60)',
-      topbar: 'rgba(10, 10, 15, 0.50)',
-      border: 'rgba(255, 255, 255, 0.08)',
-      borderStrong: 'rgba(255, 255, 255, 0.15)',
-      text: '#ffffff',
-      secondary: 'rgba(255, 255, 255, 0.72)',
-      tertiary: 'rgba(255, 255, 255, 0.50)',
-      accent: '#00d4ff',
-      accentHover: '#ff2d92',
-      accentRgb: '0, 212, 255',
-    },
-    light: {
-      page: '#eef1f6',
-      content: 'rgba(255, 255, 255, 0.72)',
-      sidebar: 'rgba(255, 255, 255, 0.78)',
-      topbar: 'rgba(255, 255, 255, 0.72)',
-      border: 'rgba(20, 24, 40, 0.10)',
-      borderStrong: 'rgba(20, 24, 40, 0.18)',
-      text: '#10131c',
-      secondary: 'rgba(16, 19, 28, 0.72)',
-      tertiary: 'rgba(16, 19, 28, 0.55)',
-      accent: '#00d4ff',
-      accentHover: '#ff2d92',
-      accentRgb: '0, 212, 255',
-    },
-  },
-  {
-    id: 'cyber',
-    label: '赛博霓虹',
-    blurb: '霓虹·OLED·强发光',
-    preview: {
-      dark: { bg: '#000000', gradient: ['#a855f7', '#ec4899', '#38bdf8'] },
-      light: { bg: '#f4f4f7', gradient: ['#a855f7', '#ec4899', '#38bdf8'] },
-    },
-    signature: {
-      gradient: ['#a855f7', '#ec4899', '#38bdf8'],
-      accentRgb: '168, 85, 247',
-      magentaRgb: '236, 72, 153',
-      amberRgb: '56, 189, 248',
-      holoForeground: '#0a0a0f',
-      radius: 8,
-      glassBlur: 26,
-    },
-    dark: {
-      page: '#000000',
-      content: 'rgba(255, 255, 255, 0.07)',
-      sidebar: 'rgba(0, 0, 0, 0.60)',
-      topbar: 'rgba(0, 0, 0, 0.55)',
-      border: 'rgba(180, 120, 255, 0.12)',
-      borderStrong: 'rgba(180, 120, 255, 0.20)',
-      text: '#ffffff',
-      secondary: 'rgba(255, 255, 255, 0.72)',
-      tertiary: 'rgba(255, 255, 255, 0.50)',
-      accent: '#a855f7',
-      accentHover: '#ec4899',
-      accentRgb: '168, 85, 247',
-    },
-    light: {
-      page: '#f4f4f7',
-      content: 'rgba(255, 255, 255, 0.74)',
-      sidebar: 'rgba(255, 255, 255, 0.80)',
-      topbar: 'rgba(255, 255, 255, 0.74)',
-      border: 'rgba(120, 60, 200, 0.12)',
-      borderStrong: 'rgba(120, 60, 200, 0.20)',
-      text: '#15121d',
-      secondary: 'rgba(21, 18, 29, 0.72)',
-      tertiary: 'rgba(21, 18, 29, 0.55)',
-      accent: '#a855f7',
-      accentHover: '#ec4899',
-      accentRgb: '168, 85, 247',
-    },
-  },
-  {
-    id: 'sunset',
-    label: '暖阳极简',
-    blurb: '暖·扁平·柔影',
-    preview: {
-      dark: { bg: '#1a1714', gradient: ['#ff8a4c', '#ff5d8f', '#ffb347'] },
-      light: { bg: '#faf6f0', gradient: ['#ff8a4c', '#ff5d8f', '#ffb347'] },
-    },
-    signature: {
-      gradient: ['#ff8a4c', '#ff5d8f', '#ffb347'],
-      accentRgb: '255, 138, 76',
-      magentaRgb: '255, 93, 143',
-      amberRgb: '255, 179, 71',
-      holoForeground: '#2a1206',
-      radius: 18,
-      glassBlur: 0,
-    },
-    dark: {
-      page: '#1a1714',
-      content: '#221c17',
-      sidebar: '#1a1714',
-      topbar: '#1a1714',
-      border: 'rgba(255, 235, 220, 0.10)',
-      borderStrong: 'rgba(255, 235, 220, 0.18)',
-      text: '#fbf4ee',
-      secondary: 'rgba(251, 244, 238, 0.72)',
-      tertiary: 'rgba(251, 244, 238, 0.50)',
-      accent: '#ff8a4c',
-      accentHover: '#ff5d8f',
-      accentRgb: '255, 138, 76',
-    },
-    light: {
-      page: '#faf6f0',
-      content: '#ffffff',
-      sidebar: '#fffdf9',
-      topbar: '#fffdf9',
-      border: 'rgba(60, 40, 25, 0.10)',
-      borderStrong: 'rgba(60, 40, 25, 0.18)',
-      text: '#2a1d12',
-      secondary: 'rgba(42, 29, 18, 0.72)',
-      tertiary: 'rgba(42, 29, 18, 0.55)',
-      accent: '#ff8a4c',
-      accentHover: '#ff5d8f',
-      accentRgb: '255, 138, 76',
-    },
-  },
-  {
-    id: 'forest',
-    label: '森林自然',
-    blurb: '绿·柔和·有机',
-    preview: {
-      dark: { bg: '#0b1410', gradient: ['#10b981', '#14b8a6', '#84cc16'] },
-      light: { bg: '#eef3ee', gradient: ['#10b981', '#14b8a6', '#84cc16'] },
-    },
-    signature: {
-      gradient: ['#10b981', '#14b8a6', '#84cc16'],
-      accentRgb: '16, 185, 129',
-      magentaRgb: '20, 184, 166',
-      amberRgb: '132, 204, 22',
-      holoForeground: '#04140d',
-      radius: 14,
-      glassBlur: 18,
-    },
-    dark: {
-      page: '#0b1410',
-      content: 'rgba(220, 255, 235, 0.07)',
-      sidebar: 'rgba(8, 18, 12, 0.60)',
-      topbar: 'rgba(8, 18, 12, 0.55)',
-      border: 'rgba(120, 220, 170, 0.10)',
-      borderStrong: 'rgba(120, 220, 170, 0.18)',
-      text: '#eafff4',
-      secondary: 'rgba(234, 255, 244, 0.72)',
-      tertiary: 'rgba(234, 255, 244, 0.50)',
-      accent: '#10b981',
-      accentHover: '#14b8a6',
-      accentRgb: '16, 185, 129',
-    },
-    light: {
-      page: '#eef3ee',
-      content: 'rgba(255, 255, 255, 0.74)',
-      sidebar: 'rgba(255, 255, 255, 0.80)',
-      topbar: 'rgba(255, 255, 255, 0.74)',
-      border: 'rgba(16, 40, 28, 0.10)',
-      borderStrong: 'rgba(16, 40, 28, 0.18)',
-      text: '#0e1f16',
-      secondary: 'rgba(14, 31, 22, 0.72)',
-      tertiary: 'rgba(14, 31, 22, 0.55)',
-      accent: '#10b981',
-      accentHover: '#14b8a6',
-      accentRgb: '16, 185, 129',
-    },
-  },
-  {
-    id: 'scholar',
-    label: '专业工作台',
-    blurb: '中性·清晰·高密度',
-    preview: {
-      dark: { bg: '#17201e', gradient: ['#2f9b7d', '#4f7db8', '#c18a3b'] },
-      light: { bg: '#f4f6f4', gradient: ['#176b57', '#2f6fad', '#b77722'] },
-    },
-    signature: {
-      gradient: ['#176b57', '#2f6fad', '#b77722'],
-      accentRgb: '23, 107, 87',
-      magentaRgb: '47, 111, 173',
-      amberRgb: '183, 119, 34',
-      holoForeground: '#ffffff',
-      radius: 6,
-      glassBlur: 0,
-    },
-    dark: {
-      page: '#151b1a',
-      content: '#1d2523',
-      sidebar: '#18201f',
-      topbar: '#1d2523',
-      border: 'rgba(229, 236, 232, 0.11)',
-      borderStrong: 'rgba(229, 236, 232, 0.20)',
-      text: '#edf2ef',
-      secondary: 'rgba(237, 242, 239, 0.72)',
-      tertiary: 'rgba(237, 242, 239, 0.52)',
-      accent: '#4ab394',
-      accentHover: '#62c3a7',
-      accentRgb: '74, 179, 148',
-    },
-    light: {
-      page: '#eef2ef',
-      content: '#ffffff',
-      sidebar: '#f7f9f7',
-      topbar: '#ffffff',
-      border: '#d6ddd8',
-      borderStrong: '#bdc9c1',
-      text: '#15201c',
-      secondary: '#4c5d56',
-      tertiary: '#72817b',
-      accent: '#15654f',
-      accentHover: '#0f4f3e',
-      accentRgb: '21, 101, 79',
-    },
+    dark: KANEO_DARK,
+    light: KANEO_LIGHT,
   },
 ];
 
@@ -326,51 +204,86 @@ export const WORK_FONT_LABELS: Record<WorkThemeFont, string> = {
 };
 
 export function readWorkThemeSettings(): WorkThemeSettings {
-  if (typeof window === 'undefined') return defaultWorkThemeSettings;
-  try {
-    const raw = window.localStorage.getItem(WORK_THEME_STORAGE_KEY);
-    if (!raw) return defaultWorkThemeSettings;
-    const parsed = JSON.parse(raw);
-    if (isLegacyScholarDefault(parsed)) return defaultWorkThemeSettings;
-    return normalizeSettings(parsed);
-  } catch {
-    return defaultWorkThemeSettings;
-  }
-}
+  const storage = getStorage();
+  if (!storage) return defaultWorkThemeSettings;
 
-function isLegacyScholarDefault(value: unknown): boolean {
-  if (!value || typeof value !== 'object') return false;
-  const input = value as Partial<WorkThemeSettings>;
-  return input.theme === 'scholar'
-    && input.mode === 'light'
-    && input.density === 'compact'
-    && input.contrast === 'default'
-    && input.reduceMotion === false
-    && input.ambient === false
-    && input.fontSize === 14
-    && input.fontFamily === 'system'
-    && input.navLayout === 'expanded'
-    && input.radius === 6
-    && input.glassBlur === 0
-    && input.contentPadding === 20;
+  for (const key of ALL_WORK_THEME_STORAGE_KEYS) {
+    let raw: string | null = null;
+    try {
+      raw = storage.getItem(key);
+    } catch {
+      return defaultWorkThemeSettings;
+    }
+    if (!raw) continue;
+
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      const next = normalizeSettings(parsed);
+      if (key !== WORK_THEME_STORAGE_KEY || raw !== JSON.stringify(next)) {
+        persistSettings(storage, next);
+      }
+      return next;
+    } catch {
+      // Try a known legacy key before falling back to defaults.
+    }
+  }
+
+  return defaultWorkThemeSettings;
 }
 
 export function saveWorkThemeSettings(settings: WorkThemeSettings): WorkThemeSettings {
   const next = normalizeSettings(settings);
-  try {
-    window.localStorage.setItem(WORK_THEME_STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // Storage may be disabled; the active document should still update.
-  }
+  const storage = getStorage();
+  if (storage) persistSettings(storage, next);
   applyWorkTheme(next);
   return next;
 }
 
+/**
+ * Same as saveWorkThemeSettings but wraps the DOM update in a View Transition
+ * when the browser supports it, so dark/light switching reveals with a radial
+ * wipe from the click point. Pass the click coordinates via `origin` (from the
+ * triggering button's getBoundingClientRect center, or pointer event coords).
+ * Falls back to the plain synchronous apply when the API is unavailable.
+ */
+export function saveWorkThemeSettingsWithTransition(
+  settings: WorkThemeSettings,
+  origin?: { x: number; y: number },
+): WorkThemeSettings {
+  const next = normalizeSettings(settings);
+  const storage = getStorage();
+  if (storage) persistSettings(storage, next);
+
+  // Only animate when the mode actually flips; other settings (font size,
+  // density) change without a theme swap and shouldn't trigger the wipe.
+  const doc = typeof document !== 'undefined' ? document : undefined;
+  const supportsVT = !!doc && 'startViewTransition' in doc;
+
+  if (supportsVT && doc) {
+    const root = doc.documentElement;
+    if (origin) {
+      root.style.setProperty('--theme-transition-x', `${origin.x}px`);
+      root.style.setProperty('--theme-transition-y', `${origin.y}px`);
+    }
+    (doc as Document & { startViewTransition: (cb: () => void) => void }).startViewTransition(() => {
+      applyWorkTheme(next);
+    });
+  } else {
+    applyWorkTheme(next);
+  }
+  return next;
+}
+
 export function resetWorkThemeSettings(): WorkThemeSettings {
-  try {
-    window.localStorage.removeItem(WORK_THEME_STORAGE_KEY);
-  } catch {
-    // Keep reset functional even when persistent storage is unavailable.
+  const storage = getStorage();
+  if (storage) {
+    for (const key of ALL_WORK_THEME_STORAGE_KEYS) {
+      try {
+        storage.removeItem(key);
+      } catch {
+        // Keep reset functional when persistent storage is unavailable.
+      }
+    }
   }
   applyWorkTheme(defaultWorkThemeSettings);
   return defaultWorkThemeSettings;
@@ -378,116 +291,162 @@ export function resetWorkThemeSettings(): WorkThemeSettings {
 
 export function applyWorkTheme(settings: WorkThemeSettings): void {
   if (typeof document === 'undefined') return;
+
   const root = document.documentElement;
   const normalized = normalizeSettings(settings);
-  const preset = WORK_THEMES.find((item) => item.id === normalized.theme) ?? WORK_THEMES[0];
-  const colors = preset[normalized.mode];
-  const radiusValue = preset.signature.radius;
-  const blurValue = preset.signature.glassBlur;
-  const radius = `${radiusValue}px`;
-  const fontStack = fontStackOf(normalized.fontFamily);
-  const [gradientStart, gradientMiddle, gradientEnd] = preset.signature.gradient;
+  const palette = normalized.mode === 'dark' ? KANEO_DARK : KANEO_LIGHT;
   const highContrast = normalized.contrast === 'high';
   const secondaryText = highContrast
-    ? `color-mix(in srgb, ${colors.text} 88%, transparent)`
-    : colors.secondary;
+    ? `color-mix(in srgb, ${palette.foreground} 88%, transparent)`
+    : palette.mutedForeground;
   const tertiaryText = highContrast
-    ? `color-mix(in srgb, ${colors.text} 72%, transparent)`
-    : colors.tertiary;
+    ? `color-mix(in srgb, ${palette.foreground} 72%, transparent)`
+    : palette.tertiary;
   const border = highContrast
-    ? `color-mix(in srgb, ${colors.text} ${normalized.mode === 'dark' ? '34%' : '28%'}, transparent)`
-    : colors.border;
+    ? `color-mix(in srgb, ${palette.foreground} ${normalized.mode === 'dark' ? '34%' : '28%'}, transparent)`
+    : palette.border;
   const borderStrong = highContrast
-    ? `color-mix(in srgb, ${colors.text} ${normalized.mode === 'dark' ? '48%' : '40%'}, transparent)`
-    : colors.borderStrong;
+    ? `color-mix(in srgb, ${palette.foreground} ${normalized.mode === 'dark' ? '48%' : '40%'}, transparent)`
+    : palette.border;
+  const fontStack = fontStackOf(normalized.fontFamily);
+  const primaryGradient = `linear-gradient(135deg, ${palette.primary}, ${palette.primary})`;
+  const primaryHoverGradient = `linear-gradient(135deg, ${palette.accentHover}, ${palette.accentHover})`;
 
-  root.setAttribute('data-theme', normalized.theme);
+  root.setAttribute('data-theme', 'kaneo');
   root.setAttribute('data-mode', normalized.mode);
   root.setAttribute('data-reduce-motion', String(normalized.reduceMotion));
-  root.setAttribute('data-ambient', normalized.ambient ? 'on' : 'off');
-  root.setAttribute('data-work-theme', normalized.theme);
+  root.setAttribute('data-work-theme', 'kaneo');
   root.setAttribute('data-work-mode', normalized.mode);
   root.setAttribute('data-work-density', normalized.density);
   root.setAttribute('data-work-contrast', normalized.contrast);
   root.setAttribute('data-work-motion', normalized.reduceMotion ? 'reduced' : 'standard');
-  root.setAttribute('data-work-ambient', normalized.ambient ? 'on' : 'off');
   root.setAttribute('data-work-font', normalized.fontFamily);
-  root.setAttribute('data-work-nav-layout', normalized.navLayout);
-  root.style.fontSize = `${normalized.fontSize}px`;
-  root.style.setProperty('--fs-display', `${normalized.fontSize + 10}px`);
-  root.style.setProperty('--fs-page-title', `${normalized.fontSize + 7}px`);
-  root.style.setProperty('--fs-section-title', `${normalized.fontSize + 2}px`);
-  root.style.setProperty('--fs-body', `${normalized.fontSize}px`);
-  root.style.setProperty('--fs-helper', `${Math.max(12, normalized.fontSize - 2)}px`);
-  root.style.setProperty('--fs-table-body', `${Math.max(12, normalized.fontSize - 1)}px`);
-  root.style.setProperty('--fs-kpi-value', `${normalized.fontSize + 13}px`);
-  root.style.setProperty('--content-padding', `${normalized.contentPadding}px`);
-  root.style.setProperty('--content-gutter', `${normalized.contentPadding}px`);
-  root.style.setProperty('--work-glass-blur', `${blurValue}px`);
-  root.style.setProperty('--work-accent-rgb', preset.signature.accentRgb);
-  root.style.setProperty('--work-magenta-rgb', preset.signature.magentaRgb);
-  root.style.setProperty('--work-amber-rgb', preset.signature.amberRgb);
-  root.style.setProperty('--work-emerald-rgb', normalized.theme === 'forest' ? preset.signature.accentRgb : '0, 255, 148');
-  root.style.setProperty('--bg-page', colors.page);
-  root.style.setProperty('--bg-content', colors.content);
-  root.style.setProperty('--bg-sidebar', colors.sidebar);
-  root.style.setProperty('--bg-topbar', colors.topbar);
-  root.style.setProperty('--bg-sidebar-hover', normalized.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(20, 24, 40, 0.06)');
-  root.style.setProperty('--bg-sidebar-active', normalized.mode === 'dark' ? 'rgba(255, 255, 255, 0.14)' : 'rgba(20, 24, 40, 0.10)');
-  root.style.setProperty('--bg-sidebar-text', highContrast ? secondaryText : normalized.mode === 'dark' ? 'rgba(255, 255, 255, 0.60)' : 'rgba(16, 19, 28, 0.62)');
-  root.style.setProperty('--bg-sidebar-text-active', colors.text);
-  root.style.setProperty('--bg-primary', colors.content);
-  root.style.setProperty('--bg-secondary', normalized.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(20, 24, 40, 0.04)');
-  root.style.setProperty('--bg-default', normalized.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(20, 24, 40, 0.04)');
-  root.style.setProperty('--bg-hover', normalized.mode === 'dark' ? 'rgba(255, 255, 255, 0.10)' : 'rgba(20, 24, 40, 0.08)');
-  root.style.setProperty('--bg-active', normalized.mode === 'dark' ? 'rgba(255, 255, 255, 0.14)' : 'rgba(20, 24, 40, 0.12)');
-  root.style.setProperty('--bg-subtle', normalized.mode === 'dark' ? 'rgba(255, 255, 255, 0.055)' : 'rgba(20, 24, 40, 0.045)');
-  root.style.setProperty('--text-primary', colors.text);
-  root.style.setProperty('--text-secondary', secondaryText);
-  root.style.setProperty('--text-tertiary', tertiaryText);
-  root.style.setProperty('--text-inverse', preset.signature.holoForeground);
-  root.style.setProperty('--border-default', border);
-  root.style.setProperty('--border-divider', border);
-  root.style.setProperty('--border-sidebar', border);
-  root.style.setProperty('--border-light', border);
-  root.style.setProperty('--border-strong', borderStrong);
-  root.style.setProperty('--accent', colors.accent);
-  root.style.setProperty('--accent-hover', colors.accentHover);
-  root.style.setProperty('--accent-soft', `rgba(${preset.signature.accentRgb}, 0.14)`);
-  root.style.setProperty('--accent-bg', `rgba(${preset.signature.accentRgb}, 0.13)`);
-  root.style.setProperty('--accent-contrast', preset.signature.holoForeground);
-  root.style.setProperty('--gradient-holographic', `linear-gradient(135deg, ${gradientStart}, ${gradientMiddle}, ${gradientEnd})`);
-  root.style.setProperty('--gradient-holographic-hover', `linear-gradient(135deg, ${lightenHex(gradientStart, 0.12)}, ${lightenHex(gradientMiddle, 0.12)}, ${lightenHex(gradientEnd, 0.12)})`);
-  root.style.setProperty('--font-cn', fontStack);
-  root.style.setProperty('--font-en', fontStack);
-  root.style.setProperty('--radius-sm', radius);
-  root.style.setProperty('--radius-card', radius);
-  root.style.setProperty('--radius-button', radius);
-  root.style.setProperty('--radius-input', radius);
-  root.style.setProperty('--radius-modal', `${Math.max(radiusValue, 10)}px`);
+  root.classList.toggle('dark', normalized.mode === 'dark');
+
+  // Old attributes are removed so a previous skin cannot keep affecting the document.
+  root.removeAttribute('data-ambient');
+  root.removeAttribute('data-work-ambient');
+  root.removeAttribute('data-work-nav-layout');
+
+  setProperties(root, {
+    '--background': palette.background,
+    '--foreground': palette.foreground,
+    '--card': palette.card,
+    '--card-foreground': palette.cardForeground,
+    '--popover': palette.popover,
+    '--popover-foreground': palette.popoverForeground,
+    '--primary': palette.primary,
+    '--primary-foreground': palette.primaryForeground,
+    '--secondary': palette.secondary,
+    '--secondary-foreground': palette.secondaryForeground,
+    '--muted': palette.muted,
+    '--muted-foreground': secondaryText,
+    '--accent': palette.accent,
+    '--accent-foreground': palette.accentForeground,
+    '--border': border,
+    '--input': highContrast ? borderStrong : palette.input,
+    '--ring': palette.ring,
+    '--destructive': palette.destructive,
+    '--destructive-foreground': palette.destructiveForeground,
+    '--success': palette.success,
+    '--success-foreground': palette.successForeground,
+    '--warning': palette.warning,
+    '--warning-foreground': palette.warningForeground,
+    '--info': palette.info,
+    '--info-foreground': palette.infoForeground,
+    '--sidebar': palette.sidebar,
+    '--sidebar-foreground': palette.sidebarForeground,
+    '--sidebar-primary': palette.sidebarPrimary,
+    '--sidebar-primary-foreground': palette.sidebarPrimaryForeground,
+    '--sidebar-accent': palette.sidebarAccent,
+    '--sidebar-accent-foreground': palette.sidebarAccentForeground,
+    '--sidebar-border': highContrast ? border : palette.sidebarBorder,
+    '--sidebar-ring': palette.sidebarRing,
+    '--color-primary': palette.primary,
+    '--color-success': palette.success,
+    '--color-success-bg': `color-mix(in srgb, ${palette.success} 14%, transparent)`,
+    '--color-warning': palette.warning,
+    '--color-warning-bg': `color-mix(in srgb, ${palette.warning} 16%, transparent)`,
+    '--color-risk': palette.destructive,
+    '--color-risk-bg': `color-mix(in srgb, ${palette.destructive} 14%, transparent)`,
+    '--color-info': palette.info,
+    '--color-info-bg': `color-mix(in srgb, ${palette.info} 14%, transparent)`,
+    '--color-blocked': palette.blocked,
+    '--color-blocked-bg': `color-mix(in srgb, ${palette.blocked} 14%, transparent)`,
+    '--contrast-border-width': highContrast ? '2px' : '1px',
+    '--focus-ring-width': highContrast ? '3px' : '2px',
+    '--fs-display': `${normalized.fontSize + 10}px`,
+    '--fs-page-title': `${normalized.fontSize + 7}px`,
+    '--fs-section-title': `${normalized.fontSize + 2}px`,
+    '--fs-body': `${normalized.fontSize}px`,
+    '--fs-helper': `${Math.max(12, normalized.fontSize - 2)}px`,
+    '--fs-table-body': `${Math.max(12, normalized.fontSize - 1)}px`,
+    '--fs-kpi-value': `${normalized.fontSize + 13}px`,
+    '--font-size-body': `${normalized.fontSize}px`,
+    '--font-size-page-title': `${normalized.fontSize + 7}px`,
+    '--font-size-section-title': `${normalized.fontSize + 2}px`,
+    '--font-size-helper': `${Math.max(12, normalized.fontSize - 2)}px`,
+    '--font-size-table': `${Math.max(12, normalized.fontSize - 1)}px`,
+    '--content-padding': `${normalized.contentPadding}px`,
+    '--content-gutter': `${normalized.contentPadding}px`,
+    '--density-content-padding': `${normalized.contentPadding}px`,
+    '--bg-page': palette.page,
+    '--bg-content': palette.content,
+    '--bg-sidebar': palette.sidebar,
+    '--bg-topbar': palette.topbar,
+    '--bg-sidebar-hover': `color-mix(in srgb, ${palette.sidebarForeground} 7%, ${palette.sidebar})`,
+    '--bg-sidebar-active': `color-mix(in srgb, ${palette.primary} 12%, ${palette.sidebar})`,
+    '--bg-sidebar-text': secondaryText,
+    '--bg-sidebar-text-active': palette.foreground,
+    '--bg-primary': palette.card,
+    '--bg-secondary': palette.secondary,
+    '--bg-default': palette.muted,
+    '--bg-hover': palette.accent,
+    '--bg-active': `color-mix(in srgb, ${palette.primary} 14%, ${palette.card})`,
+    '--bg-subtle': palette.muted,
+    '--text-primary': palette.foreground,
+    '--text-secondary': secondaryText,
+    '--text-tertiary': tertiaryText,
+    '--text-inverse': palette.primaryForeground,
+    '--border-default': border,
+    '--border-divider': border,
+    '--border-sidebar': highContrast ? border : palette.sidebarBorder,
+    '--border-light': highContrast ? border : palette.border,
+    '--border-strong': borderStrong,
+    '--accent-hover': palette.accentHover,
+    '--accent-soft': palette.accent === palette.primary ? palette.secondary : palette.accent,
+    '--accent-bg': `color-mix(in srgb, ${palette.accent} 14%, transparent)`,
+    '--accent-contrast': palette.accentForeground,
+    '--gradient-holographic': primaryGradient,
+    '--gradient-holographic-hover': primaryHoverGradient,
+    '--font-cn': fontStack,
+    '--font-en': fontStack,
+    '--radius-sm': '4px',
+    '--radius-card': '6px',
+    '--radius-button': '6px',
+    '--radius-input': '6px',
+    '--radius-modal': '8px',
+    // Fixed compatibility values keep the legacy stylesheet neutral without a user setting.
+    '--work-glass-blur': '0px',
+    '--work-accent-rgb': palette.accentRgb,
+    '--work-magenta-rgb': palette.accentRgb,
+    '--work-amber-rgb': palette.warningRgb,
+    '--work-emerald-rgb': palette.successRgb,
+    '--work-violet-rgb': palette.blockedRgb,
+  });
 }
 
 function normalizeSettings(value: unknown): WorkThemeSettings {
-  const input = (value && typeof value === 'object' ? value : {}) as Partial<WorkThemeSettings>;
-  const theme = WORK_THEMES.some((item) => item.id === input.theme) ? input.theme! : defaultWorkThemeSettings.theme;
-  const mode = input.mode === 'light' || input.mode === 'dark' ? input.mode : defaultWorkThemeSettings.mode;
-  const density = input.density === 'compact' || input.density === 'standard' ? input.density : defaultWorkThemeSettings.density;
-  const contrast = input.contrast === 'high' || input.contrast === 'default' ? input.contrast : defaultWorkThemeSettings.contrast;
-  const fontFamily = isWorkFont(input.fontFamily) ? input.fontFamily : defaultWorkThemeSettings.fontFamily;
-  const navLayout = isWorkNavLayout(input.navLayout) ? input.navLayout : defaultWorkThemeSettings.navLayout;
+  const input = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
 
   return {
-    theme,
-    mode,
-    density,
-    contrast,
+    theme: 'kaneo',
+    mode: input.mode === 'dark' || input.mode === 'light' ? input.mode : defaultWorkThemeSettings.mode,
+    density: input.density === 'compact' || input.density === 'standard' ? input.density : defaultWorkThemeSettings.density,
+    contrast: input.contrast === 'high' || input.contrast === 'default' ? input.contrast : defaultWorkThemeSettings.contrast,
     reduceMotion: typeof input.reduceMotion === 'boolean' ? input.reduceMotion : defaultWorkThemeSettings.reduceMotion,
-    ambient: typeof input.ambient === 'boolean' ? input.ambient : defaultWorkThemeSettings.ambient,
     fontSize: clampNumber(input.fontSize, 13, 18, defaultWorkThemeSettings.fontSize),
-    fontFamily,
-    navLayout,
-    radius: clampNumber(input.radius, 4, 18, defaultWorkThemeSettings.radius),
-    glassBlur: clampNumber(input.glassBlur, 0, 36, defaultWorkThemeSettings.glassBlur),
+    fontFamily: isWorkFont(input.fontFamily) ? input.fontFamily : defaultWorkThemeSettings.fontFamily,
     contentPadding: clampNumber(input.contentPadding, 0, 240, defaultWorkThemeSettings.contentPadding),
   };
 }
@@ -496,26 +455,42 @@ function isWorkFont(value: unknown): value is WorkThemeFont {
   return value === 'system' || value === 'sans' || value === 'noto' || value === 'misans' || value === 'puhui';
 }
 
-function isWorkNavLayout(value: unknown): value is WorkThemeNavLayout {
-  return value === 'expanded' || value === 'mini' || value === 'horizontal';
-}
-
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   const number = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.min(max, Math.max(min, Math.round(number)));
 }
 
-function lightenHex(hex: string, amount: number): string {
-  const clean = hex.replace('#', '');
-  if (clean.length !== 6) return hex;
-  const channels = [0, 2, 4].map((start) => parseInt(clean.slice(start, start + 2), 16));
-  if (channels.some((channel) => Number.isNaN(channel))) return hex;
-  const next = channels
-    .map((channel) => Math.round(channel + (255 - channel) * amount))
-    .map((channel) => channel.toString(16).padStart(2, '0'))
-    .join('');
-  return `#${next}`;
+function getStorage(): Storage | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function persistSettings(storage: Storage, settings: WorkThemeSettings): void {
+  let persisted = false;
+  try {
+    storage.setItem(WORK_THEME_STORAGE_KEY, JSON.stringify(settings));
+    persisted = true;
+  } catch {
+    // Storage may be disabled; the active document should still update.
+  }
+
+  if (!persisted) return;
+  for (const key of LEGACY_WORK_THEME_STORAGE_KEYS) {
+    try {
+      storage.removeItem(key);
+    } catch {
+      // A legacy key is best-effort cleanup only.
+    }
+  }
+}
+
+function setProperties(root: HTMLElement, properties: Record<string, string>): void {
+  for (const [name, value] of Object.entries(properties)) root.style.setProperty(name, value);
 }
 
 function fontStackOf(font: WorkThemeFont): string {

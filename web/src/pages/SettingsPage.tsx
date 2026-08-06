@@ -1,7 +1,12 @@
-import SettingsView from '../features/settings/components/SettingsView';
+import SettingsTabs from '../features/settings/components/SettingsTabs';
+import PageFrame from '../components/common/PageFrame';
 
 function SettingsPage() {
-  return <SettingsView />;
+  return (
+    <PageFrame className="page-frame-settings">
+      <SettingsTabs />
+    </PageFrame>
+  );
 }
 
 export default SettingsPage;

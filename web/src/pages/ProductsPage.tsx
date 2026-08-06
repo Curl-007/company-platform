@@ -1,8 +1,8 @@
 import { useState, type KeyboardEvent } from 'react';
-import PageHeader from '../components/common/PageHeader';
 import ProductsTab from '../features/products/components/ProductsTab';
 import ProgramsTab from '../features/products/components/ProgramsTab';
 import PortfoliosTab from '../features/products/components/PortfoliosTab';
+import PageFrame from '../components/common/PageFrame';
 
 type Tab = 'products' | 'programs' | 'portfolios';
 
@@ -34,12 +34,10 @@ function ProductsPage() {
   const [tab, setTab] = useState<Tab>('products');
 
   return (
-    <div className="products-page">
-      <PageHeader
-        title="产品管理"
-        description="统一管理产品、项目集与产品组合。"
-      />
-
+    <PageFrame
+      className="page-frame-products"
+      contentClassName="products-page"
+    >
       <div className="nav-tabs products-page-tabs" role="tablist" aria-label="产品管理视图">
         {PRODUCT_TABS.map(({ key, label }) => (
           <button
@@ -74,7 +72,7 @@ function ProductsPage() {
           </div>
         ))}
       </div>
-    </div>
+    </PageFrame>
   );
 }
 

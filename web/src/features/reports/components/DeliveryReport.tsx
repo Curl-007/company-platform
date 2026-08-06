@@ -12,7 +12,7 @@ export default function DeliveryReport({
   reportModel: ReportModel;
 }) {
   return (
-    <div className="grid-2 mt-20">
+    <div className="grid-2">
       <Panel title="低进展需求" subtitle="按完成度升序">
         <DataTable
           columns={requirementColumns}

@@ -99,8 +99,8 @@ export function updateTestCaseStatus(id: string, status: string): Promise<TestCa
   return unwrapPatch<RawTestCase>(`/api/test-cases/${id}/status`, { status }).then(normalizeTestCase);
 }
 
-export function deleteTestCase(id: string): Promise<{ deleted: boolean }> {
-  return unwrapDel<{ deleted: boolean }>(`/api/test-cases/${id}`);
+export function deleteTestCase(id: string, cascade?: boolean): Promise<{ deleted: boolean }> {
+  return unwrapDel<{ deleted: boolean }>(`/api/test-cases/${id}${cascade ? '?cascade=true' : ''}`);
 }
 
 export function createTestRun(input: TestRunInput): Promise<unknown> {

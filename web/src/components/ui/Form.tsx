@@ -1,4 +1,7 @@
 import React from 'react';
+import { Input } from './Input';
+import { Select } from './Select';
+import { Textarea } from './Textarea';
 
 type FieldTone = 'default' | 'danger';
 
@@ -40,55 +43,20 @@ export function FormField({
   );
 }
 
-export interface TextInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  invalid?: boolean;
-}
+// TextInput / TextArea / SelectInput are thin aliases over the canonical
+// Input / Textarea / Select atoms so that every text control in the app shares
+// one implementation (with data-slot + ui-* prefix). New code should import
+// Input / Textarea / Select directly; these are kept for the existing call
+// sites (e.g. Settings) that already use the Form.* names.
+export type { InputProps as TextInputProps } from './Input';
+export type { SelectProps as SelectInputProps } from './Select';
+export type { TextareaProps as TextAreaProps } from './Textarea';
 
-export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
-  ({ className = '', invalid = false, ...props }, ref) => (
-    <input
-      ref={ref}
-      className={['form-input', className].filter(Boolean).join(' ')}
-      aria-invalid={invalid || undefined}
-      {...props}
-    />
-  ),
-);
-
+export const TextInput = Input;
 TextInput.displayName = 'TextInput';
 
-export interface TextAreaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-  invalid?: boolean;
-}
-
-export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(
-  ({ className = '', invalid = false, ...props }, ref) => (
-    <textarea
-      ref={ref}
-      className={['form-textarea', className].filter(Boolean).join(' ')}
-      aria-invalid={invalid || undefined}
-      {...props}
-    />
-  ),
-);
-
-TextArea.displayName = 'TextArea';
-
-export interface SelectInputProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
-  invalid?: boolean;
-}
-
-export const SelectInput = React.forwardRef<HTMLSelectElement, SelectInputProps>(
-  ({ className = '', invalid = false, children, ...props }, ref) => (
-    <select
-      ref={ref}
-      className={['form-select', className].filter(Boolean).join(' ')}
-      aria-invalid={invalid || undefined}
-      {...props}
-    >
-      {children}
-    </select>
-  ),
-);
-
+export const SelectInput = Select;
 SelectInput.displayName = 'SelectInput';
+
+export const TextArea = Textarea;
+TextArea.displayName = 'TextArea';

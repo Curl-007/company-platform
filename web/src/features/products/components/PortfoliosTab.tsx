@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   createPortfolio,
   deletePortfolio,
   fetchPortfolios,
+  fetchProducts,
   updatePortfolio,
 } from '../api';
 import ManagementEmptyState from './ManagementEmptyState';
@@ -19,10 +20,15 @@ import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { canOperate } from '../../../constants/roles';
 import { ROADMAP_STATUS_LABELS, labelOf } from '../../../constants/enums';
-import type { Portfolio } from '../../../types';
+import type { Portfolio, Product } from '../../../types';
 
 export default function PortfoliosTab() {
   const { data, loading, error, reload } = useAsync<Portfolio[]>(fetchPortfolios, [], { cacheKey: 'portfolios:list' });
+  const products = useAsync<Product[]>(fetchProducts, [], { cacheKey: 'products:list' });
+  const productNameById = useMemo(
+    () => new Map((products.data ?? []).map((product) => [product.id, product.name])),
+    [products.data],
+  );
   const toast = useToast();
   const confirm = useConfirm();
   const canManagePortfolios = canOperate(getSessionUser(), 'products:manage');
@@ -154,7 +160,9 @@ export default function PortfoliosTab() {
                       </div>
                     </div>
                     <div className="management-chip-list">
-                      {selected.productIds.length ? selected.productIds.map((id) => <span key={id}>{id}</span>) : <div className="product-empty-line">暂无产品。</div>}
+                      {selected.productIds.length ? selected.productIds.map((id) => (
+                        <span key={id} title={productNameById.has(id) ? `编号 ${id}` : undefined}>{productNameById.get(id) ?? id}</span>
+                      )) : <div className="product-empty-line">暂无产品。</div>}
                     </div>
                   </div>
                   <div className="product-section">
