@@ -12,7 +12,7 @@ import MetricStrip from '../../../components/common/MetricStrip';
 import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { ApiError } from '../../../services/api';
-import type { DashboardData, SessionUser, TimeEntry, WeeklyWorkSummary } from '../../../types';
+import type { DashboardData, TimeEntry, WeeklyWorkSummary } from '../../../types';
 import MyWorkCapacityPanel from './MyWorkCapacityPanel';
 import MyWorkTaskWorkspace, { type TaskFilter, type TaskFilterCounts } from './MyWorkTaskWorkspace';
 import MyWorkDefectsPanel from './MyWorkDefectsPanel';
@@ -26,7 +26,7 @@ const STORAGE_KEYS = {
   filter: 'mywork-task-filter',
 };
 
-export default function MyWorkView({ user }: { user?: SessionUser | null }) {
+export default function MyWorkView() {
   const toast = useToast();
   const confirm = useConfirm();
   const [tab, setTab] = useState<Tab>(() => {

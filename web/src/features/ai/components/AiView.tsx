@@ -142,7 +142,6 @@ export default function AiView() {
     if (!data?.aiProvider) return;
     // Auto probe once summary is ready so the light is not stuck grey.
     void refreshConnection();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.aiProvider?.configured, data?.aiProvider?.model, data?.aiProvider?.baseUrlHost]);
 
   async function handleFiles(files: FileList | null) {

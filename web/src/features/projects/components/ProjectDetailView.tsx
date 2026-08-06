@@ -64,7 +64,7 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
     const saved = window.localStorage.getItem(STORAGE_KEYS.detailTab);
     return saved === 'wbs' || saved === 'kanban' || saved === 'flow' || saved === 'governance' ? saved : 'overview';
   });
-  const [status, setStatus] = useState('');
+  const [, setStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [activationMissing, setActivationMissing] = useState<string[]>([]);

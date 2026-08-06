@@ -1,11 +1,10 @@
-import type { SessionUser } from '../types';
 import MyWorkView from '../features/mywork/components/MyWorkView';
 import PageFrame from '../components/common/PageFrame';
 
-function MyWorkPage({ user }: { user?: SessionUser | null }) {
+function MyWorkPage() {
   return (
     <PageFrame className="page-frame-mywork">
-      <MyWorkView user={user} />
+      <MyWorkView />
     </PageFrame>
   );
 }

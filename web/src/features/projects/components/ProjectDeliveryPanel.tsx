@@ -1,7 +1,7 @@
 import Panel from '../../../components/common/Panel';
 import PageState from '../../../components/common/PageState';
 import StatusBadge from '../../../components/common/StatusBadge';
-import type { Build, Defect, ProjectDetail, Release, Requirement, TestCase } from '../../../types';
+import type { ProjectDetail } from '../../../types';
 import {
   BUILD_STATUS_LABELS,
   RELEASE_STATUS_LABELS,

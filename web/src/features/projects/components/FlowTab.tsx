@@ -10,7 +10,7 @@ import { useAsync } from '../../../hooks/useAsync';
 import { getSessionUser } from '../../../services/auth';
 import { canOperate } from '../../../constants/roles';
 import PageState from '../../../components/common/PageState';
-import type { FlowGate, GateState, WorkflowTemplate } from '../../../types';
+import type { GateState, WorkflowTemplate } from '../../../types';
 
 const FIXED_ID = 'fixed-project-delivery-v1';
 const LIGHT_ID = 'lightweight-delivery-v1';

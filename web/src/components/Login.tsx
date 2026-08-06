@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useState, type FormEvent } from 'react';
+import React, { Suspense, useState, type FormEvent } from 'react';
 import { Check, LockKeyhole, Mail } from 'lucide-react';
 import { login } from '../services/auth';
 import { lazyWithRetry } from '../app/lazyWithRetry';
