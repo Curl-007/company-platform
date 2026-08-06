@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 import ProjectList from '../features/projects/components/ProjectList';
 import ProjectDetailView from '../features/projects/components/ProjectDetailView';
 import PageFrame from '../components/common/PageFrame';

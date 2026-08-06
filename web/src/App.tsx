@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, Suspense } from 'react';
-import { HashRouter, useLocation, useNavigate } from 'react-router-dom';
+import { HashRouter, useLocation, useNavigate } from 'react-router';
 import Layout from './components/Layout';
 import Login from './components/Login';
 import PageErrorBoundary from './components/common/PageErrorBoundary';
