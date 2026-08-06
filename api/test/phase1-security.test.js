@@ -1636,7 +1636,7 @@ test("seed accounts remain disabled after restart, work logs keep authenticated 
     body: JSON.stringify({
       name: "Encrypted integration provider",
       provider: "openai-compatible",
-      baseUrl: "https://api.example.test/v1",
+      baseUrl: "https://api.openai.com/v1",
       model: "test-model",
       apiKey: "sk-integration-secret-key",
     }),
