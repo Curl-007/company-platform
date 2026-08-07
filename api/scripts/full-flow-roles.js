@@ -910,10 +910,24 @@ async function main() {
 
     if (defectId) {
       for (const st of DEFECT_CHAIN) {
-        const patch = await req("PATCH", `/api/defects/${encodeURIComponent(defectId)}/status`, {
+        const defectNow = await req("GET", `/api/defects/${encodeURIComponent(defectId)}`, {
           token: sessions.qa.token,
-          body: { status: st },
         });
+        const defectVersion = versionOf(dataOf(defectNow.json));
+        let patch = await req("PATCH", `/api/defects/${encodeURIComponent(defectId)}/status`, {
+          token: sessions.qa.token,
+          body: { status: st, version: defectVersion },
+        });
+        if (patch.status === 409 && patch.json?.errorCode === "VERSION_CONFLICT") {
+          const retryNow = await req("GET", `/api/defects/${encodeURIComponent(defectId)}`, {
+            token: sessions.qa.token,
+          });
+          const retryVersion = versionOf(dataOf(retryNow.json));
+          patch = await req("PATCH", `/api/defects/${encodeURIComponent(defectId)}/status`, {
+            token: sessions.qa.token,
+            body: { status: st, version: retryVersion },
+          });
+        }
         record(
           `QA defect → ${st}`,
           patch.status === 200,
@@ -1462,9 +1476,9 @@ async function main() {
           messages: [{ role: "user", content: "请根据附件编写测试用例" }],
           attachments: [
             {
-              kind: "document",
               name: "tc-spec.md",
-              contentText: `标题：附件用例-${stamp}\n项目：${projectId}\n步骤：1 打开 2 校验\n期望：通过`,
+              mimeType: "text/markdown",
+              contentBase64: Buffer.from(`标题：附件用例-${stamp}\n项目：${projectId}\n步骤：1 打开 2 校验\n期望：通过`).toString("base64"),
             },
           ],
           currentPage: "testing",
@@ -1754,18 +1768,26 @@ async function main() {
 
       // PATCH reassign bugDev DEV → QA then back to DEV
       if (assignBugDevId) {
+        const bugBefore = await req("GET", `/api/defects/${encodeURIComponent(assignBugDevId)}`, {
+          token: qaToken,
+        });
+        const bugVersion = versionOf(dataOf(bugBefore.json));
         const reQa = await req("PATCH", `/api/defects/${encodeURIComponent(assignBugDevId)}`, {
           token: qaToken,
-          body: { assignee: qaName, assigneeRole: "qa" },
+          body: { assignee: qaName, assigneeRole: "qa", version: bugVersion },
         });
         record(
           "BUG reassign DEV→QA",
           reQa.status === 200 && dataOf(reQa.json)?.assignee === qaName,
           `status=${reQa.status} assignee=${dataOf(reQa.json)?.assignee || "?"}`,
         );
+        const bugAfterQa = await req("GET", `/api/defects/${encodeURIComponent(assignBugDevId)}`, {
+          token: qaToken,
+        });
+        const bugVersion2 = versionOf(dataOf(bugAfterQa.json));
         const reDev = await req("PATCH", `/api/defects/${encodeURIComponent(assignBugDevId)}`, {
           token: qaToken,
-          body: { assignee: devName, assigneeRole: "dev" },
+          body: { assignee: devName, assigneeRole: "dev", version: bugVersion2 },
         });
         record(
           "BUG reassign QA→DEV",

@@ -50,10 +50,10 @@ const WALK: Record<RoleKey, Array<[string, RegExp | string]>> = {
     ['团队日报', /日报|团队/],
     ['团队容量', /容量/],
     ['动态中心', /动态/],
-    ['项目执行', '项目管理'],
+    ['项目执行', '项目执行'],
     ['需求管理', /需求/],
-    ['测试质量', '测试管理'],
-    ['交付中心', '构建发布中心'],
+    ['测试质量', '测试质量'],
+    ['交付中心', '交付中心'],
     ['文档中心', /文档/],
     ['AI 分析', /AI|分析|助手/],
     ['报表中心', /报表/],
@@ -63,10 +63,10 @@ const WALK: Record<RoleKey, Array<[string, RegExp | string]>> = {
   ],
   pm: [
     ['工作台', /工作台/],
-    ['项目执行', '项目管理'],
+    ['项目执行', '项目执行'],
     ['需求管理', /需求/],
-    ['测试质量', '测试管理'],
-    ['交付中心', '构建发布中心'],
+    ['测试质量', '测试质量'],
+    ['交付中心', '交付中心'],
     ['团队容量', /容量/],
     ['团队日报', /日报|团队/],
     ['报表中心', /报表/],
@@ -77,7 +77,7 @@ const WALK: Record<RoleKey, Array<[string, RegExp | string]>> = {
     ['工作台', /工作台/],
     ['产品管理', '产品管理'],
     ['需求管理', /需求/],
-    ['项目执行', '项目管理'],
+    ['项目执行', '项目执行'],
     ['文档中心', /文档/],
     ['动态中心', /动态/],
     ['我的工作', /我的工作/],
@@ -85,16 +85,16 @@ const WALK: Record<RoleKey, Array<[string, RegExp | string]>> = {
   dev: [
     ['工作台', /工作台/],
     ['我的工作', /我的工作/],
-    ['项目执行', '项目管理'],
+    ['项目执行', '项目执行'],
     ['需求管理', /需求/],
-    ['交付中心', '构建发布中心'],
+    ['交付中心', '交付中心'],
     ['文档中心', /文档/],
     ['动态中心', /动态/],
   ],
   qa: [
     ['工作台', /工作台/],
     ['我的工作', /我的工作/],
-    ['测试质量', '测试管理'],
+    ['测试质量', '测试质量'],
     ['文档中心', /文档/],
     ['动态中心', /动态/],
   ],
@@ -142,7 +142,7 @@ test.describe('multi-role full-flow UI', () => {
   for (const role of Object.keys(ACCOUNTS) as RoleKey[]) {
     test(`${role} login, must-see and must-not-see nav`, async ({ page }) => {
       await loginAs(page, role);
-      await expect(page.locator('.page-title, .page-header').first()).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator('.kaneo-app-header-title').first()).toBeVisible({ timeout: 15_000 });
 
       for (const label of MUST_SEE[role]) {
         await expect(

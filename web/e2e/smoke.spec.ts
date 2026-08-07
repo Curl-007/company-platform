@@ -22,13 +22,13 @@ async function openNav(page: Page, label: string) {
 test.describe('manual checklist automation', () => {
   test('login lands on shell with navigation', async ({ page }) => {
     await loginAsAdmin(page);
-    await expect(page.locator('.page-title')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.kaneo-app-header-title')).toBeVisible({ timeout: 15_000 });
   });
 
   test('projects list and optional detail open', async ({ page }) => {
     await loginAsAdmin(page);
     await openNav(page, '项目执行');
-    await expect(page.getByRole('heading', { name: '项目管理' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: '项目执行' })).toBeVisible({ timeout: 15_000 });
 
     // Prefer opening first project card/row if present; otherwise list empty is still a pass for shell load.
     const projectOpen = page.locator('button, a, [role="button"], tr, .card').filter({ hasText: /PRJ-|项目/ }).first();
@@ -57,8 +57,8 @@ test.describe('manual checklist automation', () => {
   test('delivery center loads', async ({ page }) => {
     await loginAsAdmin(page);
     await openNav(page, '交付中心');
-    // Page title is "构建发布中心" (nav label is 交付中心).
-    await expect(page.getByRole('heading', { name: '构建发布中心' })).toBeVisible({ timeout: 15_000 });
+    // Page title is the nav label (交付中心).
+    await expect(page.getByRole('heading', { name: '交付中心' })).toBeVisible({ timeout: 15_000 });
     await expect(page.locator('.page-header, .panel, .card, .nav-tabs').first()).toBeVisible();
   });
 

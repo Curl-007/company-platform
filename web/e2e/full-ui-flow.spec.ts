@@ -31,10 +31,10 @@ const ADMIN_NAV_WALK: Array<[string, RegExp | string]> = [
   ['团队日报', /日报|团队/],
   ['团队容量', /容量/],
   ['动态中心', /动态/],
-  ['项目执行', '项目管理'],
+  ['项目执行', '项目执行'],
   ['需求管理', /需求/],
-  ['测试质量', '测试管理'],
-  ['交付中心', '构建发布中心'],
+  ['测试质量', '测试质量'],
+  ['交付中心', '交付中心'],
   ['文档中心', /文档/],
   ['AI 分析', /AI|分析|助手/],
   ['报表中心', /报表/],
@@ -184,8 +184,8 @@ test.describe('admin key interactions', () => {
     test.setTimeout(120_000);
     await loginAs(page, 'admin');
     await openNav(page, '项目执行');
-    await expectHeading(page, '项目管理');
-    await expect(page.getByRole('heading', { name: /项目驾驶舱|项目管理/ }).first()).toBeVisible();
+    await expectHeading(page, '项目执行');
+    await expect(page.getByRole('heading', { name: /项目驾驶舱|项目执行/ }).first()).toBeVisible();
     await expectShell(page);
 
     const viewBtn = page.getByRole('button', { name: '查看', exact: true }).first();
@@ -222,19 +222,19 @@ test.describe('admin key interactions', () => {
     test.setTimeout(120_000);
     await loginAs(page, 'admin');
     await openNav(page, '测试质量');
-    await expectHeading(page, '测试管理');
+    await expectHeading(page, '测试质量');
 
-    const casesTab = page.locator('.nav-tabs').getByRole('button', { name: '测试用例', exact: true });
-    const defectsTab = page.locator('.nav-tabs').getByRole('button', { name: '缺陷列表', exact: true });
+    const casesTab = page.locator('[role="tablist"][aria-label="测试质量视图"]').getByRole('tab', { name: '测试用例', exact: true });
+    const defectsTab = page.locator('[role="tablist"][aria-label="测试质量视图"]').getByRole('tab', { name: '缺陷列表', exact: true });
     await expect(casesTab).toBeVisible();
     await expect(defectsTab).toBeVisible();
 
     await casesTab.click();
-    await expect(page.locator('.nav-tabs .nav-tab.active')).toContainText('测试用例');
+    await expect(page.locator('.qa-tab-chip.is-active')).toContainText('测试用例');
     await expect(page.locator('.panel-title').filter({ hasText: /测试用例/ }).first()).toBeVisible();
 
     await defectsTab.click();
-    await expect(page.locator('.nav-tabs .nav-tab.active')).toContainText('缺陷列表');
+    await expect(page.locator('.qa-tab-chip.is-active')).toContainText('缺陷列表');
     await expect(page.locator('.panel-title').filter({ hasText: /缺陷/ }).first()).toBeVisible();
   });
 
@@ -242,13 +242,13 @@ test.describe('admin key interactions', () => {
     test.setTimeout(120_000);
     await loginAs(page, 'admin');
     await openNav(page, '交付中心');
-    await expectHeading(page, '构建发布中心');
+    await expectHeading(page, '交付中心');
 
     for (const tab of ['全链路', '构建', '发布', '质量门禁'] as const) {
-      const tabBtn = page.locator('.delivery-tabs .delivery-tab, .delivery-tab').filter({ hasText: tab });
+      const tabBtn = page.locator('[role="tablist"][aria-label="构建发布视图"] [role="tab"]').filter({ hasText: tab });
       await expect(tabBtn.first()).toBeVisible();
       await tabBtn.first().click();
-      await expect(page.locator('.delivery-tab.active').first()).toContainText(tab);
+      await expect(page.locator('.dl-tab-chip.is-active').first()).toContainText(tab);
     }
     await expectShell(page);
   });
@@ -445,7 +445,7 @@ test.describe('multi-role permission probes', () => {
     await expect(nav.getByRole('button', { name: '研发流程', exact: true })).toBeVisible();
 
     await openNav(page, '交付中心');
-    await expectHeading(page, '构建发布中心');
+    await expectHeading(page, '交付中心');
     await openNav(page, '报表中心');
     await expectHeading(page, /报表/);
     await openNav(page, '研发流程');
@@ -595,7 +595,7 @@ test.describe('assigned work surfaces for DEV and QA', () => {
     await openNav(page, '测试质量');
     await expectHeading(page, /测试|质量/);
 
-    const casesTab = page.locator('.nav-tabs').getByRole('button', { name: /测试用例|用例/ }).first();
+    const casesTab = page.locator('[role="tablist"][aria-label="测试质量视图"]').getByRole('tab', { name: /测试用例|用例/ }).first();
     if ((await casesTab.count()) > 0) {
       await casesTab.click();
     }
@@ -603,7 +603,7 @@ test.describe('assigned work surfaces for DEV and QA', () => {
       timeout: 15_000,
     });
 
-    const createBtn = page.getByRole('button', { name: '新建测试用例', exact: true });
+    const createBtn = page.getByRole('button', { name: '新建用例', exact: true });
     await expect(createBtn).toBeVisible({ timeout: 15_000 });
     await createBtn.click();
     await expect(page.locator('.panel-title').filter({ hasText: '新建测试用例' })).toBeVisible({
@@ -629,7 +629,7 @@ test.describe('assigned work surfaces for DEV and QA', () => {
     // Jump to testing quality and assert case table shell
     await openNav(page, '测试质量');
     await expectHeading(page, /测试|质量/);
-    const casesTab = page.locator('.nav-tabs').getByRole('button', { name: /测试用例|用例/ }).first();
+    const casesTab = page.locator('[role="tablist"][aria-label="测试质量视图"]').getByRole('tab', { name: /测试用例|用例/ }).first();
     if ((await casesTab.count()) > 0) await casesTab.click();
     await expect(page.locator('.panel-title, .data-table, .panel').filter({ hasText: /测试用例|暂无/ }).first()).toBeVisible({
       timeout: 15_000,
