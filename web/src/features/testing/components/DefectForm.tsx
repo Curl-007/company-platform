@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Save, X } from 'lucide-react';
 import {
   createDefect,
@@ -34,6 +35,7 @@ export default function DefectForm({
   onDone: () => void;
   canUseAi?: boolean;
 }) {
+  const { t } = useTranslation();
   const { data: projects } = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
   const [title, setTitle] = useState(item?.title ?? '');
   const [projectId, setProjectId] = useState(item?.projectId ?? '');
@@ -46,8 +48,8 @@ export default function DefectForm({
   const [formError, setFormError] = useState<string | null>(null);
 
   async function handleSubmit() {
-    if (!title.trim()) return setFormError('请输入缺陷标题。');
-    if (!projectId) return setFormError('请选择所属项目。');
+    if (!title.trim()) return setFormError(t('features.testing.defectForm.titleRequired'));
+    if (!projectId) return setFormError(t('features.testing.defectForm.projectRequired'));
     setFormError(null);
     setSubmitting(true);
     try {
@@ -65,19 +67,19 @@ export default function DefectForm({
       else if (item) await updateDefect(item.id, payload);
       onDone();
     } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : `${mode === 'create' ? '创建' : '更新'}缺陷失败`);
+      setFormError(error instanceof ApiError ? error.message : (mode === 'create' ? t('features.testing.defectForm.createFailed') : t('features.testing.defectForm.updateFailed')));
       setSubmitting(false);
     }
   }
 
   return (
-    <Overlay onClose={onClose} maxWidth={720} ariaLabel={mode === 'create' ? '新建缺陷' : '编辑缺陷'}>
+    <Overlay onClose={onClose} maxWidth={720} ariaLabel={mode === 'create' ? t('features.testing.defectForm.createTitle') : t('features.testing.defectForm.editTitle')}>
       <Panel
         className="qa-form-panel"
-        title={mode === 'create' ? '新建缺陷' : '编辑缺陷'}
-        subtitle={item?.id ?? '支持测试指派开发修复，开发再指回测试验证'}
+        title={mode === 'create' ? t('features.testing.defectForm.createTitle') : t('features.testing.defectForm.editTitle')}
+        subtitle={item?.id ?? t('features.testing.defectForm.subtitle')}
         toolbar={(
-          <button className="btn btn-text btn-sm btn-with-icon" onClick={onClose} aria-label="关闭">
+          <button className="btn btn-text btn-sm btn-with-icon" onClick={onClose} aria-label={t('common.close')}>
             <X size={15} aria-hidden="true" />
           </button>
         )}
@@ -89,10 +91,10 @@ export default function DefectForm({
             <BusinessAdvicePanel
               targetType="defect"
               targetId={item.id}
-              title="AI 缺陷分析"
-              description="基于缺陷、关联需求、关联构建和修复任务生成。"
-              buttonText="AI 分析缺陷"
-              question="请分析该缺陷的修复优先级、验证风险、责任协作和下一步动作。"
+              title={t('features.testing.defectForm.aiAdviceTitle')}
+              description={t('features.testing.defectForm.aiAdviceDesc')}
+              buttonText={t('features.testing.defectForm.aiAnalyzeDefect')}
+              question={t('features.testing.defectForm.aiAdviceQuestion')}
               draft={() => ({
                 title: title.trim(),
                 severity,
@@ -108,27 +110,27 @@ export default function DefectForm({
             <div className="qa-form-summary">
               <StatusBadge status={item.severity} label={labelOf(DEFECT_SEVERITY_LABELS, item.severity)} showDot={false} />
               <StatusBadge status={item.status} label={labelOf(DEFECT_STATUS_LABELS, item.status)} />
-              {item.requirementId ? <span className="qa-form-summary-meta">关联 {item.requirementId}</span> : null}
+              {item.requirementId ? <span className="qa-form-summary-meta">{t('features.testing.defectForm.relatedRequirement', { id: item.requirementId })}</span> : null}
             </div>
           ) : null}
 
           <div className="form-group">
-            <label className="form-label">缺陷标题</label>
-            <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="一句话描述问题现象" />
+            <label className="form-label">{t('features.testing.defectForm.titleLabel')}</label>
+            <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('features.testing.defectForm.titlePlaceholder')} />
           </div>
 
           <div className="qa-form-grid">
             <div className="form-group">
-              <label className="form-label">所属项目</label>
+              <label className="form-label">{t('features.testing.defectForm.projectLabel')}</label>
               <select className="form-select" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-                <option value="">请选择项目</option>
+                <option value="">{t('features.testing.defectForm.selectProject')}</option>
                 {(projects ?? []).map((project) => (
                   <option key={project.id} value={project.id}>{project.name}</option>
                 ))}
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">严重级别</label>
+              <label className="form-label">{t('features.testing.defectForm.severityLabel')}</label>
               <select className="form-select" value={severity} onChange={(e) => setSeverity(e.target.value)}>
                 {DEFECT_SEVERITIES.map((value) => (
                   <option key={value} value={value}>{labelOf(DEFECT_SEVERITY_LABELS, value)}</option>
@@ -136,23 +138,23 @@ export default function DefectForm({
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">当前处理人</label>
+              <label className="form-label">{t('features.testing.defectForm.assigneeLabel')}</label>
               <input
                 className="form-input"
                 value={assignee}
                 onChange={(e) => setAssignee(e.target.value)}
-                placeholder="测试可指派开发，开发可指回测试"
+                placeholder={t('features.testing.defectForm.assigneePlaceholder')}
               />
             </div>
             <div className="form-group">
-              <label className="form-label">处理角色</label>
+              <label className="form-label">{t('features.testing.defectForm.assigneeRoleLabel')}</label>
               <select className="form-select" value={assigneeRole} onChange={(e) => setAssigneeRole(e.target.value)}>
-                <option value="dev">开发修复</option>
-                <option value="qa">测试验证</option>
+                <option value="dev">{t('features.testing.defectForm.roleDevFix')}</option>
+                <option value="qa">{t('features.testing.defectForm.roleQaVerify')}</option>
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">状态</label>
+              <label className="form-label">{t('features.testing.defectForm.statusLabel')}</label>
               <select className="form-select" value={status} onChange={(e) => setStatus(e.target.value)}>
                 {DEFECT_STATUSES.map((value) => (
                   <option key={value} value={value}>{labelOf(DEFECT_STATUS_LABELS, value)}</option>
@@ -163,21 +165,21 @@ export default function DefectForm({
           </div>
 
           <div className="form-group">
-            <label className="form-label">缺陷描述</label>
+            <label className="form-label">{t('features.testing.defectForm.descriptionLabel')}</label>
             <textarea
               className="form-textarea"
               rows={5}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="复现步骤、期望结果、实际结果、环境信息"
+              placeholder={t('features.testing.defectForm.descriptionPlaceholder')}
             />
           </div>
 
           <div className="qa-form-footer">
-            <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>取消</button>
+            <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>{t('common.cancel')}</button>
             <button className="btn btn-primary btn-sm btn-with-icon" onClick={handleSubmit} disabled={submitting}>
               <Save size={14} aria-hidden="true" />
-              {submitting ? '保存中...' : '保存'}
+              {submitting ? t('features.testing.defectForm.saving') : t('common.save')}
             </button>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Save, X } from 'lucide-react';
 import {
   createTestCase,
@@ -32,6 +33,7 @@ export default function TestCaseForm({
   onDone: () => void;
   canUseAi?: boolean;
 }) {
+  const { t } = useTranslation();
   const { data: projects } = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
   const [name, setName] = useState(item?.name ?? '');
   const [projectId, setProjectId] = useState(item?.projectId ?? '');
@@ -44,8 +46,8 @@ export default function TestCaseForm({
   const [formError, setFormError] = useState<string | null>(null);
 
   async function handleSubmit() {
-    if (!name.trim()) return setFormError('请输入测试用例名称。');
-    if (!projectId) return setFormError('请选择所属项目。');
+    if (!name.trim()) return setFormError(t('features.testing.testCaseForm.nameRequired'));
+    if (!projectId) return setFormError(t('features.testing.testCaseForm.projectRequired'));
     setFormError(null);
     setSubmitting(true);
     try {
@@ -62,19 +64,19 @@ export default function TestCaseForm({
       else if (item) await updateTestCase(item.id, payload);
       onDone();
     } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : `${mode === 'create' ? '创建' : '更新'}测试用例失败`);
+      setFormError(error instanceof ApiError ? error.message : (mode === 'create' ? t('features.testing.testCaseForm.createFailed') : t('features.testing.testCaseForm.updateFailed')));
       setSubmitting(false);
     }
   }
 
   return (
-    <Overlay onClose={onClose} maxWidth={720} ariaLabel={mode === 'create' ? '新建测试用例' : '编辑测试用例'}>
+    <Overlay onClose={onClose} maxWidth={720} ariaLabel={mode === 'create' ? t('features.testing.testCaseForm.createTitle') : t('features.testing.testCaseForm.editTitle')}>
       <Panel
         className="qa-form-panel"
-        title={mode === 'create' ? '新建测试用例' : '编辑测试用例'}
-        subtitle={item?.id ?? '按项目创建并指派给测试或开发'}
+        title={mode === 'create' ? t('features.testing.testCaseForm.createTitle') : t('features.testing.testCaseForm.editTitle')}
+        subtitle={item?.id ?? t('features.testing.testCaseForm.subtitle')}
         toolbar={(
-          <button className="btn btn-text btn-sm btn-with-icon" onClick={onClose} aria-label="关闭">
+          <button className="btn btn-text btn-sm btn-with-icon" onClick={onClose} aria-label={t('common.close')}>
             <X size={15} aria-hidden="true" />
           </button>
         )}
@@ -86,10 +88,10 @@ export default function TestCaseForm({
             <BusinessAdvicePanel
               targetType="test_case"
               targetId={item.id}
-              title="AI 测试建议"
-              description="基于测试用例、执行记录、关联需求、关联缺陷和同步任务生成。"
-              buttonText="AI 分析用例"
-              question="请分析该测试用例的覆盖充分性、失败/阻塞风险、缺陷关联和下一步验证动作。"
+              title={t('features.testing.testCaseForm.aiAdviceTitle')}
+              description={t('features.testing.testCaseForm.aiAdviceDesc')}
+              buttonText={t('features.testing.testCaseForm.aiAnalyzeCase')}
+              question={t('features.testing.testCaseForm.aiAdviceQuestion')}
               draft={() => ({
                 name: name.trim(),
                 projectId,
@@ -106,40 +108,40 @@ export default function TestCaseForm({
             <div className="qa-form-summary">
               <StatusBadge status={item.status} label={labelOf(TEST_CASE_STATUS_LABELS, item.status)} />
               <span className="qa-form-summary-meta">
-                执行 {item.totalCases} · 通过 {item.passedCases} · 失败 {item.failedCases} · 阻塞 {item.blockedCases}
+                {t('features.testing.testCaseForm.summaryMeta', { total: item.totalCases, passed: item.passedCases, failed: item.failedCases, blocked: item.blockedCases })}
               </span>
             </div>
           ) : null}
 
           <div className="form-group">
-            <label className="form-label">用例名称</label>
-            <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="描述要验证的行为" />
+            <label className="form-label">{t('features.testing.testCaseForm.nameLabel')}</label>
+            <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('features.testing.testCaseForm.namePlaceholder')} />
           </div>
 
           <div className="qa-form-grid">
             <div className="form-group">
-              <label className="form-label">所属项目</label>
+              <label className="form-label">{t('features.testing.testCaseForm.projectLabel')}</label>
               <select className="form-select" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-                <option value="">请选择项目</option>
+                <option value="">{t('features.testing.testCaseForm.selectProject')}</option>
                 {(projects ?? []).map((project) => (
                   <option key={project.id} value={project.id}>{project.name}</option>
                 ))}
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">负责人</label>
-              <input className="form-input" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="测试负责人" />
+              <label className="form-label">{t('features.testing.testCaseForm.ownerLabel')}</label>
+              <input className="form-input" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder={t('features.testing.testCaseForm.ownerPlaceholder')} />
             </div>
             <div className="form-group">
-              <label className="form-label">执行角色</label>
+              <label className="form-label">{t('features.testing.testCaseForm.assigneeRoleLabel')}</label>
               <select className="form-select" value={assigneeRole} onChange={(e) => setAssigneeRole(e.target.value)}>
-                <option value="qa">测试</option>
-                <option value="dev">开发联调</option>
+                <option value="qa">{t('features.testing.testCaseForm.roleQa')}</option>
+                <option value="dev">{t('features.testing.testCaseForm.roleDev')}</option>
               </select>
             </div>
             {mode === 'edit' && item ? (
               <div className="form-group">
-                <label className="form-label">当前状态</label>
+                <label className="form-label">{t('features.testing.testCaseForm.currentStatusLabel')}</label>
                 <div className="qa-form-status">
                   <StatusBadge status={item.status} label={labelOf(TEST_CASE_STATUS_LABELS, item.status)} />
                 </div>
@@ -150,41 +152,41 @@ export default function TestCaseForm({
           </div>
 
           <div className="form-group">
-            <label className="form-label">步骤（每行一条）</label>
+            <label className="form-label">{t('features.testing.testCaseForm.stepsLabel')}</label>
             <textarea
               className="form-textarea"
               rows={5}
               value={stepsText}
               onChange={(e) => setStepsText(e.target.value)}
-              placeholder={'1. 打开页面\n2. 输入合法数据\n3. 提交并观察结果'}
+              placeholder={t('features.testing.testCaseForm.stepsPlaceholder')}
             />
           </div>
           <div className="form-group">
-            <label className="form-label">预期结果</label>
+            <label className="form-label">{t('features.testing.testCaseForm.expectedResultLabel')}</label>
             <textarea
               className="form-textarea"
               rows={3}
               value={expectedResult}
               onChange={(e) => setExpectedResult(e.target.value)}
-              placeholder="通过时的可观察结果"
+              placeholder={t('features.testing.testCaseForm.expectedResultPlaceholder')}
             />
           </div>
           <div className="form-group">
-            <label className="form-label">说明</label>
+            <label className="form-label">{t('features.testing.testCaseForm.descriptionLabel')}</label>
             <textarea
               className="form-textarea"
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="前置条件、数据依赖、边界说明"
+              placeholder={t('features.testing.testCaseForm.descriptionPlaceholder')}
             />
           </div>
 
           <div className="qa-form-footer">
-            <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>取消</button>
+            <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>{t('common.cancel')}</button>
             <button className="btn btn-primary btn-sm btn-with-icon" onClick={handleSubmit} disabled={submitting}>
               <Save size={14} aria-hidden="true" />
-              {submitting ? '保存中...' : '保存'}
+              {submitting ? t('features.testing.testCaseForm.saving') : t('common.save')}
             </button>
           </div>
         </div>

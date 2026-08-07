@@ -13,6 +13,7 @@ import type {
   Requirement,
 } from '../../types';
 import { businessDateKey } from '../../utils/businessDate';
+import i18n, { getInterfaceLocale } from '../../i18n';
 
 export type DeliveryTab = 'overview' | 'builds' | 'releases' | 'gates';
 export type DeliveryKind = 'build' | 'release';
@@ -65,10 +66,10 @@ export function today(): string {
 }
 
 export function formatDate(value?: string | null): string {
-  if (!value) return '未设置';
+  if (!value) return i18n.t('enums.unset');
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('zh-CN');
+  return date.toLocaleDateString(getInterfaceLocale());
 }
 
 export function statusLabel(kind: DeliveryKind, status: string): string {
@@ -129,7 +130,7 @@ export function buildRecords(
       status: release.status,
       date: release.releaseDate,
       ownerId: release.productId,
-      ownerLabel: release.productId ? productMap.get(release.productId) ?? release.productId : '未关联产品',
+      ownerLabel: release.productId ? productMap.get(release.productId) ?? release.productId : i18n.t('features.delivery.deliveryPageModel.noLinkedProduct'),
       linkedStories: release.linkedStories ?? [],
       linkedBugs: release.linkedBugs ?? [],
       notes: release.releaseNotes,
@@ -153,36 +154,72 @@ export function buildDeliveryAiPrompt(
   const releases = records.filter((item) => item.kind === 'release');
   const latestRecords = records.slice(0, 10).map((item) => {
     const gate = gates.find((gateItem) => gateItem.kind === item.kind && gateItem.id === item.id);
-    return `${item.kind === 'build' ? '构建' : '发布'} ${item.id} ${item.title} / ${item.version || '无版本'} / ${statusLabel(item.kind, item.status)} / 就绪 ${gate?.score ?? releaseReadiness(item)}% / 门禁 ${gate ? (gate.ready ? '通过' : '阻断') : '未知'} / 需求 ${item.linkedStories.length} / 缺陷 ${item.linkedBugs.length}`;
+    return i18n.t('features.delivery.deliveryPageModel.recordLine', {
+      kind: item.kind === 'build'
+        ? i18n.t('features.delivery.deliveryPageModel.build')
+        : i18n.t('features.delivery.deliveryPageModel.release'),
+      id: item.id,
+      title: item.title,
+      version: item.version || i18n.t('features.delivery.deliveryPageModel.noVersion'),
+      status: statusLabel(item.kind, item.status),
+      score: gate?.score ?? releaseReadiness(item),
+      gate: gate ? (gate.ready
+        ? i18n.t('features.delivery.deliveryPageModel.gatePassed')
+        : i18n.t('features.delivery.deliveryPageModel.gateBlocked'))
+        : i18n.t('features.delivery.deliveryPageModel.gateUnknown'),
+      stories: item.linkedStories.length,
+      bugs: item.linkedBugs.length,
+    });
   });
   const blockedGateLines = blockedGates.slice(0, 8).map((item) => {
     const record = records.find((recordItem) => recordItem.kind === item.kind && recordItem.id === item.id);
     const failed = item.gates.filter((gate) => !gate.passed).map((gate) => `${gate.label}: ${gate.message}`).join('；');
-    return `${item.kind === 'build' ? '构建' : '发布'} ${item.id} ${record?.title || ''} / ${item.score}% / ${item.summary} / ${failed || '未给出阻断项'}`;
+    return i18n.t('features.delivery.deliveryPageModel.blockedGateLine', {
+      kind: item.kind === 'build'
+        ? i18n.t('features.delivery.deliveryPageModel.build')
+        : i18n.t('features.delivery.deliveryPageModel.release'),
+      id: item.id,
+      title: record?.title || '',
+      score: item.score,
+      summary: item.summary,
+      failed: failed || i18n.t('features.delivery.deliveryPageModel.noBlockedGateItem'),
+    });
   });
-  const defectLines = seriousOpenDefects.slice(0, 8).map((item) => `${item.id} ${item.title} / ${item.severity} / ${item.status} / ${item.assignee || '未分配'}`);
-  const requirementLines = unfinishedRequirements.slice(0, 8).map((item) => `${item.id} ${item.title} / ${item.status} / ${item.priority} / ${item.completion ?? 0}%`);
+  const defectLines = seriousOpenDefects.slice(0, 8).map((item) => i18n.t('features.delivery.deliveryPageModel.defectLine', {
+    id: item.id,
+    title: item.title,
+    severity: item.severity,
+    status: item.status,
+    assignee: item.assignee || i18n.t('features.delivery.deliveryPageModel.unassigned'),
+  }));
+  const requirementLines = unfinishedRequirements.slice(0, 8).map((item) => i18n.t('features.delivery.deliveryPageModel.requirementLine', {
+    id: item.id,
+    title: item.title,
+    status: item.status,
+    priority: item.priority,
+    completion: item.completion ?? 0,
+  }));
 
   return [
-    '请作为交付经理 AI 助手，基于下面构建、发布、门禁、需求和缺陷快照，给出发布准备度分析。',
-    '请控制在 900 字以内，输出：1. 当前能否发布 2. 主要阻塞/风险 3. 候选版本处理建议 4. 发布治理动作 5. 需要补齐的数据。',
-    '建议必须具体到版本、构建、发布、门禁、缺陷或需求，不要泛泛而谈。',
+    i18n.t('features.delivery.deliveryPageModel.aiPromptIntro'),
+    i18n.t('features.delivery.deliveryPageModel.aiPromptInstructions'),
+    i18n.t('features.delivery.deliveryPageModel.aiPromptAdvisory'),
     '',
-    `交付记录总数：${records.length}，构建候选：${candidates.length}，发布单：${releases.length}`,
-    `门禁结果：${gates.length} 条，阻断：${blockedGates.length} 条`,
-    `未完成需求：${unfinishedRequirements.length}，未关闭缺陷：${openDefects.length}，高严重未关闭缺陷：${seriousOpenDefects.length}`,
+    i18n.t('features.delivery.deliveryPageModel.deliveryTotalLine', { count: records.length, candidates: candidates.length, releases: releases.length }),
+    i18n.t('features.delivery.deliveryPageModel.gateTotalLine', { count: gates.length, blocked: blockedGates.length }),
+    i18n.t('features.delivery.deliveryPageModel.requirementDefectLine', { requirements: unfinishedRequirements.length, openDefects: openDefects.length, serious: seriousOpenDefects.length }),
     '',
-    '最近交付记录：',
-    latestRecords.length ? latestRecords.join('\n') : '暂无交付记录',
+    i18n.t('features.delivery.deliveryPageModel.recentRecordsTitle'),
+    latestRecords.length ? latestRecords.join('\n') : i18n.t('features.delivery.deliveryPageModel.noRecords'),
     '',
-    '阻断门禁：',
-    blockedGateLines.length ? blockedGateLines.join('\n') : '暂无阻断门禁',
+    i18n.t('features.delivery.deliveryPageModel.blockedGatesTitle'),
+    blockedGateLines.length ? blockedGateLines.join('\n') : i18n.t('features.delivery.deliveryPageModel.noBlockedGates'),
     '',
-    '高严重未关闭缺陷：',
-    defectLines.length ? defectLines.join('\n') : '暂无高严重未关闭缺陷',
+    i18n.t('features.delivery.deliveryPageModel.seriousDefectsTitle'),
+    defectLines.length ? defectLines.join('\n') : i18n.t('features.delivery.deliveryPageModel.noSeriousDefects'),
     '',
-    '未完成需求：',
-    requirementLines.length ? requirementLines.join('\n') : '暂无未完成需求',
+    i18n.t('features.delivery.deliveryPageModel.unfinishedRequirementsTitle'),
+    requirementLines.length ? requirementLines.join('\n') : i18n.t('features.delivery.deliveryPageModel.noUnfinishedRequirements'),
   ].join('\n');
 }
 
@@ -191,14 +228,14 @@ export function buildPipelineStages(
   releaseBuildIds: Set<string | null | undefined>,
 ): Array<{ id: string; label: string; tone: StageTone; records: DeliveryRecord[] }> {
   return [
-    { id: 'building', label: '构建中', tone: 'running', records: records.filter((item) => item.kind === 'build' && item.status === 'building') },
-    { id: 'testing', label: '测试验证', tone: 'running', records: records.filter((item) => item.status === 'testing' || item.status === 'staging') },
+    { id: 'building', label: i18n.t('features.delivery.deliveryPageModel.stageBuilding'), tone: 'running', records: records.filter((item) => item.kind === 'build' && item.status === 'building') },
+    { id: 'testing', label: i18n.t('features.delivery.deliveryPageModel.stageTesting'), tone: 'running', records: records.filter((item) => item.status === 'testing' || item.status === 'staging') },
     {
       id: 'candidate',
-      label: '候选发布',
+      label: i18n.t('features.delivery.deliveryPageModel.stageCandidate'),
       tone: 'idle',
       records: records.filter((item) => (item.kind === 'build' && item.status === 'released' && !releaseBuildIds.has(item.id)) || (item.kind === 'release' && item.status === 'draft')),
     },
-    { id: 'released', label: '已发布', tone: 'done', records: records.filter((item) => item.kind === 'release' && item.status === 'released') },
+    { id: 'released', label: i18n.t('features.delivery.deliveryPageModel.stageReleased'), tone: 'done', records: records.filter((item) => item.kind === 'release' && item.status === 'released') },
   ];
 }

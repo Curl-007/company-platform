@@ -1,11 +1,14 @@
 import React from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { PageKey, SessionUser } from '../types';
 import { NAV_GROUPS } from '../app/pageRegistry';
 import { canAccessPageForUser } from '../constants/roles';
+import { useLocale } from '../i18n/LanguageProvider';
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarHeader,
@@ -23,6 +26,8 @@ interface AppSidebarProps {
 
 export default function AppSidebar({ currentPage, user, onNavigate }: AppSidebarProps) {
   const { open, isMobile, mobileOpen, setMobileOpen } = useSidebar();
+  const { t } = useTranslation();
+  const { locale, setLocale } = useLocale();
   const expanded = isMobile ? mobileOpen : open;
   const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>(() => (
     Object.fromEntries(NAV_GROUPS.map((group) => [group.label, true]))
@@ -43,7 +48,7 @@ export default function AppSidebar({ currentPage, user, onNavigate }: AppSidebar
       <SidebarHeader>
         <div className="kaneo-sidebar-brand">
           <span className="kaneo-sidebar-brand-mark" aria-hidden="true">P</span>
-          {expanded ? <span className="kaneo-sidebar-brand-name">公司管理平台</span> : null}
+          {expanded ? <span className="kaneo-sidebar-brand-name">{t('nav.brand')}</span> : null}
         </div>
       </SidebarHeader>
       <SidebarContent className="sidebar-nav">
@@ -61,7 +66,7 @@ export default function AppSidebar({ currentPage, user, onNavigate }: AppSidebar
                     aria-controls={groupId}
                     onClick={() => setExpandedGroups((state) => ({ ...state, [group.label]: !isGroupExpanded }))}
                   >
-                    <span>{group.label}</span>
+                    <span>{t(`nav:group.${group.id}`, { defaultValue: group.label })}</span>
                     {isGroupExpanded ? <ChevronDown size={13} aria-hidden="true" /> : <ChevronRight size={13} aria-hidden="true" />}
                   </button>
                 </SidebarGroupLabel>
@@ -71,17 +76,18 @@ export default function AppSidebar({ currentPage, user, onNavigate }: AppSidebar
                   {group.items.map((item) => {
                     const Icon = item.icon;
                     const isActive = currentPage === item.key;
+                    const itemLabel = t(`nav:item.${item.key}`, { defaultValue: item.label });
                     return (
                       <SidebarMenuItem key={`${group.label}-${item.key}`}>
                         <SidebarMenuButton
                           isActive={isActive}
-                          title={item.label}
-                          aria-label={item.label}
+                          title={itemLabel}
+                          aria-label={itemLabel}
                           data-page={item.key}
                           onClick={() => navigate(item.key)}
                         >
                           <Icon size={16} aria-hidden="true" />
-                          {expanded ? <span>{item.label}</span> : <span className="sr-only">{item.label}</span>}
+                          {expanded ? <span>{itemLabel}</span> : <span className="sr-only">{itemLabel}</span>}
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     );
@@ -92,6 +98,24 @@ export default function AppSidebar({ currentPage, user, onNavigate }: AppSidebar
           );
         })}
       </SidebarContent>
+      {expanded ? (
+        <SidebarFooter>
+          <div className="kaneo-sidebar-lang-switch" role="group" aria-label={t('common.language')}>
+            {(['zh-CN', 'en-US'] as const).map((code) => (
+              <button
+                key={code}
+                type="button"
+                className={`kaneo-sidebar-lang-btn ${locale === code ? 'active' : ''}`}
+                aria-pressed={locale === code}
+                onClick={() => setLocale(code)}
+                title={code === 'zh-CN' ? t('settings.language.zhCN') : t('settings.language.enUS')}
+              >
+                {code === 'zh-CN' ? '中' : 'EN'}
+              </button>
+            ))}
+          </div>
+        </SidebarFooter>
+      ) : null}
     </Sidebar>
   );
 }

@@ -1,7 +1,7 @@
 import React from 'react';
 import { DayPicker } from 'react-day-picker';
-import { zhCN } from 'date-fns/locale';
 import { cn } from './utils';
+import { useDateLocale } from '../../i18n/useDateFormatter';
 
 export interface CalendarProps {
   className?: string;
@@ -16,15 +16,18 @@ export interface CalendarProps {
 }
 
 /**
- * Calendar atom wrapping react-day-picker. Localized to zh-CN by default and
- * themed via the `.ui-calendar` class (global.css). Compose with Popover to
- * build a date input (see DatePicker).
+ * Calendar atom wrapping react-day-picker. Locale follows the active UI
+ * language (see useDateLocale) and is themed via the `.ui-calendar` class
+ * (global.css). Compose with Popover to build a date input (see DatePicker).
  */
 export const Calendar = React.forwardRef<HTMLDivElement, CalendarProps>(
-  ({ className, mode = 'single', ...props }, ref) => (
-    <div ref={ref} className={cn('ui-calendar', className)} data-slot="calendar">
-      <DayPicker mode={mode} locale={zhCN} {...props} />
-    </div>
-  ),
+  ({ className, mode = 'single', ...props }, ref) => {
+    const dateLocale = useDateLocale();
+    return (
+      <div ref={ref} className={cn('ui-calendar', className)} data-slot="calendar">
+        <DayPicker mode={mode} locale={dateLocale} {...props} />
+      </div>
+    );
+  },
 );
 Calendar.displayName = 'Calendar';

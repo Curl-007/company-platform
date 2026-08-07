@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createRelease } from '../api';
 import { splitIds, today } from '../deliveryPageModel';
 import {
@@ -30,6 +31,7 @@ export default function CreateReleaseDialog({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const { t } = useTranslation();
   const [productId, setProductId] = useState(products[0]?.id ?? '');
   const [buildId, setBuildId] = useState(builds.find((item) => item.status === 'released')?.id ?? '');
   const [name, setName] = useState('');
@@ -44,7 +46,7 @@ export default function CreateReleaseDialog({
 
   async function submit() {
     setFormError(null);
-    if (!name.trim()) return setFormError('请输入发布名称。');
+    if (!name.trim()) return setFormError(t('features.delivery.createReleaseDialog.nameRequired'));
     setSubmitting(true);
     try {
       await createRelease({
@@ -60,7 +62,7 @@ export default function CreateReleaseDialog({
       });
       onCreated();
     } catch (err: unknown) {
-      setFormError(err instanceof ApiError ? err.message : '创建失败');
+      setFormError(err instanceof ApiError ? err.message : t('features.delivery.createReleaseDialog.createFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -68,29 +70,29 @@ export default function CreateReleaseDialog({
 
   return (
     <Overlay onClose={onClose} maxWidth={720}>
-      <Panel title="新建发布" subtitle="从候选构建生成对外发布单，沉淀版本说明和质量门禁。">
+      <Panel title={t('features.delivery.createReleaseDialog.createTitle')} subtitle={t('features.delivery.createReleaseDialog.subtitle')}>
         <DeliveryFormError message={formError} />
         <form className="delivery-form" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
           <div className="form-row">
-            <FormSelect label="所属产品" value={productId} onChange={setProductId} options={[{ value: '', label: '未关联产品' }, ...products.map((item) => ({ value: item.id, label: item.name }))]} />
-            <FormSelect label="关联构建" value={buildId} onChange={setBuildId} options={[{ value: '', label: '未关联构建' }, ...builds.map((item) => ({ value: item.id, label: `${item.version || item.id} · ${item.name}` }))]} />
+            <FormSelect label={t('features.delivery.createReleaseDialog.productLabel')} value={productId} onChange={setProductId} options={[{ value: '', label: t('features.delivery.deliveryPageModel.noLinkedProduct') }, ...products.map((item) => ({ value: item.id, label: item.name }))]} />
+            <FormSelect label={t('features.delivery.createReleaseDialog.buildLabel')} value={buildId} onChange={setBuildId} options={[{ value: '', label: t('features.delivery.createReleaseDialog.noLinkedBuild') }, ...builds.map((item) => ({ value: item.id, label: `${item.version || item.id} · ${item.name}` }))]} />
           </div>
           <div className="form-row">
-            <FormInput label="发布名称" value={name} onChange={setName} placeholder="例如：项目管理平台 v1.2" />
-            <FormInput label="版本号" value={version} onChange={setVersion} placeholder="1.2.0" />
+            <FormInput label={t('features.delivery.createReleaseDialog.nameLabel')} value={name} onChange={setName} placeholder={t('features.delivery.createReleaseDialog.namePlaceholder')} />
+            <FormInput label={t('features.delivery.createReleaseDialog.versionLabel')} value={version} onChange={setVersion} placeholder="1.2.0" />
           </div>
           <div className="form-row">
-            <FormInput label="发布日期" type="date" value={releaseDate} onChange={setReleaseDate} />
-            <FormSelect label="发布类型" value={releaseType} onChange={setReleaseType} options={[
+            <FormInput label={t('features.delivery.createReleaseDialog.releaseDateLabel')} type="date" value={releaseDate} onChange={setReleaseDate} />
+            <FormSelect label={t('features.delivery.createReleaseDialog.releaseTypeLabel')} value={releaseType} onChange={setReleaseType} options={[
               { value: 'official', label: labelOf(RELEASE_TYPE_LABELS, 'official') },
               { value: 'stable', label: labelOf(RELEASE_TYPE_LABELS, 'stable') },
               { value: 'hotfix', label: labelOf(RELEASE_TYPE_LABELS, 'hotfix') },
             ]} />
           </div>
-          <QuickIdInput label="关联需求" value={linkedStories} onChange={setLinkedStories} items={requirements.map((item) => item.id)} />
-          <QuickIdInput label="关联缺陷" value={linkedBugs} onChange={setLinkedBugs} items={defects.map((item) => item.id)} />
-          <FormTextarea label="发布说明" value={releaseNotes} onChange={setReleaseNotes} placeholder="补充新增能力、修复内容、影响范围和回滚方案" />
-          <FormActions submitting={submitting} submitText="创建发布" onClose={onClose} />
+          <QuickIdInput label={t('features.delivery.createReleaseDialog.linkedStoriesLabel')} value={linkedStories} onChange={setLinkedStories} items={requirements.map((item) => item.id)} />
+          <QuickIdInput label={t('features.delivery.createReleaseDialog.linkedBugsLabel')} value={linkedBugs} onChange={setLinkedBugs} items={defects.map((item) => item.id)} />
+          <FormTextarea label={t('features.delivery.createReleaseDialog.releaseNotesLabel')} value={releaseNotes} onChange={setReleaseNotes} placeholder={t('features.delivery.createReleaseDialog.releaseNotesPlaceholder')} />
+          <FormActions submitting={submitting} submitText={t('features.delivery.createReleaseDialog.createRelease')} onClose={onClose} />
         </form>
       </Panel>
     </Overlay>

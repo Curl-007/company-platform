@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, LoaderCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { FileTreeNode } from '../../types';
 
 interface FileTreeProps {
@@ -101,6 +102,7 @@ function FileTree({
   className = '',
   loadingPaths,
 }: FileTreeProps) {
+  const { t } = useTranslation();
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => collectInitiallyExpanded(items));
   const [loadedChildren, setLoadedChildren] = useState<Map<string, FileTreeNode[]>>(new Map());
   const [pendingPaths, setPendingPaths] = useState<Set<string>>(new Set());
@@ -212,11 +214,11 @@ function FileTree({
   }, [activateNode, collapseDirectory, expandDirectory, focusPath, navigationItems]);
 
   if (items.length === 0) {
-    return <div className={`file-tree-empty ${className}`}>没有文件</div>;
+    return <div className={`file-tree-empty ${className}`}>{t('common.noFiles')}</div>;
   }
 
   return (
-    <div className={`file-tree ${className}`} role="tree" aria-label="文件目录">
+    <div className={`file-tree ${className}`} role="tree" aria-label={t('common.fileTree')}>
       {visibleItems.map((item, index) => {
         const { node, depth, position, setSize } = item;
         const isDirectory = node.type === 'dir';

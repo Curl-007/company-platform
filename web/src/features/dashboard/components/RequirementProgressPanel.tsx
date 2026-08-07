@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Panel from '../../../components/common/Panel';
 import ProgressBar from '../../../components/common/ProgressBar';
 import { Pagination } from '../../../components/common/Pagination';
@@ -7,6 +8,7 @@ import type { RequirementProgress } from '../../../types';
 const PAGE_SIZE = 6;
 
 export default function RequirementProgressPanel({ items }: { items: RequirementProgress[] }) {
+  const { t } = useTranslation();
   const [page, setPage] = useState(1);
   const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
 
@@ -25,15 +27,15 @@ export default function RequirementProgressPanel({ items }: { items: Requirement
 
   return (
     <Panel
-      title="需求推进"
+      title={t('features.dashboard.requirementProgressPanel.title')}
       subtitle={
         items.length === 0
-          ? '跟踪进行中的需求完成情况'
-          : `跟踪进行中的需求完成情况 · 共 ${items.length} 项`
+          ? t('features.dashboard.requirementProgressPanel.subtitle')
+          : t('features.dashboard.requirementProgressPanel.subtitleCount', { count: items.length })
       }
     >
       {items.length === 0 ? (
-        <p className="body-text" style={{ margin: 0 }}>当前没有进行中的需求。</p>
+        <p className="body-text" style={{ margin: 0 }}>{t('features.dashboard.requirementProgressPanel.empty')}</p>
       ) : (
         <>
           <div className="requirement-progress-list" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -51,7 +53,7 @@ export default function RequirementProgressPanel({ items }: { items: Requirement
           {showPagination ? (
             <div className="list-pagination mt-4" data-slot="list-pagination">
               <span className="list-pagination-meta text-secondary">
-                第 {rangeStart}–{rangeEnd} 条，共 {items.length} 条
+                {t('features.dashboard.requirementProgressPanel.rangeInfo', { start: rangeStart, end: rangeEnd, count: items.length })}
               </span>
               <Pagination page={page} pageCount={pageCount} onPageChange={setPage} />
             </div>

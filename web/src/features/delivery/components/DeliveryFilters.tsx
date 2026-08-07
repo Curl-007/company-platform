@@ -1,4 +1,5 @@
 import { Search } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import FilterBar from '../../../components/common/FilterBar';
 import {
   BUILD_STATUS_LABELS,
@@ -26,6 +27,7 @@ export default function DeliveryFilters({
   statusChoices: string[];
   hideKind?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="dl-filter-wrap">
       <FilterBar>
@@ -35,8 +37,8 @@ export default function DeliveryFilters({
             className="form-input border-0 bg-transparent shadow-none"
             value={keyword}
             onChange={(event) => onKeyword(event.target.value)}
-            placeholder="搜索版本、名称、需求、缺陷或构建号"
-            aria-label="搜索交付记录"
+            placeholder={t('features.delivery.deliveryFilters.searchPlaceholder')}
+            aria-label={t('features.delivery.deliveryFilters.searchAria')}
           />
         </div>
         {hideKind ? null : (
@@ -44,20 +46,20 @@ export default function DeliveryFilters({
             className="form-select"
             value={kind}
             onChange={(event) => onKind(event.target.value as '' | DeliveryKind)}
-            aria-label="交付类型"
+            aria-label={t('features.delivery.deliveryFilters.kindAria')}
           >
-            <option value="">全部类型</option>
-            <option value="build">构建</option>
-            <option value="release">发布</option>
+            <option value="">{t('features.delivery.deliveryFilters.allKinds')}</option>
+            <option value="build">{t('features.delivery.deliveryFilters.build')}</option>
+            <option value="release">{t('features.delivery.deliveryFilters.release')}</option>
           </select>
         )}
         <select
           className="form-select"
           value={status}
           onChange={(event) => onStatus(event.target.value)}
-          aria-label="交付状态"
+          aria-label={t('features.delivery.deliveryFilters.statusAria')}
         >
-          <option value="">全部状态</option>
+          <option value="">{t('features.delivery.deliveryFilters.allStatus')}</option>
           {statusChoices.map((item) => (
             <option key={item} value={item}>
               {labelOf({ ...BUILD_STATUS_LABELS, ...RELEASE_STATUS_LABELS }, item)}

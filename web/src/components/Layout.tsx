@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { PageKey, SessionUser } from '../types';
 import { NAV_ITEMS } from '../app/pageRegistry';
 import { ApiError } from '../services/api';
@@ -22,9 +23,10 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ currentPage, onNavigate, user, onUserUpdate, onLogout, children }) => {
+  const { t } = useTranslation();
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const currentNavLabel = NAV_ITEMS.find((item) => item.key === currentPage)?.label ?? '工作台';
+  const currentNavLabel = NAV_ITEMS.find((item) => item.key === currentPage)?.label ?? t('nav.item.dashboard');
 
   const handleNavigate = useCallback((page: PageKey, focusId?: string) => {
     onNavigate(page, focusId);
@@ -32,7 +34,7 @@ const Layout: React.FC<LayoutProps> = ({ currentPage, onNavigate, user, onUserUp
 
   return (
     <div className={['kaneo-app-shell', aiSidebarOpen ? 'ai-sidebar-open' : ''].filter(Boolean).join(' ')}>
-      <a className="skip-link" href="#main-content">跳到主要内容</a>
+      <a className="skip-link" href="#main-content">{t('common.skipToContent')}</a>
       <SidebarProvider>
         <AppSidebar currentPage={currentPage} user={user} onNavigate={handleNavigate} />
         <SidebarInset>
@@ -69,6 +71,7 @@ const Layout: React.FC<LayoutProps> = ({ currentPage, onNavigate, user, onUserUp
 };
 
 function ProfileDialog({ user, onClose, onSaved }: { user: SessionUser; onClose: () => void; onSaved: (user: SessionUser) => void }) {
+  const { t } = useTranslation();
   const toast = useToast();
   const [draft, setDraft] = useState<UpdateProfileInput>({
     name: user.name,
@@ -92,8 +95,8 @@ function ProfileDialog({ user, onClose, onSaved }: { user: SessionUser; onClose:
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!draft.name.trim()) { setFormError('姓名不能为空'); return; }
-    if (!draft.email.trim()) { setFormError('邮箱不能为空'); return; }
+    if (!draft.name.trim()) { setFormError(t('common.nameRequired')); return; }
+    if (!draft.email.trim()) { setFormError(t('common.emailRequired')); return; }
     setSaving(true);
     setFormError(null);
     try {
@@ -105,40 +108,40 @@ function ProfileDialog({ user, onClose, onSaved }: { user: SessionUser; onClose:
         department: draft.department?.trim(),
         bio: draft.bio?.trim(),
       });
-      toast.success('个人资料已保存');
+      toast.success(t('common.profileSaved'));
       onSaved(updated);
     } catch (err: unknown) {
-      setFormError(err instanceof ApiError ? err.message : '保存失败');
+      setFormError(err instanceof ApiError ? err.message : t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Overlay onClose={onClose} maxWidth={680} ariaLabel="个人资料">
-      <Panel title="个人资料" subtitle="维护你的基础信息，这些内容会显示在顶部头像和协作资料中。">
+    <Overlay onClose={onClose} maxWidth={680} ariaLabel={t('common.profile')}>
+      <Panel title={t('common.profile')} subtitle={t('common.profileSubtitle')}>
         <form className="profile-form" onSubmit={handleSubmit}>
           <div className="profile-dialog-head">
             <div className="profile-dialog-avatar">{draft.name.split(/\s+/).map((word) => word[0]).join('').toUpperCase().slice(0, 2) || 'U'}</div>
             <div>
               <div className="profile-dialog-name">{draft.name || user.name}</div>
-              <div className="profile-dialog-meta">{draft.position || user.role} · {draft.department || '未设置部门'}</div>
+              <div className="profile-dialog-meta">{draft.position || user.role} · {draft.department || t('common.noDepartment')}</div>
             </div>
           </div>
           {formError ? <div className="form-error">{formError}</div> : null}
           <div className="form-row">
-            <FormField label="姓名" htmlFor="profile-name" required><TextInput id="profile-name" value={draft.name} invalid={Boolean(formError && !draft.name.trim())} onChange={(event) => setField('name', event.target.value)} /></FormField>
-            <FormField label="邮箱" htmlFor="profile-email" required><TextInput id="profile-email" type="email" value={draft.email} invalid={Boolean(formError && !draft.email.trim())} onChange={(event) => setField('email', event.target.value)} /></FormField>
+            <FormField label={t('common.profileName')} htmlFor="profile-name" required><TextInput id="profile-name" value={draft.name} invalid={Boolean(formError && !draft.name.trim())} onChange={(event) => setField('name', event.target.value)} /></FormField>
+            <FormField label={t('common.profileEmail')} htmlFor="profile-email" required><TextInput id="profile-email" type="email" value={draft.email} invalid={Boolean(formError && !draft.email.trim())} onChange={(event) => setField('email', event.target.value)} /></FormField>
           </div>
           <div className="form-row">
-            <FormField label="手机号" htmlFor="profile-phone"><TextInput id="profile-phone" value={draft.phone ?? ''} onChange={(event) => setField('phone', event.target.value)} placeholder="例如：13800000000" /></FormField>
-            <FormField label="职位" htmlFor="profile-position"><TextInput id="profile-position" value={draft.position ?? ''} onChange={(event) => setField('position', event.target.value)} placeholder="例如：项目经理 / 前端工程师" /></FormField>
+            <FormField label={t('common.profilePhone')} htmlFor="profile-phone"><TextInput id="profile-phone" value={draft.phone ?? ''} onChange={(event) => setField('phone', event.target.value)} placeholder={t('common.phonePlaceholder')} /></FormField>
+            <FormField label={t('common.profilePosition')} htmlFor="profile-position"><TextInput id="profile-position" value={draft.position ?? ''} onChange={(event) => setField('position', event.target.value)} placeholder={t('common.positionPlaceholder')} /></FormField>
           </div>
-          <FormField label="部门" htmlFor="profile-department"><TextInput id="profile-department" value={draft.department ?? ''} onChange={(event) => setField('department', event.target.value)} placeholder="例如：研发部 / 产品部 / 测试部" /></FormField>
-          <FormField label="个人简介" htmlFor="profile-bio"><TextArea id="profile-bio" value={draft.bio ?? ''} onChange={(event) => setField('bio', event.target.value)} rows={3} placeholder="补充职责范围、协作偏好或当前负责的方向" /></FormField>
+          <FormField label={t('common.profileDepartment')} htmlFor="profile-department"><TextInput id="profile-department" value={draft.department ?? ''} onChange={(event) => setField('department', event.target.value)} placeholder={t('common.departmentPlaceholder')} /></FormField>
+          <FormField label={t('common.profileBio')} htmlFor="profile-bio"><TextArea id="profile-bio" value={draft.bio ?? ''} onChange={(event) => setField('bio', event.target.value)} rows={3} placeholder={t('common.bioPlaceholder')} /></FormField>
           <div className="profile-form-actions">
-            <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>取消</Button>
-            <Button type="submit" variant="primary" size="sm" disabled={saving}>{saving ? '保存中...' : '保存资料'}</Button>
+            <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>{t('common.cancel')}</Button>
+            <Button type="submit" variant="primary" size="sm" disabled={saving}>{saving ? t('common.saving') : t('common.saveProfile')}</Button>
           </div>
         </form>
       </Panel>

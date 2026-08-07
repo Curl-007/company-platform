@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
   CalendarDays,
@@ -47,14 +48,15 @@ import {
 import { canOperate } from '../../../constants/roles';
 
 const PROJECT_DETAIL_TABS: Array<{ key: DetailTab; label: string; icon: LucideIcon }> = [
-  { key: 'overview', label: '概览', icon: FolderKanban },
-  { key: 'wbs', label: 'WBS', icon: ListTree },
-  { key: 'kanban', label: '看板', icon: SquareKanban },
-  { key: 'flow', label: '流程', icon: GitBranch },
-  { key: 'governance', label: '风险与决策', icon: ShieldAlert },
+  { key: 'overview', label: 'features.projects.projectDetailView.tabOverview', icon: FolderKanban },
+  { key: 'wbs', label: 'features.projects.projectDetailView.tabWbs', icon: ListTree },
+  { key: 'kanban', label: 'features.projects.projectDetailView.tabKanban', icon: SquareKanban },
+  { key: 'flow', label: 'features.projects.projectDetailView.tabFlow', icon: GitBranch },
+  { key: 'governance', label: 'features.projects.projectDetailView.tabGovernance', icon: ShieldAlert },
 ];
 
 export default function ProjectDetailView({ id, onBack, user }: { id: string; onBack: () => void; user?: SessionUser | null }) {
+  const { t } = useTranslation();
   const { data, loading, error, reload } = useAsync<ProjectDetail>(
     () => fetchProject(id),
     [id],
@@ -85,13 +87,15 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
     const projectVersion = data?.version;
     if (!projectVersion) return;
     if (!canUpdateProject) {
-      setActionError('当前账号无权变更项目状态。');
+      setActionError(t('features.projects.projectDetailView.noStatusPermission'));
       return;
     }
     const confirmed = await confirm({
-      title: `变更项目状态为“${labelOf(PROJECT_STATUS_LABELS, next)}”？`,
-      description: '状态变更会影响项目看板、报表和动态中心中的项目状态展示。',
-      confirmText: '确认变更',
+      title: t('features.projects.projectDetailView.changeStatusConfirm', {
+        status: labelOf(PROJECT_STATUS_LABELS, next),
+      }),
+      description: t('features.projects.projectDetailView.changeStatusDesc'),
+      confirmText: t('features.projects.projectDetailView.confirmChange'),
       tone: 'info',
     });
     if (!confirmed) {
@@ -105,12 +109,12 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
     setActivationMissing([]);
     try {
       await updateProjectStatus(id, next, projectVersion);
-      toast.success('项目状态已更新');
+      toast.success(t('features.projects.projectDetailView.statusUpdated'));
       reload();
     } catch (err: unknown) {
       const missing = activationGateMissing(err);
       setActivationMissing(missing);
-      setActionError(missing.length ? activationGateSummary(missing) : err instanceof ApiError ? err.message : '状态更新失败');
+      setActionError(missing.length ? activationGateSummary(missing) : err instanceof ApiError ? err.message : t('features.projects.projectDetailView.statusUpdateFailed'));
     } finally {
       setSaving(false);
       setStatus('');
@@ -121,7 +125,7 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
     return (
       <>
         <button className="btn btn-text btn-sm btn-with-icon" onClick={onBack} style={{ marginBottom: 12 }}>
-          <ArrowLeft size={15} aria-hidden="true" /> 项目列表
+          <ArrowLeft size={15} aria-hidden="true" /> {t('features.projects.projectDetailView.projectList')}
         </button>
         <PageState loading={loading} error={error} isEmpty={!loading && !error && !data} onRetry={reload} />
       </>
@@ -133,14 +137,17 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
   const activeSprints = project.sprints.filter((item) => item.status === 'active' || item.status === 'in_progress').length;
   const blockedTasks = project.tasks.filter((item) => item.status === 'blocked').length;
   const scheduleText = project.startDate || project.endDate
-    ? `${project.startDate ?? '未设开始'} 至 ${project.endDate ?? '未设结束'}`
-    : '未设置排期';
+    ? t('features.projects.projectDetailView.scheduleRange', {
+        start: project.startDate ?? t('features.projects.common.startUnset'),
+        end: project.endDate ?? t('features.projects.common.endUnset'),
+      })
+    : t('features.projects.common.noSchedule');
 
   return (
     <div className="project-detail-page min-w-0">
-      <nav className="flex min-w-0 max-w-full flex-wrap items-center gap-1 text-sm" aria-label="项目路径">
+      <nav className="flex min-w-0 max-w-full flex-wrap items-center gap-1 text-sm" aria-label={t('features.projects.projectDetailView.breadcrumbLabel')}>
         <button className="btn btn-text btn-sm btn-with-icon shrink-0" onClick={onBack}>
-          <ArrowLeft size={15} aria-hidden="true" /> 项目
+          <ArrowLeft size={15} aria-hidden="true" /> {t('features.projects.projectDetailView.projectCrumb')}
         </button>
         <span className="text-secondary" aria-hidden="true">/</span>
         <span className="min-w-0 truncate font-medium" title={project.name}>{project.name}</span>
@@ -167,12 +174,12 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
           <div className="pd-hero-actions">
             {canUpdateProject ? (
               <button className="btn btn-secondary btn-sm btn-with-icon" onClick={() => setEditing(true)}>
-                <Pencil size={14} aria-hidden="true" /> 编辑
+                <Pencil size={14} aria-hidden="true" /> {t('common.edit')}
               </button>
             ) : null}
             {canManageMembers ? (
               <button className="btn btn-secondary btn-sm btn-with-icon" onClick={() => setManagingMembers(true)}>
-                <Users size={14} aria-hidden="true" /> 成员
+                <Users size={14} aria-hidden="true" /> {t('features.projects.projectDetailView.membersButton')}
               </button>
             ) : null}
             {canUpdateProject ? (
@@ -183,9 +190,9 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
                     .map((item) => ({ value: item, label: labelOf(PROJECT_STATUS_LABELS, item) }))}
                   value=""
                   onChange={(next) => handleStatusChange(next)}
-                  placeholder="变更状态"
+                  placeholder={t('features.projects.projectDetailView.changeStatusPlaceholder')}
                   disabled={saving}
-                  ariaLabel="变更项目状态"
+                  ariaLabel={t('features.projects.projectDetailView.changeStatusAria')}
                   className="w-full"
                 />
               </div>
@@ -197,34 +204,34 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
           <div className="pd-hero-metric">
             <span className="pd-hero-metric-label">
               <UserRound size={13} aria-hidden="true" />
-              负责人
+              {t('features.projects.projectDetailView.ownerLabel')}
             </span>
-            <strong className="pd-hero-metric-value truncate">{project.owner || '未设置'}</strong>
+            <strong className="pd-hero-metric-value truncate">{project.owner || t('features.projects.projectDetailView.ownerUnset')}</strong>
           </div>
           <div className="pd-hero-metric">
             <span className="pd-hero-metric-label">
               <CalendarDays size={13} aria-hidden="true" />
-              排期
+              {t('features.projects.projectDetailView.scheduleLabel')}
             </span>
             <strong className="pd-hero-metric-value truncate" title={scheduleText}>{scheduleText}</strong>
           </div>
           <div className="pd-hero-metric">
-            <span className="pd-hero-metric-label">任务 / 风险</span>
+            <span className="pd-hero-metric-label">{t('features.projects.projectDetailView.tasksRisksLabel')}</span>
             <strong className="pd-hero-metric-value">
-              <span>{project.tasks.length} 任务</span>
+              <span>{t('features.projects.projectDetailView.taskCount', { count: project.tasks.length })}</span>
               <span className={project.riskCount > 0 || blockedTasks > 0 ? 'is-risk' : 'is-muted'}>
-                风险 {project.riskCount}
+                {t('features.projects.projectDetailView.riskCount', { count: project.riskCount })}
               </span>
               <span className={blockedTasks > 0 ? 'is-risk' : 'is-muted'}>
-                阻塞 {blockedTasks}
+                {t('features.projects.projectDetailView.blockedCount', { count: blockedTasks })}
               </span>
             </strong>
           </div>
           <div className="pd-hero-metric pd-hero-metric-progress">
             <span className="pd-hero-metric-label">
-              进度
+              {t('features.projects.projectDetailView.progressLabel')}
               <span className="pd-hero-health">
-                健康
+                {t('features.projects.projectDetailView.healthLabel')}
                 <StatusBadge label={String(project.healthScore)} variant={healthVariant(project.healthScore)} showDot={false} />
               </span>
             </span>
@@ -243,13 +250,13 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
         >
           {actionError ? <span className="min-w-0 flex-1 break-words text-[var(--destructive)]">{actionError}</span> : null}
           {activationMissing.some((item) => ['projectObjective', 'plannedDates', 'milestoneOrSprint'].includes(item)) && (
-            <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>完善项目基础信息</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>{t('features.projects.projectDetailView.completeBasicInfo')}</button>
           )}
           {activationMissing.includes('projectMembers') && canManageMembers && (
-            <button className="btn btn-secondary btn-sm" onClick={() => setManagingMembers(true)}>管理项目成员</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setManagingMembers(true)}>{t('features.projects.projectDetailView.manageMembers')}</button>
           )}
           {activationMissing.includes('riskOwners') && (
-            <button className="btn btn-secondary btn-sm" onClick={() => setTab('governance')}>补充风险责任人</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setTab('governance')}>{t('features.projects.projectDetailView.addRiskOwner')}</button>
           )}
           {activationMissing.some((item) => ['capacityAllocations', 'capacityPlans', 'capacityApprovals'].includes(item)) && (
             <button
@@ -261,7 +268,7 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
                 window.location.hash = `#/capacity?${params.toString()}`;
               }}
             >
-              配置容量与投入
+              {t('features.projects.projectDetailView.configureCapacity')}
             </button>
           )}
         </div>
@@ -272,7 +279,7 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
         onValueChange={(value) => setTab(value as DetailTab)}
         className="project-detail-tabs min-w-0"
       >
-        <TabsList className="project-detail-tablist" aria-label="项目详情视图">
+        <TabsList className="project-detail-tablist" aria-label={t('features.projects.projectDetailView.tabsAria')}>
           {PROJECT_DETAIL_TABS.map(({ key, label, icon: Icon }) => (
             <TabsTrigger
               key={key}
@@ -282,7 +289,7 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
               aria-controls={`project-detail-panel-${key}`}
             >
               <Icon size={14} aria-hidden="true" />
-              <span>{label}</span>
+              <span>{t(label)}</span>
             </TabsTrigger>
           ))}
         </TabsList>
@@ -309,10 +316,10 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
           className="project-detail-ai-panel"
           targetType="project"
           targetId={project.id}
-          title="AI 项目建议"
-          description="基于项目、需求、任务、测试、缺陷与交付上下文生成执行建议。"
-          buttonText="AI 分析项目"
-          question="请分析该项目的执行状态、主要风险、交付缺口和下一步动作。"
+          title={t('features.projects.projectDetailView.aiAdviceTitle')}
+          description={t('features.projects.projectDetailView.aiAdviceDescription')}
+          buttonText={t('features.projects.projectDetailView.aiAnalyzeButton')}
+          question={t('features.projects.projectDetailView.aiAdviceQuestion')}
           draft={() => ({
             status: project.status,
             healthScore: project.healthScore,

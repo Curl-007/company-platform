@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import StatusBadge from '../../../components/common/StatusBadge';
 import type { ReleaseReport } from '../../../types';
 import { formatDate, statusLabel } from '../deliveryPageModel';
@@ -26,7 +27,8 @@ export function RecordList({
   empty: string;
   records: Array<{ id: string; title: string; meta: string; body: string }>;
 }) {
-  if (loading) return <div className="delivery-empty-inline">加载中...</div>;
+  const { t } = useTranslation();
+  if (loading) return <div className="delivery-empty-inline">{t('common.loading')}</div>;
   if (records.length === 0) return <div className="delivery-empty-inline">{empty}</div>;
   return (
     <div className="delivery-governance-records">
@@ -44,17 +46,18 @@ export function RecordList({
 }
 
 export function ReleaseReportSection({ report, loading, error }: { report?: ReleaseReport | null; loading: boolean; error: unknown }) {
+  const { t } = useTranslation();
   if (loading) {
     return (
       <section className="delivery-report-section">
-        <div className="delivery-empty-inline">发布报告生成中...</div>
+        <div className="delivery-empty-inline">{t('features.delivery.deliveryDetailParts.reportGenerating')}</div>
       </section>
     );
   }
   if (error) {
     return (
       <section className="delivery-report-section">
-        <div className="form-error">发布报告加载失败。</div>
+        <div className="form-error">{t('features.delivery.deliveryDetailParts.reportLoadFailed')}</div>
       </section>
     );
   }
@@ -78,38 +81,38 @@ export function ReleaseReportSection({ report, loading, error }: { report?: Rele
     <section className="delivery-report-section">
       <div className="delivery-report-head">
         <div>
-          <h3>发布报告</h3>
-          <p>{report.summary || '暂无发布报告摘要。'}</p>
+          <h3>{t('features.delivery.deliveryDetailParts.reportTitle')}</h3>
+          <p>{report.summary || t('features.delivery.deliveryDetailParts.noReportSummary')}</p>
         </div>
         <StatusBadge status={gateReady ? 'passed' : 'blocked'} label={`${readyScore}%`} showDot={false} />
       </div>
       <div className="delivery-report-metrics">
-        <DetailItem label="覆盖需求" value={`${metrics.requirementCount ?? 0}`} />
-        <DetailItem label="关联缺陷" value={`${metrics.defectCount ?? 0}`} />
-        <DetailItem label="未关闭缺陷" value={`${metrics.openDefectCount ?? 0}`} />
-        <DetailItem label="审批记录" value={`${metrics.approvalCount ?? 0}`} />
-        <DetailItem label="回滚记录" value={`${metrics.rollbackCount ?? 0}`} />
-        <DetailItem label="审计记录" value={`${metrics.auditCount ?? 0}`} />
+        <DetailItem label={t('features.delivery.deliveryDetailParts.coveredRequirements')} value={`${metrics.requirementCount ?? 0}`} />
+        <DetailItem label={t('features.delivery.deliveryDetailParts.linkedDefects')} value={`${metrics.defectCount ?? 0}`} />
+        <DetailItem label={t('features.delivery.deliveryDetailParts.openDefects')} value={`${metrics.openDefectCount ?? 0}`} />
+        <DetailItem label={t('features.delivery.deliveryDetailParts.approvals')} value={`${metrics.approvalCount ?? 0}`} />
+        <DetailItem label={t('features.delivery.deliveryDetailParts.rollbacks')} value={`${metrics.rollbackCount ?? 0}`} />
+        <DetailItem label={t('features.delivery.deliveryDetailParts.auditRecords')} value={`${metrics.auditCount ?? 0}`} />
       </div>
       {report.build ? (
         <div className="delivery-report-linked">
-          <span>关联构建</span>
-          <strong>{report.build.id} · {report.build.name || '未命名构建'}</strong>
+          <span>{t('features.delivery.deliveryDetailParts.linkedBuild')}</span>
+          <strong>{report.build.id} · {report.build.name || t('features.delivery.deliveryDetailParts.unnamedBuild')}</strong>
           <StatusBadge status={report.build.status || 'building'} label={statusLabel('build', report.build.status || 'building')} showDot={false} />
         </div>
       ) : null}
       {recommendations.length ? (
         <div className="delivery-report-list">
-          <strong>复盘建议</strong>
+          <strong>{t('features.delivery.deliveryDetailParts.recommendations')}</strong>
           {recommendations.map((item) => <span key={item}>{item}</span>)}
         </div>
       ) : null}
       <div className="delivery-report-list">
-        <strong>最近审计</strong>
+        <strong>{t('features.delivery.deliveryDetailParts.recentAudit')}</strong>
         {auditTrail.slice(0, 6).map((item) => (
-          <span key={item.id}>{item.action} · {item.actorName || '未知'} · {formatDate(item.createdAt)}</span>
+          <span key={item.id}>{t('features.delivery.deliveryDetailParts.auditItem', { action: item.action, actor: item.actorName || t('features.delivery.deliveryDetailParts.unknown'), date: formatDate(item.createdAt) })}</span>
         ))}
-        {auditTrail.length === 0 ? <span>暂无审计记录</span> : null}
+        {auditTrail.length === 0 ? <span>{t('features.delivery.deliveryDetailParts.noAuditRecords')}</span> : null}
       </div>
     </section>
   );

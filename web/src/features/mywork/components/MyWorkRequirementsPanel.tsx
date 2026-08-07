@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ClipboardList } from 'lucide-react';
 import Panel from '../../../components/common/Panel';
 import ProgressBar from '../../../components/common/ProgressBar';
@@ -21,6 +22,7 @@ import MyWorkEmptyPanel from './MyWorkEmptyPanel';
 type RequirementProgressItem = DashboardData['requirementProgress'][number];
 
 export default function MyWorkRequirementsPanel({ items }: { items: RequirementProgressItem[] }) {
+  const { t } = useTranslation();
   const sessionUser = getSessionUser();
   const canOpenRequirements = canAccessPageForUser(sessionUser, 'requirements');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -51,9 +53,9 @@ export default function MyWorkRequirementsPanel({ items }: { items: RequirementP
     return (
       <MyWorkEmptyPanel
         icon={<ClipboardList size={26} />}
-        eyebrow="需求跟进"
-        title="当前没有待跟进需求"
-        description="没有指派给你的需求，新的跟进事项会显示在这里。"
+        eyebrow={t('features.mywork.myWorkRequirementsPanel.emptyEyebrow')}
+        title={t('features.mywork.myWorkRequirementsPanel.emptyTitle')}
+        description={t('features.mywork.myWorkRequirementsPanel.emptyDesc')}
         action={
           canOpenRequirements ? (
             <button
@@ -61,7 +63,7 @@ export default function MyWorkRequirementsPanel({ items }: { items: RequirementP
               className="btn btn-secondary btn-sm"
               onClick={() => navigateTo('requirements')}
             >
-              <ClipboardList size={15} /> 查看需求管理
+              <ClipboardList size={15} /> {t('features.mywork.myWorkRequirementsPanel.viewRequirements')}
             </button>
           ) : undefined
         }
@@ -71,7 +73,7 @@ export default function MyWorkRequirementsPanel({ items }: { items: RequirementP
 
   return (
     <div className="mywork-split">
-      <Panel title="我的需求" subtitle={`共 ${items.length} 条`} className="mywork-panel-left">
+      <Panel title={t('features.mywork.myWorkRequirementsPanel.panelTitle')} subtitle={t('features.mywork.myWorkRequirementsPanel.countSubtitle', { count: items.length })} className="mywork-panel-left">
         <div className="mywork-queue">
           {items.map((item) => (
             <div
@@ -101,18 +103,18 @@ export default function MyWorkRequirementsPanel({ items }: { items: RequirementP
       </Panel>
 
       <Panel
-        title="需求详情"
+        title={t('features.mywork.myWorkRequirementsPanel.detailPanelTitle')}
         className="mywork-panel-center"
         toolbar={
           selectedSummary && canOpenRequirements ? (
             <button className="btn btn-secondary btn-sm" onClick={() => openInRequirements(selectedSummary.id)}>
-              打开完整详情
+              {t('features.mywork.myWorkRequirementsPanel.openFullDetail')}
             </button>
           ) : undefined
         }
       >
         {!selectedSummary ? (
-          <div className="empty-state-desc">请选择左侧需求查看详情。</div>
+          <div className="empty-state-desc">{t('features.mywork.myWorkRequirementsPanel.selectLeftHint')}</div>
         ) : detailAsync.loading || detailAsync.error ? (
           <PageState loading={detailAsync.loading} error={detailAsync.error} onRetry={() => { void detailAsync.reload(); }} />
         ) : detail ? (
@@ -128,39 +130,39 @@ export default function MyWorkRequirementsPanel({ items }: { items: RequirementP
             </div>
             <div className="mywork-detail-meta">
               <div className="detail-field">
-                <span className="detail-label">优先级</span>
+                <span className="detail-label">{t('features.mywork.myWorkRequirementsPanel.priorityLabel')}</span>
                 <span className="detail-value">{labelOf(PRIORITY_LABELS, detail.priority)}</span>
               </div>
               <div className="detail-field">
-                <span className="detail-label">负责人</span>
+                <span className="detail-label">{t('features.mywork.myWorkRequirementsPanel.ownerLabel')}</span>
                 <span className="detail-value">{detail.owner || '-'}</span>
               </div>
               <div className="detail-field">
-                <span className="detail-label">执行人</span>
+                <span className="detail-label">{t('features.mywork.myWorkRequirementsPanel.assigneeLabel')}</span>
                 <span className="detail-value">
                   {detail.assignee
                     ? `${detail.assignee}${detail.assigneeRole ? ` · ${labelOf(USER_ROLE_LABELS, detail.assigneeRole)}` : ''}`
-                    : '未分配'}
+                    : t('features.mywork.myWorkRequirementsPanel.unassigned')}
                 </span>
               </div>
               <div className="detail-field">
-                <span className="detail-label">分配状态</span>
+                <span className="detail-label">{t('features.mywork.myWorkRequirementsPanel.assignmentStatusLabel')}</span>
                 <span className="detail-value">{detail.assignmentStatus || '-'}</span>
               </div>
             </div>
             <div className="detail-field mywork-detail-progress">
-              <span className="detail-label">完成度</span>
+              <span className="detail-label">{t('features.mywork.myWorkRequirementsPanel.completionLabel')}</span>
               <ProgressBar percent={detail.completion ?? selectedSummary.completion ?? 0} />
             </div>
             {detail.description ? (
               <div className="detail-field" style={{ marginTop: 12 }}>
-                <span className="detail-label">描述</span>
+                <span className="detail-label">{t('features.mywork.myWorkRequirementsPanel.descriptionLabel')}</span>
                 <div className="detail-value" style={{ whiteSpace: 'pre-wrap' }}>{detail.description}</div>
               </div>
             ) : null}
             {Array.isArray(detail.acceptanceCriteria) && detail.acceptanceCriteria.length > 0 ? (
               <div className="detail-field" style={{ marginTop: 12 }}>
-                <span className="detail-label">验收标准</span>
+                <span className="detail-label">{t('features.mywork.myWorkRequirementsPanel.acceptanceCriteriaLabel')}</span>
                 <ul className="detail-value" style={{ margin: '6px 0 0', paddingLeft: 18 }}>
                   {detail.acceptanceCriteria.map((line) => (
                     <li key={line}>{line}</li>
@@ -170,12 +172,12 @@ export default function MyWorkRequirementsPanel({ items }: { items: RequirementP
             ) : null}
             {!canOpenRequirements ? (
               <div className="text-secondary" style={{ marginTop: 12, fontSize: 12 }}>
-                当前角色无「需求管理」页面权限时，可在此查看指派给你的需求摘要。
+                {t('features.mywork.myWorkRequirementsPanel.noRequirementsAccessHint')}
               </div>
             ) : null}
           </div>
         ) : (
-          <div className="empty-state-desc">未能加载需求详情。</div>
+          <div className="empty-state-desc">{t('features.mywork.myWorkRequirementsPanel.loadFailed')}</div>
         )}
       </Panel>
     </div>

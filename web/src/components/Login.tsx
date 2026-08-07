@@ -1,5 +1,6 @@
 import React, { Suspense, useState, type FormEvent } from 'react';
 import { Check, LockKeyhole, Mail } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { login } from '../services/auth';
 import { lazyWithRetry } from '../app/lazyWithRetry';
 import { GradientText, MotionGuard } from './reactbits';
@@ -13,14 +14,15 @@ interface LoginProps {
   onLoginSuccess: (user: SessionUser) => void;
 }
 
-const HIGHLIGHTS = [
-  '项目、需求、任务、测试全流程闭环',
-  '看板拖拽与迭代燃尽图可视化',
-  'AI 文档分析与工作日志智能解读',
-  '操作审计与动态追踪',
+const HIGHLIGHT_KEYS = [
+  'auth.feature1',
+  'auth.feature2',
+  'auth.feature3',
+  'auth.feature4',
 ];
 
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -29,7 +31,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!email.trim() || !password.trim()) {
-      setError('请输入邮箱和密码。');
+      setError(t('auth.emailPasswordRequired'));
       return;
     }
 
@@ -40,7 +42,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       const user = await login(email.trim(), password);
       onLoginSuccess(user);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '登录失败，请检查账号和密码。');
+      setError(err instanceof Error ? err.message : t('auth.loginFailed'));
     } finally {
       setLoading(false);
     }
@@ -63,21 +65,21 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         <div className="login-brand-panel">
           <div className="login-brand-logo-lg">P</div>
           <h1 className="login-brand-title">
-            <MotionGuard fallback={<span>项目管理平台</span>}>
+            <MotionGuard fallback={<span>{t('auth.brandTitle')}</span>}>
               <GradientText
                 colors={['#339cff', '#7cc4ff', '#1f7fdf', '#339cff']}
                 animationSpeed={6}
               >
-                项目管理平台
+                {t('auth.brandTitle')}
               </GradientText>
             </MotionGuard>
           </h1>
-          <p className="login-brand-subtitle">AI 驱动的企业级项目协作工作台</p>
+          <p className="login-brand-subtitle">{t('auth.subtitle')}</p>
           <ul className="login-brand-highlights">
-            {HIGHLIGHTS.map((item) => (
+            {HIGHLIGHT_KEYS.map((item) => (
               <li key={item}>
                 <Check size={16} />
-                <span>{item}</span>
+                <span>{t(item)}</span>
               </li>
             ))}
           </ul>
@@ -87,13 +89,13 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           <div className="login-card">
             <div className="login-card-header">
               <span className="login-card-kicker">Sign in</span>
-              <h2 className="login-card-title">欢迎回来</h2>
-              <p className="login-card-subtitle">使用企业账号登录，进入项目协作工作台</p>
+              <h2 className="login-card-title">{t('auth.welcome')}</h2>
+              <p className="login-card-subtitle">{t('auth.cardSubtitle')}</p>
             </div>
 
             <form className="login-form" onSubmit={handleSubmit}>
               <div className="form-group">
-                <label className="form-label" htmlFor="login-email">邮箱</label>
+                <label className="form-label" htmlFor="login-email">{t('auth.email')}</label>
                 <div className="login-input-wrap">
                   <Mail size={16} className="login-input-icon" aria-hidden />
                   <input
@@ -110,7 +112,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               </div>
 
               <div className="form-group">
-                <label className="form-label" htmlFor="login-password">密码</label>
+                <label className="form-label" htmlFor="login-password">{t('auth.password')}</label>
                 <div className="login-input-wrap">
                   <LockKeyhole size={16} className="login-input-icon" aria-hidden />
                   <input
@@ -119,7 +121,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="请输入密码"
+                    placeholder={t('auth.passwordPlaceholder')}
                     autoComplete="current-password"
                   />
                 </div>
@@ -128,7 +130,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               {error && <div className="form-error">{error}</div>}
 
               <button className="btn btn-primary btn-lg login-submit" type="submit" disabled={loading}>
-                {loading ? '登录中...' : '登录'}
+                {loading ? t('auth.signingIn') : t('auth.login')}
               </button>
             </form>
 

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { KeyRound } from 'lucide-react';
 import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
@@ -16,6 +17,7 @@ export default function CreateMemberDialog({
   onClose: () => void;
   onSubmit: (input: CreateUserInput) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [draft, setDraft] = useState({
     name: '',
     email: '',
@@ -53,23 +55,23 @@ export default function CreateMemberDialog({
 
   return (
     <Overlay onClose={onClose} maxWidth={640}>
-      <Panel title="新建团队成员" subtitle="成员账号创建后会同步进入团队协作视图，由团队管理统一维护生命周期。">
+      <Panel title={t('features.team.createMemberDialog.createTitle')} subtitle={t('features.team.createMemberDialog.subtitle')}>
         <form className="team-create-form" onSubmit={handleSubmit}>
           <div className="form-row">
-            <FormField label="姓名" htmlFor="team-create-name" required>
+            <FormField label={t('features.team.createMemberDialog.nameLabel')} htmlFor="team-create-name" required>
               <TextInput id="team-create-name" value={draft.name} onChange={(event) => setField('name', event.target.value)} required />
             </FormField>
-            <FormField label="邮箱" htmlFor="team-create-email" required>
+            <FormField label={t('features.team.createMemberDialog.emailLabel')} htmlFor="team-create-email" required>
               <TextInput id="team-create-email" type="email" value={draft.email} onChange={(event) => setField('email', event.target.value)} required />
             </FormField>
           </div>
           <div className="form-row">
-            <FormField label="角色" htmlFor="team-create-role" required>
+            <FormField label={t('features.team.createMemberDialog.roleLabel')} htmlFor="team-create-role" required>
               <SelectInput id="team-create-role" value={draft.role} onChange={(event) => setField('role', event.target.value)}>
-                {ROLE_OPTIONS.filter((item) => item.value).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                {ROLE_OPTIONS.filter((item) => item.value).map((item) => <option key={item.value} value={item.value}>{t(item.label)}</option>)}
               </SelectInput>
             </FormField>
-            <FormField label="初始密码" htmlFor="team-create-password" required>
+            <FormField label={t('features.team.createMemberDialog.passwordLabel')} htmlFor="team-create-password" required>
               <div className="input-with-icon">
                 <KeyRound size={14} />
                 <TextInput id="team-create-password" type="password" value={draft.password} onChange={(event) => setField('password', event.target.value)} required minLength={4} />
@@ -77,22 +79,22 @@ export default function CreateMemberDialog({
             </FormField>
           </div>
           <div className="form-row">
-            <FormField label="手机号" htmlFor="team-create-phone">
+            <FormField label={t('features.team.createMemberDialog.phoneLabel')} htmlFor="team-create-phone">
               <TextInput id="team-create-phone" value={draft.phone} onChange={(event) => setField('phone', event.target.value)} />
             </FormField>
-            <FormField label="职位" htmlFor="team-create-position">
+            <FormField label={t('features.team.createMemberDialog.positionLabel')} htmlFor="team-create-position">
               <TextInput id="team-create-position" value={draft.position} onChange={(event) => setField('position', event.target.value)} />
             </FormField>
           </div>
-          <FormField label="部门" htmlFor="team-create-department">
+          <FormField label={t('features.team.createMemberDialog.departmentLabel')} htmlFor="team-create-department">
             <SelectInput id="team-create-department" value={draft.departmentId} onChange={(event) => setField('departmentId', event.target.value)}>
-              <option value="">未归属部门</option>
+              <option value="">{t('features.team.createMemberDialog.noDepartment')}</option>
               {departments.filter((item) => item.status === 'active').map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </SelectInput>
           </FormField>
           <div className="team-create-actions">
-            <Button variant="secondary" size="sm" onClick={onClose}>取消</Button>
-            <Button type="submit" variant="primary" size="sm" disabled={submitting}>{submitting ? '创建中...' : '创建成员'}</Button>
+            <Button variant="secondary" size="sm" onClick={onClose}>{t('common.cancel')}</Button>
+            <Button type="submit" variant="primary" size="sm" disabled={submitting}>{submitting ? t('features.team.createMemberDialog.creating') : t('features.team.createMemberDialog.createMember')}</Button>
           </div>
         </form>
       </Panel>

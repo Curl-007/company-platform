@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -72,6 +73,7 @@ function matchesFocus(item: Requirement, focus: FocusFilter) {
 }
 
 export default function RequirementsView() {
+  const { t } = useTranslation();
   const toast = useToast();
   const confirm = useConfirm();
   const sessionUser = getSessionUser();
@@ -193,58 +195,58 @@ export default function RequirementsView() {
 
   async function handleDelete(requirement: Requirement) {
     if (!canManageRequirements) {
-      toast.error('当前账号无权删除需求。');
+      toast.error(t('features.requirements.requirementsView.noPermissionDelete'));
       return;
     }
     const confirmed = await confirm({
-      title: `删除需求“${requirement.title}”？`,
-      description: '删除后需求记录将不可恢复，请确认它没有仍在流转中的任务或测试依赖。',
-      confirmText: '删除需求',
+      title: t('features.requirements.requirementsView.deleteConfirm', { title: requirement.title }),
+      description: t('features.requirements.requirementsView.deleteConfirmDesc'),
+      confirmText: t('features.requirements.requirementsView.delete'),
       tone: 'danger',
     });
     if (!confirmed) return;
     try {
       await deleteRequirement(requirement.id);
-      toast.success(`已删除需求：${requirement.title}`);
+      toast.success(t('features.requirements.requirementsView.deleted', { title: requirement.title }));
       reload();
     } catch (err) {
       // 409 = has dependencies (tasks/defects/test cases/children); offer cascade.
       if (err instanceof ApiError && err.status === 409) {
         const summary = summarizeDependencies((err.body as { details?: { dependencies?: Record<string, unknown> } })?.details?.dependencies);
         const cascade = await confirm({
-          title: summary ? '检测到关联记录' : '该需求存在关联记录',
+          title: summary ? t('features.requirements.requirementsView.dependenciesTitle') : t('features.requirements.requirementsView.dependenciesTitleAlt'),
           description: summary
-            ? `“${requirement.title}”关联了 ${summary}。是否一并删除这些记录？此操作不可恢复。`
-            : `“${requirement.title}”仍有关联记录。是否一并删除？此操作不可恢复。`,
-          confirmText: '级联删除',
+            ? t('features.requirements.requirementsView.dependenciesConfirm', { title: requirement.title, summary })
+            : t('features.requirements.requirementsView.dependenciesConfirmAlt', { title: requirement.title }),
+          confirmText: t('features.requirements.requirementsView.cascadeDelete'),
           tone: 'danger',
         });
         if (!cascade) return;
         try {
           await deleteRequirement(requirement.id, true);
-          toast.success(`已删除需求及其关联记录：${requirement.title}`);
+          toast.success(t('features.requirements.requirementsView.deletedWithDependencies', { title: requirement.title }));
           reload();
         } catch (cascadeErr) {
-          toast.error(cascadeErr instanceof ApiError ? cascadeErr.message : '级联删除失败');
+          toast.error(cascadeErr instanceof ApiError ? cascadeErr.message : t('features.requirements.requirementsView.cascadeDeleteFailed'));
         }
         return;
       }
-      toast.error(err instanceof ApiError ? err.message : '删除需求失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.requirements.requirementsView.deleteFailed'));
     }
   }
 
   const focusButtons: { key: FocusFilter; label: string; count: number }[] = [
-    { key: 'all', label: '全部', count: signals.total },
-    { key: 'open', label: '在途', count: signals.open },
-    { key: 'high', label: '高优', count: signals.high },
-    { key: 'unassigned', label: '待指派', count: signals.unassigned },
-    { key: 'done', label: '已完结', count: signals.done },
+    { key: 'all', label: t('features.requirements.requirementsView.focusAll'), count: signals.total },
+    { key: 'open', label: t('features.requirements.requirementsView.focusOpen'), count: signals.open },
+    { key: 'high', label: t('features.requirements.requirementsView.focusHigh'), count: signals.high },
+    { key: 'unassigned', label: t('features.requirements.requirementsView.focusUnassigned'), count: signals.unassigned },
+    { key: 'done', label: t('features.requirements.requirementsView.focusDone'), count: signals.done },
   ];
 
   const columns: TreeTableColumn<Requirement>[] = [
     {
       key: 'title',
-      title: '需求',
+      title: t('features.requirements.requirementsView.colTitle'),
       render: (item) => {
         const childCount = (childrenMap[item.id] ?? []).length;
         return (
@@ -252,10 +254,10 @@ export default function RequirementsView() {
             <div className="req-title-main">
               <span className="req-id text-mono">{item.id}</span>
               <strong className="req-title-text" title={item.title}>{item.title}</strong>
-              {childCount > 0 ? <span className="req-child-chip">{childCount} 子项</span> : null}
+              {childCount > 0 ? <span className="req-child-chip">{t('features.requirements.requirementsView.childCount', { count: childCount })}</span> : null}
             </div>
             {item.owner ? (
-              <span className="req-title-meta">负责人 {item.owner}</span>
+              <span className="req-title-meta">{t('features.requirements.requirementsView.ownerPrefix', { owner: item.owner })}</span>
             ) : null}
           </div>
         );
@@ -263,7 +265,7 @@ export default function RequirementsView() {
     },
     {
       key: 'project',
-      title: '项目',
+      title: t('features.requirements.requirementsView.colProject'),
       width: 140,
       render: (item) => (
         <span className="req-project-cell truncate" title={projectMap.get(item.projectId) ?? item.projectId}>
@@ -273,7 +275,7 @@ export default function RequirementsView() {
     },
     {
       key: 'priority',
-      title: '优先级',
+      title: t('features.requirements.requirementsView.colPriority'),
       width: 88,
       align: 'center',
       render: (item) => (
@@ -286,7 +288,7 @@ export default function RequirementsView() {
     },
     {
       key: 'status',
-      title: '状态',
+      title: t('features.requirements.requirementsView.colStatus'),
       width: 100,
       render: (item) => (
         <StatusBadge
@@ -297,12 +299,12 @@ export default function RequirementsView() {
     },
     {
       key: 'assignment',
-      title: '执行',
+      title: t('features.requirements.requirementsView.colAssignment'),
       width: 150,
       render: (item) => (
         <div className="req-assignee-cell">
           <span className={item.assignee ? '' : 'is-muted'}>
-            {item.assignee || '未分配'}
+            {item.assignee || t('features.requirements.requirementsView.unassigned')}
           </span>
           {item.assigneeRole ? (
             <em>{labelOf(USER_ROLE_LABELS, item.assigneeRole)}</em>
@@ -312,13 +314,13 @@ export default function RequirementsView() {
     },
     {
       key: 'completion',
-      title: '完成度',
+      title: t('features.requirements.requirementsView.colCompletion'),
       width: 160,
       render: (item) => <RequirementCompletionCell completion={item.completion} />,
     },
     {
       key: 'actions',
-      title: '操作',
+      title: t('common.actions'),
       width: 72,
       align: 'right',
       render: (item) => (
@@ -330,61 +332,61 @@ export default function RequirementsView() {
               void handleDelete(item);
             }}
           >
-            删除
+            {t('common.delete')}
           </button>
-        ) : <span className="text-secondary">只读</span>
+        ) : <span className="text-secondary">{t('features.requirements.requirementsView.readonly')}</span>
       ),
     },
   ];
 
   return (
     <div className="req-workbench">
-      <section className="req-signal-strip" aria-label="需求池概况">
+      <section className="req-signal-strip" aria-label={t('features.requirements.requirementsView.ariaLabelPool')}>
         <div className="req-signal">
-          <span className="req-signal-label"><ListTree size={13} aria-hidden="true" /> 需求总数</span>
+          <span className="req-signal-label"><ListTree size={13} aria-hidden="true" /> {t('features.requirements.requirementsView.signalTotal')}</span>
           <strong>{signals.total}</strong>
-          <em>根节点 {rootCount}</em>
+          <em>{t('features.requirements.requirementsView.signalRootCount', { count: rootCount })}</em>
         </div>
         <div className="req-signal">
-          <span className="req-signal-label"><CircleDashed size={13} aria-hidden="true" /> 在途</span>
+          <span className="req-signal-label"><CircleDashed size={13} aria-hidden="true" /> {t('features.requirements.requirementsView.signalOpen')}</span>
           <strong>{signals.open}</strong>
-          <em>平均完成 {signals.avgCompletion}%</em>
+          <em>{t('features.requirements.requirementsView.signalAvgCompletion', { percent: signals.avgCompletion })}</em>
         </div>
         <div className={`req-signal ${signals.high > 0 ? 'is-risk' : ''}`}>
-          <span className="req-signal-label"><AlertTriangle size={13} aria-hidden="true" /> 高优未完</span>
+          <span className="req-signal-label"><AlertTriangle size={13} aria-hidden="true" /> {t('features.requirements.requirementsView.signalHigh')}</span>
           <strong>{signals.high}</strong>
-          <em>需优先收敛</em>
+          <em>{t('features.requirements.requirementsView.signalHighCaption')}</em>
         </div>
         <div className={`req-signal ${signals.unassigned > 0 ? 'is-warn' : ''}`}>
-          <span className="req-signal-label"><UserRound size={13} aria-hidden="true" /> 待指派</span>
+          <span className="req-signal-label"><UserRound size={13} aria-hidden="true" /> {t('features.requirements.requirementsView.signalUnassigned')}</span>
           <strong>{signals.unassigned}</strong>
-          <em>缺少执行人</em>
+          <em>{t('features.requirements.requirementsView.signalUnassignedCaption')}</em>
         </div>
         <div className="req-signal">
-          <span className="req-signal-label"><CheckCircle2 size={13} aria-hidden="true" /> 已完结</span>
+          <span className="req-signal-label"><CheckCircle2 size={13} aria-hidden="true" /> {t('features.requirements.requirementsView.signalDone')}</span>
           <strong>{signals.done}</strong>
-          <em>验收 / 关闭 / 取消</em>
+          <em>{t('features.requirements.requirementsView.signalDoneCaption')}</em>
         </div>
       </section>
 
       <Panel
         className="req-pool-panel"
-        title="需求池"
-        subtitle={`显示 ${visibleRequirements.length} / ${requirements.length} 条`}
+        title={t('features.requirements.requirementsView.poolTitle')}
+        subtitle={t('features.requirements.requirementsView.poolSubtitle', { visible: visibleRequirements.length, total: requirements.length })}
         toolbar={(
           <div className="req-pool-toolbar">
             <button className="btn btn-secondary btn-sm btn-with-icon" onClick={reload} disabled={loading}>
-              <RefreshCw size={14} aria-hidden="true" /> 刷新
+              <RefreshCw size={14} aria-hidden="true" /> {t('features.requirements.requirementsView.refresh')}
             </button>
             {canManageRequirements ? (
               <button className="btn btn-primary btn-sm btn-with-icon" onClick={() => setCreating(true)}>
-                <Plus size={14} aria-hidden="true" /> 新建需求
+                <Plus size={14} aria-hidden="true" /> {t('features.requirements.requirementsView.new')}
               </button>
             ) : null}
           </div>
         )}
       >
-        <div className="req-focus-row" role="group" aria-label="快速聚焦">
+        <div className="req-focus-row" role="group" aria-label={t('features.requirements.requirementsView.ariaLabelFocus')}>
           {focusButtons.map((item) => (
             <button
               key={item.key}
@@ -405,19 +407,19 @@ export default function RequirementsView() {
               <Search size={14} className="shrink-0 text-secondary" aria-hidden="true" />
               <input
                 className="form-input border-0 bg-transparent shadow-none"
-                placeholder="搜索需求标题 / 编号"
+                placeholder={t('features.requirements.requirementsView.searchPlaceholder')}
                 value={filters.keyword ?? ''}
                 onChange={(e) => setFilter('keyword', e.target.value)}
-                aria-label="搜索需求"
+                aria-label={t('features.requirements.requirementsView.searchAriaLabel')}
               />
             </div>
             <select
               className="form-select"
               value={filters.status ?? ''}
               onChange={(e) => setFilter('status', e.target.value)}
-              aria-label="状态"
+              aria-label={t('features.requirements.requirementsView.statusAriaLabel')}
             >
-              <option value="">全部状态</option>
+              <option value="">{t('features.requirements.requirementsView.allStatuses')}</option>
               {REQUIREMENT_STATUSES.map((item) => (
                 <option key={item} value={item}>{labelOf(REQUIREMENT_STATUS_LABELS, item)}</option>
               ))}
@@ -426,9 +428,9 @@ export default function RequirementsView() {
               className="form-select"
               value={filters.priority ?? ''}
               onChange={(e) => setFilter('priority', e.target.value)}
-              aria-label="优先级"
+              aria-label={t('features.requirements.requirementsView.priorityAriaLabel')}
             >
-              <option value="">全部优先级</option>
+              <option value="">{t('features.requirements.requirementsView.allPriorities')}</option>
               {REQUIREMENT_PRIORITIES.map((item) => (
                 <option key={item} value={item}>{labelOf(PRIORITY_LABELS, item)}</option>
               ))}
@@ -437,9 +439,9 @@ export default function RequirementsView() {
               className="form-select filter-project"
               value={filters.projectId ?? ''}
               onChange={(e) => setFilter('projectId', e.target.value)}
-              aria-label="项目"
+              aria-label={t('features.requirements.requirementsView.projectAriaLabel')}
             >
-              <option value="">全部项目</option>
+              <option value="">{t('features.requirements.requirementsView.allProjects')}</option>
               {projects.map((item) => (
                 <option key={item.id} value={item.id}>{item.name}</option>
               ))}
@@ -460,7 +462,7 @@ export default function RequirementsView() {
             getDepth={(item) => depthMap.get(item.id) ?? 0}
             rowKey="id"
             onRowClick={setSelected}
-            emptyText="当前没有符合条件的需求。"
+            emptyText={t('features.requirements.requirementsView.emptyText')}
             indentSize={18}
           />
         )}

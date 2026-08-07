@@ -1,3 +1,4 @@
+import i18n from '../../i18n';
 import type { AiProposedAction } from '../../types';
 import { createIdempotencyKey } from '../../services/idempotency';
 import { businessDateKey } from '../../utils/businessDate';
@@ -101,7 +102,7 @@ export async function executeAiProposedAction(
 
   switch (type) {
     case 'create_requirement': {
-      if (!draft.title.trim() || !draft.projectId) throw new Error('请填写需求标题并选择项目。');
+      if (!draft.title.trim() || !draft.projectId) throw new Error(i18n.t('features.ai.aiActionExecutor.reqTitleProjectMissing'));
       const created = await createRequirement({
         title: draft.title.trim(),
         projectId: draft.projectId,
@@ -115,7 +116,7 @@ export async function executeAiProposedAction(
       break;
     }
     case 'update_requirement': {
-      if (!draft.resourceId.trim()) throw new Error('请填写需求编号 REQ-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.reqIdRequired'));
       const current = await fetchRequirement(draft.resourceId.trim());
       await updateRequirement(draft.resourceId.trim(), {
         version: Number(current.version || 1),
@@ -130,20 +131,20 @@ export async function executeAiProposedAction(
       break;
     }
     case 'update_requirement_status': {
-      if (!draft.resourceId.trim() || !draft.status) throw new Error('请填写需求编号与目标状态。');
+      if (!draft.resourceId.trim() || !draft.status) throw new Error(i18n.t('features.ai.aiActionExecutor.reqIdStatusRequired'));
       const current = await fetchRequirement(draft.resourceId.trim());
       await updateRequirementStatus(draft.resourceId.trim(), draft.status, Number(current.version || 1));
       id = draft.resourceId.trim();
       break;
     }
     case 'delete_requirement': {
-      if (!draft.resourceId.trim()) throw new Error('请填写需求编号 REQ-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.reqIdRequired'));
       await deleteRequirement(draft.resourceId.trim());
       id = draft.resourceId.trim();
       break;
     }
     case 'create_defect': {
-      if (!draft.title.trim() || !draft.projectId) throw new Error('请填写缺陷标题并选择项目。');
+      if (!draft.title.trim() || !draft.projectId) throw new Error(i18n.t('features.ai.aiActionExecutor.defectTitleProjectMissing'));
       const created = await createDefect({
         title: draft.title.trim(),
         projectId: draft.projectId,
@@ -156,7 +157,7 @@ export async function executeAiProposedAction(
       break;
     }
     case 'update_defect': {
-      if (!draft.resourceId.trim()) throw new Error('请填写缺陷编号 BUG-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.defectIdRequired'));
       const current = (await fetchDefects()).find((item) => item.id === draft.resourceId.trim());
       if (!current) throw new Error('Defect not found. Refresh and retry.');
       await updateDefect(draft.resourceId.trim(), {
@@ -171,7 +172,7 @@ export async function executeAiProposedAction(
       break;
     }
     case 'update_defect_status': {
-      if (!draft.resourceId.trim() || !draft.status) throw new Error('请填写缺陷编号与目标状态。');
+      if (!draft.resourceId.trim() || !draft.status) throw new Error(i18n.t('features.ai.aiActionExecutor.defectIdStatusRequired'));
       const current = (await fetchDefects()).find((item) => item.id === draft.resourceId.trim());
       if (!current) throw new Error('Defect not found. Refresh and retry.');
       await updateDefectStatus(draft.resourceId.trim(), draft.status, current.version);
@@ -179,13 +180,13 @@ export async function executeAiProposedAction(
       break;
     }
     case 'delete_defect': {
-      if (!draft.resourceId.trim()) throw new Error('请填写缺陷编号 BUG-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.defectIdRequired'));
       await deleteDefect(draft.resourceId.trim());
       id = draft.resourceId.trim();
       break;
     }
     case 'create_task': {
-      if (!draft.title.trim() || !draft.projectId) throw new Error('请填写任务标题并选择项目。');
+      if (!draft.title.trim() || !draft.projectId) throw new Error(i18n.t('features.ai.aiActionExecutor.taskTitleProjectMissing'));
       const created = await createWbsTask(draft.projectId, {
         title: draft.title.trim(),
         owner: draft.assignee.trim() || undefined,
@@ -196,7 +197,7 @@ export async function executeAiProposedAction(
       break;
     }
     case 'update_task': {
-      if (!draft.resourceId.trim()) throw new Error('请填写任务编号 TASK-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.taskIdRequired'));
       const current = await fetchTask(draft.resourceId.trim());
       await updateTask(draft.resourceId.trim(), {
         version: Number(current.version || 1),
@@ -209,7 +210,7 @@ export async function executeAiProposedAction(
       break;
     }
     case 'update_task_status': {
-      if (!draft.resourceId.trim() || !draft.status) throw new Error('请填写任务编号与目标状态。');
+      if (!draft.resourceId.trim() || !draft.status) throw new Error(i18n.t('features.ai.aiActionExecutor.taskIdStatusRequired'));
       const current = await fetchTask(draft.resourceId.trim());
       await updateTaskStatus(draft.resourceId.trim(), {
         status: draft.status,
@@ -221,13 +222,13 @@ export async function executeAiProposedAction(
       break;
     }
     case 'delete_task': {
-      if (!draft.resourceId.trim()) throw new Error('请填写任务编号 TASK-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.taskIdRequired'));
       await deleteTask(draft.resourceId.trim());
       id = draft.resourceId.trim();
       break;
     }
     case 'create_test_case': {
-      if (!draft.title.trim() || !draft.projectId) throw new Error('请填写用例名称并选择项目。');
+      if (!draft.title.trim() || !draft.projectId) throw new Error(i18n.t('features.ai.aiActionExecutor.testCaseNameProjectMissing'));
       const created = await createTestCase({
         name: draft.title.trim(),
         projectId: draft.projectId,
@@ -238,7 +239,7 @@ export async function executeAiProposedAction(
       break;
     }
     case 'update_test_case': {
-      if (!draft.resourceId.trim()) throw new Error('请填写用例编号 TC-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.testCaseIdRequired'));
       await updateTestCase(draft.resourceId.trim(), {
         name: draft.title.trim() || undefined,
         owner: draft.owner.trim() || draft.assignee.trim() || undefined,
@@ -248,19 +249,19 @@ export async function executeAiProposedAction(
       break;
     }
     case 'update_test_case_status': {
-      if (!draft.resourceId.trim() || !draft.status) throw new Error('请填写用例编号与目标状态。');
+      if (!draft.resourceId.trim() || !draft.status) throw new Error(i18n.t('features.ai.aiActionExecutor.testCaseIdStatusRequired'));
       await updateTestCaseStatus(draft.resourceId.trim(), draft.status);
       id = draft.resourceId.trim();
       break;
     }
     case 'delete_test_case': {
-      if (!draft.resourceId.trim()) throw new Error('请填写用例编号 TC-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.testCaseIdRequired'));
       await deleteTestCase(draft.resourceId.trim());
       id = draft.resourceId.trim();
       break;
     }
     case 'create_project': {
-      if (!draft.title.trim() || !draft.owner.trim()) throw new Error('请填写项目名称与负责人。');
+      if (!draft.title.trim() || !draft.owner.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.projectNameOwnerMissing'));
       const created = await createProject({
         name: draft.title.trim(),
         owner: draft.owner.trim(),
@@ -270,7 +271,7 @@ export async function executeAiProposedAction(
       break;
     }
     case 'update_project': {
-      if (!draft.resourceId.trim()) throw new Error('请填写项目编号 PRJ-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.projectIdRequired'));
       const current = await fetchProject(draft.resourceId.trim());
       await updateProject(draft.resourceId.trim(), {
         version: Number(current.version || 1),
@@ -282,20 +283,20 @@ export async function executeAiProposedAction(
       break;
     }
     case 'update_project_status': {
-      if (!draft.resourceId.trim() || !draft.status) throw new Error('请填写项目编号与目标状态。');
+      if (!draft.resourceId.trim() || !draft.status) throw new Error(i18n.t('features.ai.aiActionExecutor.projectIdStatusRequired'));
       const current = await fetchProject(draft.resourceId.trim());
       await updateProjectStatus(draft.resourceId.trim(), draft.status, Number(current.version || 1));
       id = draft.resourceId.trim();
       break;
     }
     case 'delete_project': {
-      if (!draft.resourceId.trim()) throw new Error('请填写项目编号 PRJ-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.projectIdRequired'));
       await deleteProject(draft.resourceId.trim());
       id = draft.resourceId.trim();
       break;
     }
     case 'create_product': {
-      if (!draft.title.trim() || !draft.owner.trim()) throw new Error('请填写产品名称与负责人。');
+      if (!draft.title.trim() || !draft.owner.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.productNameOwnerMissing'));
       const created = await createProduct({
         name: draft.title.trim(),
         owner: draft.owner.trim(),
@@ -306,7 +307,7 @@ export async function executeAiProposedAction(
       break;
     }
     case 'update_product': {
-      if (!draft.resourceId.trim()) throw new Error('请填写产品编号 PROD-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.productIdRequired'));
       await updateProduct(draft.resourceId.trim(), {
         name: draft.title.trim() || undefined,
         owner: draft.owner.trim() || undefined,
@@ -317,13 +318,13 @@ export async function executeAiProposedAction(
       break;
     }
     case 'delete_product': {
-      if (!draft.resourceId.trim()) throw new Error('请填写产品编号 PROD-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.productIdRequired'));
       await deleteProduct(draft.resourceId.trim());
       id = draft.resourceId.trim();
       break;
     }
     case 'create_build': {
-      if (!draft.title.trim() || !draft.projectId) throw new Error('请填写构建名称并选择项目。');
+      if (!draft.title.trim() || !draft.projectId) throw new Error(i18n.t('features.ai.aiActionExecutor.buildNameProjectMissing'));
       const created = await createBuild({
         projectId: draft.projectId,
         name: draft.title.trim(),
@@ -334,7 +335,7 @@ export async function executeAiProposedAction(
       break;
     }
     case 'update_build': {
-      if (!draft.resourceId.trim()) throw new Error('请填写构建编号 BLD-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.buildIdRequired'));
       await updateBuild(draft.resourceId.trim(), {
         name: draft.title.trim() || undefined,
         version: draft.version || undefined,
@@ -344,19 +345,19 @@ export async function executeAiProposedAction(
       break;
     }
     case 'update_build_status': {
-      if (!draft.resourceId.trim() || !draft.status) throw new Error('请填写构建编号与目标状态。');
+      if (!draft.resourceId.trim() || !draft.status) throw new Error(i18n.t('features.ai.aiActionExecutor.buildIdStatusRequired'));
       await updateBuildStatus(draft.resourceId.trim(), draft.status);
       id = draft.resourceId.trim();
       break;
     }
     case 'delete_build': {
-      if (!draft.resourceId.trim()) throw new Error('请填写构建编号 BLD-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.buildIdRequired'));
       await deleteBuild(draft.resourceId.trim());
       id = draft.resourceId.trim();
       break;
     }
     case 'create_release': {
-      if (!draft.title.trim()) throw new Error('请填写发布名称。');
+      if (!draft.title.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.releaseNameRequired'));
       const created = await createRelease({
         name: draft.title.trim(),
         productId: draft.productId || undefined,
@@ -368,25 +369,25 @@ export async function executeAiProposedAction(
       break;
     }
     case 'update_release_status': {
-      if (!draft.resourceId.trim() || !draft.status) throw new Error('请填写发布编号与目标状态。');
+      if (!draft.resourceId.trim() || !draft.status) throw new Error(i18n.t('features.ai.aiActionExecutor.releaseIdStatusRequired'));
       await updateReleaseStatus(draft.resourceId.trim(), draft.status);
       id = draft.resourceId.trim();
       break;
     }
     case 'delete_release': {
-      if (!draft.resourceId.trim()) throw new Error('请填写发布编号 REL-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.releaseIdRequired'));
       await deleteRelease(draft.resourceId.trim());
       id = draft.resourceId.trim();
       break;
     }
     case 'create_document': {
-      if (!draft.title.trim()) throw new Error('请填写文档标题。');
+      if (!draft.title.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.documentTitleRequired'));
       const body = draft.content.trim() || draft.description.trim() || draft.title.trim();
       const created = await uploadDocument({
         title: draft.title.trim(),
         type: 'markdown',
         category: draft.category || 'project',
-        owner: draft.owner.trim() || 'AI 助手',
+        owner: draft.owner.trim() || i18n.t('common.aiAssistant'),
         projectId: draft.projectId || undefined,
         fileName: `${draft.title.trim().slice(0, 40)}.md`,
         fileSize: body.length,
@@ -397,7 +398,7 @@ export async function executeAiProposedAction(
       break;
     }
     case 'update_document': {
-      if (!draft.resourceId.trim()) throw new Error('请填写文档编号 DOC-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.documentIdRequired'));
       await updateDocument(draft.resourceId.trim(), {
         title: draft.title.trim() || undefined,
         owner: draft.owner.trim() || undefined,
@@ -408,13 +409,13 @@ export async function executeAiProposedAction(
       break;
     }
     case 'delete_document': {
-      if (!draft.resourceId.trim()) throw new Error('请填写文档编号 DOC-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.documentIdRequired'));
       await deleteDocument(draft.resourceId.trim());
       id = draft.resourceId.trim();
       break;
     }
     case 'create_sprint': {
-      if (!draft.title.trim() || !draft.projectId) throw new Error('请填写迭代名称并选择项目。');
+      if (!draft.title.trim() || !draft.projectId) throw new Error(i18n.t('features.ai.aiActionExecutor.sprintNameProjectMissing'));
       const created = await createSprint(draft.projectId, {
         name: draft.title.trim(),
         goal: draft.objective.trim() || draft.description.trim() || undefined,
@@ -423,7 +424,7 @@ export async function executeAiProposedAction(
       break;
     }
     case 'update_sprint': {
-      if (!draft.resourceId.trim()) throw new Error('请填写迭代编号 SPR-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.sprintIdRequired'));
       await updateSprint(draft.resourceId.trim(), {
         name: draft.title.trim() || undefined,
         goal: draft.objective.trim() || draft.description.trim() || undefined,
@@ -433,14 +434,14 @@ export async function executeAiProposedAction(
       break;
     }
     case 'delete_sprint': {
-      if (!draft.resourceId.trim()) throw new Error('请填写迭代编号 SPR-xxx。');
+      if (!draft.resourceId.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.sprintIdRequired'));
       await deleteSprint(draft.resourceId.trim());
       id = draft.resourceId.trim();
       break;
     }
     case 'create_work_log': {
       const content = draft.content.trim() || draft.description.trim();
-      if (!content) throw new Error('请填写日报内容。');
+      if (!content) throw new Error(i18n.t('features.ai.aiActionExecutor.workLogContentRequired'));
       const created = await createWorkLog({
         content,
         logDate: draft.workDate || businessDateKey(),
@@ -450,7 +451,7 @@ export async function executeAiProposedAction(
       break;
     }
     case 'create_time_entry': {
-      if (!draft.projectId || !draft.hours) throw new Error('请选择项目并填写工时小时数。');
+      if (!draft.projectId || !draft.hours) throw new Error(i18n.t('features.ai.aiActionExecutor.timeEntryProjectHoursRequired'));
       const created = await createTimeEntry({
         projectId: draft.projectId,
         workDate: draft.workDate || businessDateKey(),
@@ -463,7 +464,7 @@ export async function executeAiProposedAction(
       break;
     }
     case 'create_risk': {
-      if (!draft.title.trim() || !draft.projectId) throw new Error('请填写风险标题并选择项目。');
+      if (!draft.title.trim() || !draft.projectId) throw new Error(i18n.t('features.ai.aiActionExecutor.riskTitleProjectMissing'));
       const created = await createProjectRisk(draft.projectId, {
         title: draft.title.trim(),
         description: draft.description.trim() || undefined,
@@ -474,37 +475,37 @@ export async function executeAiProposedAction(
       break;
     }
     case 'create_program': {
-      if (!draft.title.trim() || !draft.owner.trim()) throw new Error('请填写项目集名称与负责人。');
+      if (!draft.title.trim() || !draft.owner.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.programNameOwnerMissing'));
       const created = await createProgram({
         name: draft.title.trim(),
         owner: draft.owner.trim(),
-        objective: draft.objective.trim() || draft.description.trim() || '战略对齐',
+        objective: draft.objective.trim() || draft.description.trim() || i18n.t('features.ai.aiActionExecutor.programDefaultObjective'),
       });
       id = created.id;
       break;
     }
     case 'create_portfolio': {
-      if (!draft.title.trim() || !draft.owner.trim()) throw new Error('请填写组合名称与负责人。');
+      if (!draft.title.trim() || !draft.owner.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.portfolioNameOwnerMissing'));
       const created = await createPortfolio({
         name: draft.title.trim(),
         owner: draft.owner.trim(),
-        objective: draft.objective.trim() || draft.description.trim() || '组合目标',
+        objective: draft.objective.trim() || draft.description.trim() || i18n.t('features.ai.aiActionExecutor.portfolioDefaultObjective'),
       });
       id = created.id;
       break;
     }
     case 'create_strategic_goal': {
-      if (!draft.title.trim() || !draft.owner.trim()) throw new Error('请填写目标名称与负责人。');
+      if (!draft.title.trim() || !draft.owner.trim()) throw new Error(i18n.t('features.ai.aiActionExecutor.goalNameOwnerMissing'));
       const created = await createStrategicGoal({
         name: draft.title.trim(),
         owner: draft.owner.trim(),
-        objective: draft.objective.trim() || draft.description.trim() || '战略目标',
+        objective: draft.objective.trim() || draft.description.trim() || i18n.t('features.ai.aiActionExecutor.goalDefaultObjective'),
       });
       id = created.id;
       break;
     }
     default:
-      throw new Error(`暂不支持的操作类型：${type}`);
+      throw new Error(i18n.t('features.ai.aiActionExecutor.unsupportedType', { type }));
   }
 
   return { type, id, label: type };

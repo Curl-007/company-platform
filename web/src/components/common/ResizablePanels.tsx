@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface ResizablePanelsProps {
   left?: ReactNode;
@@ -25,6 +26,7 @@ function ResizablePanels({
   rightMax = 460,
   className = '',
 }: ResizablePanelsProps) {
+  const { t } = useTranslation();
   const [leftWidth, setLeftWidth] = useState(leftDefault);
   const [rightWidth, setRightWidth] = useState(rightDefault);
   const drag = useRef<{ side: 'left' | 'right'; startX: number; startWidth: number } | null>(null);
@@ -58,7 +60,7 @@ function ResizablePanels({
     <div
       className="resizable-handle"
       onPointerDown={(event) => startDrag(side, event)}
-      aria-label="调整分栏宽度"
+      aria-label={t('common.resizePanels')}
       role="separator"
     >
       <span />

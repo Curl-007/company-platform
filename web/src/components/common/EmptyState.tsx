@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   cn,
   Empty,
@@ -19,16 +20,18 @@ export interface EmptyStateProps {
 
 const EmptyState: React.FC<EmptyStateProps> = ({
   icon,
-  title = '暂无数据',
+  title,
   description,
   action,
   compact = false,
 }) => {
+  const { t } = useTranslation();
+  const resolvedTitle = title ?? t('common.empty');
   return (
     <Empty className={cn('empty-state-block ui-empty-state', compact && 'compact')}>
       {icon && <EmptyMedia className="empty-state-icon">{icon}</EmptyMedia>}
       <EmptyHeader>
-        <EmptyTitle className="empty-state-title">{title}</EmptyTitle>
+        <EmptyTitle className="empty-state-title">{resolvedTitle}</EmptyTitle>
         {description && <EmptyDescription className="empty-state-desc">{description}</EmptyDescription>}
       </EmptyHeader>
       {action && <EmptyContent className="empty-state-action">{action}</EmptyContent>}

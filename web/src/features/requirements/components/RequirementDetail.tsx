@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Bot,
   CheckCircle2,
@@ -28,16 +29,16 @@ import { canOperate } from '../../../constants/roles';
 import { updateRequirement, updateRequirementStatus } from '../api';
 
 const ASSIGNMENT_STATUS_OPTIONS = [
-  { value: 'unassigned', label: '待分配' },
-  { value: 'assigned', label: '已分配' },
-  { value: 'in_progress', label: '处理中' },
-  { value: 'ready_for_test', label: '提测中' },
-  { value: 'verified', label: '已验证' },
+  { value: 'unassigned', label: 'features.requirements.requirementDetail.assignmentUnassigned' },
+  { value: 'assigned', label: 'features.requirements.requirementDetail.assignmentAssigned' },
+  { value: 'in_progress', label: 'features.requirements.requirementDetail.assignmentInProgress' },
+  { value: 'ready_for_test', label: 'features.requirements.requirementDetail.assignmentReadyForTest' },
+  { value: 'verified', label: 'features.requirements.requirementDetail.assignmentVerified' },
 ];
 
 const EXEC_ROLE_OPTIONS = [
-  { value: 'dev', label: '开发' },
-  { value: 'qa', label: '测试' },
+  { value: 'dev', label: 'features.requirements.requirementDetail.roleDev' },
+  { value: 'qa', label: 'features.requirements.requirementDetail.roleQa' },
 ];
 
 interface RequirementDetailProps {
@@ -68,6 +69,7 @@ export default function RequirementDetail({
   onUpdated,
   canManage,
 }: RequirementDetailProps) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState(requirement.title);
   const [description, setDescription] = useState(requirement.description ?? '');
   const [priority, setPriority] = useState(requirement.priority);
@@ -94,7 +96,7 @@ export default function RequirementDetail({
     ?? assignmentStatus;
 
   async function handleSave() {
-    if (!canManage) return setFormError('当前账号无权更新需求。');
+    if (!canManage) return setFormError(t('features.requirements.requirementDetail.noPermissionUpdate'));
     setSubmitting(true);
     setFormError(null);
     try {
@@ -116,7 +118,7 @@ export default function RequirementDetail({
       });
       onUpdated();
     } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : '更新需求失败');
+      setFormError(error instanceof ApiError ? error.message : t('features.requirements.requirementDetail.updateFailed'));
       setSubmitting(false);
     }
   }
@@ -128,7 +130,7 @@ export default function RequirementDetail({
       const advice = await fetchAiBusinessAdvice({
         targetType: 'requirement',
         targetId: requirement.id,
-        question: '请结合需求、任务、测试、缺陷和当前编辑草稿，给出需求拆解、验收补强、协作风险和下一步动作。',
+        question: t('features.requirements.requirementDetail.aiQuestion'),
         draft: {
           title: title.trim() || requirement.title,
           description: description.trim(),
@@ -143,14 +145,14 @@ export default function RequirementDetail({
       });
       setAiAdvice(advice);
     } catch (error) {
-      setAiError(error instanceof ApiError ? error.message : 'AI 需求分析生成失败，请检查模型配置或稍后重试。');
+      setAiError(error instanceof ApiError ? error.message : t('features.requirements.requirementDetail.aiAnalyzeFailed'));
     } finally {
       setAiLoading(false);
     }
   }
 
   return (
-    <Overlay onClose={onClose} maxWidth={760} ariaLabel={`需求详情：${requirement.title}`}>
+    <Overlay onClose={onClose} maxWidth={760} ariaLabel={t('features.requirements.requirementDetail.ariaLabel', { title: requirement.title })}>
       <Panel
         className="req-detail-panel"
         title={requirement.title}
@@ -164,50 +166,50 @@ export default function RequirementDetail({
                 disabled={aiLoading}
               >
                 <Sparkles size={14} aria-hidden="true" />
-                {aiLoading ? '分析中...' : 'AI 分析'}
+                {aiLoading ? t('features.requirements.requirementDetail.analyzing') : t('common.aiAnalyze')}
               </button>
             ) : null}
-            <button className="btn btn-text btn-sm btn-with-icon" onClick={onClose} aria-label="关闭">
+            <button className="btn btn-text btn-sm btn-with-icon" onClick={onClose} aria-label={t('common.close')}>
               <X size={15} aria-hidden="true" />
             </button>
           </div>
         )}
       >
         <div className="req-detail-body">
-          <section className="req-detail-summary" aria-label="需求摘要">
+          <section className="req-detail-summary" aria-label={t('features.requirements.requirementDetail.summaryAriaLabel')}>
             <div className="req-detail-badges">
               <StatusBadge status={priority} label={labelOf(PRIORITY_LABELS, priority)} showDot={false} />
               <StatusBadge status={status} label={labelOf(REQUIREMENT_STATUS_LABELS, status)} />
-              <span className="req-detail-chip">{assignmentLabel}</span>
+              <span className="req-detail-chip">{t(assignmentLabel)}</span>
             </div>
 
             <div className="req-detail-metrics">
               <div className="req-detail-metric">
-                <span><UserRound size={13} aria-hidden="true" /> 负责人</span>
-                <strong>{requirement.owner || '未设置'}</strong>
+                <span><UserRound size={13} aria-hidden="true" /> {t('features.requirements.requirementDetail.ownerLabel')}</span>
+                <strong>{requirement.owner || t('enums.unset')}</strong>
               </div>
               <div className="req-detail-metric">
-                <span><UserRound size={13} aria-hidden="true" /> 执行人</span>
+                <span><UserRound size={13} aria-hidden="true" /> {t('features.requirements.requirementDetail.assigneeLabel')}</span>
                 <strong>
-                  {requirement.assignee || '未分配'}
+                  {requirement.assignee || t('features.requirements.requirementDetail.unassigned')}
                   {requirement.assigneeRole
                     ? ` · ${labelOf(USER_ROLE_LABELS, requirement.assigneeRole)}`
                     : ''}
                 </strong>
               </div>
               <div className="req-detail-metric">
-                <span><ListTree size={13} aria-hidden="true" /> 子需求</span>
+                <span><ListTree size={13} aria-hidden="true" /> {t('features.requirements.requirementDetail.childCountLabel')}</span>
                 <strong>{childCount}</strong>
               </div>
               <div className="req-detail-metric">
-                <span><CheckCircle2 size={13} aria-hidden="true" /> 关联任务</span>
+                <span><CheckCircle2 size={13} aria-hidden="true" /> {t('features.requirements.requirementDetail.linkedTasksLabel')}</span>
                 <strong>{linkedTaskCount}</strong>
               </div>
             </div>
 
             <div className="req-detail-progress">
               <div className="req-detail-progress-head">
-                <span>完成度</span>
+                <span>{t('features.requirements.requirementDetail.completionLabel')}</span>
                 <strong className="text-mono">{completionNum}%</strong>
               </div>
               <ProgressBar percent={completionNum} height={7} showPercent={false} />
@@ -222,37 +224,37 @@ export default function RequirementDetail({
                 <div>
                   <div className="section-title req-ai-title">
                     <Bot size={14} aria-hidden="true" />
-                    {aiAdvice?.title || 'AI 需求分析'}
+                    {aiAdvice?.title || t('features.requirements.requirementDetail.aiTitle')}
                   </div>
                   <div className="body-text">
-                    基于需求、任务、测试、缺陷和当前草稿生成
+                    {t('features.requirements.requirementDetail.aiAdviceBasis')}
                     {aiAdvice?.modelUsed ? ` · ${aiAdvice.modelUsed}` : ''}
-                    {aiAdvice?.fallback ? ' · 规则兜底' : ''}
+                    {aiAdvice?.fallback ? t('common.ruleFallback') : ''}
                   </div>
                 </div>
                 {aiAdvice ? (
                   <button className="btn btn-secondary btn-xs" onClick={handleAiAdvice} disabled={aiLoading}>
-                    重新分析
+                    {t('common.reanalyze')}
                   </button>
                 ) : null}
               </div>
-              {aiLoading ? <div className="body-text">AI 正在分析需求拆解、验收口径和交付风险…</div> : null}
+              {aiLoading ? <div className="body-text">{t('features.requirements.requirementDetail.aiAnalyzing')}</div> : null}
               {aiError ? <div className="form-error">{aiError}</div> : null}
               {aiAdvice ? (
                 <div className="requirement-ai-advice-content">
                   <p>{aiAdvice.summary}</p>
-                  <AdviceList title="风险" items={aiAdvice.risks} />
-                  <AdviceList title="建议" items={aiAdvice.suggestions} />
-                  <AdviceList title="下一步" items={aiAdvice.nextActions} />
-                  <AdviceList title="缺少信息" items={aiAdvice.missingInfo} />
+                  <AdviceList title={t('common.risks')} items={aiAdvice.risks} />
+                  <AdviceList title={t('common.suggestions')} items={aiAdvice.suggestions} />
+                  <AdviceList title={t('common.nextSteps')} items={aiAdvice.nextActions} />
+                  <AdviceList title={t('common.missingInfo')} items={aiAdvice.missingInfo} />
                 </div>
               ) : null}
             </section>
           ) : null}
 
-          <section className="req-detail-form" aria-label="需求编辑">
+          <section className="req-detail-form" aria-label={t('features.requirements.requirementDetail.editAriaLabel')}>
             <div className="form-group">
-              <label className="form-label">需求标题</label>
+              <label className="form-label">{t('features.requirements.requirementDetail.titleLabel')}</label>
               <input
                 className="form-input"
                 value={title}
@@ -263,7 +265,7 @@ export default function RequirementDetail({
 
             <div className="req-form-grid">
               <div className="form-group">
-                <label className="form-label">状态</label>
+                <label className="form-label">{t('features.requirements.requirementDetail.statusLabel')}</label>
                 <select
                   className="form-select"
                   value={status}
@@ -276,7 +278,7 @@ export default function RequirementDetail({
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">优先级</label>
+                <label className="form-label">{t('features.requirements.requirementDetail.priorityLabel')}</label>
                 <select
                   className="form-select"
                   value={priority}
@@ -289,17 +291,17 @@ export default function RequirementDetail({
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">执行人</label>
+                <label className="form-label">{t('features.requirements.requirementDetail.assigneeLabel')}</label>
                 <input
                   className="form-input"
                   value={assignee}
                   onChange={(event) => setAssignee(event.target.value)}
                   disabled={!canManage}
-                  placeholder="开发 / 测试执行人"
+                  placeholder={t('features.requirements.requirementDetail.assigneePlaceholder')}
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">执行角色</label>
+                <label className="form-label">{t('features.requirements.requirementDetail.assigneeRoleLabel')}</label>
                 <select
                   className="form-select"
                   value={assigneeRole}
@@ -307,12 +309,12 @@ export default function RequirementDetail({
                   disabled={!canManage}
                 >
                   {EXEC_ROLE_OPTIONS.map((item) => (
-                    <option key={item.value} value={item.value}>{item.label}</option>
+                    <option key={item.value} value={item.value}>{t(item.label)}</option>
                   ))}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">指派状态</label>
+                <label className="form-label">{t('features.requirements.requirementDetail.assignmentStatusLabel')}</label>
                 <select
                   className="form-select"
                   value={assignmentStatus}
@@ -320,12 +322,12 @@ export default function RequirementDetail({
                   disabled={!canManage}
                 >
                   {ASSIGNMENT_STATUS_OPTIONS.map((item) => (
-                    <option key={item.value} value={item.value}>{item.label}</option>
+                    <option key={item.value} value={item.value}>{t(item.label)}</option>
                   ))}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">完成度</label>
+                <label className="form-label">{t('features.requirements.requirementDetail.completionLabel')}</label>
                 <input
                   className="form-input"
                   type="number"
@@ -339,38 +341,38 @@ export default function RequirementDetail({
             </div>
 
             <div className="form-group">
-              <label className="form-label">需求描述</label>
+              <label className="form-label">{t('features.requirements.requirementDetail.descriptionLabel')}</label>
               <textarea
                 className="form-textarea"
                 rows={4}
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 disabled={!canManage}
-                placeholder="背景、目标、边界与约束"
+                placeholder={t('features.requirements.requirementDetail.descriptionPlaceholder')}
               />
             </div>
 
             <div className="form-group">
-              <label className="form-label">验收标准（每行一条）</label>
+              <label className="form-label">{t('features.requirements.requirementDetail.criteriaLabel')}</label>
               <textarea
                 className="form-textarea"
                 rows={4}
                 value={criteria}
                 onChange={(event) => setCriteria(event.target.value)}
                 disabled={!canManage}
-                placeholder={'例如：\n登录成功后跳转工作台\n失败时展示明确错误提示'}
+                placeholder={t('features.requirements.requirementDetail.criteriaPlaceholder')}
               />
             </div>
           </section>
 
           <div className="req-detail-footer">
             <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>
-              取消
+              {t('common.cancel')}
             </button>
             {canManage ? (
               <button className="btn btn-primary btn-sm btn-with-icon" onClick={handleSave} disabled={submitting}>
                 <Save size={14} aria-hidden="true" />
-                {submitting ? '保存中...' : '保存'}
+                {submitting ? t('features.requirements.requirementDetail.saving') : t('common.save')}
               </button>
             ) : null}
           </div>

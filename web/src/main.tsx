@@ -6,6 +6,8 @@ import { ToastProvider } from './components/common/Toast';
 import { ConfirmProvider } from './components/common/ConfirmDialog';
 import { applyWorkTheme, readWorkThemeSettings } from './theme/workTheme';
 import { queryClient } from './lib/queryClient';
+import './i18n';
+import { LanguageProvider } from './i18n/LanguageProvider';
 import './styles/global.css';
 import './styles/req-workbench.css';
 import './styles/qa-workbench.css';
@@ -24,12 +26,14 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <ConfirmProvider>
-          <App />
-        </ConfirmProvider>
-      </ToastProvider>
-    </QueryClientProvider>
+    <LanguageProvider>
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>
+          <ConfirmProvider>
+            <App />
+          </ConfirmProvider>
+        </ToastProvider>
+      </QueryClientProvider>
+    </LanguageProvider>
   </StrictMode>,
 );

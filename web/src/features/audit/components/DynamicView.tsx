@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Activity, AlertTriangle, Clock3, ExternalLink, Eye, Radar, RefreshCw, Search, SlidersHorizontal } from 'lucide-react';
 import { fetchAuditLogs, type AuditLogFilters } from '../api';
 import { useAsync } from '../../../hooks/useAsync';
@@ -22,6 +23,7 @@ import {
 } from './dynamicMeta';
 
 export default function DynamicView() {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [keyword, setKeyword] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -114,8 +116,8 @@ export default function DynamicView() {
   return (
     <div className="stack dynamic-page">
       <div className="page-inline-actions mb-1 flex items-center justify-between gap-3">
-        <p className="text-secondary text-sm m-0">共 {timeline.length} 条记录</p>
-        <button className="btn btn-secondary btn-sm" onClick={reload}><RefreshCw size={14} /> 刷新</button>
+        <p className="text-secondary text-sm m-0">{t('features.audit.dynamicView.recordCount', { count: timeline.length })}</p>
+        <button className="btn btn-secondary btn-sm" onClick={reload}><RefreshCw size={14} /> {t('features.audit.dynamicView.refresh')}</button>
       </div>
 
       <MetricStrip
@@ -123,31 +125,31 @@ export default function DynamicView() {
         items={[
           {
             icon: <Activity size={14} />,
-            label: '当前动态',
+            label: t('features.audit.dynamicView.currentActivity'),
             value: timeline.length,
-            caption: `${timeRange === 'week' ? '最近 7 天' : timeRange === 'today' ? '今日范围' : '全部范围'}操作轨迹`,
+            caption: `${timeRange === 'week' ? t('features.audit.dynamicView.rangeLast7Days') : timeRange === 'today' ? t('features.audit.dynamicView.rangeToday') : t('features.audit.dynamicView.rangeAll')}${t('features.audit.dynamicView.operationTrail')}`,
             className: 'dynamic-summary-card',
           },
           {
             icon: <AlertTriangle size={14} />,
-            label: '重点关注',
+            label: t('features.audit.dynamicView.keyFocus'),
             value: stats.importantCount,
-            caption: '登录失败、删改、状态变更',
+            caption: t('features.audit.dynamicView.keyFocusCaption'),
             tone: 'risk',
             className: 'dynamic-summary-card dynamic-summary-card-important',
           },
           {
             icon: <Clock3 size={14} />,
-            label: '今日动态',
+            label: t('features.audit.dynamicView.todayActivity'),
             value: stats.todayCount,
-            caption: '当天新增的审计记录',
+            caption: t('features.audit.dynamicView.todayActivityCaption'),
             className: 'dynamic-summary-card',
           },
           {
             icon: <Radar size={14} />,
-            label: '风险信号',
+            label: t('features.audit.dynamicView.riskSignals'),
             value: stats.riskCount,
-            caption: '账号、测试、删除、发布风险',
+            caption: t('features.audit.dynamicView.riskSignalsCaption'),
             className: 'dynamic-summary-card',
           },
         ]}
@@ -156,7 +158,7 @@ export default function DynamicView() {
       <div className="dynamic-workbench dynamic-command-center">
         <aside className="dynamic-rail">
           <div className="dynamic-rail-header">
-            <span>待关注</span>
+            <span>{t('features.audit.dynamicView.attentionQueue')}</span>
             <strong>{attentionQueue.length}</strong>
           </div>
           {attentionQueue.length ? (
@@ -170,7 +172,7 @@ export default function DynamicView() {
               ))}
             </div>
           ) : (
-            <div className="body-text">当前范围内暂无需要优先关注的动态。</div>
+            <div className="body-text">{t('features.audit.dynamicView.noPriorityActivity')}</div>
           )}
         </aside>
 
@@ -182,7 +184,7 @@ export default function DynamicView() {
                   className={`btn btn-sm ${importantOnly ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => setImportantOnly((value) => !value)}
                 >
-                  <Eye size={14} /> {importantOnly ? '已只看重点' : '只看重点'}
+                  <Eye size={14} /> {importantOnly ? t('features.audit.dynamicView.onlyImportantActive') : t('features.audit.dynamicView.onlyImportant')}
                 </button>
               }
             >
@@ -190,29 +192,29 @@ export default function DynamicView() {
                 <Search size={14} className="shrink-0 text-secondary" aria-hidden="true" />
                 <input
                   className="form-input border-0 bg-transparent shadow-none"
-                  placeholder="搜索人员、页面、对象、动作"
+                  placeholder={t('features.audit.dynamicView.searchPlaceholder')}
                   value={keyword}
                   onChange={(event) => setKeyword(event.target.value)}
-                  aria-label="搜索动态"
+                  aria-label={t('features.audit.dynamicView.searchAria')}
                 />
               </div>
-              <select className="form-select" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} aria-label="角色">
-                <option value="all">全部角色</option>
+              <select className="form-select" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} aria-label={t('features.audit.dynamicView.role')}>
+                <option value="all">{t('features.audit.dynamicView.allRoles')}</option>
                 {roleOptions.map((role) => (
                   <option key={role} value={role}>{role}</option>
                 ))}
               </select>
-              <select className="form-select" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} aria-label="分类">
-                <option value="all">全部分类</option>
+              <select className="form-select" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} aria-label={t('features.audit.dynamicView.category')}>
+                <option value="all">{t('features.audit.dynamicView.allCategories')}</option>
                 {Object.entries(CATEGORY_META).map(([key, meta]) => (
-                  <option key={key} value={key}>{meta.label}</option>
+                  <option key={key} value={key}>{t(meta.label)}</option>
                 ))}
               </select>
             </FilterBar>
           </div>
 
           {filteredTimeline.length === 0 ? (
-            <p className="body-text" style={{ margin: 0 }}>当前筛选条件下没有匹配的动态记录。</p>
+            <p className="body-text" style={{ margin: 0 }}>{t('features.audit.dynamicView.noMatchingRecords')}</p>
           ) : (
             <div className="timeline dynamic-timeline">
               {filteredTimeline.map((item) => {
@@ -227,7 +229,7 @@ export default function DynamicView() {
                       <div className="dynamic-timeline-top">
                         <div className="dynamic-timeline-heading">
                           <span className="font-medium">{item.title}</span>
-                          {item.isImportant ? <span className="tag risk">重点</span> : null}
+                          {item.isImportant ? <span className="tag risk">{t('features.audit.dynamicView.important')}</span> : null}
                         </div>
                         <span className="text-secondary dynamic-timeline-time">{formatTime(item.record.createdAt)}</span>
                       </div>
@@ -240,17 +242,17 @@ export default function DynamicView() {
 
                       <div className="body-text dynamic-timeline-detail">{item.detail}</div>
                       <div className="dynamic-timeline-footer">
-                        <div className="text-secondary dynamic-timeline-resource">关联对象：{item.resourceLabel}</div>
+                        <div className="text-secondary dynamic-timeline-resource">{t('features.audit.dynamicView.relatedResource', { resource: item.resourceLabel })}</div>
                         {getResourceTarget(item.record) ? (
                           <button className="btn btn-secondary btn-xs" onClick={() => openResource(item.record)}>
-                            <ExternalLink size={12} /> 打开对象
+                            <ExternalLink size={12} /> {t('features.audit.dynamicView.openObject')}
                           </button>
                         ) : null}
                       </div>
 
                       {canExpand ? (
                         <button className="btn btn-text btn-xs" style={{ padding: '2px 0', marginTop: 8 }} onClick={() => toggle(item.record.id)}>
-                          {isOpen ? '收起变更详情' : '查看变更详情'}
+                          {isOpen ? t('features.audit.dynamicView.collapseChanges') : t('features.audit.dynamicView.viewChanges')}
                         </button>
                       ) : null}
 
@@ -268,53 +270,53 @@ export default function DynamicView() {
         </section>
 
         <aside className="dynamic-filter-panel">
-          <div className="dynamic-filter-panel-title"><SlidersHorizontal size={15} /> 筛选策略</div>
+          <div className="dynamic-filter-panel-title"><SlidersHorizontal size={15} /> {t('features.audit.dynamicView.filterStrategy')}</div>
           <div className="dynamic-filter-grid">
             <div className="form-group">
-              <label className="form-label">时间范围</label>
+              <label className="form-label">{t('features.audit.dynamicView.timeRange')}</label>
               <select className="form-select" value={timeRange} onChange={(event) => setTimeRange(event.target.value as TimeRange)}>
-                <option value="today">今天</option>
-                <option value="week">最近 7 天</option>
-                <option value="all">全部</option>
+                <option value="today">{t('features.audit.dynamicView.today')}</option>
+                <option value="week">{t('features.audit.dynamicView.rangeLast7Days')}</option>
+                <option value="all">{t('features.audit.dynamicView.all')}</option>
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">资源类型</label>
+              <label className="form-label">{t('features.audit.dynamicView.resourceType')}</label>
               <select className="form-select" value={resourceTypeFilter} onChange={(event) => setResourceTypeFilter(event.target.value)}>
-                <option value="all">全部资源</option>
-                <option value="project">项目</option>
-                <option value="requirement">需求</option>
-                <option value="task">任务</option>
-                <option value="defect">缺陷</option>
-                <option value="test_case">测试用例</option>
-                <option value="document">文档</option>
-                <option value="work_log">日报</option>
-                <option value="build">构建</option>
-                <option value="release">发布</option>
-                <option value="user">用户</option>
-                <option value="page">页面</option>
+                <option value="all">{t('features.audit.dynamicView.allResources')}</option>
+                <option value="project">{t('features.audit.dynamicMeta.resourceType.project')}</option>
+                <option value="requirement">{t('features.audit.dynamicMeta.resourceType.requirement')}</option>
+                <option value="task">{t('features.audit.dynamicMeta.resourceType.task')}</option>
+                <option value="defect">{t('features.audit.dynamicMeta.resourceType.defect')}</option>
+                <option value="test_case">{t('features.audit.dynamicMeta.resourceType.test_case')}</option>
+                <option value="document">{t('features.audit.dynamicMeta.resourceType.document')}</option>
+                <option value="work_log">{t('features.audit.dynamicMeta.resourceType.work_log')}</option>
+                <option value="build">{t('features.audit.dynamicMeta.resourceType.build')}</option>
+                <option value="release">{t('features.audit.dynamicMeta.resourceType.release')}</option>
+                <option value="user">{t('features.audit.dynamicMeta.resourceType.user')}</option>
+                <option value="page">{t('features.audit.dynamicMeta.resourceType.page')}</option>
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">动作类型</label>
+              <label className="form-label">{t('features.audit.dynamicView.actionType')}</label>
               <select className="form-select" value={actionFilter} onChange={(event) => setActionFilter(event.target.value)}>
-                <option value="all">全部动作</option>
-                <option value="auth.">登录</option>
-                <option value="project.">项目</option>
-                <option value="requirement.">需求</option>
-                <option value="task.">任务</option>
-                <option value="defect.">缺陷</option>
-                <option value="test_case.">测试</option>
-                <option value="document.">文档</option>
-                <option value="work_log.">日报</option>
-                <option value="build.">构建</option>
-                <option value="release.">发布</option>
-                <option value="user.">用户</option>
+                <option value="all">{t('features.audit.dynamicView.allActions')}</option>
+                <option value="auth.">{t('features.audit.dynamicView.actionAuth')}</option>
+                <option value="project.">{t('features.audit.dynamicView.actionProject')}</option>
+                <option value="requirement.">{t('features.audit.dynamicView.actionRequirement')}</option>
+                <option value="task.">{t('features.audit.dynamicView.actionTask')}</option>
+                <option value="defect.">{t('features.audit.dynamicView.actionDefect')}</option>
+                <option value="test_case.">{t('features.audit.dynamicView.actionTestCase')}</option>
+                <option value="document.">{t('features.audit.dynamicView.actionDocument')}</option>
+                <option value="work_log.">{t('features.audit.dynamicView.actionWorkLog')}</option>
+                <option value="build.">{t('features.audit.dynamicView.actionBuild')}</option>
+                <option value="release.">{t('features.audit.dynamicView.actionRelease')}</option>
+                <option value="user.">{t('features.audit.dynamicView.actionUser')}</option>
               </select>
             </div>
             <label className="form-checkbox dynamic-filter-checkbox">
               <input type="checkbox" checked={includePageViews} onChange={(event) => setIncludePageViews(event.target.checked)} />
-              <span>包含页面访问</span>
+              <span>{t('features.audit.dynamicView.includePageViews')}</span>
             </label>
           </div>
           <div className="dynamic-category-dock">
@@ -324,7 +326,7 @@ export default function DynamicView() {
                 className={`dynamic-category-chip ${item.variant}${categoryFilter === item.key ? ' active' : ''}`}
                 onClick={() => setCategoryFilter(categoryFilter === item.key ? 'all' : item.key)}
               >
-                <span>{item.label}</span>
+                <span>{t(item.label)}</span>
                 <strong>{item.count}</strong>
               </button>
             ))}

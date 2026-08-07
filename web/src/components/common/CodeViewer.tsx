@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { SourceFile } from '../../types';
 
 // ---------------------------------------------------------------------------
@@ -53,13 +54,14 @@ function tokenizeLine(line: string, language: string): React.ReactNode[] {
 }
 
 function CodeViewer({ file, className = '', maxHeight = 600 }: CodeViewerProps) {
+  const { t } = useTranslation();
   const lines = useMemo(() => file.content.split('\n'), [file.content]);
 
   return (
     <div className={`code-viewer ${className}`} style={{ maxHeight, overflow: 'auto' }}>
       <div className="code-viewer-header">
         <span className="code-viewer-lang">{file.language}</span>
-        <span className="code-viewer-info">{file.lineCount} 行{file.truncated ? ' (已截断)' : ''}</span>
+        <span className="code-viewer-info">{t('common.linesCount', { count: file.lineCount })}{file.truncated ? ` (${t('common.truncated')})` : ''}</span>
       </div>
       <div className="code-viewer-body">
         <table className="code-viewer-table">

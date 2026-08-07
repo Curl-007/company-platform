@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, CalendarDays, Plus, RefreshCw, Users } from 'lucide-react';
 import PageState from '../../../components/common/PageState';
 import Panel from '../../../components/common/Panel';
@@ -24,6 +25,7 @@ import WorkCalendarOverlay from './WorkCalendarOverlay';
 import WorkloadThresholdsOverlay from './WorkloadThresholdsOverlay';
 
 export default function CapacityView({ user }: { user?: SessionUser | null }) {
+  const { t } = useTranslation();
   const routeParams = useMemo(() => new URLSearchParams(window.location.hash.split('?')[1] ?? ''), []);
   const initialPeriod = useMemo(() => {
     const fallback = currentWeek();
@@ -74,73 +76,73 @@ export default function CapacityView({ user }: { user?: SessionUser | null }) {
     try {
       await approveProjectAllocation(id);
       overviewAsync.reload();
-      toast.success('超配例外已审批，保留在容量风险视图中供持续跟踪。');
+      toast.success(t('features.capacity.capacityView.overrideApproved'));
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : '审批超配例外失败');
+      toast.error(error instanceof ApiError ? error.message : t('features.capacity.capacityView.approveOverrideFailed'));
     } finally {
       setApprovingAllocationId(null);
     }
   }
   async function removeAllocation(id: string, projectName: string, allocationPercent: number) {
     const confirmed = await confirm({
-      title: '删除项目投入分配？',
-      description: `${projectName} 的 ${allocationPercent}% 项目投入将被删除，并重新计算成员负载。`,
-      confirmText: '删除分配',
+      title: t('features.capacity.capacityView.deleteAllocationTitle'),
+      description: t('features.capacity.capacityView.deleteAllocationDesc', { projectName, percent: allocationPercent }),
+      confirmText: t('features.capacity.capacityView.deleteAllocation'),
       tone: 'warning',
     });
     if (!confirmed) return;
     try {
       await deleteProjectAllocation(id);
       await overviewAsync.reload();
-      toast.success('项目投入分配已删除，容量数据已更新');
+      toast.success(t('features.capacity.capacityView.allocationDeleted'));
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : '删除项目投入分配失败');
+      toast.error(error instanceof ApiError ? error.message : t('features.capacity.capacityView.deleteAllocationFailed'));
     }
   }
   return (
     <div className="page capacity-page">
       <div className="page-inline-actions mb-4 flex flex-wrap justify-end gap-2">
-        <button className="btn btn-secondary btn-sm" onClick={overviewAsync.reload}><RefreshCw size={15} /> 刷新</button>
-        {user?.role === 'admin' ? <button className="btn btn-secondary btn-sm" onClick={() => setEditingThresholds(true)}>风险阈值</button> : null}
-        <button className="btn btn-secondary btn-sm" onClick={() => setEditingCalendar(true)}>工作日历</button>
-        <button className="btn btn-primary btn-sm" onClick={() => { setEditingAllocation(null); setAllocating(true); }}><Plus size={15} /> 分配项目投入</button>
+        <button className="btn btn-secondary btn-sm" onClick={overviewAsync.reload}><RefreshCw size={15} /> {t('features.capacity.capacityView.refresh')}</button>
+        {user?.role === 'admin' ? <button className="btn btn-secondary btn-sm" onClick={() => setEditingThresholds(true)}>{t('features.capacity.capacityView.riskThresholds')}</button> : null}
+        <button className="btn btn-secondary btn-sm" onClick={() => setEditingCalendar(true)}>{t('features.capacity.capacityView.workCalendar')}</button>
+        <button className="btn btn-primary btn-sm" onClick={() => { setEditingAllocation(null); setAllocating(true); }}><Plus size={15} /> {t('features.capacity.capacityView.allocateProjectInput')}</button>
       </div>
 
-      <Panel title="规划周期" icon={<CalendarDays size={18} />}>
+      <Panel title={t('features.capacity.capacityView.planningPeriod')} icon={<CalendarDays size={18} />}>
         <div className="flex gap-3" style={{ alignItems: 'end', flexWrap: 'wrap' }}>
-          <label className="form-field"><span>开始日期</span><input className="form-input" type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} /></label>
-          <label className="form-field"><span>结束日期</span><input className="form-input" type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} /></label>
+          <label className="form-field"><span>{t('features.capacity.capacityView.startDate')}</span><input className="form-input" type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} /></label>
+          <label className="form-field"><span>{t('features.capacity.capacityView.endDate')}</span><input className="form-input" type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} /></label>
           <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
-            <button className="btn btn-secondary btn-sm" type="button" onClick={() => { const period = weekRange(); setPeriodStart(period.periodStart); setPeriodEnd(period.periodEnd); }}>本周</button>
-            <button className="btn btn-secondary btn-sm" type="button" onClick={() => { const period = weekRange(1); setPeriodStart(period.periodStart); setPeriodEnd(period.periodEnd); }}>下周</button>
-            <button className="btn btn-secondary btn-sm" type="button" onClick={() => { const period = weekRange(1, 2); setPeriodStart(period.periodStart); setPeriodEnd(period.periodEnd); }}>未来两周</button>
+            <button className="btn btn-secondary btn-sm" type="button" onClick={() => { const period = weekRange(); setPeriodStart(period.periodStart); setPeriodEnd(period.periodEnd); }}>{t('features.capacity.capacityView.thisWeek')}</button>
+            <button className="btn btn-secondary btn-sm" type="button" onClick={() => { const period = weekRange(1); setPeriodStart(period.periodStart); setPeriodEnd(period.periodEnd); }}>{t('features.capacity.capacityView.nextWeek')}</button>
+            <button className="btn btn-secondary btn-sm" type="button" onClick={() => { const period = weekRange(1, 2); setPeriodStart(period.periodStart); setPeriodEnd(period.periodEnd); }}>{t('features.capacity.capacityView.nextTwoWeeks')}</button>
           </div>
-          <span className="text-secondary">有效容量会扣除会议、培训、支持和值班等非项目投入。</span>
+          <span className="text-secondary">{t('features.capacity.capacityView.effectiveCapacityHint')}</span>
         </div>
       </Panel>
 
       <div className="metric-grid" style={{ marginTop: 16 }}>
-        <Panel title="团队成员" icon={<Users size={18} />}><strong className="metric-value">{summary.memberCount}</strong><div className="text-secondary">已配置 {summary.configuredCount} 人</div></Panel>
-        <Panel title="有效容量"><strong className="metric-value">{summary.totalEffectiveHours.toFixed(1)}h</strong><div className="text-secondary">周期内可用于交付的工时</div></Panel>
-        <Panel title="计划投入"><strong className="metric-value">{summary.totalPlannedHours.toFixed(1)}h</strong><div className="text-secondary">项目分配后的总计划工时</div></Panel>
-        <Panel title="实际投入"><strong className="metric-value">{summary.totalActualHours.toFixed(1)}h</strong><div className="text-secondary">员工自主记录的实际投入，仅用于计划偏差核对</div></Panel>
-        <Panel title="临时工作"><strong className="metric-value">{summary.totalUnplannedActualHours.toFixed(1)}h</strong><div className="text-secondary">已分类实际工时 {summary.totalClassifiedActualHours.toFixed(1)}h；未分类历史记录不参与占比</div></Panel>
-        <Panel title="资源风险" icon={<AlertTriangle size={18} />}><strong className="metric-value">{summary.overloadedCount + summary.attentionCount}</strong><div className="text-secondary">过载 {summary.overloadedCount} 人，关注 {summary.attentionCount} 人；碎片化风险 {summary.highFragmentationCount} 人；待超配审批 {summary.pendingOverrideCount} 项</div></Panel>
+        <Panel title={t('features.capacity.capacityView.teamMembers')} icon={<Users size={18} />}><strong className="metric-value">{summary.memberCount}</strong><div className="text-secondary">{t('features.capacity.capacityView.configuredCount', { count: summary.configuredCount })}</div></Panel>
+        <Panel title={t('features.capacity.capacityView.effectiveCapacity')}><strong className="metric-value">{summary.totalEffectiveHours.toFixed(1)}h</strong><div className="text-secondary">{t('features.capacity.capacityView.effectiveCapacityHint2')}</div></Panel>
+        <Panel title={t('features.capacity.capacityView.plannedInput')}><strong className="metric-value">{summary.totalPlannedHours.toFixed(1)}h</strong><div className="text-secondary">{t('features.capacity.capacityView.plannedInputHint')}</div></Panel>
+        <Panel title={t('features.capacity.capacityView.actualInput')}><strong className="metric-value">{summary.totalActualHours.toFixed(1)}h</strong><div className="text-secondary">{t('features.capacity.capacityView.actualInputHint')}</div></Panel>
+        <Panel title={t('features.capacity.capacityView.unplannedWork')}><strong className="metric-value">{summary.totalUnplannedActualHours.toFixed(1)}h</strong><div className="text-secondary">{t('features.capacity.capacityView.classifiedHours', { hours: summary.totalClassifiedActualHours.toFixed(1) })}</div></Panel>
+        <Panel title={t('features.capacity.capacityView.resourceRisk')} icon={<AlertTriangle size={18} />}><strong className="metric-value">{summary.overloadedCount + summary.attentionCount}</strong><div className="text-secondary">{t('features.capacity.capacityView.riskHint', { overloaded: summary.overloadedCount, attention: summary.attentionCount, fragmentation: summary.highFragmentationCount, pending: summary.pendingOverrideCount })}</div></Panel>
       </div>
 
-      <Panel title="成员负载" subtitle={`低负载仅提示核对分配，不代表低绩效。当前阈值：平衡 ≥ ${Math.round(overview.thresholds.balancedMin * 100)}%，关注 ≥ ${Math.round(overview.thresholds.attentionMin * 100)}%，过载 > ${Math.round(overview.thresholds.overloadedAbove * 100)}%。`} style={{ marginTop: 16 }}>
-        <div className="table-scroll"><table className="data-table"><thead><tr><th>成员</th><th>角色</th><th>有效容量</th><th>计划投入</th><th>实际投入</th><th>临时工作</th><th>当前 WIP</th><th>项目碎片化</th><th>负载率</th><th>项目分配</th><th>风险</th><th>操作</th></tr></thead><tbody>
+      <Panel title={t('features.capacity.capacityView.memberLoad')} subtitle={t('features.capacity.capacityView.thresholdsSubtitle', { balanced: Math.round(overview.thresholds.balancedMin * 100), attention: Math.round(overview.thresholds.attentionMin * 100), overloaded: Math.round(overview.thresholds.overloadedAbove * 100) })} style={{ marginTop: 16 }}>
+        <div className="table-scroll"><table className="data-table"><thead><tr><th>{t('features.capacity.capacityView.member')}</th><th>{t('features.capacity.capacityView.role')}</th><th>{t('features.capacity.capacityView.effectiveCapacity')}</th><th>{t('features.capacity.capacityView.plannedInput')}</th><th>{t('features.capacity.capacityView.actualInput')}</th><th>{t('features.capacity.capacityView.unplannedWork')}</th><th>{t('features.capacity.capacityView.currentWip')}</th><th>{t('features.capacity.capacityView.fragmentation')}</th><th>{t('features.capacity.capacityView.loadRatio')}</th><th>{t('features.capacity.capacityView.projectAllocations')}</th><th>{t('features.capacity.capacityView.risk')}</th><th>{t('common.actions')}</th></tr></thead><tbody>
           {overview.members.map((member) => {
             const loadPercent = member.loadRatio === null ? 0 : Math.min(100, Math.round(member.loadRatio * 100));
-            return <tr key={member.userId}><td>{member.userName}</td><td>{member.role}</td><td>{member.effectiveHours.toFixed(1)}h</td><td>{member.plannedHours.toFixed(1)}h</td><td>{member.actualHours.toFixed(1)}h</td><td>{member.unplannedActualHours.toFixed(1)}h <span className="text-secondary">{member.unplannedRatio === null ? '待分类' : `(${Math.round(member.unplannedRatio * 100)}%)`}</span></td><td>{member.currentWipCount}</td><td>{member.projectFragmentationCount} {member.fragmentationRisk ? <span className="text-danger">· 关注</span> : null}</td><td style={{ minWidth: 140 }}><ProgressBar percent={loadPercent} height={6} /><span className="text-secondary">{percentage(member.loadRatio)}</span></td><td>{member.allocations.length ? member.allocations.map((item) => <div key={item.id}>{item.projectName} {item.allocationPercent}%{item.approvalStatus === 'pending' ? <span className="text-danger"> · 待超配审批</span> : null}{item.overloadReason ? <small className="text-secondary"> · {item.overloadReason}</small> : null}{user?.role === 'admin' && item.approvalStatus === 'pending' && item.updatedBy !== user.id ? <button className="btn btn-text btn-sm" disabled={approvingAllocationId === item.id} onClick={() => approveOverride(item.id)}>审批</button> : null}{user?.role === 'admin' && item.approvalStatus === 'pending' && item.updatedBy === user.id ? <small className="text-secondary"> · 不可自审批</small> : null}{canManageProjectAllocations ? <button className="btn btn-text btn-sm" onClick={() => { setEditingAllocation(item); setAllocating(true); }}>编辑</button> : null}{canManageProjectAllocations ? <button className="btn btn-text btn-sm" onClick={() => void removeAllocation(item.id, item.projectName, item.allocationPercent)}>删除</button> : null}</div>) : '暂无分配'}</td><td><StatusBadge label={member.risk.label} variant={RISK_VARIANT[member.risk.code]} /></td><td><button className="btn btn-text btn-sm" onClick={() => setEditingMember(member)}>配置容量</button></td></tr>;
+            return <tr key={member.userId}><td>{member.userName}</td><td>{member.role}</td><td>{member.effectiveHours.toFixed(1)}h</td><td>{member.plannedHours.toFixed(1)}h</td><td>{member.actualHours.toFixed(1)}h</td><td>{member.unplannedActualHours.toFixed(1)}h <span className="text-secondary">{member.unplannedRatio === null ? t('features.capacity.capacityView.unclassified') : t('features.capacity.capacityView.ratioValue', { percent: Math.round(member.unplannedRatio * 100) })}</span></td><td>{member.currentWipCount}</td><td>{member.projectFragmentationCount} {member.fragmentationRisk ? <span className="text-danger">{t('features.capacity.capacityView.attention')}</span> : null}</td><td style={{ minWidth: 140 }}><ProgressBar percent={loadPercent} height={6} /><span className="text-secondary">{percentage(member.loadRatio)}</span></td><td>{member.allocations.length ? member.allocations.map((item) => <div key={item.id}>{item.projectName} {item.allocationPercent}%{item.approvalStatus === 'pending' ? <span className="text-danger"> · {t('features.capacity.capacityView.pendingOverride')}</span> : null}{item.overloadReason ? <small className="text-secondary"> · {item.overloadReason}</small> : null}{user?.role === 'admin' && item.approvalStatus === 'pending' && item.updatedBy !== user.id ? <button className="btn btn-text btn-sm" disabled={approvingAllocationId === item.id} onClick={() => approveOverride(item.id)}>{t('features.capacity.capacityView.approve')}</button> : null}{user?.role === 'admin' && item.approvalStatus === 'pending' && item.updatedBy === user.id ? <small className="text-secondary"> · {t('features.capacity.capacityView.cannotSelfApprove')}</small> : null}{canManageProjectAllocations ? <button className="btn btn-text btn-sm" onClick={() => { setEditingAllocation(item); setAllocating(true); }}>{t('common.edit')}</button> : null}{canManageProjectAllocations ? <button className="btn btn-text btn-sm" onClick={() => void removeAllocation(item.id, item.projectName, item.allocationPercent)}>{t('common.delete')}</button> : null}</div>) : t('features.capacity.capacityView.noAllocations')}</td><td><StatusBadge label={member.risk.label} variant={RISK_VARIANT[member.risk.code]} /></td><td><button className="btn btn-text btn-sm" onClick={() => setEditingMember(member)}>{t('features.capacity.capacityView.configureCapacity')}</button></td></tr>;
           })}
         </tbody></table></div>
       </Panel>
 
-      {editingMember ? <CapacityPlanForm member={editingMember} periodStart={periodStart} periodEnd={periodEnd} onClose={() => setEditingMember(null)} onSaved={() => { setEditingMember(null); overviewAsync.reload(); toast.success('容量计划已保存'); }} /> : null}
-      {allocating ? <AllocationForm allocation={editingAllocation ?? undefined} preferredProjectId={requestedProjectId || undefined} periodStart={periodStart} periodEnd={periodEnd} members={membersAsync.data ?? []} capacityMembers={overview.members} projects={projectsAsync.data ?? []} onClose={() => { setAllocating(false); setEditingAllocation(null); }} onConfigureCapacity={(member) => { setAllocating(false); setEditingAllocation(null); setEditingMember(member); }} onSaved={() => { const isEditing = Boolean(editingAllocation); setAllocating(false); setEditingAllocation(null); overviewAsync.reload(); toast.success(isEditing ? '项目投入已更新' : '项目投入已保存'); }} /> : null}
+      {editingMember ? <CapacityPlanForm member={editingMember} periodStart={periodStart} periodEnd={periodEnd} onClose={() => setEditingMember(null)} onSaved={() => { setEditingMember(null); overviewAsync.reload(); toast.success(t('features.capacity.capacityView.capacityPlanSaved')); }} /> : null}
+      {allocating ? <AllocationForm allocation={editingAllocation ?? undefined} preferredProjectId={requestedProjectId || undefined} periodStart={periodStart} periodEnd={periodEnd} members={membersAsync.data ?? []} capacityMembers={overview.members} projects={projectsAsync.data ?? []} onClose={() => { setAllocating(false); setEditingAllocation(null); }} onConfigureCapacity={(member) => { setAllocating(false); setEditingAllocation(null); setEditingMember(member); }} onSaved={() => { const isEditing = Boolean(editingAllocation); setAllocating(false); setEditingAllocation(null); overviewAsync.reload(); toast.success(isEditing ? t('features.capacity.capacityView.allocationUpdated') : t('features.capacity.capacityView.allocationSaved')); }} /> : null}
       {editingCalendar ? <WorkCalendarOverlay periodStart={periodStart} periodEnd={periodEnd} onClose={() => setEditingCalendar(false)} onChanged={overviewAsync.reload} /> : null}
-      {editingThresholds && user?.role === 'admin' ? <WorkloadThresholdsOverlay initial={overview.thresholds} onClose={() => setEditingThresholds(false)} onSaved={() => { setEditingThresholds(false); overviewAsync.reload(); toast.success('容量风险阈值已更新'); }} /> : null}
+      {editingThresholds && user?.role === 'admin' ? <WorkloadThresholdsOverlay initial={overview.thresholds} onClose={() => setEditingThresholds(false)} onSaved={() => { setEditingThresholds(false); overviewAsync.reload(); toast.success(t('features.capacity.capacityView.thresholdsUpdated')); }} /> : null}
     </div>
   );
 }

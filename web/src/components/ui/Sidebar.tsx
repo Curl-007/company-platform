@@ -1,5 +1,6 @@
 import React from 'react';
 import { Menu, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from './utils';
 
 type SidebarContextValue = {
@@ -110,6 +111,7 @@ export interface SidebarProps extends React.HTMLAttributes<HTMLElement> {
 export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(
   ({ className, children, collapsible = 'offcanvas', variant = 'inset', ...props }, ref) => {
     const { open, isMobile, mobileOpen, setMobileOpen } = useSidebar();
+    const { t } = useTranslation();
     const visible = isMobile ? mobileOpen : true;
     const asideRef = React.useRef<HTMLElement | null>(null);
 
@@ -159,7 +161,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(
       <>
         <div className="kaneo-sidebar-gap" data-slot="sidebar-gap" aria-hidden="true" />
         {isMobile && mobileOpen ? (
-          <button className="kaneo-sidebar-scrim" type="button" aria-label="关闭导航" onClick={() => setMobileOpen(false)} />
+          <button className="kaneo-sidebar-scrim" type="button" aria-label={t('common.closeNav')} onClick={() => setMobileOpen(false)} />
         ) : null}
         <aside
           ref={setAsideRef}
@@ -187,8 +189,12 @@ SidebarInset.displayName = 'SidebarInset';
 export const SidebarTrigger = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>(
   ({ className, children, ...props }, ref) => {
     const { isMobile, mobileOpen, open, toggleSidebar } = useSidebar();
+    const { t } = useTranslation();
+    const triggerLabel = isMobile
+      ? (mobileOpen ? t('common.closeNav') : t('common.openNav'))
+      : (open ? t('common.collapseSidebar') : t('common.expandSidebar'));
     return (
-      <button ref={ref} type="button" className={cn('kaneo-sidebar-trigger', className)} aria-label={isMobile ? (mobileOpen ? '关闭导航' : '打开导航') : (open ? '折叠侧栏' : '展开侧栏')} onClick={toggleSidebar} {...props}>
+      <button ref={ref} type="button" className={cn('kaneo-sidebar-trigger', className)} aria-label={triggerLabel} onClick={toggleSidebar} {...props}>
         {isMobile ? (mobileOpen ? <X size={16} /> : <Menu size={16} />) : (open ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />)}
         {children}
       </button>

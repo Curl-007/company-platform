@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createSprint, type CreateSprintInput } from '../../tasks/api';
 import { ApiError } from '../../../services/api';
 import { createIdempotencyKey } from '../../../services/idempotency';
@@ -14,6 +15,7 @@ export default function CreateSprintForm({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [goal, setGoal] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -22,7 +24,7 @@ export default function CreateSprintForm({
 
   async function handleSubmit() {
     setFormError(null);
-    if (!name.trim()) return setFormError('请输入迭代名称。');
+    if (!name.trim()) return setFormError(t('features.projects.createSprintForm.nameRequired'));
 
     setSubmitting(true);
     try {
@@ -40,7 +42,7 @@ export default function CreateSprintForm({
       await createSprint(projectId, input, createRequest.current.key);
       onCreated();
     } catch (err: unknown) {
-      setFormError(err instanceof ApiError ? err.message : '创建迭代失败');
+      setFormError(err instanceof ApiError ? err.message : t('features.projects.createSprintForm.createFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -48,20 +50,20 @@ export default function CreateSprintForm({
 
   return (
     <Overlay onClose={onClose}>
-      <Panel title="新建迭代" subtitle="为项目添加一个迭代">
+      <Panel title={t('features.projects.createSprintForm.title')} subtitle={t('features.projects.createSprintForm.subtitle')}>
         {formError && <div className="form-error" style={{ marginBottom: 8 }}>{formError}</div>}
         <div className="form-group">
-          <label className="form-label">迭代名称</label>
-          <input className="form-input" value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：Sprint 4" />
+          <label className="form-label">{t('features.projects.createSprintForm.nameLabel')}</label>
+          <input className="form-input" value={name} onChange={(event) => setName(event.target.value)} placeholder={t('features.projects.createSprintForm.namePlaceholder')} />
         </div>
         <div className="form-group">
-          <label className="form-label">迭代目标</label>
-          <input className="form-input" value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="本次迭代目标" />
+          <label className="form-label">{t('features.projects.createSprintForm.goalLabel')}</label>
+          <input className="form-input" value={goal} onChange={(event) => setGoal(event.target.value)} placeholder={t('features.projects.createSprintForm.goalPlaceholder')} />
         </div>
         <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end' }}>
-          <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>取消</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>{t('common.cancel')}</button>
           <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? '创建中...' : '创建'}
+            {submitting ? t('features.projects.createSprintForm.creating') : t('features.projects.createSprintForm.create')}
           </button>
         </div>
       </Panel>

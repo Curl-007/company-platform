@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
@@ -24,6 +25,7 @@ function Overlay({
   ariaLabelledby,
   ariaLabel,
 }: OverlayProps) {
+  const { t } = useTranslation();
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent
@@ -31,7 +33,7 @@ function Overlay({
         style={{ maxWidth }}
         showClose={false}
         aria-labelledby={ariaLabelledby}
-        aria-label={ariaLabel ?? (ariaLabelledby ? undefined : '对话框')}
+        aria-label={ariaLabel ?? (ariaLabelledby ? undefined : t('common.dialog'))}
       >
         {children}
       </DialogContent>

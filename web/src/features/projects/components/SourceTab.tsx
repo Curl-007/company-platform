@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Code2, FileCode2, FolderTree, SlidersHorizontal } from 'lucide-react';
 import { fetchProjectSources, fetchSourceFile } from '../api';
 import { ApiError } from '../../../services/api';
@@ -13,6 +14,7 @@ interface SourceTabProps {
 }
 
 export default function SourceTab({ projectId, sourcePath }: SourceTabProps) {
+  const { t } = useTranslation();
   const [tree, setTree] = useState<FileTreeNode[] | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [file, setFile] = useState<SourceFile | null>(null);
@@ -27,7 +29,7 @@ export default function SourceTab({ projectId, sourcePath }: SourceTabProps) {
     setTreeError(null);
     fetchProjectSources(projectId)
       .then((data) => setTree(data as unknown as FileTreeNode[]))
-      .catch((err) => setTreeError(err instanceof ApiError ? err.message : '加载源码目录失败'))
+      .catch((err) => setTreeError(err instanceof ApiError ? err.message : t('features.projects.sourceTab.treeLoadFailed')))
       .finally(() => setTreeLoading(false));
   }, [projectId, sourcePath]);
 
@@ -40,7 +42,7 @@ export default function SourceTab({ projectId, sourcePath }: SourceTabProps) {
     setFileError(null);
     fetchSourceFile(projectId, selectedPath)
       .then((data) => setFile(data))
-      .catch((err) => setFileError(err instanceof ApiError ? err.message : '加载文件失败'))
+      .catch((err) => setFileError(err instanceof ApiError ? err.message : t('features.projects.sourceTab.fileLoadFailed')))
       .finally(() => setFileLoading(false));
   }, [projectId, selectedPath]);
 
@@ -51,14 +53,14 @@ export default function SourceTab({ projectId, sourcePath }: SourceTabProps) {
           <div className="project-board-toolbar-left">
             <span className="project-board-icon"><Code2 size={17} /></span>
             <div>
-              <div className="project-board-title">源码画板</div>
-              <div className="project-board-subtitle">目录、代码画布和文件信息将在这里联动。</div>
+              <div className="project-board-title">{t('features.projects.sourceTab.title')}</div>
+              <div className="project-board-subtitle">{t('features.projects.sourceTab.subtitle')}</div>
             </div>
           </div>
         </div>
         <div className="source-canvas-empty">
           <FileCode2 size={24} />
-          <span>该项目未配置源码路径，暂时无法浏览文件。</span>
+          <span>{t('features.projects.sourceTab.noSourcePath')}</span>
         </div>
       </div>
     );
@@ -70,11 +72,11 @@ export default function SourceTab({ projectId, sourcePath }: SourceTabProps) {
         <div className="project-board-toolbar-left">
           <span className="project-board-icon"><Code2 size={17} /></span>
           <div>
-            <div className="project-board-title">源码画板</div>
+            <div className="project-board-title">{t('features.projects.sourceTab.title')}</div>
             <div className="project-board-subtitle">{sourcePath}</div>
           </div>
         </div>
-        <span className="source-workbench-hint"><SlidersHorizontal size={14} /> 拖动分隔条调整视图</span>
+        <span className="source-workbench-hint"><SlidersHorizontal size={14} /> {t('features.projects.sourceTab.dragHint')}</span>
       </div>
       <ResizablePanels
         className="source-resizable"
@@ -82,13 +84,13 @@ export default function SourceTab({ projectId, sourcePath }: SourceTabProps) {
         rightDefault={300}
         left={
           <div className="source-tree-panel">
-            <div className="source-tree-header"><FolderTree size={15} /> 文件目录</div>
+            <div className="source-tree-header"><FolderTree size={15} /> {t('features.projects.sourceTab.fileTree')}</div>
             {treeLoading ? (
-              <p className="text-secondary" style={{ padding: 12, fontSize: 13 }}>加载中...</p>
+              <p className="text-secondary" style={{ padding: 12, fontSize: 13 }}>{t('common.loading')}</p>
             ) : treeError ? (
               <p className="form-error" style={{ padding: 12, fontSize: 13 }}>{treeError}</p>
             ) : !tree ? (
-              <p className="text-secondary" style={{ padding: 12, fontSize: 13 }}>暂无数据</p>
+              <p className="text-secondary" style={{ padding: 12, fontSize: 13 }}>{t('common.empty')}</p>
             ) : (
               <FileTree
                 items={tree}
@@ -100,41 +102,41 @@ export default function SourceTab({ projectId, sourcePath }: SourceTabProps) {
         }
         right={
           <div className="source-inspector">
-            <div className="source-tree-header"><FileCode2 size={15} /> 文件信息</div>
+            <div className="source-tree-header"><FileCode2 size={15} /> {t('features.projects.sourceTab.fileInfo')}</div>
             {file ? (
               <div className="source-inspector-body">
                 <div className="detail-field">
-                  <span className="detail-label">文件名</span>
-                  <span>{(file.path ?? selectedPath ?? '').split(/[\\/]/).pop() || '未命名文件'}</span>
+                  <span className="detail-label">{t('features.projects.sourceTab.fileNameLabel')}</span>
+                  <span>{(file.path ?? selectedPath ?? '').split(/[\\/]/).pop() || t('features.projects.sourceTab.unnamedFile')}</span>
                 </div>
                 <div className="detail-field">
-                  <span className="detail-label">路径</span>
+                  <span className="detail-label">{t('features.projects.sourceTab.pathLabel')}</span>
                   <span className="text-mono">{file.path ?? selectedPath}</span>
                 </div>
                 <div className="detail-field">
-                  <span className="detail-label">语言</span>
+                  <span className="detail-label">{t('features.projects.sourceTab.languageLabel')}</span>
                   <span>{file.language || 'text'}</span>
                 </div>
                 <div className="detail-field">
-                  <span className="detail-label">行数</span>
+                  <span className="detail-label">{t('features.projects.sourceTab.lineCountLabel')}</span>
                   <span>{file.lineCount || file.content.split('\n').length}</span>
                 </div>
               </div>
             ) : (
-              <div className="source-inspector-empty">从左侧选择文件</div>
+              <div className="source-inspector-empty">{t('features.projects.sourceTab.selectFile')}</div>
             )}
           </div>
         }
       >
         <div className="source-content-panel">
           {fileLoading ? (
-            <div style={{ padding: 16 }}><p className="text-secondary" style={{ fontSize: 13 }}>加载文件中...</p></div>
+            <div style={{ padding: 16 }}><p className="text-secondary" style={{ fontSize: 13 }}>{t('features.projects.sourceTab.fileLoading')}</p></div>
           ) : fileError ? (
             <div style={{ padding: 16 }}><p className="form-error" style={{ fontSize: 13 }}>{fileError}</p></div>
           ) : !file ? (
             <div className="source-canvas-empty">
               <FileCode2 size={24} />
-              <span>请从左侧选择文件以查看内容。</span>
+              <span>{t('features.projects.sourceTab.selectFilePrompt')}</span>
             </div>
           ) : (
             <CodeViewer file={file} />

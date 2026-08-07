@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { sendAiChat } from '../../ai/api';
 import { ApiError } from '../../../services/api';
 import Panel from '../../../components/common/Panel';
 import { Button } from '../../../components/ui';
+import i18n from '../../../i18n';
 import type { DashboardData } from '../../../types';
 import {
   TASK_STATUS_LABELS,
@@ -17,38 +19,58 @@ function buildDashboardAiPrompt(data: DashboardData): string {
   const actionTasks = data.focusTasks
     .filter((task) => !['done', 'cancelled'].includes(task.status))
     .slice(0, 10)
-    .map((task) => `${task.id} ${task.title} / ${labelOf(TASK_STATUS_LABELS, task.status)} / ${task.owner || '未分配'} / ${task.dueDate || '未设截止'} / ${task.progress ?? 0}%`);
+    .map((task) => i18n.t('features.dashboard.dashboardAiAdvisor.prompt.taskItem', {
+      id: task.id,
+      title: task.title,
+      status: labelOf(TASK_STATUS_LABELS, task.status),
+      owner: task.owner || i18n.t('features.dashboard.dashboardView.unassigned'),
+      dueDate: task.dueDate || i18n.t('features.dashboard.dashboardAiAdvisor.prompt.unsetDueDate'),
+      progress: task.progress ?? 0,
+    }));
   const riskyProjects = data.riskyProjects
     .slice(0, 8)
-    .map((project) => `${project.id} ${project.name} / ${labelOf(PROJECT_STATUS_LABELS, project.status)} / 健康 ${project.healthScore} / 风险 ${project.riskCount} / 进度 ${project.progress}%`);
+    .map((project) => i18n.t('features.dashboard.dashboardAiAdvisor.prompt.riskyProjectItem', {
+      id: project.id,
+      name: project.name,
+      status: labelOf(PROJECT_STATUS_LABELS, project.status),
+      health: project.healthScore,
+      riskCount: project.riskCount,
+      progress: project.progress,
+    }));
   const requirements = data.requirementProgress
     .slice(0, 8)
-    .map((item) => `${item.id} ${item.title} / ${item.projectName} / 完成 ${item.completion}%`);
+    .map((item) => i18n.t('features.dashboard.dashboardAiAdvisor.prompt.requirementItem', {
+      id: item.id,
+      title: item.title,
+      projectName: item.projectName,
+      completion: item.completion,
+    }));
 
   return [
-    '请作为公司项目管理平台的 AI 管理参谋，基于下面仪表盘快照给出管理层行动建议。',
-    '请控制在 800 字以内，输出：1. 当前经营判断 2. 最大风险 3. 本周优先动作 4. 需要项目经理补齐的数据。',
-    '建议必须具体到项目、任务、需求或指标，不要泛泛而谈。',
+    i18n.t('features.dashboard.dashboardAiAdvisor.prompt.role'),
+    i18n.t('features.dashboard.dashboardAiAdvisor.prompt.scope'),
+    i18n.t('features.dashboard.dashboardAiAdvisor.prompt.specificity'),
     '',
-    `任务总数：${data.metrics.tasks.total}，任务状态分布：${taskCounts || '无'}`,
-    `项目平均健康度：${data.metrics.projectHealthAverage}`,
-    `需求平均完成率：${data.metrics.requirementCompletionAverage}%`,
-    `测试通过率：${data.metrics.testPassRate}%`,
-    `开放风险：${data.metrics.openRisks}`,
-    `文档总数：${data.metrics.documentCount}`,
+    i18n.t('features.dashboard.dashboardAiAdvisor.prompt.totalTasks', { count: data.metrics.tasks.total, distribution: taskCounts || i18n.t('features.dashboard.dashboardAiAdvisor.prompt.none') }),
+    i18n.t('features.dashboard.dashboardAiAdvisor.prompt.avgHealth', { value: data.metrics.projectHealthAverage }),
+    i18n.t('features.dashboard.dashboardAiAdvisor.prompt.avgRequirementCompletion', { value: data.metrics.requirementCompletionAverage }),
+    i18n.t('features.dashboard.dashboardAiAdvisor.prompt.testPassRate', { value: data.metrics.testPassRate }),
+    i18n.t('features.dashboard.dashboardAiAdvisor.prompt.openRisks', { count: data.metrics.openRisks }),
+    i18n.t('features.dashboard.dashboardAiAdvisor.prompt.documentCount', { count: data.metrics.documentCount }),
     '',
-    '优先行动任务：',
-    actionTasks.length ? actionTasks.join('\n') : '暂无待处理任务',
+    i18n.t('features.dashboard.dashboardAiAdvisor.prompt.priorityActionsHeading'),
+    actionTasks.length ? actionTasks.join('\n') : i18n.t('features.dashboard.dashboardAiAdvisor.prompt.noPendingTasks'),
     '',
-    '风险项目：',
-    riskyProjects.length ? riskyProjects.join('\n') : '暂无风险项目',
+    i18n.t('features.dashboard.dashboardAiAdvisor.prompt.riskyProjectsHeading'),
+    riskyProjects.length ? riskyProjects.join('\n') : i18n.t('features.dashboard.dashboardAiAdvisor.prompt.noRiskyProjects'),
     '',
-    '需求推进：',
-    requirements.length ? requirements.join('\n') : '暂无需求推进数据',
+    i18n.t('features.dashboard.dashboardAiAdvisor.prompt.requirementsHeading'),
+    requirements.length ? requirements.join('\n') : i18n.t('features.dashboard.dashboardAiAdvisor.prompt.noRequirementProgress'),
   ].join('\n');
 }
 
 export default function DashboardAiAdvisor({ data }: { data: DashboardData }) {
+  const { t } = useTranslation();
   const [aiAdvice, setAiAdvice] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -75,7 +97,7 @@ export default function DashboardAiAdvisor({ data }: { data: DashboardData }) {
       });
       setAiAdvice(reply.content);
     } catch (err: unknown) {
-      setAiError(err instanceof ApiError ? err.message : 'AI 管理建议生成失败，请检查模型配置或稍后重试。');
+      setAiError(err instanceof ApiError ? err.message : t('features.dashboard.dashboardAiAdvisor.generateFailed'));
     } finally {
       setAiLoading(false);
     }
@@ -83,27 +105,27 @@ export default function DashboardAiAdvisor({ data }: { data: DashboardData }) {
 
   return (
     <Panel
-      title="AI 管理参谋"
-      subtitle="基于当前 KPI、行动队列、风险项目和需求推进生成"
+      title={t('features.dashboard.dashboardAiAdvisor.title')}
+      subtitle={t('features.dashboard.dashboardAiAdvisor.subtitle')}
       toolbar={(
         <Button size="sm" variant="primary" onClick={handleAnalyze} disabled={aiLoading}>
-          {aiLoading ? 'AI 分析中...' : aiAdvice ? '重新分析' : '生成建议'}
+          {aiLoading ? t('common.aiAnalyzing') : aiAdvice ? t('common.reanalyze') : t('features.dashboard.dashboardAiAdvisor.generateAdvice')}
         </Button>
       )}
     >
       {showGenerated ? (
         <div className="dashboard-ai-result">
-          {aiLoading ? <div className="body-text">AI 正在分析经营指标、任务阻塞和项目风险，请稍候...</div> : null}
+          {aiLoading ? <div className="body-text">{t('features.dashboard.dashboardAiAdvisor.analyzing')}</div> : null}
           {aiError ? <div className="form-error">{aiError}</div> : null}
           {aiAdvice ? <div className="dashboard-ai-content">{aiAdvice}</div> : null}
         </div>
       ) : hasSummary ? (
         <div className="dashboard-ai-summary">
-          <div className="dashboard-ai-summary-title">{ai?.title || 'AI 总结'}</div>
+          <div className="dashboard-ai-summary-title">{ai?.title || t('features.dashboard.dashboardAiAdvisor.aiSummary')}</div>
           {ai?.summary ? <p className="body-text">{ai.summary}</p> : null}
           {ai?.risks?.length ? (
             <div className="dashboard-ai-summary-section">
-              <div className="dashboard-ai-summary-heading">风险提醒</div>
+              <div className="dashboard-ai-summary-heading">{t('features.dashboard.dashboardAiAdvisor.riskReminder')}</div>
               <ul className="dashboard-ai-summary-list">
                 {ai.risks.map((risk, index) => <li key={index}>{risk}</li>)}
               </ul>
@@ -111,7 +133,7 @@ export default function DashboardAiAdvisor({ data }: { data: DashboardData }) {
           ) : null}
           {ai?.recommendations?.length ? (
             <div className="dashboard-ai-summary-section">
-              <div className="dashboard-ai-summary-heading">建议动作</div>
+              <div className="dashboard-ai-summary-heading">{t('features.dashboard.dashboardAiAdvisor.suggestedActions')}</div>
               <ul className="dashboard-ai-summary-list">
                 {ai.recommendations.map((rec, index) => <li key={index}>{rec}</li>)}
               </ul>
@@ -119,7 +141,7 @@ export default function DashboardAiAdvisor({ data }: { data: DashboardData }) {
           ) : null}
         </div>
       ) : (
-        <p className="body-text dashboard-ai-empty">点击生成后，会给出本周优先动作、风险处置和需要补齐的数据。</p>
+        <p className="body-text dashboard-ai-empty">{t('features.dashboard.dashboardAiAdvisor.emptyHint')}</p>
       )}
     </Panel>
   );

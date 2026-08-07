@@ -1,5 +1,6 @@
 import type { Portfolio, Product, ProductImage, ProductMetric, ProductModule, Program, RoadmapItem } from '../../types';
 import { PROJECT_STATUS_LABELS, ROADMAP_STATUS_LABELS } from '../../constants/enums';
+import i18n from '../../i18n';
 
 export type DetailItem = { key: string; value: string };
 export type StrategyKind = 'program' | 'portfolio';
@@ -23,7 +24,11 @@ const PRODUCT_IMAGE_TYPE_BY_EXTENSION: Record<string, (typeof PRODUCT_IMAGE_TYPE
 };
 
 export const GOAL_STATUS_LABELS: Record<string, string> = {
-  draft: '草稿', active: '推进中', on_hold: '暂停', achieved: '已达成', closed: '已关闭',
+  draft: 'features.products.goalStatus.draft',
+  active: 'features.products.goalStatus.active',
+  on_hold: 'features.products.goalStatus.onHold',
+  achieved: 'features.products.goalStatus.achieved',
+  closed: 'features.products.goalStatus.closed',
 };
 
 export function toDetailItems(record?: Record<string, unknown>): DetailItem[] {
@@ -94,12 +99,12 @@ export function isAcceptedProductImage(file: File): boolean {
 
 export function validateProductImageFiles(files: readonly File[], currentCount: number): string | null {
   if (currentCount + files.length > PRODUCT_IMAGE_MAX_COUNT) {
-    return `产品图片最多 ${PRODUCT_IMAGE_MAX_COUNT} 张，当前还可添加 ${Math.max(0, PRODUCT_IMAGE_MAX_COUNT - currentCount)} 张。`;
+    return i18n.t('features.products.productModel.imageCountExceeded', { max: PRODUCT_IMAGE_MAX_COUNT, remaining: Math.max(0, PRODUCT_IMAGE_MAX_COUNT - currentCount) });
   }
   const invalidType = files.find((file) => !isAcceptedProductImage(file));
-  if (invalidType) return `${invalidType.name} 不是受支持的 PNG、JPG、WEBP 或 GIF 图片。`;
+  if (invalidType) return i18n.t('features.products.productModel.invalidImageType', { name: invalidType.name });
   const oversized = files.find((file) => file.size > PRODUCT_IMAGE_MAX_BYTES);
-  if (oversized) return `${oversized.name} 超过 5 MiB 限制。`;
+  if (oversized) return i18n.t('features.products.productModel.imageTooLarge', { name: oversized.name });
   return null;
 }
 

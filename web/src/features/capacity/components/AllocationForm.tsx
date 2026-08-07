@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
 import { ApiError } from '../../../services/api';
@@ -28,6 +29,7 @@ export default function AllocationForm({
   onConfigureCapacity: (member: CapacityMemberOverview) => void;
   onSaved: () => void;
 }) {
+  const { t } = useTranslation();
   const [userId, setUserId] = useState(allocation?.userId ?? members[0]?.id ?? '');
   const [projectId, setProjectId] = useState(allocation?.projectId ?? preferredProjectId ?? projects[0]?.id ?? '');
   const [allocationPercent, setAllocationPercent] = useState(allocation ? String(allocation.allocationPercent) : '20');
@@ -46,11 +48,11 @@ export default function AllocationForm({
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (requiresCapacityPlan) {
-      setError('请先为所选成员配置当前周期的容量计划，再分配项目投入。');
+      setError(t('features.capacity.allocationForm.capacityPlanRequired'));
       return;
     }
     if (requiresOverride && !overloadReason.trim()) {
-      setError('投入超过 100%，请填写超配原因后提交独立审批。');
+      setError(t('features.capacity.allocationForm.overrideReasonRequired'));
       return;
     }
     setSaving(true);
@@ -68,7 +70,7 @@ export default function AllocationForm({
       });
       onSaved();
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : '保存项目投入失败');
+      setError(reason instanceof ApiError ? reason.message : t('features.capacity.allocationForm.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -76,28 +78,31 @@ export default function AllocationForm({
 
   return (
     <Overlay onClose={onClose}>
-      <Panel title={allocation ? '编辑项目投入' : '分配项目投入'} subtitle="投入用于资源平衡，不作为个人绩效评分。">
+      <Panel title={allocation ? t('features.capacity.allocationForm.editTitle') : t('features.capacity.allocationForm.createTitle')} subtitle={t('features.capacity.allocationForm.subtitle')}>
         <form className="form-stack" onSubmit={submit} style={{ minWidth: 480 }}>
-          <label className="form-field"><span>成员</span><select className="form-select" value={userId} disabled={Boolean(allocation)} onChange={(event) => setUserId(event.target.value)}>{members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
-          <label className="form-field"><span>项目</span><select className="form-select" value={projectId} disabled={Boolean(allocation)} onChange={(event) => setProjectId(event.target.value)}>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+          <label className="form-field"><span>{t('features.capacity.allocationForm.member')}</span><select className="form-select" value={userId} disabled={Boolean(allocation)} onChange={(event) => setUserId(event.target.value)}>{members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
+          <label className="form-field"><span>{t('features.capacity.allocationForm.project')}</span><select className="form-select" value={projectId} disabled={Boolean(allocation)} onChange={(event) => setProjectId(event.target.value)}>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
           <div className="form-grid form-grid-2">
-            <label className="form-field"><span>投入比例 (%)</span><input className="form-input" type="number" min="0" max="200" value={allocationPercent} onChange={(event) => setAllocationPercent(event.target.value)} /></label>
-            <label className="form-field"><span>计划工时（可选）</span><input className="form-input" type="number" min="0" value={plannedHours} onChange={(event) => setPlannedHours(event.target.value)} /></label>
+            <label className="form-field"><span>{t('features.capacity.allocationForm.allocationPercent')}</span><input className="form-input" type="number" min="0" max="200" value={allocationPercent} onChange={(event) => setAllocationPercent(event.target.value)} /></label>
+            <label className="form-field"><span>{t('features.capacity.allocationForm.plannedHours')}</span><input className="form-input" type="number" min="0" value={plannedHours} onChange={(event) => setPlannedHours(event.target.value)} /></label>
           </div>
           <div className={requiresOverride ? 'form-error' : 'text-secondary'}>
-            当前已分配 {selectedMember?.allocationPercent ?? 0}%；本次提交后预计 {projectedAllocationPercent}%
-            {requiresOverride ? '。该超配将进入待审批状态，且提交人不能自行审批。' : '。'}
+            {t('features.capacity.allocationForm.allocationSummary', {
+              current: selectedMember?.allocationPercent ?? 0,
+              projected: projectedAllocationPercent,
+              suffix: requiresOverride ? t('features.capacity.allocationForm.overrideNote') : t('features.capacity.allocationForm.periodEnd'),
+            })}
           </div>
           {requiresCapacityPlan && selectedMember ? (
             <div className="form-error">
-              所选成员尚无当前周期的容量计划，无法校验投入是否超过有效容量。
-              <button className="btn btn-text btn-sm" type="button" onClick={() => onConfigureCapacity(selectedMember)}>先配置容量计划</button>
+              {t('features.capacity.allocationForm.noPlanHint')}
+              <button className="btn btn-text btn-sm" type="button" onClick={() => onConfigureCapacity(selectedMember)}>{t('features.capacity.allocationForm.configurePlanFirst')}</button>
             </div>
           ) : null}
-          {requiresOverride ? <label className="form-field"><span>超配原因（必填）</span><textarea className="form-textarea" value={overloadReason} onChange={(event) => setOverloadReason(event.target.value)} placeholder="说明交付紧急性、影响范围和缓解措施" /></label> : null}
-          <label className="form-field"><span>说明</span><textarea className="form-textarea" value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+          {requiresOverride ? <label className="form-field"><span>{t('features.capacity.allocationForm.overloadReason')}</span><textarea className="form-textarea" value={overloadReason} onChange={(event) => setOverloadReason(event.target.value)} placeholder={t('features.capacity.allocationForm.overloadReasonPlaceholder')} /></label> : null}
+          <label className="form-field"><span>{t('features.capacity.allocationForm.notes')}</span><textarea className="form-textarea" value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
           {error ? <div className="form-error">{error}</div> : null}
-          <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}><button className="btn btn-secondary" type="button" onClick={onClose}>取消</button><button className="btn btn-primary" disabled={saving || !userId || !projectId || requiresCapacityPlan}>{saving ? '保存中…' : '保存投入'}</button></div>
+          <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}><button className="btn btn-secondary" type="button" onClick={onClose}>{t('common.cancel')}</button><button className="btn btn-primary" disabled={saving || !userId || !projectId || requiresCapacityPlan}>{saving ? t('features.capacity.allocationForm.saving') : t('features.capacity.allocationForm.saveAllocation')}</button></div>
         </form>
       </Panel>
     </Overlay>

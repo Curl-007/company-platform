@@ -1,6 +1,7 @@
 import type { TeamWorkSummary, TeamWorkSummaryMember, WorkLog } from '../../../types';
 import { USER_ROLE_LABELS, labelOf } from '../../../constants/enums';
 import { businessDateKey, businessWeekStart } from '../../../utils/businessDate';
+import i18n from '../../../i18n';
 
 export type QuickFilter = 'all' | 'missing' | 'blocked';
 
@@ -146,45 +147,45 @@ export function buildMemberLinks(member: TeamWorkSummaryMember): RelatedLink[] {
 
 export function buildOverallMarkdown(summary: TeamWorkSummary): string {
   return [
-    '# 团队周报',
+    i18n.t('features.workLogs.teamLogsHelpers.markdown.title'),
     '',
-    `- 项目：${summary.project || '未指定项目'}`,
-    `- 周起始：${summary.weekKey}`,
-    `- 已提交人数：${summary.submittedCount}`,
-    `- 缺报人数：${summary.missingCount}`,
+    i18n.t('features.workLogs.teamLogsHelpers.markdown.project', { project: summary.project || i18n.t('features.workLogs.teamLogsHelpers.markdown.unspecifiedProject') }),
+    i18n.t('features.workLogs.teamLogsHelpers.markdown.weekStart', { week: summary.weekKey }),
+    i18n.t('features.workLogs.teamLogsHelpers.markdown.submittedCount', { count: summary.submittedCount }),
+    i18n.t('features.workLogs.teamLogsHelpers.markdown.missingCount', { count: summary.missingCount }),
     '',
-    '## AI 整体摘要',
-    summary.overall.summary || '暂无摘要。',
+    i18n.t('features.workLogs.teamLogsHelpers.markdown.overallSummaryHeading'),
+    summary.overall.summary || i18n.t('features.workLogs.common.noSummary'),
     '',
-    '## 本周完成',
-    ...(summary.overall.completedItems.length ? summary.overall.completedItems.map((item) => `- ${item}`) : ['- 暂无']),
+    i18n.t('features.workLogs.teamLogsHelpers.markdown.completedHeading'),
+    ...(summary.overall.completedItems.length ? summary.overall.completedItems.map((item) => `- ${item}`) : [i18n.t('features.workLogs.teamLogsHelpers.markdown.none')]),
     '',
-    '## 本周阻塞',
-    ...(summary.overall.blockers.length ? summary.overall.blockers.map((item) => `- ${item}`) : ['- 暂无']),
+    i18n.t('features.workLogs.teamLogsHelpers.markdown.blockersHeading'),
+    ...(summary.overall.blockers.length ? summary.overall.blockers.map((item) => `- ${item}`) : [i18n.t('features.workLogs.teamLogsHelpers.markdown.none')]),
     '',
-    '## 下周计划',
-    ...(summary.overall.nextPlans.length ? summary.overall.nextPlans.map((item) => `- ${item}`) : ['- 暂无']),
+    i18n.t('features.workLogs.teamLogsHelpers.markdown.nextPlansHeading'),
+    ...(summary.overall.nextPlans.length ? summary.overall.nextPlans.map((item) => `- ${item}`) : [i18n.t('features.workLogs.teamLogsHelpers.markdown.none')]),
     '',
-    '## 缺报成员',
+    i18n.t('features.workLogs.teamLogsHelpers.markdown.missingMembersHeading'),
     ...(summary.missingMembers.length
       ? summary.missingMembers.map((item) => `- ${item.name}（${labelOf(USER_ROLE_LABELS, item.role)}）`)
-      : ['- 暂无']),
+      : [i18n.t('features.workLogs.teamLogsHelpers.markdown.none')]),
     '',
-    '## 成员周报',
+    i18n.t('features.workLogs.teamLogsHelpers.markdown.membersHeading'),
     ...summary.members.flatMap((member) => [
-      `### ${member.author}（${labelOf(USER_ROLE_LABELS, member.role)}）`,
-      `- 日报篇数：${member.count}`,
+      i18n.t('features.workLogs.teamLogsHelpers.markdown.memberHeading', { author: member.author, role: labelOf(USER_ROLE_LABELS, member.role) }),
+      i18n.t('features.workLogs.teamLogsHelpers.markdown.logCount', { count: member.count }),
       '',
-      member.summary.summary || '暂无摘要。',
+      member.summary.summary || i18n.t('features.workLogs.common.noSummary'),
       '',
-      '完成事项：',
-      ...(member.summary.completedItems.length ? member.summary.completedItems.map((item) => `- ${item}`) : ['- 暂无']),
+      i18n.t('features.workLogs.teamLogsHelpers.markdown.completedItemsLabel'),
+      ...(member.summary.completedItems.length ? member.summary.completedItems.map((item) => `- ${item}`) : [i18n.t('features.workLogs.teamLogsHelpers.markdown.none')]),
       '',
-      '阻塞事项：',
-      ...(member.summary.blockers.length ? member.summary.blockers.map((item) => `- ${item}`) : ['- 暂无']),
+      i18n.t('features.workLogs.teamLogsHelpers.markdown.blockedItemsLabel'),
+      ...(member.summary.blockers.length ? member.summary.blockers.map((item) => `- ${item}`) : [i18n.t('features.workLogs.teamLogsHelpers.markdown.none')]),
       '',
-      '下步计划：',
-      ...(member.summary.nextPlans.length ? member.summary.nextPlans.map((item) => `- ${item}`) : ['- 暂无']),
+      i18n.t('features.workLogs.teamLogsHelpers.markdown.nextPlanLabel'),
+      ...(member.summary.nextPlans.length ? member.summary.nextPlans.map((item) => `- ${item}`) : [i18n.t('features.workLogs.teamLogsHelpers.markdown.none')]),
       '',
     ]),
   ].join('\n');

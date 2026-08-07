@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, X } from 'lucide-react';
 import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
@@ -9,8 +10,8 @@ import type { Project, Requirement } from '../../../types';
 import { createRequirement } from '../api';
 
 const EXEC_ROLE_OPTIONS = [
-  { value: 'dev', label: '开发' },
-  { value: 'qa', label: '测试' },
+  { value: 'dev', label: 'features.requirements.createRequirementForm.roleDev' },
+  { value: 'qa', label: 'features.requirements.createRequirementForm.roleQa' },
 ];
 
 interface CreateRequirementFormProps {
@@ -26,6 +27,7 @@ export default function CreateRequirementForm({
   onClose,
   onCreated,
 }: CreateRequirementFormProps) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState('');
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
   const [parentId, setParentId] = useState('');
@@ -42,8 +44,8 @@ export default function CreateRequirementForm({
   const parentOptions = requirements.filter((item) => !item.parentId && item.projectId === projectId);
 
   async function handleSubmit() {
-    if (!title.trim()) return setFormError('请输入需求标题。');
-    if (!projectId) return setFormError('请选择所属项目。');
+    if (!title.trim()) return setFormError(t('features.requirements.createRequirementForm.titleRequired'));
+    if (!projectId) return setFormError(t('features.requirements.createRequirementForm.projectRequired'));
     setFormError(null);
     setSubmitting(true);
     try {
@@ -65,19 +67,19 @@ export default function CreateRequirementForm({
       await createRequirement(input, createRequest.current.key);
       onCreated();
     } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : '创建需求失败');
+      setFormError(error instanceof ApiError ? error.message : t('features.requirements.createRequirementForm.createFailed'));
       setSubmitting(false);
     }
   }
 
   return (
-    <Overlay onClose={onClose} maxWidth={680} ariaLabel="新建需求">
+    <Overlay onClose={onClose} maxWidth={680} ariaLabel={t('features.requirements.createRequirementForm.ariaLabel')}>
       <Panel
         className="req-create-panel"
-        title="新建需求"
-        subtitle="创建需求并直接分配给开发或测试"
+        title={t('features.requirements.createRequirementForm.title')}
+        subtitle={t('features.requirements.createRequirementForm.subtitle')}
         toolbar={(
-          <button className="btn btn-text btn-sm btn-with-icon" onClick={onClose} aria-label="关闭">
+          <button className="btn btn-text btn-sm btn-with-icon" onClick={onClose} aria-label={t('common.close')}>
             <X size={15} aria-hidden="true" />
           </button>
         )}
@@ -86,19 +88,19 @@ export default function CreateRequirementForm({
           {formError ? <div className="form-error req-detail-error">{formError}</div> : null}
 
           <div className="form-group">
-            <label className="form-label">需求标题</label>
+            <label className="form-label">{t('features.requirements.createRequirementForm.titleLabel')}</label>
             <input
               className="form-input"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="用一句话说明要交付什么"
+              placeholder={t('features.requirements.createRequirementForm.titlePlaceholder')}
               autoFocus
             />
           </div>
 
           <div className="req-form-grid">
             <div className="form-group">
-              <label className="form-label">所属项目</label>
+              <label className="form-label">{t('features.requirements.createRequirementForm.projectLabel')}</label>
               <select
                 className="form-select"
                 value={projectId}
@@ -107,14 +109,14 @@ export default function CreateRequirementForm({
                   setParentId('');
                 }}
               >
-                <option value="">请选择项目</option>
+                <option value="">{t('features.requirements.createRequirementForm.selectProject')}</option>
                 {projects.map((item) => (
                   <option key={item.id} value={item.id}>{item.name}</option>
                 ))}
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">优先级</label>
+              <label className="form-label">{t('features.requirements.createRequirementForm.priorityLabel')}</label>
               <select
                 className="form-select"
                 value={priority}
@@ -126,75 +128,75 @@ export default function CreateRequirementForm({
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">需求负责人</label>
+              <label className="form-label">{t('features.requirements.createRequirementForm.ownerLabel')}</label>
               <input
                 className="form-input"
                 value={owner}
                 onChange={(event) => setOwner(event.target.value)}
-                placeholder="项目经理 / 产品经理"
+                placeholder={t('features.requirements.createRequirementForm.ownerPlaceholder')}
               />
             </div>
             <div className="form-group">
-              <label className="form-label">父级需求</label>
+              <label className="form-label">{t('features.requirements.createRequirementForm.parentLabel')}</label>
               <select
                 className="form-select"
                 value={parentId}
                 onChange={(event) => setParentId(event.target.value)}
               >
-                <option value="">无（作为根需求）</option>
+                <option value="">{t('features.requirements.createRequirementForm.noParent')}</option>
                 {parentOptions.map((item) => (
                   <option key={item.id} value={item.id}>{item.id} · {item.title}</option>
                 ))}
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">执行人</label>
+              <label className="form-label">{t('features.requirements.createRequirementForm.assigneeLabel')}</label>
               <input
                 className="form-input"
                 value={assignee}
                 onChange={(event) => setAssignee(event.target.value)}
-                placeholder="可直接指派开发或测试"
+                placeholder={t('features.requirements.createRequirementForm.assigneePlaceholder')}
               />
             </div>
             <div className="form-group">
-              <label className="form-label">执行角色</label>
+              <label className="form-label">{t('features.requirements.createRequirementForm.assigneeRoleLabel')}</label>
               <select
                 className="form-select"
                 value={assigneeRole}
                 onChange={(event) => setAssigneeRole(event.target.value)}
               >
                 {EXEC_ROLE_OPTIONS.map((item) => (
-                  <option key={item.value} value={item.value}>{item.label}</option>
+                  <option key={item.value} value={item.value}>{t(item.label)}</option>
                 ))}
               </select>
             </div>
           </div>
 
           <div className="form-group">
-            <label className="form-label">需求描述</label>
+            <label className="form-label">{t('features.requirements.createRequirementForm.descriptionLabel')}</label>
             <textarea
               className="form-textarea"
               rows={4}
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="背景、目标、边界与约束"
+              placeholder={t('features.requirements.createRequirementForm.descriptionPlaceholder')}
             />
           </div>
 
           <div className="form-group">
-            <label className="form-label">验收标准（每行一条）</label>
+            <label className="form-label">{t('features.requirements.createRequirementForm.criteriaLabel')}</label>
             <textarea
               className="form-textarea"
               rows={4}
               value={criteria}
               onChange={(event) => setCriteria(event.target.value)}
-              placeholder={'例如：\n核心路径可完成\n异常提示清晰可定位'}
+              placeholder={t('features.requirements.createRequirementForm.criteriaPlaceholder')}
             />
           </div>
 
           <div className="req-detail-footer">
             <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>
-              取消
+              {t('common.cancel')}
             </button>
             <button
               className="btn btn-primary btn-sm btn-with-icon"
@@ -202,7 +204,7 @@ export default function CreateRequirementForm({
               disabled={submitting}
             >
               <Plus size={14} aria-hidden="true" />
-              {submitting ? '创建中...' : '创建'}
+              {submitting ? t('features.requirements.createRequirementForm.creating') : t('features.requirements.createRequirementForm.create')}
             </button>
           </div>
         </div>

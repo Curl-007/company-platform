@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
   cn,
   Empty,
@@ -50,13 +51,15 @@ function DataTable<T>({
   rowKey,
   onRowClick,
   loading = false,
-  emptyText = '暂无数据',
+  emptyText,
   emptyContent,
   className = '',
   defaultSortKey,
   defaultSortDirection = 'asc',
   pageSize,
 }: DataTableProps<T>) {
+  const { t } = useTranslation();
+  const resolvedEmptyText = emptyText ?? t('common.empty');
   const [sortKey, setSortKey] = useState<string | undefined>(defaultSortKey);
   const [sortDir, setSortDir] = useState<SortDirection>(defaultSortDirection);
   const [page, setPage] = useState(1);
@@ -138,7 +141,7 @@ function DataTable<T>({
             size={28}
             className="ui-data-table-spinner"
           />
-          <span className="data-table-loading-text">加载中...</span>
+          <span className="data-table-loading-text">{t('common.loading')}</span>
         </div>
       </div>
     );
@@ -205,7 +208,7 @@ function DataTable<T>({
                 {emptyContent ?? (
                   <Empty className="data-table-empty ui-data-table-empty bg-[var(--card)] text-[var(--muted-foreground)]">
                     <EmptyDescription className="data-table-empty-text text-[var(--muted-foreground)]">
-                      {emptyText}
+                      {resolvedEmptyText}
                     </EmptyDescription>
                   </Empty>
                 )}

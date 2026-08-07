@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Contrast, Maximize2, Minus, Moon, Palette, Plus, RotateCcw, SlidersHorizontal, Sun, Type, X, ZapOff } from 'lucide-react';
 import {
   Sheet,
@@ -30,6 +31,7 @@ const CONTENT_GUTTER_TICK = 8;
 const CONTENT_GUTTER_MAJOR = 40;
 
 export default function ThemeSettings() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState<WorkThemeSettings>(() => readWorkThemeSettings());
   // Track the last pointer position so theme-mode toggles can reveal from the
@@ -80,8 +82,8 @@ export default function ThemeSettings() {
         <button
           type="button"
           className="topbar-icon-button"
-          aria-label="打开主题设置"
-          title="主题设置"
+          aria-label={t('common.openThemeSettings')}
+          title={t('common.themeSettings')}
         >
           <Palette size={18} />
           {changed ? <span className="topbar-notification-dot" /> : null}
@@ -97,30 +99,30 @@ export default function ThemeSettings() {
           <div>
             <SheetTitle className="theme-settings-title" id="theme-settings-title">
               <SlidersHorizontal size={16} />
-              主题设置
-          </SheetTitle>
-            <SheetDescription className="theme-settings-subtitle">工作台的主题与辅助偏好</SheetDescription>
+              {t('common.themeSettings')}
+            </SheetTitle>
+            <SheetDescription className="theme-settings-subtitle">{t('common.themeSettingsSubtitle')}</SheetDescription>
           </div>
           <div className="theme-settings-actions">
             <SheetClose asChild>
-              <button type="button" className="topbar-icon-button theme-settings-close" aria-label="关闭主题设置">
+              <button type="button" className="topbar-icon-button theme-settings-close" aria-label={t('common.closeThemeSettings')}>
                 <X size={16} />
               </button>
             </SheetClose>
-            <button type="button" className="topbar-icon-button" onClick={reset} aria-label="恢复默认">
+            <button type="button" className="topbar-icon-button" onClick={reset} aria-label={t('common.restoreDefaults')}>
               <RotateCcw size={16} />
             </button>
           </div>
         </div>
 
         <div className="theme-settings-body">
-          <OptionBlock title="明暗">
+          <OptionBlock title={t('common.themeMode')}>
             <div className="theme-segmented">
               <button type="button" className={settings.mode === 'dark' ? 'active' : ''} aria-pressed={settings.mode === 'dark'} onClick={() => update({ mode: 'dark' })}>
-                <Moon size={15} /> 深色
+                <Moon size={15} /> {t('common.dark')}
               </button>
               <button type="button" className={settings.mode === 'light' ? 'active' : ''} aria-pressed={settings.mode === 'light'} onClick={() => update({ mode: 'light' })}>
-                <Sun size={15} /> 浅色
+                <Sun size={15} /> {t('common.light')}
               </button>
             </div>
           </OptionBlock>
@@ -128,25 +130,25 @@ export default function ThemeSettings() {
           <section className="theme-settings-grid">
             <ToggleTile
               icon={<Contrast size={16} />}
-              label="高对比"
+              label={t('common.highContrast')}
               active={settings.contrast === 'high'}
               onClick={() => update({ contrast: settings.contrast === 'high' ? 'default' : 'high' })}
             />
             <ToggleTile
               icon={<Maximize2 size={16} />}
-              label="紧凑布局"
+              label={t('common.compactLayout')}
               active={settings.density === 'compact'}
               onClick={() => update({ density: settings.density === 'compact' ? 'standard' : 'compact' })}
             />
             <ToggleTile
               icon={<ZapOff size={16} />}
-              label="减少动效"
+              label={t('common.reduceMotion')}
               active={settings.reduceMotion}
               onClick={() => update({ reduceMotion: !settings.reduceMotion })}
             />
           </section>
 
-          <OptionBlock title="字体" canReset={settings.fontFamily !== defaultWorkThemeSettings.fontFamily} onReset={() => update({ fontFamily: defaultWorkThemeSettings.fontFamily })}>
+          <OptionBlock title={t('common.font')} canReset={settings.fontFamily !== defaultWorkThemeSettings.fontFamily} onReset={() => update({ fontFamily: defaultWorkThemeSettings.fontFamily })}>
             <div className="theme-font-grid">
               {fontOptions.map(([value, label]) => (
                 <button
@@ -192,11 +194,12 @@ function OptionBlock({
   onReset?: () => void;
   children: ReactNode;
 }) {
+  const { t } = useTranslation();
   return (
     <section className="theme-option-block">
       <h2 className="theme-option-title">
         {canReset && (
-          <button type="button" onClick={onReset} aria-label={`重置${title}`}>
+          <button type="button" onClick={onReset} aria-label={t('common.resetOption', { label: title })}>
             <RotateCcw size={12} />
           </button>
         )}
@@ -208,11 +211,12 @@ function OptionBlock({
 }
 
 function ToggleTile({ icon, label, active, onClick }: { icon: ReactNode; label: string; active: boolean; onClick: () => void }) {
+  const { t } = useTranslation();
   return (
     <button type="button" className={`theme-toggle-tile ${active ? 'active' : ''}`} onClick={onClick} aria-pressed={active}>
       <span className="theme-toggle-icon">{icon}</span>
       <span>{label}</span>
-      <strong>{active ? '开' : '关'}</strong>
+      <strong>{t(active ? 'common.on' : 'common.off')}</strong>
     </button>
   );
 }
@@ -228,20 +232,21 @@ function FontSizeSetting({
   onReset: () => void;
   onChange: (value: number) => void;
 }) {
+  const { t } = useTranslation();
   const pct = ((value - FONT_SIZE_RANGE[0]) / (FONT_SIZE_RANGE[1] - FONT_SIZE_RANGE[0])) * 100;
   const nextValue = (delta: number) => onChange(Math.min(FONT_SIZE_RANGE[1], Math.max(FONT_SIZE_RANGE[0], value + delta)));
 
   return (
-    <OptionBlock title="字号" canReset={canReset} onReset={onReset}>
+    <OptionBlock title={t('common.fontSize')} canReset={canReset} onReset={onReset}>
       <div className="theme-stepper-row">
         <Type size={15} className="text-secondary" />
-        <button type="button" className="topbar-icon-button" disabled={value <= FONT_SIZE_RANGE[0]} onClick={() => nextValue(-1)} aria-label="减小字号">
+        <button type="button" className="topbar-icon-button" disabled={value <= FONT_SIZE_RANGE[0]} onClick={() => nextValue(-1)} aria-label={t('common.decreaseFontSize')}>
           <Minus size={14} />
         </button>
         <div className="theme-progress-track">
           <span style={{ width: `${pct}%` }} />
         </div>
-        <button type="button" className="topbar-icon-button" disabled={value >= FONT_SIZE_RANGE[1]} onClick={() => nextValue(1)} aria-label="增大字号">
+        <button type="button" className="topbar-icon-button" disabled={value >= FONT_SIZE_RANGE[1]} onClick={() => nextValue(1)} aria-label={t('common.increaseFontSize')}>
           <Plus size={14} />
         </button>
         <strong>{value}px</strong>
@@ -261,6 +266,7 @@ function GutterSetting({
   onReset: () => void;
   onChange: (value: number) => void;
 }) {
+  const { t } = useTranslation();
   const [min, max] = CONTENT_GUTTER_RANGE;
   const pct = ((value - min) / (max - min)) * 100;
   const ticks: number[] = [];
@@ -274,15 +280,15 @@ function GutterSetting({
   }
 
   return (
-    <OptionBlock title="内容边距" canReset={canReset} onReset={onReset}>
+    <OptionBlock title={t('common.contentPadding')} canReset={canReset} onReset={onReset}>
       <div className="theme-gutter-head">
-        <span>页面左右留白</span>
+        <span>{t('common.pageGutter')}</span>
         <strong>{value}px</strong>
       </div>
       <div
         className="theme-gutter-ruler"
         role="slider"
-        aria-label="内容边距"
+        aria-label={t('common.contentPadding')}
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={value}

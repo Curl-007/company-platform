@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Info, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 type ConfirmTone = 'danger' | 'warning' | 'info';
 
@@ -24,6 +25,7 @@ const ConfirmContext = createContext<ConfirmContextValue | null>(null);
 const FOCUSABLE = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { t } = useTranslation();
   const [state, setState] = useState<ConfirmState | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -40,13 +42,13 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setState({
         title: options.title,
         description: options.description,
-        confirmText: options.confirmText ?? '确认',
-        cancelText: options.cancelText ?? '取消',
+        confirmText: options.confirmText ?? t('common.confirm'),
+        cancelText: options.cancelText ?? t('common.cancel'),
         tone: options.tone ?? 'danger',
         resolve,
       });
     });
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!state) return undefined;
@@ -106,7 +108,7 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
             tabIndex={-1}
             onClick={(event) => event.stopPropagation()}
           >
-            <button className="confirm-close" onClick={() => close(false)} aria-label="关闭">
+            <button className="confirm-close" onClick={() => close(false)} aria-label={t('common.close')}>
               <X size={16} />
             </button>
             <div className="confirm-icon">

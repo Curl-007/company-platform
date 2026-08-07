@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import Panel from '../../../components/common/Panel';
 import type { TimeEntry, WeeklyWorkSummary } from '../../../types';
 
@@ -26,29 +27,30 @@ export default function MyWorkLogsTab({
   onEditTimeEntry: (entry: TimeEntry) => void;
   onRemoveTimeEntry: (entry: TimeEntry) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="mywork-logs-layout">
       <div className="mywork-logs-main">
         <Panel
-          title="每日日报"
-          subtitle="除管理员外，所有角色都需要上传日报；支持 .md .txt .doc .docx 自动识别。"
-          toolbar={<button className="btn btn-primary btn-sm" onClick={onOpenLogForm}>上传今日日报</button>}
+          title={t('features.mywork.myWorkLogsTab.dailyLogTitle')}
+          subtitle={t('features.mywork.myWorkLogsTab.dailyLogSubtitle')}
+          toolbar={<button className="btn btn-primary btn-sm" onClick={onOpenLogForm}>{t('features.mywork.myWorkLogsTab.uploadDailyLog')}</button>}
         >
           <div className="body-text">
-            建议每天提交一篇日报，方便动态页留痕，并为 AI 周报生成提供完整素材。
+            {t('features.mywork.myWorkLogsTab.dailyLogTip')}
           </div>
         </Panel>
 
         <Panel
-          title="实际工时"
-          subtitle="用于核对计划与实际投入，不用于个人绩效评分。"
-          toolbar={<button className="btn btn-secondary btn-sm" onClick={onOpenTimeEntryForm}>记录工时</button>}
+          title={t('features.mywork.myWorkLogsTab.timeEntriesTitle')}
+          subtitle={t('features.mywork.myWorkLogsTab.timeEntriesSubtitle')}
+          toolbar={<button className="btn btn-secondary btn-sm" onClick={onOpenTimeEntryForm}>{t('features.mywork.myWorkLogsTab.recordTimeEntry')}</button>}
           className="mywork-time-panel"
         >
           {timeEntriesLoading ? (
-            <div className="body-text">正在加载工时记录…</div>
+            <div className="body-text">{t('features.mywork.myWorkLogsTab.loadingTimeEntries')}</div>
           ) : timeEntriesError ? (
-            <div className="form-error">工时记录加载失败，请稍后重试。</div>
+            <div className="form-error">{t('features.mywork.myWorkLogsTab.timeEntriesLoadFailed')}</div>
           ) : timeEntries?.length ? (
             <div className="mywork-time-list">
               {timeEntries.slice(0, 6).map((entry) => (
@@ -58,49 +60,49 @@ export default function MyWorkLogsTab({
                   </span>
                   <div className="mywork-time-row-actions">
                     <span className="text-secondary">
-                      {entry.hours}h · {entry.workNature === 'unplanned' ? '临时工作' : entry.workNature === 'planned' ? '计划内' : '待分类'}
+                      {entry.hours}h · {entry.workNature === 'unplanned' ? t('features.mywork.myWorkLogsTab.natureUnplanned') : entry.workNature === 'planned' ? t('features.mywork.myWorkLogsTab.naturePlanned') : t('features.mywork.myWorkLogsTab.natureUnspecified')}
                     </span>
-                    <button className="btn btn-text btn-sm" onClick={() => onEditTimeEntry(entry)}>编辑</button>
-                    <button className="btn btn-text btn-sm" onClick={() => onRemoveTimeEntry(entry)}>删除</button>
+                    <button className="btn btn-text btn-sm" onClick={() => onEditTimeEntry(entry)}>{t('common.edit')}</button>
+                    <button className="btn btn-text btn-sm" onClick={() => onRemoveTimeEntry(entry)}>{t('common.delete')}</button>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="body-text">本周期尚无实际工时记录。</div>
+            <div className="body-text">{t('features.mywork.myWorkLogsTab.noTimeEntries')}</div>
           )}
         </Panel>
       </div>
 
       <Panel
-        title="AI 周报"
-        subtitle="基于本周日报自动汇总"
-        toolbar={<button className="btn btn-secondary btn-sm" onClick={onRefreshWeekly}>刷新周报</button>}
+        title={t('features.mywork.myWorkLogsTab.aiWeeklyTitle')}
+        subtitle={t('features.mywork.myWorkLogsTab.aiWeeklySubtitle')}
+        toolbar={<button className="btn btn-secondary btn-sm" onClick={onRefreshWeekly}>{t('features.mywork.myWorkLogsTab.refreshWeekly')}</button>}
         className="mywork-weekly-panel"
       >
         {weeklyLoading ? (
-          <div className="body-text">周报生成中...</div>
+          <div className="body-text">{t('features.mywork.myWorkLogsTab.weeklyGenerating')}</div>
         ) : weeklyError ? (
           <div className="form-error">{String(weeklyError)}</div>
         ) : weeklyData ? (
           <div className="mywork-weekly-body">
             <div className="detail-grid">
               <div className="detail-field">
-                <span className="detail-label">周起始</span>
+                <span className="detail-label">{t('features.mywork.myWorkLogsTab.weekStartLabel')}</span>
                 <span>{weeklyData.weekKey}</span>
               </div>
               <div className="detail-field">
-                <span className="detail-label">日报数量</span>
+                <span className="detail-label">{t('features.mywork.myWorkLogsTab.dailyLogCountLabel')}</span>
                 <span>{weeklyData.count}</span>
               </div>
             </div>
-            <div className="section-title">AI 摘要</div>
+            <div className="section-title">{t('features.mywork.myWorkLogsTab.aiSummaryTitle')}</div>
             <div className="body-text" style={{ whiteSpace: 'pre-wrap' }}>{weeklyData.summary.summary}</div>
-            <div className="section-title">周报 Markdown</div>
+            <div className="section-title">{t('features.mywork.myWorkLogsTab.weeklyMarkdownTitle')}</div>
             <pre className="body-text mywork-weekly-markdown">{weeklyData.markdown}</pre>
           </div>
         ) : (
-          <div className="body-text">本周还没有日报记录。</div>
+          <div className="body-text">{t('features.mywork.myWorkLogsTab.noWeeklyData')}</div>
         )}
       </Panel>
     </div>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AiProposedAction, Project } from '../../../types';
 import {
   BUILD_STATUSES,
@@ -29,18 +30,18 @@ import { executeAiProposedAction } from '../aiActionExecutor';
 import { businessDateKey } from '../../../utils/businessDate';
 
 const ACTION_LABELS: Record<string, string> = {
-  create_requirement: '新建需求', update_requirement: '修改需求', update_requirement_status: '变更需求状态', delete_requirement: '删除需求',
-  create_defect: '新建缺陷', update_defect: '修改缺陷', update_defect_status: '变更缺陷状态', delete_defect: '删除缺陷',
-  create_task: '新建任务', update_task: '修改任务', update_task_status: '变更任务状态', delete_task: '删除任务',
-  create_test_case: '新建测试用例', update_test_case: '修改测试用例', update_test_case_status: '变更用例状态', delete_test_case: '删除测试用例',
-  create_project: '新建项目', update_project: '修改项目', update_project_status: '变更项目状态', delete_project: '删除项目',
-  create_product: '新建产品', update_product: '修改产品', delete_product: '删除产品',
-  create_build: '新建构建', update_build: '修改构建', update_build_status: '变更构建状态', delete_build: '删除构建',
-  create_release: '新建发布', update_release_status: '变更发布状态', delete_release: '删除发布',
-  create_document: '新建文档', update_document: '修改文档', delete_document: '删除文档',
-  create_sprint: '新建迭代', update_sprint: '修改迭代', delete_sprint: '删除迭代',
-  create_work_log: '提交日报', create_time_entry: '记录工时',
-  create_risk: '登记风险', create_program: '新建项目集', create_portfolio: '新建组合', create_strategic_goal: '新建战略目标',
+  create_requirement: 'features.ai.aiActionDraftCard.actionCreateRequirement', update_requirement: 'features.ai.aiActionDraftCard.actionUpdateRequirement', update_requirement_status: 'features.ai.aiActionDraftCard.actionUpdateRequirementStatus', delete_requirement: 'features.ai.aiActionDraftCard.actionDeleteRequirement',
+  create_defect: 'features.ai.aiActionDraftCard.actionCreateDefect', update_defect: 'features.ai.aiActionDraftCard.actionUpdateDefect', update_defect_status: 'features.ai.aiActionDraftCard.actionUpdateDefectStatus', delete_defect: 'features.ai.aiActionDraftCard.actionDeleteDefect',
+  create_task: 'features.ai.aiActionDraftCard.actionCreateTask', update_task: 'features.ai.aiActionDraftCard.actionUpdateTask', update_task_status: 'features.ai.aiActionDraftCard.actionUpdateTaskStatus', delete_task: 'features.ai.aiActionDraftCard.actionDeleteTask',
+  create_test_case: 'features.ai.aiActionDraftCard.actionCreateTestCase', update_test_case: 'features.ai.aiActionDraftCard.actionUpdateTestCase', update_test_case_status: 'features.ai.aiActionDraftCard.actionUpdateTestCaseStatus', delete_test_case: 'features.ai.aiActionDraftCard.actionDeleteTestCase',
+  create_project: 'features.ai.aiActionDraftCard.actionCreateProject', update_project: 'features.ai.aiActionDraftCard.actionUpdateProject', update_project_status: 'features.ai.aiActionDraftCard.actionUpdateProjectStatus', delete_project: 'features.ai.aiActionDraftCard.actionDeleteProject',
+  create_product: 'features.ai.aiActionDraftCard.actionCreateProduct', update_product: 'features.ai.aiActionDraftCard.actionUpdateProduct', delete_product: 'features.ai.aiActionDraftCard.actionDeleteProduct',
+  create_build: 'features.ai.aiActionDraftCard.actionCreateBuild', update_build: 'features.ai.aiActionDraftCard.actionUpdateBuild', update_build_status: 'features.ai.aiActionDraftCard.actionUpdateBuildStatus', delete_build: 'features.ai.aiActionDraftCard.actionDeleteBuild',
+  create_release: 'features.ai.aiActionDraftCard.actionCreateRelease', update_release_status: 'features.ai.aiActionDraftCard.actionUpdateReleaseStatus', delete_release: 'features.ai.aiActionDraftCard.actionDeleteRelease',
+  create_document: 'features.ai.aiActionDraftCard.actionCreateDocument', update_document: 'features.ai.aiActionDraftCard.actionUpdateDocument', delete_document: 'features.ai.aiActionDraftCard.actionDeleteDocument',
+  create_sprint: 'features.ai.aiActionDraftCard.actionCreateSprint', update_sprint: 'features.ai.aiActionDraftCard.actionUpdateSprint', delete_sprint: 'features.ai.aiActionDraftCard.actionDeleteSprint',
+  create_work_log: 'features.ai.aiActionDraftCard.actionCreateWorkLog', create_time_entry: 'features.ai.aiActionDraftCard.actionCreateTimeEntry',
+  create_risk: 'features.ai.aiActionDraftCard.actionCreateRisk', create_program: 'features.ai.aiActionDraftCard.actionCreateProgram', create_portfolio: 'features.ai.aiActionDraftCard.actionCreatePortfolio', create_strategic_goal: 'features.ai.aiActionDraftCard.actionCreateStrategicGoal',
 };
 
 function kindOf(type: string) {
@@ -104,12 +105,13 @@ export default function AiActionDraftCard({
   projects: Project[];
   onDone?: (result: { type: string; id: string; label: string }) => void;
 }) {
+  const { t } = useTranslation();
   const liveProjects = useMemo(
     () => projects.filter((item) => !['archived', 'done'].includes(String(item.status || ''))),
     [projects],
   );
   const type = String(action.type);
-  const label = ACTION_LABELS[type] || type;
+  const label = ACTION_LABELS[type] ? t(ACTION_LABELS[type]) : type;
   const canWrite = canWriteType(type);
   const isCreate = type.startsWith('create_');
   const isDelete = type.startsWith('delete_');
@@ -181,7 +183,7 @@ export default function AiActionDraftCard({
 
   async function handleExecute() {
     if (!canWrite) {
-      setError('当前账号无权执行该写操作。');
+      setError(t('features.ai.aiActionDraftCard.noWritePermission'));
       return;
     }
     setSubmitting(true);
@@ -195,7 +197,7 @@ export default function AiActionDraftCard({
       setDoneId(result.id);
       onDone?.({ type: result.type, id: result.id, label });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : '操作失败');
+      setError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : t('features.ai.aiActionDraftCard.operationFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -204,10 +206,10 @@ export default function AiActionDraftCard({
   if (doneId) {
     return (
       <div className="ai-action-card ai-action-card-success">
-        <div className="ai-action-card-title">{label}已完成</div>
-        <div className="body-text">对象：<span className="text-mono">{doneId}</span></div>
+        <div className="ai-action-card-title">{t('features.ai.aiActionDraftCard.completed', { label })}</div>
+        <div className="body-text">{t('features.ai.aiActionDraftCard.target')}：<span className="text-mono">{doneId}</span></div>
         <div className="ai-action-card-toolbar">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => openResult(type, doneId, projectId)}>打开相关页面</button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => openResult(type, doneId, projectId)}>{t('features.ai.aiActionDraftCard.openRelatedPage')}</button>
         </div>
       </div>
     );
@@ -219,31 +221,31 @@ export default function AiActionDraftCard({
 
   return (
     <div className={`ai-action-card ${isDelete ? 'ai-action-card-danger' : ''}`}>
-      <div className="ai-action-card-title">{label}（需确认）</div>
+      <div className="ai-action-card-title">{t('features.ai.aiActionDraftCard.confirmTitle', { label })}</div>
       <div className="text-secondary" style={{ fontSize: 12, marginBottom: 8 }}>
-        AI 只生成草稿；确认后才会调用正式业务接口。
+        {t('features.ai.aiActionDraftCard.draftOnlyHint')}
       </div>
       {error ? <div className="form-error" style={{ marginBottom: 8 }}>{error}</div> : null}
 
       {!isCreate ? (
         <div className="form-group">
-          <label className="form-label">对象编号</label>
+          <label className="form-label">{t('features.ai.aiActionDraftCard.targetId')}</label>
           <input className="form-input" value={resourceId} onChange={(e) => setResourceId(e.target.value)} placeholder={idPlaceholder(type)} disabled={!canWrite || submitting} />
         </div>
       ) : null}
 
       {showTitle ? (
         <div className="form-group">
-          <label className="form-label">{type.includes('work_log') ? '摘要/标题（可选）' : '标题/名称'}</label>
+          <label className="form-label">{type.includes('work_log') ? t('features.ai.aiActionDraftCard.summaryOrTitle') : t('features.ai.aiActionDraftCard.titleOrName')}</label>
           <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} disabled={!canWrite || submitting} />
         </div>
       ) : null}
 
       {showProject ? (
         <div className="form-group">
-          <label className="form-label">项目</label>
+          <label className="form-label">{t('features.ai.aiActionDraftCard.project')}</label>
           <select className="form-select" value={projectId} onChange={(e) => setProjectId(e.target.value)} disabled={!canWrite || submitting}>
-            <option value="">请选择项目</option>
+            <option value="">{t('features.ai.aiActionDraftCard.selectProject')}</option>
             {liveProjects.map((item) => <option key={item.id} value={item.id}>{item.name} ({item.id})</option>)}
           </select>
         </div>
@@ -252,11 +254,11 @@ export default function AiActionDraftCard({
       {type.includes('release') && isCreate ? (
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">产品 ID（可选）</label>
+            <label className="form-label">{t('features.ai.aiActionDraftCard.productIdOptional')}</label>
             <input className="form-input" value={productId} onChange={(e) => setProductId(e.target.value)} disabled={!canWrite || submitting} placeholder="PROD-xxx" />
           </div>
           <div className="form-group">
-            <label className="form-label">构建 ID（可选）</label>
+            <label className="form-label">{t('features.ai.aiActionDraftCard.buildIdOptional')}</label>
             <input className="form-input" value={buildId} onChange={(e) => setBuildId(e.target.value)} disabled={!canWrite || submitting} placeholder="BLD-xxx" />
           </div>
         </div>
@@ -264,10 +266,10 @@ export default function AiActionDraftCard({
 
       {isStatus || (type.includes('sprint') && type.startsWith('update_')) ? (
         <div className="form-group">
-          <label className="form-label">目标状态</label>
+          <label className="form-label">{t('features.ai.aiActionDraftCard.targetStatus')}</label>
           {statusOptions.length ? (
             <select className="form-select" value={status} onChange={(e) => setStatus(e.target.value)} disabled={!canWrite || submitting}>
-              <option value="">请选择</option>
+              <option value="">{t('features.ai.aiActionDraftCard.selectPlaceholder')}</option>
               {statusOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           ) : (
@@ -279,17 +281,17 @@ export default function AiActionDraftCard({
       {type.includes('requirement') && (isCreate || type === 'update_requirement') ? (
         <>
           <div className="form-group">
-            <label className="form-label">优先级</label>
+            <label className="form-label">{t('features.ai.aiActionDraftCard.priority')}</label>
             <select className="form-select" value={priority} onChange={(e) => setPriority(e.target.value)} disabled={!canWrite || submitting}>
               {REQUIREMENT_PRIORITIES.map((item) => <option key={item} value={item}>{labelOf(PRIORITY_LABELS, item)}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">描述</label>
+            <label className="form-label">{t('features.ai.aiActionDraftCard.description')}</label>
             <textarea className="form-textarea" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} disabled={!canWrite || submitting} />
           </div>
           <div className="form-group">
-            <label className="form-label">验收标准（每行一条）</label>
+            <label className="form-label">{t('features.ai.aiActionDraftCard.acceptanceCriteriaOnePerLine')}</label>
             <textarea className="form-textarea" rows={2} value={criteria} onChange={(e) => setCriteria(e.target.value)} disabled={!canWrite || submitting} />
           </div>
         </>
@@ -298,13 +300,13 @@ export default function AiActionDraftCard({
       {(type.includes('defect') || type.includes('risk')) && (isCreate || type.startsWith('update_')) && !isStatus ? (
         <>
           <div className="form-group">
-            <label className="form-label">严重级别</label>
+            <label className="form-label">{t('features.ai.aiActionDraftCard.severity')}</label>
             <select className="form-select" value={severity} onChange={(e) => setSeverity(e.target.value)} disabled={!canWrite || submitting}>
               {DEFECT_SEVERITIES.map((item) => <option key={item} value={item}>{labelOf(DEFECT_SEVERITY_LABELS, item)}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">描述</label>
+            <label className="form-label">{t('features.ai.aiActionDraftCard.description')}</label>
             <textarea className="form-textarea" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} disabled={!canWrite || submitting} />
           </div>
         </>
@@ -313,13 +315,13 @@ export default function AiActionDraftCard({
       {type.includes('task') && (isCreate || type === 'update_task') ? (
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">任务类型</label>
+            <label className="form-label">{t('features.ai.aiActionDraftCard.taskType')}</label>
             <select className="form-select" value={taskType} onChange={(e) => setTaskType(e.target.value)} disabled={!canWrite || submitting}>
               {TASK_TYPES.map((item) => <option key={item} value={item}>{labelOf(TASK_TYPE_LABELS, item)}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">预估工时</label>
+            <label className="form-label">{t('features.ai.aiActionDraftCard.estimatedHours')}</label>
             <input className="form-input" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} disabled={!canWrite || submitting} />
           </div>
         </div>
@@ -327,28 +329,28 @@ export default function AiActionDraftCard({
 
       {(type.includes('build') || type.includes('release') || type.includes('product')) && (isCreate || type.startsWith('update_')) && !isStatus ? (
         <div className="form-group">
-          <label className="form-label">版本</label>
+          <label className="form-label">{t('features.ai.aiActionDraftCard.version')}</label>
           <input className="form-input" value={version} onChange={(e) => setVersion(e.target.value)} disabled={!canWrite || submitting} placeholder="1.0.0" />
         </div>
       ) : null}
 
       {showOwner ? (
         <div className="form-group">
-          <label className="form-label">负责人</label>
+          <label className="form-label">{t('features.ai.aiActionDraftCard.owner')}</label>
           <input className="form-input" value={owner} onChange={(e) => setOwner(e.target.value)} disabled={!canWrite || submitting} />
         </div>
       ) : null}
 
       {(type.includes('project') || type.includes('program') || type.includes('portfolio') || type.includes('strategic') || type.includes('sprint')) && (isCreate || type.startsWith('update_')) && !isStatus ? (
         <div className="form-group">
-          <label className="form-label">目标/说明</label>
+          <label className="form-label">{t('features.ai.aiActionDraftCard.objectiveOrNotes')}</label>
           <textarea className="form-textarea" rows={2} value={objective || description} onChange={(e) => { setObjective(e.target.value); setDescription(e.target.value); }} disabled={!canWrite || submitting} />
         </div>
       ) : null}
 
       {type === 'create_work_log' || type === 'create_document' ? (
         <div className="form-group">
-          <label className="form-label">{type === 'create_work_log' ? '日报内容' : '文档正文'}</label>
+          <label className="form-label">{type === 'create_work_log' ? t('features.ai.aiActionDraftCard.workLogContent') : t('features.ai.aiActionDraftCard.documentBody')}</label>
           <textarea className="form-textarea" rows={4} value={content} onChange={(e) => setContent(e.target.value)} disabled={!canWrite || submitting} />
         </div>
       ) : null}
@@ -356,11 +358,11 @@ export default function AiActionDraftCard({
       {type === 'create_time_entry' ? (
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">工时（小时）</label>
+            <label className="form-label">{t('features.ai.aiActionDraftCard.hours')}</label>
             <input className="form-input" value={hours} onChange={(e) => setHours(e.target.value)} disabled={!canWrite || submitting} />
           </div>
           <div className="form-group">
-            <label className="form-label">日期</label>
+            <label className="form-label">{t('features.ai.aiActionDraftCard.date')}</label>
             <input className="form-input" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} disabled={!canWrite || submitting} />
           </div>
         </div>
@@ -369,28 +371,28 @@ export default function AiActionDraftCard({
       {(isCreate || type.startsWith('update_')) && (type.includes('requirement') || type.includes('defect') || type.includes('task') || type.includes('test_case')) && !isStatus ? (
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">执行人/处理人</label>
+            <label className="form-label">{t('features.ai.aiActionDraftCard.assignee')}</label>
             <input className="form-input" value={assignee} onChange={(e) => setAssignee(e.target.value)} disabled={!canWrite || submitting} />
           </div>
           {!type.includes('task') ? (
             <div className="form-group">
-              <label className="form-label">角色</label>
+              <label className="form-label">{t('features.ai.aiActionDraftCard.role')}</label>
               <select className="form-select" value={assigneeRole} onChange={(e) => setAssigneeRole(e.target.value)} disabled={!canWrite || submitting || !assignee.trim()}>
-                <option value="dev">开发</option>
-                <option value="qa">测试</option>
+                <option value="dev">{t('features.ai.aiActionDraftCard.roleDev')}</option>
+                <option value="qa">{t('features.ai.aiActionDraftCard.roleQa')}</option>
               </select>
             </div>
           ) : <div />}
         </div>
       ) : null}
 
-      {isDelete ? <div className="text-secondary" style={{ fontSize: 12, marginBottom: 8 }}>删除通常不可恢复，请确认编号正确。</div> : null}
+      {isDelete ? <div className="text-secondary" style={{ fontSize: 12, marginBottom: 8 }}>{t('features.ai.aiActionDraftCard.deleteIrreversibleHint')}</div> : null}
 
       <div className="ai-action-card-toolbar">
         <button type="button" className={`btn btn-sm ${isDelete ? 'btn-danger' : 'btn-primary'}`} onClick={() => { void handleExecute(); }} disabled={!canWrite || submitting}>
-          {submitting ? '执行中…' : isDelete ? '确认删除' : '确认执行'}
+          {submitting ? t('features.ai.aiActionDraftCard.executing') : isDelete ? t('features.ai.aiActionDraftCard.confirmDelete') : t('features.ai.aiActionDraftCard.confirmExecute')}
         </button>
-        {!canWrite ? <span className="text-secondary" style={{ fontSize: 12 }}>当前角色无权写入该资源。</span> : null}
+        {!canWrite ? <span className="text-secondary" style={{ fontSize: 12 }}>{t('features.ai.aiActionDraftCard.roleNoWritePermission')}</span> : null}
       </div>
     </div>
   );

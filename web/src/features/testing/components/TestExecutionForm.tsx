@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Play, X } from 'lucide-react';
 import { createTestRun } from '../api';
 import { ApiError } from '../../../services/api';
@@ -23,6 +24,7 @@ export default function TestExecutionForm({
   onClose: () => void;
   onDone: () => void;
 }) {
+  const { t } = useTranslation();
   const [result, setResult] = useState<'passed' | 'failed' | 'blocked'>('passed');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -36,19 +38,19 @@ export default function TestExecutionForm({
       await createTestRun({ testCaseId: item.id, result, notes: notes.trim() || undefined } as TestRunInput);
       onDone();
     } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : '执行记录失败');
+      setFormError(error instanceof ApiError ? error.message : t('features.testing.testExecutionForm.saveFailed'));
       setSubmitting(false);
     }
   }
 
   return (
-    <Overlay onClose={onClose} maxWidth={560} ariaLabel={`记录测试执行：${item.name}`}>
+    <Overlay onClose={onClose} maxWidth={560} ariaLabel={t('features.testing.testExecutionForm.ariaLabel', { name: item.name })}>
       <Panel
         className="qa-form-panel"
-        title="记录测试执行"
+        title={t('features.testing.testExecutionForm.title')}
         subtitle={item.name}
         toolbar={(
-          <button className="btn btn-text btn-sm btn-with-icon" onClick={onClose} aria-label="关闭">
+          <button className="btn btn-text btn-sm btn-with-icon" onClick={onClose} aria-label={t('common.close')}>
             <X size={15} aria-hidden="true" />
           </button>
         )}
@@ -59,13 +61,13 @@ export default function TestExecutionForm({
           <div className="qa-form-summary">
             <StatusBadge status={item.status} label={labelOf(TEST_CASE_STATUS_LABELS, item.status)} />
             <span className="qa-form-summary-meta">
-              通过率 {rate}% · 总 {item.totalCases} / 过 {item.passedCases} / 败 {item.failedCases} / 阻 {item.blockedCases}
+              {t('features.testing.testExecutionForm.summaryMeta', { rate, total: item.totalCases, passed: item.passedCases, failed: item.failedCases, blocked: item.blockedCases })}
             </span>
           </div>
 
           <div className="form-group">
-            <label className="form-label">执行结果</label>
-            <div className="qa-result-row" role="radiogroup" aria-label="执行结果">
+            <label className="form-label">{t('features.testing.testExecutionForm.resultLabel')}</label>
+            <div className="qa-result-row" role="radiogroup" aria-label={t('features.testing.testExecutionForm.resultAria')}>
               {TEST_RUN_RESULTS.map((value) => (
                 <button
                   key={value}
@@ -81,21 +83,21 @@ export default function TestExecutionForm({
           </div>
 
           <div className="form-group">
-            <label className="form-label">执行备注</label>
+            <label className="form-label">{t('features.testing.testExecutionForm.notesLabel')}</label>
             <textarea
               className="form-textarea"
               rows={4}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="环境、数据、截图链接或失败定位"
+              placeholder={t('features.testing.testExecutionForm.notesPlaceholder')}
             />
           </div>
 
           <div className="qa-form-footer">
-            <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>取消</button>
+            <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>{t('common.cancel')}</button>
             <button className="btn btn-primary btn-sm btn-with-icon" onClick={handleSubmit} disabled={submitting}>
               <Play size={14} aria-hidden="true" />
-              {submitting ? '提交中...' : '提交执行'}
+              {submitting ? t('features.testing.testExecutionForm.submitting') : t('features.testing.testExecutionForm.submit')}
             </button>
           </div>
         </div>

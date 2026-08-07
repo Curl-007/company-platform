@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { cn } from './utils';
 
 export interface SpinnerProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -14,17 +15,21 @@ export interface SpinnerProps extends React.HTMLAttributes<HTMLSpanElement> {
  * which honors prefers-reduced-motion (animation is disabled there).
  */
 export const Spinner = React.forwardRef<HTMLSpanElement, SpinnerProps>(
-  ({ className, size = 16, label = '加载中', style, ...props }, ref) => (
-    <span
-      ref={ref}
-      role="status"
-      aria-label={label}
-      className={cn('ui-spinner', className)}
-      style={{ width: size, height: size, ...style }}
-      data-slot="spinner"
-      {...props}
-    />
-  ),
+  ({ className, size = 16, label, style, ...props }, ref) => {
+    const { t } = useTranslation();
+    const resolvedLabel = label ?? t('common.loading');
+    return (
+      <span
+        ref={ref}
+        role="status"
+        aria-label={resolvedLabel}
+        className={cn('ui-spinner', className)}
+        style={{ width: size, height: size, ...style }}
+        data-slot="spinner"
+        {...props}
+      />
+    );
+  },
 );
 
 Spinner.displayName = 'Spinner';

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { fetchProjectDeliveryData } from '../detailModel';
 import CreateSprintForm from './CreateSprintForm';
 import type { ProjectDeliveryData } from '../deliveryModel';
@@ -21,6 +22,7 @@ export default function OverviewTab({
   onReload: () => void;
   canManageProject: boolean;
 }) {
+  const { t } = useTranslation();
   const [creatingSprint, setCreatingSprint] = useState(false);
   const {
     data: delivery,
@@ -45,20 +47,20 @@ export default function OverviewTab({
 
       <div className="pd-side-grid">
         <Panel
-          title="里程碑"
-          subtitle={project.milestones.length ? `${project.milestones.length} 个节点` : '暂无'}
+          title={t('features.projects.overviewTab.milestoneTitle')}
+          subtitle={project.milestones.length ? t('features.projects.overviewTab.milestoneCount', { count: project.milestones.length }) : t('features.projects.overviewTab.none')}
           className="pd-side-panel"
           noPadding
         >
           {project.milestones.length === 0 ? (
-            <div className="pd-empty pd-empty-pad">暂未定义里程碑</div>
+            <div className="pd-empty pd-empty-pad">{t('features.projects.overviewTab.noMilestones')}</div>
           ) : (
             <div className="pd-side-list">
               {project.milestones.map((milestone, index) => (
                 <div key={`${milestone.name}-${index}`} className="pd-side-row">
                   <div className="min-w-0">
                     <div className="pd-side-name truncate">{milestone.name}</div>
-                    <div className="pd-side-meta text-mono">{milestone.date || '未设日期'}</div>
+                    <div className="pd-side-meta text-mono">{milestone.date || t('features.projects.overviewTab.noDate')}</div>
                   </div>
                   <StatusBadge label={labelOf(MILESTONE_STATUS_LABELS, milestone.status)} status={milestone.status} />
                 </div>
@@ -68,16 +70,16 @@ export default function OverviewTab({
         </Panel>
 
         <Panel
-          title="迭代"
-          subtitle={`${project.sprints.length} 个冲刺`}
+          title={t('features.projects.overviewTab.sprintTitle')}
+          subtitle={t('features.projects.overviewTab.sprintCount', { count: project.sprints.length })}
           className="pd-side-panel"
           noPadding
           toolbar={canManageProject ? (
-            <button className="btn btn-primary btn-sm" onClick={() => setCreatingSprint(true)}>新建迭代</button>
+            <button className="btn btn-primary btn-sm" onClick={() => setCreatingSprint(true)}>{t('features.projects.overviewTab.newSprint')}</button>
           ) : undefined}
         >
           {project.sprints.length === 0 ? (
-            <div className="pd-empty pd-empty-pad">该项目暂无迭代</div>
+            <div className="pd-empty pd-empty-pad">{t('features.projects.overviewTab.noSprints')}</div>
           ) : (
             <div className="pd-side-list">
               {project.sprints.map((sprint) => (

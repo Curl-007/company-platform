@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { RefreshCw } from 'lucide-react';
 import {
   confirmAiJob,
@@ -32,12 +33,13 @@ import AiChatPanel from './AiChatPanel';
 import AiSidePanel from './AiSidePanel';
 
 export default function AiView() {
+  const { t } = useTranslation();
   const { data, loading, error, reload } = useAsync<AiSummaryExtended>(fetchAiSummary, [], { cacheKey: 'ai:summary' });
   const projectsAsync = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
   const toast = useToast();
   const confirm = useConfirm();
   const [messages, setMessages] = useState<AiChatMessage[]>([
-    createWelcomeMessage('我是项目管理 AI 助手。可对话查询，也可指令式写操作：需求/缺陷/任务/用例/项目/产品/构建/发布/文档/迭代/日报/工时/风险等；确认后才写入正式接口。'),
+    createWelcomeMessage(t('features.ai.aiView.welcomeMessage')),
   ]);
   const [draft, setDraft] = useState('');
   const [attachments, setAttachments] = useState<AiChatAttachment[]>([]);
@@ -75,11 +77,11 @@ export default function AiView() {
 
   const providerStatus = useMemo(() => {
     const provider = data?.aiProvider;
-    if (!provider) return '读取中';
-    if (!provider.configured) return '未配置';
+    if (!provider) return t('features.ai.aiView.providerReading');
+    if (!provider.configured) return t('features.ai.aiView.providerNotConfigured');
     const model = selectedModel || provider.model;
     return `${model} · ${provider.wireApi === 'responses' ? 'Responses' : 'Chat Completions'}`;
-  }, [data, selectedModel]);
+  }, [data, selectedModel, t]);
 
   async function refreshModels(preferredModel?: string) {
     setModelsLoading(true);
@@ -98,7 +100,7 @@ export default function AiView() {
       return result;
     } catch (err) {
       setModels([]);
-      setModelsError(err instanceof ApiError ? err.message : '拉取模型列表失败');
+      setModelsError(err instanceof ApiError ? err.message : t('features.ai.aiView.fetchModelsFailed'));
       throw err;
     } finally {
       setModelsLoading(false);
@@ -116,7 +118,7 @@ export default function AiView() {
         const probe = await testAiProviderConfig();
         setConnectionOnline(Boolean(probe.ok) && Boolean(modelResult.ok));
         setConnectionLatencyMs(probe.latencyMs ?? null);
-        if (!probe.ok) setConnectionError('模型服务探测失败');
+        if (!probe.ok) setConnectionError(t('features.ai.aiView.probeFailed'));
       } catch (err) {
         // 403 / no admin permission: treat successful model list as online.
         if (err instanceof ApiError && (err.status === 403 || err.status === 401)) {
@@ -126,13 +128,13 @@ export default function AiView() {
           // Admin probe failed for real connectivity reasons → red.
           setConnectionOnline(false);
           setConnectionLatencyMs(null);
-          setConnectionError(err instanceof ApiError ? err.message : '接入检测失败');
+          setConnectionError(err instanceof ApiError ? err.message : t('features.ai.aiView.connectionTestFailed'));
         }
       }
     } catch (err) {
       setConnectionOnline(false);
       setConnectionLatencyMs(null);
-      setConnectionError(err instanceof ApiError ? err.message : '接入检测失败');
+      setConnectionError(err instanceof ApiError ? err.message : t('features.ai.aiView.connectionTestFailed'));
     } finally {
       setConnectionTesting(false);
     }
@@ -149,7 +151,7 @@ export default function AiView() {
     if (!files?.length) return;
     const remaining = Math.max(0, MAX_ATTACHMENTS - attachments.length);
     const selected = Array.from(files).slice(0, remaining);
-    if (selected.length < files.length) setFileError(`单次对话最多附加 ${MAX_ATTACHMENTS} 个文件。`);
+    if (selected.length < files.length) setFileError(t('features.ai.aiView.maxAttachmentsPerChat', { count: MAX_ATTACHMENTS }));
     const validationError = validateAttachmentFiles(
       selected,
       attachments.reduce((total, item) => total + item.size, 0),
@@ -163,7 +165,7 @@ export default function AiView() {
       const next = await Promise.all(selected.map(fileToAttachment));
       setAttachments((prev) => [...prev, ...next]);
     } catch {
-      setFileError('读取附件失败，请换一个文件重试。');
+      setFileError(t('common.readAttachmentFailed'));
     }
   }
 
@@ -174,7 +176,7 @@ export default function AiView() {
     const userMessage: AiChatMessage = {
       id: `USER-${Date.now()}`,
       role: 'user',
-      content: content || '请分析这些附件。',
+      content: content || t('common.analyzeAttachments'),
       createdAt: nowIso(),
       attachments,
     };
@@ -199,7 +201,7 @@ export default function AiView() {
         {
           id: `ERR-${Date.now()}`,
           role: 'assistant',
-          content: err instanceof Error ? err.message : 'AI 助手暂时不可用，请稍后重试。',
+          content: err instanceof Error ? err.message : t('common.aiUnavailable'),
           createdAt: nowIso(),
           fallback: true,
           generatedBy: 'error',
@@ -212,7 +214,7 @@ export default function AiView() {
 
   function resetChat() {
     setMessages([
-      createWelcomeMessage('新的对话已开始。可以问项目现状，也可以说「新建需求」或上传需求文档生成草稿。', `welcome-${Date.now()}`),
+      createWelcomeMessage(t('features.ai.aiView.newChatWelcome'), `welcome-${Date.now()}`),
     ]);
     setAttachments([]);
     setDraft('');
@@ -220,13 +222,13 @@ export default function AiView() {
   }
 
   function handleActionDone(result: { type: string; id: string; label: string }) {
-    toast.success(`${result.label}成功：${result.id}`);
+    toast.success(t('features.ai.aiView.actionSuccess', { label: result.label, id: result.id }));
     setMessages((prev) => [
       ...prev,
       {
         id: `SYS-${Date.now()}`,
         role: 'assistant',
-        content: `已确认执行「${result.label}」→ ${result.id}。可继续下一条指令（创建/修改/删除/改状态）。`,
+        content: t('features.ai.aiView.actionConfirmed', { label: result.label, id: result.id }),
         createdAt: nowIso(),
         generatedBy: 'system',
       },
@@ -240,7 +242,7 @@ export default function AiView() {
       setSelectedJob(job);
       setReviewDraft(buildReviewDraft(job));
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '读取 AI 任务失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.ai.aiView.fetchJobFailed'));
     } finally {
       setJobLoading(false);
     }
@@ -254,15 +256,15 @@ export default function AiView() {
       .map((item) => item.trim())
       .filter(Boolean) || [];
     if (edited && !reviewDraft?.title.trim()) {
-      toast.error('编辑后写入前需要填写需求标题');
+      toast.error(t('features.ai.aiView.editedTitleRequired'));
       return;
     }
     const ok = await confirm({
-      title: edited ? '编辑后写入 AI 分析结果？' : '确认写入 AI 分析结果？',
+      title: edited ? t('features.ai.aiView.confirmWriteEditedTitle') : t('features.ai.aiView.confirmWriteTitle'),
       description: edited
-        ? '确认后会按当前编辑稿写入业务需求池，并记录审计日志。'
-        : '确认后会把 AI 生成的第一条需求写入业务需求池，并记录审计日志。',
-      confirmText: edited ? '编辑后写入' : '确认写入',
+        ? t('features.ai.aiView.confirmWriteEditedDescription')
+        : t('features.ai.aiView.confirmWriteDescription'),
+      confirmText: edited ? t('features.ai.aiView.writeEdited') : t('features.ai.aiView.confirmWrite'),
       tone: 'info',
     });
     if (!ok) return;
@@ -278,10 +280,10 @@ export default function AiView() {
       } : {});
       setSelectedJob(job);
       setReviewDraft(buildReviewDraft(job));
-      toast.success(job.writtenRequirementId ? `已写入需求：${job.writtenRequirementId}` : 'AI 任务已确认');
+      toast.success(job.writtenRequirementId ? t('features.ai.aiView.requirementWritten', { id: job.writtenRequirementId }) : t('features.ai.aiView.jobConfirmed'));
       await reload();
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '确认 AI 任务失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.ai.aiView.confirmJobFailed'));
     } finally {
       setJobAction(null);
     }
@@ -290,21 +292,21 @@ export default function AiView() {
   async function handleRejectJob() {
     if (!selectedJob) return;
     const ok = await confirm({
-      title: '忽略 AI 分析结果？',
-      description: '忽略后该任务不会写入业务数据，后续仍可重新分析。',
-      confirmText: '忽略结果',
+      title: t('features.ai.aiView.ignoreResultTitle'),
+      description: t('features.ai.aiView.ignoreResultDescription'),
+      confirmText: t('features.ai.aiView.ignoreResult'),
       tone: 'danger',
     });
     if (!ok) return;
     setJobAction('reject');
     try {
-      const job = await rejectAiJob(selectedJob.jobId, { reason: '用户在 AI 助手页忽略' });
+      const job = await rejectAiJob(selectedJob.jobId, { reason: t('features.ai.aiView.rejectReason') });
       setSelectedJob(job);
       setReviewDraft(buildReviewDraft(job));
-      toast.success('已忽略 AI 分析结果');
+      toast.success(t('features.ai.aiView.resultIgnored'));
       await reload();
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '驳回 AI 任务失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.ai.aiView.rejectJobFailed'));
     } finally {
       setJobAction(null);
     }
@@ -317,10 +319,10 @@ export default function AiView() {
       const job = await retryAiJob(selectedJob.jobId);
       setSelectedJob(job);
       setReviewDraft(buildReviewDraft(job));
-      toast.success('AI 任务已重新分析');
+      toast.success(t('features.ai.aiView.jobReanalyzed'));
       await reload();
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '重试 AI 任务失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.ai.aiView.retryJobFailed'));
     } finally {
       setJobAction(null);
     }
@@ -335,7 +337,7 @@ export default function AiView() {
       <div className="page-inline-actions mb-4 flex justify-end">
         <button className="btn btn-secondary btn-sm" onClick={resetChat}>
           <RefreshCw size={15} />
-          新对话
+          {t('features.ai.aiView.newChat')}
         </button>
       </div>
 

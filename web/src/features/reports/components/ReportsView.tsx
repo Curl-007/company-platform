@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   BarChart3,
@@ -38,6 +39,7 @@ interface ReportsSignal {
 }
 
 export default function ReportsView() {
+  const { t } = useTranslation();
   const { data, loading, error, reload } = useAsync<DashboardData>(fetchDashboard, [], { cacheKey: 'dashboard:overview' });
   const [view, setView] = useState<ReportView>('overview');
   const currentUser = getSessionUser();
@@ -50,42 +52,42 @@ export default function ReportsView() {
     const m = data.metrics;
     return [
       {
-        label: '项目平均健康度',
+        label: t('features.reports.reportsView.avgProjectHealth'),
         icon: Gauge,
         value: m.projectHealthAverage,
-        caption: m.projectHealthAverage >= 75 ? '整体健康' : '需要关注',
+        caption: m.projectHealthAverage >= 75 ? t('features.reports.reportsView.overallHealthy') : t('features.reports.reportsView.needsAttention'),
         tone: m.projectHealthAverage >= 75 ? '' : 'is-warn',
       },
       {
-        label: '需求完成率',
+        label: t('features.reports.reportsView.requirementCompletionRate'),
         icon: Target,
         value: `${m.requirementCompletionAverage}%`,
-        caption: '跨项目平均完成水平',
+        caption: t('features.reports.reportsView.crossProjectAverage'),
         tone: 'is-info',
       },
       {
-        label: '测试通过率',
+        label: t('features.reports.reportsView.testPassRate'),
         icon: CheckCircle2,
         value: `${m.testPassRate}%`,
-        caption: m.testPassRate >= 90 ? '达到目标' : '低于目标',
+        caption: m.testPassRate >= 90 ? t('features.reports.reportsView.metTarget') : t('features.reports.reportsView.belowTarget'),
         tone: m.testPassRate >= 90 ? '' : 'is-risk',
       },
       {
-        label: '文档数量',
+        label: t('features.reports.reportsView.documentCount'),
         icon: FileText,
         value: m.documentCount,
-        caption: '文档中心总量',
+        caption: t('features.reports.reportsView.documentTotal'),
         tone: '',
       },
       {
-        label: '开放风险',
+        label: t('features.reports.reportsView.openRisks'),
         icon: ShieldAlert,
         value: m.openRisks,
-        caption: '全部项目累计',
+        caption: t('features.reports.reportsView.allProjectsCumulative'),
         tone: m.openRisks > 0 ? 'is-risk' : '',
       },
     ];
-  }, [data]);
+  }, [data, t]);
 
   const healthRankData = useMemo(() => (data ? buildHealthRankData(data) : []), [data]);
   const reportModel = useMemo(() => (data ? buildReportModel(data) : null), [data]);
@@ -101,7 +103,7 @@ export default function ReportsView() {
 
   return (
     <div className="reports-workbench reports-page">
-      <section className="reports-signal-strip" aria-label="报表指标概况">
+      <section className="reports-signal-strip" aria-label={t('features.reports.reportsView.signalStripAria')}>
         {signals.map((item) => {
           const Icon = item.icon;
           return (
@@ -121,11 +123,11 @@ export default function ReportsView() {
       ) : null}
 
       <div className="reports-toolbar">
-        <div className="nav-tabs reports-view-tabs" role="tablist" aria-label="报表视图">
+        <div className="nav-tabs reports-view-tabs" role="tablist" aria-label={t('features.reports.reportsView.viewTabsAria')}>
           {[
-            { key: 'overview', label: '经营概览', icon: BarChart3 },
-            { key: 'risk', label: '风险分析', icon: AlertTriangle },
-            { key: 'delivery', label: '交付追踪', icon: Target },
+            { key: 'overview', label: t('features.reports.reportModel.viewOverview'), icon: BarChart3 },
+            { key: 'risk', label: t('features.reports.reportModel.viewRisk'), icon: AlertTriangle },
+            { key: 'delivery', label: t('features.reports.reportModel.viewDelivery'), icon: Target },
           ].map((item) => {
             const Icon = item.icon;
             const active = view === item.key;
@@ -146,11 +148,11 @@ export default function ReportsView() {
         <div className="reports-toolbar-actions">
           <button className="btn btn-secondary btn-sm" onClick={reload}>
             <RefreshCw size={14} aria-hidden="true" />
-            刷新
+            {t('features.reports.reportsView.refresh')}
           </button>
           <button className="btn btn-primary btn-sm" onClick={handleExport}>
             <Download size={14} aria-hidden="true" />
-            导出
+            {t('features.reports.reportsView.export')}
           </button>
         </div>
       </div>

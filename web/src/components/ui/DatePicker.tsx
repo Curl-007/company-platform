@@ -1,11 +1,12 @@
 import React from 'react';
 import { CalendarIcon } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
-import { zhCN } from 'date-fns/locale';
+import { useTranslation } from 'react-i18next';
 import { Calendar } from './Calendar';
 import { Popover, PopoverContent, PopoverTrigger } from './Popover';
 import { Button } from './Button';
 import { cn } from './utils';
+import { useDateLocale } from '../../i18n/useDateFormatter';
 
 export interface DatePickerProps {
   /** ISO date string (yyyy-MM-dd) or undefined. */
@@ -29,28 +30,32 @@ export const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
     {
       value,
       onChange,
-      placeholder = '选择日期',
+      placeholder,
       disabled = false,
       className,
       invalid = false,
-      ariaLabel = '选择日期',
+      ariaLabel,
     },
     ref,
   ) => {
+    const { t } = useTranslation();
+    const resolvedPlaceholder = placeholder ?? t('common.selectDate');
+    const resolvedAriaLabel = ariaLabel ?? t('common.selectDate');
+    const dateLocale = useDateLocale();
     const selected = React.useMemo(() => {
       if (!value) return undefined;
       const parsed = parseISO(value);
       return isValid(parsed) ? parsed : undefined;
     }, [value]);
 
-    const label = selected ? format(selected, 'yyyy-MM-dd', { locale: zhCN }) : placeholder;
+    const label = selected ? format(selected, 'yyyy-MM-dd', { locale: dateLocale }) : resolvedPlaceholder;
 
     return (
       <Popover>
         <PopoverTrigger
           ref={ref}
           disabled={disabled}
-          aria-label={ariaLabel}
+          aria-label={resolvedAriaLabel}
           className={cn(
             'ui-date-picker form-input ui-input inline-flex w-full items-center justify-between gap-2 text-left font-normal',
             !selected && 'text-[var(--muted-foreground)]',
@@ -79,7 +84,7 @@ export const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
                 onClick={() => onChange(undefined)}
                 type="button"
               >
-                清除
+                {t('common.clear')}
               </Button>
             </div>
           )}

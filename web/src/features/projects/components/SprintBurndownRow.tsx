@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { fetchSprintBurndown, fetchSprintCommitment, fetchSprintScopeChanges } from '../../tasks/api';
 import { useAsync } from '../../../hooks/useAsync';
 import BurndownChart from '../../../components/common/BurndownChart';
@@ -7,6 +8,7 @@ import { labelOf, SPRINT_STATUS_LABELS } from '../../../constants/enums';
 import type { BurndownData, Sprint, SprintCommitment, SprintScopeChange } from '../../../types';
 
 export default function SprintBurndownRow({ sprint }: { sprint: Sprint }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const { data, loading, error } = useAsync<BurndownData>(() => fetchSprintBurndown(sprint.id), [sprint.id, open], { cacheKey: 'sprints:burndown' });
   const commitmentAsync = useAsync<SprintCommitment | null>(() => fetchSprintCommitment(sprint.id), [sprint.id, open], { cacheKey: 'sprints:commitment' });
@@ -21,11 +23,11 @@ export default function SprintBurndownRow({ sprint }: { sprint: Sprint }) {
         <StatusBadge label={labelOf(SPRINT_STATUS_LABELS, sprint.status)} status={sprint.status} />
       </div>
       {open && <div style={{ marginTop: 8 }}>
-        {loading ? <p className="text-secondary" style={{ fontSize: 13 }}>正在加载燃尽图...</p> : error || !data ? <p className="text-secondary" style={{ fontSize: 13 }}>暂无燃尽数据，设置迭代起止日期并补充任务后会显示。</p> : <>
+        {loading ? <p className="text-secondary" style={{ fontSize: 13 }}>{t('features.projects.sprintBurndownRow.loading')}</p> : error || !data ? <p className="text-secondary" style={{ fontSize: 13 }}>{t('features.projects.sprintBurndownRow.noData')}</p> : <>
           <BurndownChart data={data} height={260} />
-          <p className="text-secondary" style={{ fontSize: 13, marginTop: 8 }}>总预估 {data.totalEstimate}h，任务数 {data.taskCount}。</p>
-          {commitmentAsync.data ? <p className="text-secondary" style={{ fontSize: 13, marginTop: 4 }}>承诺基线：{commitmentAsync.data.estimatedHours}h / {commitmentAsync.data.taskCount} 个任务{commitmentAsync.data.committedByName ? ` · ${commitmentAsync.data.committedByName} 确认` : ''}</p> : sprint.status === 'active' || sprint.status === 'closed' ? <p className="text-secondary" style={{ fontSize: 13, marginTop: 4 }}>该迭代尚未形成承诺基线。</p> : null}
-          {scopeChangesAsync.data?.length ? <div className="text-secondary" style={{ fontSize: 13, marginTop: 6 }}>范围变更 {scopeChangesAsync.data.length} 次：{scopeChangesAsync.data.slice(0, 2).map((item) => item.reason).filter(Boolean).join('；')}</div> : null}
+          <p className="text-secondary" style={{ fontSize: 13, marginTop: 8 }}>{t('features.projects.sprintBurndownRow.summary', { total: data.totalEstimate, count: data.taskCount })}</p>
+          {commitmentAsync.data ? <p className="text-secondary" style={{ fontSize: 13, marginTop: 4 }}>{t('features.projects.sprintBurndownRow.commitment', { hours: commitmentAsync.data.estimatedHours, count: commitmentAsync.data.taskCount })}{commitmentAsync.data.committedByName ? t('features.projects.sprintBurndownRow.commitmentConfirm', { name: commitmentAsync.data.committedByName }) : ''}</p> : sprint.status === 'active' || sprint.status === 'closed' ? <p className="text-secondary" style={{ fontSize: 13, marginTop: 4 }}>{t('features.projects.sprintBurndownRow.noCommitment')}</p> : null}
+          {scopeChangesAsync.data?.length ? <div className="text-secondary" style={{ fontSize: 13, marginTop: 6 }}>{t('features.projects.sprintBurndownRow.scopeChanges', { count: scopeChangesAsync.data.length, items: scopeChangesAsync.data.slice(0, 2).map((item) => item.reason).filter(Boolean).join('；') })}</div> : null}
         </>}
       </div>}
     </div>

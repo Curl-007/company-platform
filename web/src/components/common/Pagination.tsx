@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../ui/utils';
 
 export interface PaginationProps extends React.HTMLAttributes<HTMLElement> {
@@ -33,6 +34,7 @@ export const Pagination = React.forwardRef<HTMLElement, PaginationProps>(
     },
     ref,
   ) => {
+    const { t } = useTranslation();
     const pages = buildPageList(page, Math.max(pageCount, 1), siblingCount);
     const go = (next: number) => {
       const clamped = Math.min(Math.max(next, 1), pageCount);
@@ -43,12 +45,12 @@ export const Pagination = React.forwardRef<HTMLElement, PaginationProps>(
       <nav
         ref={ref}
         className={cn('pagination', className)}
-        aria-label="分页导航"
+        aria-label={t('common.pagination')}
         data-slot="pagination"
         {...props}
       >
         <PaginationButton
-          aria-label="上一页"
+          aria-label={t('common.previousPage')}
           onClick={() => go(page - 1)}
           disabled={disabled || page <= 1}
         >
@@ -65,7 +67,7 @@ export const Pagination = React.forwardRef<HTMLElement, PaginationProps>(
               key={p}
               active={p === page}
               aria-current={p === page ? 'page' : undefined}
-              aria-label={`第 ${p} 页`}
+              aria-label={t('common.pageN', { page: p })}
               onClick={() => go(p)}
               disabled={disabled}
             >
@@ -75,7 +77,7 @@ export const Pagination = React.forwardRef<HTMLElement, PaginationProps>(
         )}
 
         <PaginationButton
-          aria-label="下一页"
+          aria-label={t('common.nextPage')}
           onClick={() => go(page + 1)}
           disabled={disabled || page >= pageCount}
         >

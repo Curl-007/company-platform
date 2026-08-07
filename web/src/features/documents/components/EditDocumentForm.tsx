@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
 import { ApiError } from '../../../services/api';
@@ -17,6 +18,7 @@ export default function EditDocumentForm({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState(doc.title);
   const [type, setType] = useState(doc.type);
   const [category, setCategory] = useState(doc.category ?? 'project');
@@ -28,9 +30,9 @@ export default function EditDocumentForm({
 
   async function handleSubmit() {
     setFormError(null);
-    if (!title.trim()) return setFormError('标题不能为空。');
-    if (!owner.trim()) return setFormError('负责人不能为空。');
-    if (category === 'project' && !projectId) return setFormError('项目文档必须选择归属项目。');
+    if (!title.trim()) return setFormError(t('features.documents.editDocumentForm.titleRequired'));
+    if (!owner.trim()) return setFormError(t('features.documents.editDocumentForm.ownerRequired'));
+    if (category === 'project' && !projectId) return setFormError(t('features.documents.editDocumentForm.projectRequired'));
 
     setSubmitting(true);
     try {
@@ -44,7 +46,7 @@ export default function EditDocumentForm({
       });
       onSaved();
     } catch (err: unknown) {
-      setFormError(err instanceof ApiError ? err.message : '保存失败');
+      setFormError(err instanceof ApiError ? err.message : t('features.documents.editDocumentForm.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -52,49 +54,49 @@ export default function EditDocumentForm({
 
   return (
     <Overlay onClose={onClose}>
-      <Panel title="编辑文档" subtitle={doc.id}>
+      <Panel title={t('features.documents.editDocumentForm.panelTitle')} subtitle={doc.id}>
         {formError && <div className="form-error" style={{ marginBottom: 8 }}>{formError}</div>}
         <div className="form-group">
-          <label className="form-label">标题</label>
+          <label className="form-label">{t('features.documents.editDocumentForm.title')}</label>
           <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} />
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">类型</label>
+            <label className="form-label">{t('features.documents.editDocumentForm.type')}</label>
             <select className="form-select" value={type} onChange={(e) => setType(e.target.value)}>
               {DOC_TYPES.filter((item) => item.key).map((item) => (
-                <option key={item.key} value={item.key}>{item.label}</option>
+                <option key={item.key} value={item.key}>{t(item.label)}</option>
               ))}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">分类</label>
+            <label className="form-label">{t('features.documents.editDocumentForm.category')}</label>
             <select className="form-select" value={category} onChange={(e) => setCategory(e.target.value)}>
               {DOC_CATEGORIES.filter((item) => item.key).map((item) => (
-                <option key={item.key} value={item.key}>{item.label}</option>
+                <option key={item.key} value={item.key}>{t(item.label)}</option>
               ))}
             </select>
           </div>
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">负责角色</label>
+            <label className="form-label">{t('features.documents.editDocumentForm.ownerRole')}</label>
             <select className="form-select" value={ownerRole} onChange={(e) => setOwnerRole(e.target.value)}>
               {ROLE_DOC_OPTIONS.map((item) => (
-                <option key={item.key} value={item.key}>{item.label}</option>
+                <option key={item.key} value={item.key}>{t(item.label)}</option>
               ))}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">负责人</label>
+            <label className="form-label">{t('features.documents.editDocumentForm.owner')}</label>
             <input className="form-input" value={owner} onChange={(e) => setOwner(e.target.value)} />
           </div>
         </div>
         {category === 'project' && (
           <div className="form-group">
-            <label className="form-label">归属项目</label>
+            <label className="form-label">{t('features.documents.editDocumentForm.project')}</label>
             <select className="form-select" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-              <option value="">请选择项目</option>
+              <option value="">{t('features.documents.editDocumentForm.selectProject')}</option>
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>{project.name}</option>
               ))}
@@ -102,9 +104,9 @@ export default function EditDocumentForm({
           </div>
         )}
         <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end' }}>
-          <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>取消</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>{t('common.cancel')}</button>
           <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? '保存中...' : '保存'}
+            {submitting ? t('features.documents.editDocumentForm.saving') : t('common.save')}
           </button>
         </div>
       </Panel>

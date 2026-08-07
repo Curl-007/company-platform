@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, Suspense } from 'react';
 import { HashRouter, useLocation, useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import Layout from './components/Layout';
 import Login from './components/Login';
 import PageErrorBoundary from './components/common/PageErrorBoundary';
@@ -35,6 +36,7 @@ function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
+  const { t } = useTranslation();
   const [user, setUser] = useState<SessionUser | null>(() => getSessionUser());
   const [currentPage, setCurrentPage] = useState<PageKey>(() => getRoutePage(location.pathname));
 
@@ -101,7 +103,7 @@ function AppContent() {
           getToken() !== startedToken
           || getSessionGeneration() !== startedGeneration
         ) return;
-        toast.info('无法刷新会话，已保留本地登录状态。请检查网络后重试。');
+        toast.info(t('common.sessionRefreshFailed'));
       });
     return () => {
       cancelled = true;
@@ -156,7 +158,7 @@ function AppContent() {
       onLogout={handleLogout}
     >
       <PageErrorBoundary key={currentPage} pageLabel={currentPage}>
-        <Suspense fallback={<div className="page-suspense-fallback">加载中...</div>}>
+        <Suspense fallback={<div className="page-suspense-fallback">{t('common.loading')}</div>}>
           <PageComponent user={user} />
         </Suspense>
       </PageErrorBoundary>

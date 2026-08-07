@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FolderKanban, Inbox } from 'lucide-react';
 import Panel from '../../../components/common/Panel';
 import StatusBadge from '../../../components/common/StatusBadge';
@@ -52,6 +53,7 @@ export default function MyWorkTaskWorkspace({
   history: StatusHistoryEntry[] | undefined;
   onHandoffDone?: () => void;
 }) {
+  const { t } = useTranslation();
   const toast = useToast();
   const sessionUser = getSessionUser();
   const role = String(sessionUser?.role || '').toLowerCase();
@@ -125,20 +127,20 @@ export default function MyWorkTaskWorkspace({
     }
     if (canSubmitForTesting) {
       setTargetUserName(qaMembers[0]?.userName || '');
-      setReason('开发完成，提交测试');
+      setReason(t('features.mywork.myWorkTaskWorkspace.reasonSubmitForTesting'));
     } else if (canReturnForFix) {
       setTargetUserName(devMembers[0]?.userName || '');
-      setReason('测试发现问题，打回开发修复');
+      setReason(t('features.mywork.myWorkTaskWorkspace.reasonReturnForFix'));
     } else {
       setTargetUserName('');
       setReason('');
     }
-  }, [selectedTask?.id, selectedTask?.status, canSubmitForTesting, canReturnForFix, qaMembers, devMembers]);
+  }, [selectedTask?.id, selectedTask?.status, canSubmitForTesting, canReturnForFix, qaMembers, devMembers, t]);
 
   async function runHandoff(action: TaskHandoffAction) {
     if (!selectedTask) return;
     if (!targetUserName.trim()) {
-      toast.error(action === 'submit_for_testing' ? '请选择测试工程师' : '请选择开发工程师');
+      toast.error(action === 'submit_for_testing' ? t('features.mywork.myWorkTaskWorkspace.selectTestEngineer') : t('features.mywork.myWorkTaskWorkspace.selectDevEngineer'));
       return;
     }
     setSubmitting(true);
@@ -152,10 +154,10 @@ export default function MyWorkTaskWorkspace({
         assigneeId: hit?.userId || undefined,
         reason: reason.trim() || undefined,
       });
-      toast.success(action === 'submit_for_testing' ? '已提交测试并指派给测试工程师' : '已打回开发并指派给开发工程师');
+      toast.success(action === 'submit_for_testing' ? t('features.mywork.myWorkTaskWorkspace.submittedForTesting') : t('features.mywork.myWorkTaskWorkspace.returnedForFix'));
       onHandoffDone?.();
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : '任务交接失败');
+      toast.error(error instanceof ApiError ? error.message : t('features.mywork.myWorkTaskWorkspace.handoffFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -194,24 +196,30 @@ export default function MyWorkTaskWorkspace({
   };
 
   function sourceLabel(task: Task) {
-    if (task.sourceType === 'requirement') return '需求';
-    if (task.sourceType === 'test_case') return '测试';
-    if (task.sourceType === 'defect') return '缺陷';
-    return '一般';
+    if (task.sourceType === 'requirement') return t('features.mywork.myWorkTaskWorkspace.sourceRequirement');
+    if (task.sourceType === 'test_case') return t('features.mywork.myWorkTaskWorkspace.sourceTestCase');
+    if (task.sourceType === 'defect') return t('features.mywork.myWorkTaskWorkspace.sourceDefect');
+    return t('features.mywork.myWorkTaskWorkspace.sourceGeneral');
   }
 
   const filterButtons: Array<{ key: TaskFilter; label: string; count: number }> = [
-    { key: 'all', label: '全部', count: filterCounts.all },
-    { key: 'requirement', label: '需求任务', count: filterCounts.requirement },
-    { key: 'test_case', label: '测试任务', count: filterCounts.test_case },
-    { key: 'defect', label: '缺陷修复', count: filterCounts.defect },
-    { key: 'general', label: '一般任务', count: filterCounts.general },
+    { key: 'all', label: t('features.mywork.myWorkTaskWorkspace.filterAll'), count: filterCounts.all },
+    { key: 'requirement', label: t('features.mywork.myWorkTaskWorkspace.filterRequirement'), count: filterCounts.requirement },
+    { key: 'test_case', label: t('features.mywork.myWorkTaskWorkspace.filterTestCase'), count: filterCounts.test_case },
+    { key: 'defect', label: t('features.mywork.myWorkTaskWorkspace.filterDefect'), count: filterCounts.defect },
+    { key: 'general', label: t('features.mywork.myWorkTaskWorkspace.filterGeneral'), count: filterCounts.general },
   ];
 
   const queueSubtitle =
     taskFilter === 'all'
-      ? `共 ${visibleTasks.length} 条（需求 ${filterCounts.requirement} · 测试 ${filterCounts.test_case} · 缺陷 ${filterCounts.defect} · 一般 ${filterCounts.general}）`
-      : `当前筛选 ${visibleTasks.length} 条`;
+      ? t('features.mywork.myWorkTaskWorkspace.queueSubtitleAll', {
+          total: visibleTasks.length,
+          req: filterCounts.requirement,
+          tc: filterCounts.test_case,
+          def: filterCounts.defect,
+          general: filterCounts.general,
+        })
+      : t('features.mywork.myWorkTaskWorkspace.queueSubtitleFiltered', { total: visibleTasks.length });
 
   const targetOptions = canSubmitForTesting ? qaMembers : canReturnForFix ? devMembers : [];
   const hasTasksOutsideFilter = taskFilter !== 'all' && filterCounts.all > 0;
@@ -219,7 +227,7 @@ export default function MyWorkTaskWorkspace({
 
   return (
     <div className="mywork-tasks">
-      <div className="mywork-task-filters" role="group" aria-label="任务类型筛选">
+      <div className="mywork-task-filters" role="group" aria-label={t('features.mywork.myWorkTaskWorkspace.filterAria')}>
         {filterButtons.map((item) => (
           <button
             key={item.key}
@@ -236,26 +244,26 @@ export default function MyWorkTaskWorkspace({
       {visibleTasks.length === 0 ? (
         <MyWorkEmptyPanel
           icon={<Inbox size={26} />}
-          eyebrow={hasTasksOutsideFilter ? '筛选结果' : '任务队列'}
-          title={hasTasksOutsideFilter ? '当前类型暂无任务' : '当前没有待办任务'}
+          eyebrow={hasTasksOutsideFilter ? t('features.mywork.myWorkTaskWorkspace.emptyFilterEyebrow') : t('features.mywork.myWorkTaskWorkspace.emptyQueueEyebrow')}
+          title={hasTasksOutsideFilter ? t('features.mywork.myWorkTaskWorkspace.emptyFilterTitle') : t('features.mywork.myWorkTaskWorkspace.emptyQueueTitle')}
           description={hasTasksOutsideFilter
-            ? '其他类型中仍有待处理事项。'
-            : '需求、测试、缺陷与一般任务当前均为 0 项。'}
+            ? t('features.mywork.myWorkTaskWorkspace.emptyFilterDesc')
+            : t('features.mywork.myWorkTaskWorkspace.emptyQueueDesc')}
           action={
             hasTasksOutsideFilter ? (
               <button type="button" className="btn btn-primary btn-sm" onClick={() => onTaskFilterChange('all')}>
-                <Inbox size={15} /> 查看全部任务
+                <Inbox size={15} /> {t('features.mywork.myWorkTaskWorkspace.viewAllTasks')}
               </button>
             ) : canOpenProjects ? (
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigateTo('projects')}>
-                <FolderKanban size={15} /> 查看项目执行
+                <FolderKanban size={15} /> {t('features.mywork.myWorkTaskWorkspace.viewProjects')}
               </button>
             ) : undefined
           }
         />
       ) : (
       <div className="mywork-panels">
-        <Panel title="任务队列" subtitle={queueSubtitle} className="mywork-panel-left">
+        <Panel title={t('features.mywork.myWorkTaskWorkspace.queuePanelTitle')} subtitle={queueSubtitle} className="mywork-panel-left">
           <div className="mywork-queue">
             {taskFilter === 'all' ? (
               (['requirement', 'test_case', 'defect', 'general'] as const).map((bucket) => {
@@ -267,9 +275,9 @@ export default function MyWorkTaskWorkspace({
                 });
                 if (bucketTasks.length === 0) return null;
                 const headerLabel =
-                  bucket === 'requirement' ? '需求任务' :
-                  bucket === 'test_case' ? '测试任务' :
-                  bucket === 'defect' ? '缺陷修复' : '一般任务';
+                  bucket === 'requirement' ? t('features.mywork.myWorkTaskWorkspace.filterRequirement') :
+                  bucket === 'test_case' ? t('features.mywork.myWorkTaskWorkspace.filterTestCase') :
+                  bucket === 'defect' ? t('features.mywork.myWorkTaskWorkspace.filterDefect') : t('features.mywork.myWorkTaskWorkspace.filterGeneral');
                 const headerTone =
                   bucket === 'requirement' ? 'accent' :
                   bucket === 'test_case' ? 'info' :
@@ -292,7 +300,7 @@ export default function MyWorkTaskWorkspace({
                         </div>
                         <div className="mywork-queue-item-meta">
                           <span>{sourceLabel(task)} · {labelOf(TASK_TYPE_LABELS, task.type)}</span>
-                          <span>{task.assigneeRole ? labelOf(USER_ROLE_LABELS, task.assigneeRole) : '未设角色'}</span>
+                          <span>{task.assigneeRole ? labelOf(USER_ROLE_LABELS, task.assigneeRole) : t('features.mywork.myWorkTaskWorkspace.unassignedRole')}</span>
                         </div>
                       </div>
                     ))}
@@ -312,7 +320,7 @@ export default function MyWorkTaskWorkspace({
                   </div>
                   <div className="mywork-queue-item-meta">
                     <span>{sourceLabel(task)} · {labelOf(TASK_TYPE_LABELS, task.type)}</span>
-                    <span>{task.assigneeRole ? labelOf(USER_ROLE_LABELS, task.assigneeRole) : '未设角色'}</span>
+                    <span>{task.assigneeRole ? labelOf(USER_ROLE_LABELS, task.assigneeRole) : t('features.mywork.myWorkTaskWorkspace.unassignedRole')}</span>
                   </div>
                 </div>
               ))
@@ -321,12 +329,12 @@ export default function MyWorkTaskWorkspace({
         </Panel>
 
         <Panel
-          title="任务详情"
+          title={t('features.mywork.myWorkTaskWorkspace.detailPanelTitle')}
           className="mywork-panel-center"
           toolbar={
             selectedTask && canOpenLinked(selectedTask) ? (
               <button className="btn btn-secondary btn-sm" onClick={() => openLinkedSource(selectedTask)}>
-                打开关联详情
+                {t('features.mywork.myWorkTaskWorkspace.openLinkedDetail')}
               </button>
             ) : undefined
           }
@@ -337,7 +345,7 @@ export default function MyWorkTaskWorkspace({
                 <div>
                   <h3>{selectedTask.title}</h3>
                   <div className="text-secondary" style={{ fontSize: 13, marginTop: 4 }}>
-                    来源：{sourceLabel(selectedTask)}
+                    {t('features.mywork.myWorkTaskWorkspace.sourcePrefix', { source: sourceLabel(selectedTask) })}
                     {selectedTask.sourceId ? ` · ${selectedTask.sourceId}` : ''}
                     {' · '}
                     {labelOf(TASK_TYPE_LABELS, selectedTask.type)}
@@ -347,29 +355,29 @@ export default function MyWorkTaskWorkspace({
               </div>
               <div className="mywork-detail-meta">
                 <div className="detail-field">
-                  <span className="detail-label">负责人</span>
+                  <span className="detail-label">{t('features.mywork.myWorkTaskWorkspace.ownerLabel')}</span>
                   <span className="detail-value">{selectedTask.owner || '-'}</span>
                 </div>
                 <div className="detail-field">
-                  <span className="detail-label">角色</span>
-                  <span className="detail-value">{selectedTask.assigneeRole ? labelOf(USER_ROLE_LABELS, selectedTask.assigneeRole) : '未设置'}</span>
+                  <span className="detail-label">{t('features.mywork.myWorkTaskWorkspace.roleLabel')}</span>
+                  <span className="detail-value">{selectedTask.assigneeRole ? labelOf(USER_ROLE_LABELS, selectedTask.assigneeRole) : t('features.mywork.myWorkTaskWorkspace.roleUnset')}</span>
                 </div>
                 <div className="detail-field">
-                  <span className="detail-label">关联编号</span>
+                  <span className="detail-label">{t('features.mywork.myWorkTaskWorkspace.linkedIdLabel')}</span>
                   <span className="detail-value text-mono">{selectedTask.sourceId || selectedTask.requirementId || '-'}</span>
                 </div>
                 <div className="detail-field">
-                  <span className="detail-label">WBS</span>
+                  <span className="detail-label">{t('features.mywork.myWorkTaskWorkspace.wbsLabel')}</span>
                   <span className="detail-value text-mono">{selectedTask.wbsCode}</span>
                 </div>
               </div>
               <div className="detail-field mywork-detail-progress">
-                <span className="detail-label">当前进度</span>
+                <span className="detail-label">{t('features.mywork.myWorkTaskWorkspace.progressLabel')}</span>
                 <ProgressBar percent={selectedTask.progress} />
               </div>
               {selectedTask.description ? (
                 <div className="detail-field" style={{ marginTop: 8 }}>
-                  <span className="detail-label">任务说明</span>
+                  <span className="detail-label">{t('features.mywork.myWorkTaskWorkspace.descriptionLabel')}</span>
                   <div className="detail-value">{selectedTask.description}</div>
                 </div>
               ) : null}
@@ -377,12 +385,12 @@ export default function MyWorkTaskWorkspace({
               {(canSubmitForTesting || canReturnForFix) ? (
                 <div className="mywork-handoff" style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border-color, #e5e7eb)' }}>
                   <div className="detail-label" style={{ marginBottom: 8 }}>
-                    {canSubmitForTesting ? '开发完成 → 指派测试' : '测试发现问题 → 指派开发修复'}
+                    {canSubmitForTesting ? t('features.mywork.myWorkTaskWorkspace.handoffSubmitTitle') : t('features.mywork.myWorkTaskWorkspace.handoffReturnTitle')}
                   </div>
                   <div className="form-group" style={{ marginBottom: 8 }}>
-                    <label className="form-label">{canSubmitForTesting ? '测试工程师' : '开发工程师'}</label>
+                    <label className="form-label">{canSubmitForTesting ? t('features.mywork.myWorkTaskWorkspace.testEngineerLabel') : t('features.mywork.myWorkTaskWorkspace.devEngineerLabel')}</label>
                     {membersLoading ? (
-                      <div className="body-text">加载项目成员…</div>
+                      <div className="body-text">{t('features.mywork.myWorkTaskWorkspace.loadingMembers')}</div>
                     ) : targetOptions.length > 0 ? (
                       <select
                         className="form-select"
@@ -390,7 +398,7 @@ export default function MyWorkTaskWorkspace({
                         onChange={(e) => setTargetUserName(e.target.value)}
                         disabled={submitting}
                       >
-                        <option value="">请选择</option>
+                        <option value="">{t('features.mywork.myWorkTaskWorkspace.selectPlaceholder')}</option>
                         {targetOptions.map((m) => (
                           <option key={m.id} value={m.userName}>
                             {m.userName}
@@ -402,19 +410,19 @@ export default function MyWorkTaskWorkspace({
                         className="form-input"
                         value={targetUserName}
                         onChange={(e) => setTargetUserName(e.target.value)}
-                        placeholder={canSubmitForTesting ? '输入测试工程师姓名' : '输入开发工程师姓名'}
+                        placeholder={canSubmitForTesting ? t('features.mywork.myWorkTaskWorkspace.testEngineerPlaceholder') : t('features.mywork.myWorkTaskWorkspace.devEngineerPlaceholder')}
                         disabled={submitting}
                       />
                     )}
                   </div>
                   <div className="form-group" style={{ marginBottom: 8 }}>
-                    <label className="form-label">说明</label>
+                    <label className="form-label">{t('features.mywork.myWorkTaskWorkspace.reasonLabel')}</label>
                     <input
                       className="form-input"
                       value={reason}
                       onChange={(e) => setReason(e.target.value)}
                       disabled={submitting}
-                      placeholder="交接说明（可选）"
+                      placeholder={t('features.mywork.myWorkTaskWorkspace.reasonPlaceholder')}
                     />
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -425,7 +433,7 @@ export default function MyWorkTaskWorkspace({
                         disabled={submitting}
                         onClick={() => void runHandoff('submit_for_testing')}
                       >
-                        {submitting ? '提交中…' : '提交测试'}
+                        {submitting ? t('features.mywork.myWorkTaskWorkspace.submitting') : t('features.mywork.myWorkTaskWorkspace.submitForTesting')}
                       </button>
                     ) : null}
                     {canReturnForFix ? (
@@ -435,7 +443,7 @@ export default function MyWorkTaskWorkspace({
                         disabled={submitting}
                         onClick={() => void runHandoff('return_for_fix')}
                       >
-                        {submitting ? '提交中…' : '打回开发修复'}
+                        {submitting ? t('features.mywork.myWorkTaskWorkspace.submitting') : t('features.mywork.myWorkTaskWorkspace.returnForFix')}
                       </button>
                     ) : null}
                   </div>
@@ -443,11 +451,11 @@ export default function MyWorkTaskWorkspace({
               ) : null}
 
               <div className="detail-field" style={{ marginTop: 16 }}>
-                <span className="detail-label">状态流转</span>
+                <span className="detail-label">{t('features.mywork.myWorkTaskWorkspace.statusHistoryLabel')}</span>
                 {historyLoading ? (
-                  <div className="body-text">正在加载状态历史…</div>
+                  <div className="body-text">{t('features.mywork.myWorkTaskWorkspace.loadingHistory')}</div>
                 ) : historyError ? (
-                  <div className="form-error">状态历史加载失败，请稍后重试。</div>
+                  <div className="form-error">{t('features.mywork.myWorkTaskWorkspace.historyLoadFailed')}</div>
                 ) : history?.length ? (
                   <div style={{ display: 'grid', gap: 6, marginTop: 6 }}>
                     {history.slice(0, 6).map((entry) => (
@@ -460,7 +468,7 @@ export default function MyWorkTaskWorkspace({
                     ))}
                   </div>
                 ) : (
-                  <div className="body-text">暂无状态流转记录。</div>
+                  <div className="body-text">{t('features.mywork.myWorkTaskWorkspace.noHistory')}</div>
                 )}
               </div>
             </div>

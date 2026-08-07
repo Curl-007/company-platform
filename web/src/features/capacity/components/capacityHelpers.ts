@@ -1,5 +1,6 @@
 import type { UpsertCapacityPlanInput } from '../api';
 import { businessDateKey, businessWeekStart, shiftBusinessDate } from '../../../utils/businessDate';
+import i18n from '../../../i18n';
 
 export function toDate(value: Date): string {
   return businessDateKey(value);
@@ -24,11 +25,17 @@ export const RISK_VARIANT: Record<string, 'success' | 'warning' | 'risk' | 'neut
 };
 
 export const WEEKDAYS = [
-  { value: 1, label: '周一' }, { value: 2, label: '周二' }, { value: 3, label: '周三' }, { value: 4, label: '周四' }, { value: 5, label: '周五' }, { value: 6, label: '周六' }, { value: 0, label: '周日' },
+  { value: 1, label: 'features.capacity.capacityHelpers.weekdays.monday' },
+  { value: 2, label: 'features.capacity.capacityHelpers.weekdays.tuesday' },
+  { value: 3, label: 'features.capacity.capacityHelpers.weekdays.wednesday' },
+  { value: 4, label: 'features.capacity.capacityHelpers.weekdays.thursday' },
+  { value: 5, label: 'features.capacity.capacityHelpers.weekdays.friday' },
+  { value: 6, label: 'features.capacity.capacityHelpers.weekdays.saturday' },
+  { value: 0, label: 'features.capacity.capacityHelpers.weekdays.sunday' },
 ];
 
 export function percentage(value: number | null): string {
-  return value === null ? '未配置' : `${Math.round(value * 100)}%`;
+  return value === null ? i18n.t('features.capacity.capacityHelpers.unconfigured') : `${Math.round(value * 100)}%`;
 }
 
 export type CapacityPlanFormValues = Required<Omit<UpsertCapacityPlanInput, 'periodStart' | 'periodEnd'>>;

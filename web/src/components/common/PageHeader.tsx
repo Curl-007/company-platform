@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../ui';
 
 // ---------------------------------------------------------------------------
@@ -37,6 +38,7 @@ function PageHeader({
   breadcrumbs,
   className,
 }: PageHeaderProps) {
+  const { t } = useTranslation();
   const frameContext = useContext(PageFrameContext);
   const resolvedBreadcrumb = breadcrumb ?? frameContext?.breadcrumb;
   const resolvedBreadcrumbs = breadcrumbs ?? frameContext?.breadcrumbs;
@@ -78,7 +80,7 @@ function PageHeader({
               'page-breadcrumbs min-w-0 max-w-full text-xs text-[var(--muted-foreground)]',
               (title || description) && 'mb-1.5',
             )}
-            aria-label="页面路径"
+            aria-label={t('common.breadcrumbs')}
           >
             {ancestorBreadcrumbs?.length ? (
               <ol className="flex min-w-0 max-w-full flex-wrap items-center gap-1">

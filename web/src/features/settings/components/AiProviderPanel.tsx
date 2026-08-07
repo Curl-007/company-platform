@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AiProviderConfig, UpdateAiProviderInput } from '../../../types';
 import Panel from '../../../components/common/Panel';
 import StatusBadge from '../../../components/common/StatusBadge';
@@ -48,31 +49,36 @@ export default function AiProviderPanel({
   handleTestAiProvider: () => void;
   saveAiProvider: () => void;
 }) {
+  const { t } = useTranslation();
   return (
-    <Panel title="AI 模型配置" subtitle="系统管理员维护模型服务连接；API Key 只在后端保存，页面不回显明文">
+    <Panel title={t('features.settings.aiProviderPanel.title')} subtitle={t('features.settings.aiProviderPanel.subtitle')}>
       <div className="settings-form">
         {!canManageAiProvider ? (
-          <div className="form-error">当前账号只能查看配置状态，不能修改或测试 AI Provider。</div>
+          <div className="form-error">{t('features.settings.aiProviderPanel.noPermissionView')}</div>
         ) : null}
         {aiProviderLoading ? (
           <div className="ai-provider-status">
-            <div className="ai-provider-status-main">正在读取 AI Provider 配置...</div>
+            <div className="ai-provider-status-main">{t('features.settings.aiProviderPanel.loadingConfig')}</div>
           </div>
         ) : aiProviderError ? (
           <div className="ai-provider-status">
-            <div className="ai-provider-status-main">AI Provider 配置读取失败</div>
+            <div className="ai-provider-status-main">{t('features.settings.aiProviderPanel.loadFailed')}</div>
             <div className="ai-provider-status-meta">{aiProviderError}</div>
-            <Button variant="secondary" size="sm" onClick={reloadAiProvider}>重试</Button>
+            <Button variant="secondary" size="sm" onClick={reloadAiProvider}>{t('common.retry')}</Button>
           </div>
         ) : (
           <div className="ai-provider-status">
             <div className="ai-provider-status-main">
-              <StatusBadge label={aiProvider?.configured ? '已配置' : '未配置'} status={aiProvider?.configured ? 'success' : 'warning'} showDot />
-              <span className="text-mono">{aiProvider?.model || '未设置模型'}</span>
-              <span>{aiProvider?.baseUrlHost || '未设置服务地址'}</span>
+              <StatusBadge label={aiProvider?.configured ? t('features.settings.aiProviderPanel.configured') : t('features.settings.aiProviderPanel.unconfigured')} status={aiProvider?.configured ? 'success' : 'warning'} showDot />
+              <span className="text-mono">{aiProvider?.model || t('features.settings.aiProviderPanel.noModelSet')}</span>
+              <span>{aiProvider?.baseUrlHost || t('features.settings.aiProviderPanel.noServiceUrl')}</span>
             </div>
             <div className="ai-provider-status-meta">
-              密钥：{aiProvider?.apiKeyMasked || '未配置'} · 来源：{aiProvider?.apiKeySource === 'environment' ? '环境变量' : aiProvider?.apiKeySource === 'database' ? '系统设置' : '无'} · 协议：{aiProvider?.wireApi === 'responses' ? 'Responses API' : 'Chat Completions'}
+              {t('features.settings.aiProviderPanel.statusMeta', {
+                masked: aiProvider?.apiKeyMasked || t('features.settings.aiProviderPanel.unconfigured'),
+                source: aiProvider?.apiKeySource === 'environment' ? t('features.settings.aiProviderPanel.sourceEnv') : aiProvider?.apiKeySource === 'database' ? t('features.settings.aiProviderPanel.sourceDatabase') : t('features.settings.aiProviderPanel.sourceNone'),
+                protocol: aiProvider?.wireApi === 'responses' ? 'Responses API' : 'Chat Completions',
+              })}
             </div>
           </div>
         )}
@@ -80,10 +86,10 @@ export default function AiProviderPanel({
         <div className="ai-provider-list">
           <div className="ai-provider-list-head">
             <div>
-              <strong>模型配置列表</strong>
-              <span>当前启用的配置会用于 AI 对话、文档分析和项目建议。</span>
+              <strong>{t('features.settings.aiProviderPanel.listTitle')}</strong>
+              <span>{t('features.settings.aiProviderPanel.listSubtitle')}</span>
             </div>
-            <Button variant="secondary" size="sm" onClick={createAiProviderDraft} disabled={!canManageAiProvider}>新增配置</Button>
+            <Button variant="secondary" size="sm" onClick={createAiProviderDraft} disabled={!canManageAiProvider}>{t('features.settings.aiProviderPanel.newConfig')}</Button>
           </div>
           {aiProvider?.providers?.length ? (
             <div className="ai-provider-list-body">
@@ -95,32 +101,32 @@ export default function AiProviderPanel({
                     <div className="ai-provider-row-main">
                       <div className="ai-provider-row-title">
                         <strong>{item.name || item.provider}</strong>
-                        {active ? <StatusBadge label="当前使用" status="success" showDot={false} /> : null}
-                        <StatusBadge label={item.enabled ? '已启用' : '已禁用'} status={item.enabled ? 'info' : 'neutral'} showDot={false} />
+                        {active ? <StatusBadge label={t('features.settings.aiProviderPanel.inUse')} status="success" showDot={false} /> : null}
+                        <StatusBadge label={item.enabled ? t('features.settings.aiProviderPanel.enabled') : t('features.settings.aiProviderPanel.disabled')} status={item.enabled ? 'info' : 'neutral'} showDot={false} />
                       </div>
                       <div className="ai-provider-row-meta">
                         <span className="text-mono">{item.model}</span>
                         <span>{item.baseUrlHost || item.baseUrl}</span>
                         <span>{item.wireApi === 'responses' ? 'Responses API' : 'Chat Completions'}</span>
-                        <span>密钥：{item.apiKeyMasked || '未配置'}</span>
+                        <span>{t('features.settings.aiProviderPanel.keyMasked', { masked: item.apiKeyMasked || t('features.settings.aiProviderPanel.unconfigured') })}</span>
                       </div>
                     </div>
                     <div className="ai-provider-row-actions">
-                      <Button variant="text" size="sm" onClick={() => editAiProvider(item.id)} disabled={!canManageAiProvider}>编辑</Button>
+                      <Button variant="text" size="sm" onClick={() => editAiProvider(item.id)} disabled={!canManageAiProvider}>{t('common.edit')}</Button>
                       {!active ? (
-                        <Button variant="secondary" size="sm" onClick={() => handleActivateAiProvider(item.id)} disabled={!canManageAiProvider || !item.enabled}>设为当前</Button>
+                        <Button variant="secondary" size="sm" onClick={() => handleActivateAiProvider(item.id)} disabled={!canManageAiProvider || !item.enabled}>{t('features.settings.aiProviderPanel.setActive')}</Button>
                       ) : null}
                       <Button variant="secondary" size="sm" onClick={() => handleToggleAiProvider(item.id, !item.enabled)} disabled={!canManageAiProvider}>
-                        {item.enabled ? '禁用' : '启用'}
+                        {item.enabled ? t('features.settings.aiProviderPanel.disable') : t('features.settings.aiProviderPanel.enable')}
                       </Button>
-                      <Button variant="danger" size="sm" onClick={() => handleDeleteAiProvider(item.id)} disabled={!canManageAiProvider}>删除</Button>
+                      <Button variant="danger" size="sm" onClick={() => handleDeleteAiProvider(item.id)} disabled={!canManageAiProvider}>{t('common.delete')}</Button>
                     </div>
                   </div>
                 );
               })}
             </div>
           ) : (
-            <div className="ai-provider-empty">暂无模型配置，请新增一个模型连接。</div>
+            <div className="ai-provider-empty">{t('features.settings.aiProviderPanel.emptyList')}</div>
           )}
         </div>
 
@@ -128,61 +134,61 @@ export default function AiProviderPanel({
 
         <div className="ai-provider-editor-head">
           <div>
-            <strong>{aiDraft.createNew ? '新增模型配置' : '编辑模型配置'}</strong>
-            <span>{aiDraft.createNew ? '保存后会加入列表，并可设为当前使用。' : '修改后会更新选中的模型连接配置。'}</span>
+            <strong>{aiDraft.createNew ? t('features.settings.aiProviderPanel.editorNewTitle') : t('features.settings.aiProviderPanel.editorEditTitle')}</strong>
+            <span>{aiDraft.createNew ? t('features.settings.aiProviderPanel.editorNewSubtitle') : t('features.settings.aiProviderPanel.editorEditSubtitle')}</span>
           </div>
           <Checkbox
             checked={Boolean(aiDraft.activate)}
             onChange={(e) => setAiDraft((prev) => ({ ...prev, activate: e.target.checked }))}
             disabled={!canManageAiProvider}
-            label="保存后设为当前使用"
+            label={t('features.settings.aiProviderPanel.activateAfterSave')}
           />
         </div>
 
         <div className="form-row">
-          <FormField label="配置名称" htmlFor="settings-ai-name">
-            <TextInput id="settings-ai-name" value={aiDraft.name || ''} onChange={(e) => setAiDraft((prev) => ({ ...prev, name: e.target.value }))} placeholder="例如：生产模型 / 备用模型" disabled={!canManageAiProvider} />
+          <FormField label={t('features.settings.aiProviderPanel.nameLabel')} htmlFor="settings-ai-name">
+            <TextInput id="settings-ai-name" value={aiDraft.name || ''} onChange={(e) => setAiDraft((prev) => ({ ...prev, name: e.target.value }))} placeholder={t('features.settings.aiProviderPanel.namePlaceholder')} disabled={!canManageAiProvider} />
           </FormField>
-          <FormField label="Provider 名称" htmlFor="settings-ai-provider">
+          <FormField label={t('features.settings.aiProviderPanel.providerLabel')} htmlFor="settings-ai-provider">
             <TextInput id="settings-ai-provider" value={aiDraft.provider} onChange={(e) => setAiDraft((prev) => ({ ...prev, provider: e.target.value }))} placeholder="openai-compatible / my_codex" disabled={!canManageAiProvider} />
           </FormField>
         </div>
         <div className="form-row">
-          <FormField label="Wire API" htmlFor="settings-ai-wire-api">
+          <FormField label={t('features.settings.aiProviderPanel.wireApiLabel')} htmlFor="settings-ai-wire-api">
             <SelectInput id="settings-ai-wire-api" value={aiDraft.wireApi} onChange={(e) => setAiDraft((prev) => ({ ...prev, wireApi: e.target.value as UpdateAiProviderInput['wireApi'] }))} disabled={!canManageAiProvider}>
               <option value="chat_completions">Chat Completions</option>
               <option value="responses">Responses API</option>
             </SelectInput>
           </FormField>
-          <FormField label="Base URL" htmlFor="settings-ai-base-url" required>
+          <FormField label={t('features.settings.aiProviderPanel.baseUrlLabel')} htmlFor="settings-ai-base-url" required>
             <TextInput id="settings-ai-base-url" value={aiDraft.baseUrl} onChange={(e) => setAiDraft((prev) => ({ ...prev, baseUrl: e.target.value }))} placeholder="https://www.ishellmall.com/v1" disabled={!canManageAiProvider} />
           </FormField>
         </div>
         <div className="form-row">
-          <FormField label="Model" htmlFor="settings-ai-model" required>
+          <FormField label={t('features.settings.aiProviderPanel.modelLabel')} htmlFor="settings-ai-model" required>
             <TextInput id="settings-ai-model" value={aiDraft.model} onChange={(e) => setAiDraft((prev) => ({ ...prev, model: e.target.value }))} placeholder="gpt-5.5" disabled={!canManageAiProvider} />
           </FormField>
-          <FormField label="启用状态" htmlFor="settings-ai-enabled" helpText="禁用后该配置不会被 AI 对话和分析使用。">
+          <FormField label={t('features.settings.aiProviderPanel.enabledLabel')} htmlFor="settings-ai-enabled" helpText={t('features.settings.aiProviderPanel.enabledHelp')}>
             <Checkbox id="settings-ai-enabled" checked={Boolean(aiDraft.enabled)} onChange={(e) => setAiDraft((prev) => ({ ...prev, enabled: e.target.checked }))} disabled={!canManageAiProvider} />
           </FormField>
         </div>
-        <FormField label="API Key" htmlFor="settings-ai-api-key" helpText="保存后页面只显示脱敏状态，不会回显完整密钥。你贴的示例建议使用 Responses API。">
-          <TextInput id="settings-ai-api-key" type="password" value={aiDraft.apiKey} onChange={(e) => setAiDraft((prev) => ({ ...prev, apiKey: e.target.value, clearApiKey: false }))} placeholder={aiProvider?.apiKeyMasked ? '留空表示继续使用当前密钥' : '填写 API Key'} autoComplete="off" disabled={!canManageAiProvider} />
+        <FormField label={t('features.settings.aiProviderPanel.apiKeyLabel')} htmlFor="settings-ai-api-key" helpText={t('features.settings.aiProviderPanel.apiKeyHelp')}>
+          <TextInput id="settings-ai-api-key" type="password" value={aiDraft.apiKey} onChange={(e) => setAiDraft((prev) => ({ ...prev, apiKey: e.target.value, clearApiKey: false }))} placeholder={aiProvider?.apiKeyMasked ? t('features.settings.aiProviderPanel.apiKeyPlaceholderKeep') : t('features.settings.aiProviderPanel.apiKeyPlaceholder')} autoComplete="off" disabled={!canManageAiProvider} />
         </FormField>
         <div className="form-row">
-          <FormField label="响应存储" htmlFor="settings-ai-disable-storage" helpText="开启后不保存模型返回内容，降低敏感信息留存。">
+          <FormField label={t('features.settings.aiProviderPanel.storageLabel')} htmlFor="settings-ai-disable-storage" helpText={t('features.settings.aiProviderPanel.storageHelp')}>
             <Checkbox id="settings-ai-disable-storage" checked={aiDraft.disableResponseStorage} onChange={(e) => setAiDraft((prev) => ({ ...prev, disableResponseStorage: e.target.checked }))} disabled={!canManageAiProvider} />
           </FormField>
-          <FormField label="已保存密钥" htmlFor="settings-ai-clear-key" helpText="勾选后保存时将清除后端保存的 API Key。">
+          <FormField label={t('features.settings.aiProviderPanel.clearKeyLabel')} htmlFor="settings-ai-clear-key" helpText={t('features.settings.aiProviderPanel.clearKeyHelp')}>
             <Checkbox id="settings-ai-clear-key" checked={Boolean(aiDraft.clearApiKey)} onChange={(e) => setAiDraft((prev) => ({ ...prev, clearApiKey: e.target.checked, apiKey: e.target.checked ? '' : prev.apiKey }))} disabled={!canManageAiProvider} />
           </FormField>
         </div>
         <div className="flex items-center justify-end gap-2">
           <Button variant="secondary" size="sm" onClick={handleTestAiProvider} disabled={!canManageAiProvider || testingAiProvider || savingAiProvider || !aiProvider?.configured}>
-            {testingAiProvider ? '测试中...' : '测试连接'}
+            {testingAiProvider ? t('features.settings.aiProviderPanel.testing') : t('features.settings.aiProviderPanel.testConnection')}
           </Button>
           <Button variant="primary" size="sm" onClick={saveAiProvider} disabled={!canManageAiProvider || savingAiProvider || testingAiProvider}>
-            {savingAiProvider ? '保存中...' : '保存模型配置'}
+            {savingAiProvider ? t('features.settings.aiProviderPanel.saving') : t('features.settings.aiProviderPanel.saveConfig')}
           </Button>
         </div>
         <AiProviderTestResultCard result={aiTestResult} testing={testingAiProvider} />

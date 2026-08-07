@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -10,6 +11,7 @@ import {
   Search,
   TestTube2,
 } from 'lucide-react';
+import i18n from '../../../i18n';
 import { fetchDashboard } from '../api';
 import { fetchProjects } from '../../projects/api';
 import { fallbackDashboard } from '../../../data/fallback';
@@ -36,23 +38,23 @@ import RequirementProgressPanel from './RequirementProgressPanel';
 const taskColumns: DataTableColumn<Task>[] = [
   {
     key: 'title',
-    title: '任务',
+    title: i18n.t('features.dashboard.dashboardView.column.task'),
     render: (task) => (
       <div className="min-w-0">
         <div className="truncate font-medium">{task.title}</div>
-        <div className="truncate text-secondary">{task.owner || '未分配负责人'}</div>
+        <div className="truncate text-secondary">{task.owner || i18n.t('features.dashboard.dashboardView.unassignedOwner')}</div>
       </div>
     ),
   },
   {
     key: 'status',
-    title: '状态',
+    title: i18n.t('features.dashboard.dashboardView.column.status'),
     render: (task) => <StatusBadge label={labelOf(TASK_STATUS_LABELS, task.status)} status={task.status} />,
   },
-  { key: 'dueDate', title: '截止日期', render: (task) => task.dueDate || '未设置' },
+  { key: 'dueDate', title: i18n.t('features.dashboard.dashboardView.column.dueDate'), render: (task) => task.dueDate || i18n.t('features.dashboard.dashboardView.unset') },
   {
     key: 'progress',
-    title: '进度',
+    title: i18n.t('features.dashboard.dashboardView.column.progress'),
     width: 160,
     render: (task) => (
       <div className="flex min-w-[120px] items-center gap-2">
@@ -64,8 +66,8 @@ const taskColumns: DataTableColumn<Task>[] = [
 ];
 
 function projectDates(project: Project) {
-  if (!project.startDate && !project.endDate) return '未设置日期';
-  return `${project.startDate || '未开始'} - ${project.endDate || '未结束'}`;
+  if (!project.startDate && !project.endDate) return i18n.t('features.dashboard.dashboardView.unsetDate');
+  return `${project.startDate || i18n.t('features.dashboard.dashboardView.notStarted')} - ${project.endDate || i18n.t('features.dashboard.dashboardView.notEnded')}`;
 }
 
 function HealthBucket({
@@ -96,6 +98,7 @@ function HealthBucket({
 }
 
 export default function DashboardView() {
+  const { t } = useTranslation();
   const dashboardRequest = useAsync<DashboardData>(fetchDashboard, [], { cacheKey: 'dashboard:overview' });
   const projectsRequest = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
   const [keyword, setKeyword] = useState('');
@@ -116,7 +119,7 @@ export default function DashboardView() {
   const projectColumns: DataTableColumn<Project>[] = [
     {
       key: 'name',
-      title: '项目',
+      title: i18n.t('features.dashboard.dashboardView.column.project'),
       sorter: (left, right) => left.name.localeCompare(right.name),
       render: (project) => (
         <div className="min-w-0">
@@ -125,14 +128,14 @@ export default function DashboardView() {
             <span className="truncate font-medium">{project.name}</span>
           </div>
           <div className="truncate text-secondary">
-            {labelOf(PROCESS_MODE_LABELS, project.processMode)} · {project.owner || '未分配负责人'}
+            {labelOf(PROCESS_MODE_LABELS, project.processMode)} · {project.owner || i18n.t('features.dashboard.dashboardView.unassignedOwner')}
           </div>
         </div>
       ),
     },
     {
       key: 'progress',
-      title: '进度',
+      title: i18n.t('features.dashboard.dashboardView.column.progress'),
       width: 220,
       sorter: (left, right) => left.progress - right.progress,
       render: (project) => (
@@ -142,10 +145,10 @@ export default function DashboardView() {
         </div>
       ),
     },
-    { key: 'dates', title: '日期', render: (project) => projectDates(project) },
+    { key: 'dates', title: i18n.t('features.dashboard.dashboardView.column.date'), render: (project) => projectDates(project) },
     {
       key: 'status',
-      title: '状态',
+      title: i18n.t('features.dashboard.dashboardView.column.status'),
       render: (project) => <StatusBadge label={labelOf(PROJECT_STATUS_LABELS, project.status)} status={project.status} />,
     },
   ];
@@ -163,7 +166,7 @@ export default function DashboardView() {
   // MotionGuard so reduced-motion users see the plain number instead.
   const kpiItems: MetricStripItem[] = [
     {
-      label: '任务总数',
+      label: t('features.dashboard.dashboardView.totalTasks'),
       value: <MotionGuard fallback={<>{m.tasks.total}</>}>
         <CountUp to={m.tasks.total} duration={1.2} />
       </MotionGuard>,
@@ -172,49 +175,49 @@ export default function DashboardView() {
       caption: `${labelOf(TASK_STATUS_LABELS, 'done')} ${m.tasks.done ?? 0}`,
     },
     {
-      label: '项目健康度',
+      label: t('features.dashboard.dashboardView.projectHealth'),
       value: <MotionGuard fallback={<>{m.projectHealthAverage}</>}>
         <CountUp to={m.projectHealthAverage} duration={1.2} />
       </MotionGuard>,
       icon: <HeartPulse size={16} aria-hidden="true" />,
       tone: m.projectHealthAverage >= 75 ? 'success' : m.projectHealthAverage >= 50 ? 'warning' : 'risk',
-      caption: '平均健康分',
+      caption: t('features.dashboard.dashboardView.avgHealthScore'),
     },
     {
-      label: '需求完成率',
+      label: t('features.dashboard.dashboardView.requirementCompletion'),
       value: <MotionGuard fallback={<>{m.requirementCompletionAverage}%</>}>
         <CountUp to={m.requirementCompletionAverage} duration={1.2} />%
       </MotionGuard>,
       icon: <TestTube2 size={16} aria-hidden="true" />,
       tone: m.requirementCompletionAverage >= 75 ? 'success' : 'warning',
-      caption: '平均完成率',
+      caption: t('features.dashboard.dashboardView.avgCompletionRate'),
     },
     {
-      label: '测试通过率',
+      label: t('features.dashboard.dashboardView.testPassRate'),
       value: <MotionGuard fallback={<>{m.testPassRate}%</>}>
         <CountUp to={m.testPassRate} duration={1.2} />%
       </MotionGuard>,
       icon: <TestTube2 size={16} aria-hidden="true" />,
       tone: m.testPassRate >= 75 ? 'success' : m.testPassRate >= 50 ? 'warning' : 'risk',
-      caption: '用例通过',
+      caption: t('features.dashboard.dashboardView.casePassed'),
     },
     {
-      label: '开放风险',
+      label: t('features.dashboard.dashboardView.openRisks'),
       value: <MotionGuard fallback={<>{m.openRisks}</>}>
         <CountUp to={m.openRisks} duration={1.2} />
       </MotionGuard>,
       icon: <AlertTriangle size={16} aria-hidden="true" />,
       tone: m.openRisks > 0 ? 'risk' : 'success',
-      caption: m.openRisks > 0 ? '需处理' : '无风险',
+      caption: m.openRisks > 0 ? t('features.dashboard.dashboardView.needsAction') : t('features.dashboard.dashboardView.noRisks'),
     },
     {
-      label: '文档总数',
+      label: t('features.dashboard.dashboardView.totalDocuments'),
       value: <MotionGuard fallback={<>{m.documentCount}</>}>
         <CountUp to={m.documentCount} duration={1.2} />
       </MotionGuard>,
       icon: <FileText size={16} aria-hidden="true" />,
       tone: 'default',
-      caption: '知识库',
+      caption: t('features.dashboard.dashboardView.knowledgeBase'),
     },
   ];
 
@@ -240,7 +243,7 @@ export default function DashboardView() {
       <>
         {(dashboardRequest.error || projectsRequest.error) && (
           <div className="helper-text border-b border-[var(--border)] pb-3" role="status">
-            当前显示可用数据，部分实时资源暂时无法连接。可稍后重试。
+            {t('features.dashboard.dashboardView.partialDataNotice')}
           </div>
         )}
 
@@ -248,8 +251,8 @@ export default function DashboardView() {
 
         <div className="dashboard-main-grid grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,1fr)]">
           <Panel
-            title="项目"
-            subtitle={`当前显示 ${filteredProjects.length} / ${projects.length} 个可访问项目`}
+            title={t('features.dashboard.dashboardView.column.project')}
+            subtitle={t('features.dashboard.dashboardView.projectsSubtitle', { shown: filteredProjects.length, total: projects.length })}
             icon={<FolderKanban size={16} aria-hidden="true" />}
             toolbar={(
               <Button
@@ -258,25 +261,25 @@ export default function DashboardView() {
                 icon={<ArrowUpRight size={15} aria-hidden="true" />}
                 onClick={() => { window.location.hash = '#/projects'; }}
               >
-                查看全部
+                {t('features.dashboard.dashboardView.viewAll')}
               </Button>
             )}
             className="dashboard-projects-panel"
             noPadding
           >
             <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-[var(--border)] px-4 py-3">
-              <label className="sr-only" htmlFor="dashboard-project-search">搜索项目</label>
+              <label className="sr-only" htmlFor="dashboard-project-search">{t('features.dashboard.dashboardView.searchProject')}</label>
               <div className="input-with-icon min-w-0 flex-1 basis-56" style={{ minHeight: 32, padding: '0 10px' }}>
                 <Search size={15} className="shrink-0 text-secondary" aria-hidden="true" />
                 <Input
                   id="dashboard-project-search"
                   value={keyword}
                   onChange={(event) => setKeyword(event.target.value)}
-                  placeholder="搜索项目"
+                  placeholder={t('features.dashboard.dashboardView.searchProject')}
                   className="h-8 border-0 bg-transparent shadow-none focus:shadow-none"
                 />
               </div>
-              <span className="text-secondary text-xs hidden sm:inline">项目、进度、日期和状态</span>
+              <span className="text-secondary text-xs hidden sm:inline">{t('features.dashboard.dashboardView.searchHint')}</span>
             </div>
             <DataTable
               columns={projectColumns}
@@ -284,12 +287,12 @@ export default function DashboardView() {
               rowKey="id"
               loading={projectsRequest.loading}
               onRowClick={openProject}
-              emptyText={keyword ? '没有匹配的项目' : '暂无可访问项目'}
+              emptyText={keyword ? t('features.dashboard.dashboardView.noMatchingProjects') : t('features.dashboard.dashboardView.noAccessibleProjects')}
               pageSize={8}
             />
           </Panel>
 
-          <Panel title="健康分布" subtitle={`平均健康分 ${m.projectHealthAverage}`} icon={<HeartPulse size={16} aria-hidden="true" />}>
+          <Panel title={t('features.dashboard.dashboardView.healthDistribution')} subtitle={t('features.dashboard.dashboardView.avgHealthScoreSubtitle', { score: m.projectHealthAverage })} icon={<HeartPulse size={16} aria-hidden="true" />}>
             {(() => {
               const healthy = projects.filter((p) => (p.healthScore ?? 0) >= 75).length;
               const watch = projects.filter((p) => {
@@ -303,20 +306,20 @@ export default function DashboardView() {
               return (
                 <div className="dashboard-health-panel flex min-w-0 flex-col gap-4">
                   <div className="flex items-center gap-4">
-                    <DonutChart value={m.projectHealthAverage} label="健康" size={112} />
+                    <DonutChart value={m.projectHealthAverage} label={t('features.dashboard.dashboardView.health')} size={112} />
                     <div className="min-w-0 flex-1 space-y-2">
-                      <HealthBucket label="健康" count={healthy} tone="success" hint="≥ 75" />
-                      <HealthBucket label="关注" count={watch} tone="warning" hint="50–74" />
-                      <HealthBucket label="风险" count={risk} tone="risk" hint="< 50" />
+                      <HealthBucket label={t('features.dashboard.dashboardView.health')} count={healthy} tone="success" hint="≥ 75" />
+                      <HealthBucket label={t('features.dashboard.dashboardView.watch')} count={watch} tone="warning" hint="50–74" />
+                      <HealthBucket label={t('features.dashboard.dashboardView.risk')} count={risk} tone="risk" hint="< 50" />
                     </div>
                   </div>
                   <div className="dashboard-health-list border-t border-[var(--border)] pt-3">
                     <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium text-secondary">需关注项目</span>
-                      <span className="text-[11px] text-secondary">按健康分升序</span>
+                      <span className="text-xs font-medium text-secondary">{t('features.dashboard.dashboardView.projectsNeedingAttention')}</span>
+                      <span className="text-[11px] text-secondary">{t('features.dashboard.dashboardView.sortedByHealthAsc')}</span>
                     </div>
                     {topRisk.length === 0 ? (
-                      <p className="text-secondary text-xs m-0">暂无项目数据</p>
+                      <p className="text-secondary text-xs m-0">{t('features.dashboard.dashboardView.noProjectData')}</p>
                     ) : (
                       <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
                         {topRisk.map((project) => {
@@ -333,7 +336,7 @@ export default function DashboardView() {
                                 <span className="min-w-0 flex-1">
                                   <span className="dashboard-health-name">{project.name}</span>
                                   <span className="dashboard-health-meta">
-                                    {project.owner || '未分配'} · 风险 {project.riskCount ?? 0}
+                                    {t('features.dashboard.dashboardView.riskCountLine', { owner: project.owner || t('features.dashboard.dashboardView.unassigned'), count: project.riskCount ?? 0 })}
                                   </span>
                                 </span>
                                 <span className={`dashboard-health-score tone-${tone}`}>{score}</span>
@@ -351,12 +354,12 @@ export default function DashboardView() {
         </div>
 
         <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-          <Panel title="近期工作" subtitle="保持任务与截止日期可见" icon={<ListTodo size={16} aria-hidden="true" />} noPadding>
+          <Panel title={t('features.dashboard.dashboardView.recentWork')} subtitle={t('features.dashboard.dashboardView.recentWorkSubtitle')} icon={<ListTodo size={16} aria-hidden="true" />} noPadding>
             <DataTable
               columns={taskColumns}
               data={data.focusTasks.filter((task) => !['done', 'cancelled'].includes(task.status)).slice(0, 8)}
               rowKey="id"
-              emptyText="当前没有待处理任务"
+              emptyText={t('features.dashboard.dashboardView.noPendingTasks')}
             />
           </Panel>
           <RequirementProgressPanel items={data.requirementProgress} />

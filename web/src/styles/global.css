@@ -11952,6 +11952,39 @@ html {
   color: var(--sidebar-primary, var(--accent));
 }
 
+.kaneo-sidebar-lang-switch {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.kaneo-sidebar-lang-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 0;
+  border: 1px solid var(--sidebar-border, var(--border-sidebar));
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground, var(--text-secondary));
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.kaneo-sidebar-lang-btn:hover,
+.kaneo-sidebar-lang-btn:focus-visible {
+  background: var(--sidebar-accent, var(--bg-hover));
+  color: var(--sidebar-foreground, var(--text-primary));
+}
+
+.kaneo-sidebar-lang-btn.active {
+  background: var(--sidebar-accent, var(--bg-sidebar-active));
+  border-color: var(--sidebar-primary, var(--accent));
+  color: var(--sidebar-foreground, var(--text-primary));
+  font-weight: 650;
+}
+
 .kaneo-sidebar-provider[data-state='collapsed'] .kaneo-sidebar-header,
 .kaneo-sidebar-provider[data-state='collapsed'] .kaneo-sidebar-footer {
   padding: 8px 4px;

@@ -2,6 +2,8 @@ import StatusBadge from '../../../components/common/StatusBadge';
 import ProgressBar from '../../../components/common/ProgressBar';
 import { type DataTableColumn } from '../../../components/common/DataTable';
 import Panel from '../../../components/common/Panel';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../../i18n';
 import type { Project, RequirementProgress } from '../../../types';
 import { PROJECT_STATUS_LABELS, healthVariant, labelOf } from '../../../constants/enums';
 import type { ReportActionItem } from '../reportModel';
@@ -9,17 +11,17 @@ import type { ReportActionItem } from '../reportModel';
 export const riskyColumns: DataTableColumn<Project>[] = [
   {
     key: 'name',
-    title: '项目名称',
+    title: i18n.t('features.reports.reportShared.projectName'),
     render: (project) => <span className="font-medium">{project.name}</span>,
   },
   {
     key: 'status',
-    title: '状态',
+    title: i18n.t('features.reports.reportShared.status'),
     render: (project) => <StatusBadge label={labelOf(PROJECT_STATUS_LABELS, project.status)} status={project.status} />,
   },
   {
     key: 'healthScore',
-    title: '健康度',
+    title: i18n.t('features.reports.reportShared.healthScore'),
     align: 'center',
     sorter: (a, b) => a.healthScore - b.healthScore,
     render: (project) => (
@@ -28,14 +30,14 @@ export const riskyColumns: DataTableColumn<Project>[] = [
   },
   {
     key: 'riskCount',
-    title: '风险数',
+    title: i18n.t('features.reports.reportShared.riskCount'),
     align: 'center',
     sorter: (a, b) => a.riskCount - b.riskCount,
     render: (project) => <span className="text-mono">{project.riskCount}</span>,
   },
   {
     key: 'progress',
-    title: '进度',
+    title: i18n.t('features.reports.reportShared.progress'),
     width: 160,
     render: (project) => <ProgressBar percent={project.progress ?? 0} height={6} />,
   },
@@ -44,17 +46,17 @@ export const riskyColumns: DataTableColumn<Project>[] = [
 export const requirementColumns: DataTableColumn<RequirementProgress>[] = [
   {
     key: 'title',
-    title: '需求',
+    title: i18n.t('features.reports.reportShared.requirement'),
     render: (item) => <span className="font-medium">{item.title}</span>,
   },
   {
     key: 'projectName',
-    title: '所属项目',
+    title: i18n.t('features.reports.reportShared.projectName'),
     render: (item) => <span className="text-secondary">{item.projectName}</span>,
   },
   {
     key: 'completion',
-    title: '完成度',
+    title: i18n.t('features.reports.reportShared.completion'),
     width: 180,
     sorter: (a, b) => a.completion - b.completion,
     render: (item) => (
@@ -62,7 +64,7 @@ export const requirementColumns: DataTableColumn<RequirementProgress>[] = [
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
           <span className="text-secondary text-mono">{item.completion}%</span>
           <StatusBadge
-            label={item.completion >= 80 ? '稳定' : item.completion >= 50 ? '推进中' : '低进展'}
+            label={item.completion >= 80 ? i18n.t('features.reports.reportShared.stable') : item.completion >= 50 ? i18n.t('features.reports.reportShared.progressing') : i18n.t('features.reports.reportShared.lowProgress')}
             variant={item.completion >= 80 ? 'success' : item.completion >= 50 ? 'warning' : 'risk'}
             showDot={false}
           />
@@ -109,10 +111,11 @@ export function ProgressLine({ label, value, total, tone }: { label: string; val
 }
 
 export function RequirementProgressTable({ items }: { items: RequirementProgress[] }) {
+  const { t } = useTranslation();
   return (
-    <Panel title="需求进度" subtitle="跟踪各需求完成情况">
+    <Panel title={t('features.reports.reportShared.requirementsProgressTitle')} subtitle={t('features.reports.reportShared.requirementsProgressSubtitle')}>
       {items.length === 0 ? (
-        <p className="body-text" style={{ margin: 0 }}>暂无需求进度数据。</p>
+        <p className="body-text" style={{ margin: 0 }}>{t('features.reports.reportShared.noRequirementProgress')}</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {items.map((item) => (

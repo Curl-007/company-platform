@@ -1,5 +1,6 @@
 import React from 'react';
 import { Bot } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { PageKey, SessionUser } from '../types';
 import { NAV_ITEMS } from '../app/pageRegistry';
 import NotificationBell from './common/NotificationBell';
@@ -17,7 +18,8 @@ interface AppHeaderProps {
 }
 
 export default function AppHeader({ currentPage, user, aiSidebarOpen, onAiToggle, onProfileOpen, onLogout }: AppHeaderProps) {
-  const currentNavLabel = NAV_ITEMS.find((item) => item.key === currentPage)?.label ?? '工作台';
+  const { t } = useTranslation();
+  const currentNavLabel = NAV_ITEMS.find((item) => item.key === currentPage)?.label ?? t('nav.item.dashboard');
   // Guard against empty / single-word names so we never render "undefined".
   const userInitials = (user.name || '')
     .split(/\s+/)
@@ -36,14 +38,14 @@ export default function AppHeader({ currentPage, user, aiSidebarOpen, onAiToggle
         <h1 className="kaneo-app-header-title">{currentNavLabel}</h1>
       </div>
       <div className="kaneo-app-header-actions">
-        <IconButton surface="topbar" icon={<Bot size={16} />} label={aiSidebarOpen ? '隐藏 AI 面板' : '显示 AI 面板'} onClick={onAiToggle} />
+        <IconButton surface="topbar" icon={<Bot size={16} />} label={aiSidebarOpen ? t('common.hideAiPanel') : t('common.showAiPanel')} onClick={onAiToggle} />
         <ThemeSettings />
         <NotificationBell />
-        <button type="button" className="kaneo-user-trigger" onClick={onProfileOpen} aria-label="打开个人资料">
+        <button type="button" className="kaneo-user-trigger" onClick={onProfileOpen} aria-label={t('common.openProfile')}>
           <span className="kaneo-user-copy"><strong>{user.name}</strong><small>{user.position || user.role}</small></span>
           <span className="kaneo-user-avatar">{userInitials}</span>
         </button>
-        <Button variant="text" size="sm" onClick={onLogout}>退出</Button>
+        <Button variant="text" size="sm" onClick={onLogout}>{t('auth.signOut')}</Button>
       </div>
     </header>
   );

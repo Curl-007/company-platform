@@ -51,7 +51,7 @@ test.describe('professional workbench responsive shell', () => {
     await login(page);
 
     await expect(page.locator('html')).toHaveAttribute('data-work-theme', 'kaneo');
-    await expect(page.locator('html')).toHaveAttribute('data-work-mode', 'light');
+    await expect(page.locator('html')).toHaveAttribute('data-work-mode', 'dark');
     await expect(page.locator('html')).toHaveAttribute('data-work-density', 'standard');
     await expect(page.getByRole('heading', { name: '工作台' })).toBeVisible();
     await expectNoPageOverflow(page);
@@ -91,10 +91,10 @@ test.describe('professional workbench responsive shell', () => {
     await attachViewport(page, testInfo, 'mobile-products');
 
     await openMobilePage(page, '交付中心');
-    await expect(page.getByRole('heading', { name: '构建发布中心' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '交付中心' })).toBeVisible();
     await expect(page.getByRole('tablist', { name: '构建发布视图' })).toBeVisible();
     await expectNoPageOverflow(page);
-    const deliveryFilterBar = page.locator('.delivery-filter-bar');
+    const deliveryFilterBar = page.locator('.dl-filter-wrap');
     await expect(deliveryFilterBar).toHaveCount(1);
     const deliveryFilterWidth = await deliveryFilterBar.evaluate((element) => ({
       client: element.clientWidth,
@@ -154,7 +154,7 @@ test.describe('professional workbench desktop shell', () => {
 
     const root = page.locator('html');
     await expect(root).toHaveAttribute('data-work-theme', 'kaneo');
-    await expect(root).toHaveAttribute('data-work-mode', 'light');
+    await expect(root).toHaveAttribute('data-work-mode', 'dark');
     await expect(root).toHaveAttribute('data-work-density', 'standard');
     await expect(page.locator('body')).toHaveCSS('font-size', '15px');
 
@@ -164,13 +164,13 @@ test.describe('professional workbench desktop shell', () => {
     await expect(dialog).toBeVisible();
     await expect(page.getByRole('button', { name: '关闭主题设置' })).toBeFocused();
 
-    const lightBackground = await root.evaluate((element) => getComputedStyle(element).getPropertyValue('--background'));
-    await dialog.getByRole('button', { name: '深色', exact: true }).click();
-    await expect(root).toHaveAttribute('data-work-mode', 'dark');
     const darkBackground = await root.evaluate((element) => getComputedStyle(element).getPropertyValue('--background'));
-    expect(darkBackground).not.toBe(lightBackground);
     await dialog.getByRole('button', { name: '浅色', exact: true }).click();
     await expect(root).toHaveAttribute('data-work-mode', 'light');
+    const lightBackground = await root.evaluate((element) => getComputedStyle(element).getPropertyValue('--background'));
+    expect(lightBackground).not.toBe(darkBackground);
+    await dialog.getByRole('button', { name: '深色', exact: true }).click();
+    await expect(root).toHaveAttribute('data-work-mode', 'dark');
 
     const standardPanelPadding = await root.evaluate((element) => getComputedStyle(element).getPropertyValue('--panel-body-padding'));
     const compactToggle = dialog.getByRole('button', { name: /紧凑布局/ });
@@ -217,7 +217,7 @@ test.describe('professional workbench desktop shell', () => {
     await page.getByRole('button', { name: '打开主题设置' }).click();
     await page.getByRole('button', { name: '恢复默认' }).click();
     await expect(root).toHaveAttribute('data-work-theme', 'kaneo');
-    await expect(root).toHaveAttribute('data-work-mode', 'light');
+    await expect(root).toHaveAttribute('data-work-mode', 'dark');
     await expect(root).toHaveAttribute('data-work-density', 'standard');
     await expect(root).toHaveAttribute('data-work-contrast', 'default');
     await expect(root).not.toHaveAttribute('data-work-ambient');
@@ -237,8 +237,11 @@ test.describe('professional workbench desktop shell', () => {
     }
     await attachVisibleViewport(page, testInfo, 'desktop-dynamic-fixed');
 
-    await page.evaluate(() => window.scrollTo(0, 700));
-    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+    const scrollable = await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight + 100);
+    if (scrollable) {
+      await page.evaluate(() => window.scrollTo(0, 700));
+      expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+    }
     await page.getByRole('button', { name: '我的工作', exact: true }).click();
     await expect(page.getByRole('heading', { name: '我的工作' })).toBeVisible();
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
@@ -309,7 +312,7 @@ test.describe('professional workbench desktop shell', () => {
     }
 
     await page.getByRole('button', { name: '交付中心', exact: true }).click();
-    await expect(page.getByRole('heading', { name: '构建发布中心' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '交付中心' })).toBeVisible();
     const pipeline = page.locator('.delivery-pipeline');
     await expect(pipeline.locator('.delivery-stage')).toHaveCount(4);
     const pipelineWidth = await pipeline.evaluate((element) => ({

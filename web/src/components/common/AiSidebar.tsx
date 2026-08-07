@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Bot, FileText, Image as ImageIcon, Paperclip, Send, X } from 'lucide-react';
 import { sendAiChat } from '../../features/ai/api';
 import { validateAttachmentFiles } from '../../features/ai/aiChatModel';
 import type { AiChatAttachment, AiChatMessage, PageKey } from '../../types';
+import { getInterfaceLocale } from '../../i18n';
 
 interface AiSidebarProps {
   currentPage: PageKey;
@@ -51,7 +53,7 @@ async function fileToAttachment(file: File): Promise<AiChatAttachment> {
 
 function formatTime(value: string) {
   try {
-    return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+    return new Intl.DateTimeFormat(getInterfaceLocale(), { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
   } catch {
     return '';
   }
@@ -68,6 +70,7 @@ function renderContent(content: string) {
 }
 
 function AiSidebar({ currentPage, contextLabel, onClose, className = '' }: AiSidebarProps) {
+  const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState('');
   const [attachments, setAttachments] = useState<AiChatAttachment[]>([]);
@@ -77,7 +80,7 @@ function AiSidebar({ currentPage, contextLabel, onClose, className = '' }: AiSid
     {
       id: 'sidebar-welcome',
       role: 'assistant',
-      content: `我会结合当前视图「${contextLabel}」和平台数据回答。可以直接提问，也可以附加截图或文档。`,
+      content: t('common.aiWelcome', { label: contextLabel }),
       createdAt: nowIso(),
       generatedBy: 'local',
     },
@@ -88,7 +91,7 @@ function AiSidebar({ currentPage, contextLabel, onClose, className = '' }: AiSid
     if (!files?.length) return;
     const remaining = Math.max(0, MAX_ATTACHMENTS - attachments.length);
     const selected = Array.from(files).slice(0, remaining);
-    if (selected.length < files.length) setFileError(`最多附加 ${MAX_ATTACHMENTS} 个文件。`);
+    if (selected.length < files.length) setFileError(t('common.maxAttachments', { count: MAX_ATTACHMENTS }));
     const validationError = validateAttachmentFiles(
       selected,
       attachments.reduce((total, item) => total + item.size, 0),
@@ -103,7 +106,7 @@ function AiSidebar({ currentPage, contextLabel, onClose, className = '' }: AiSid
       const next = await Promise.all(selected.map(fileToAttachment));
       setAttachments((prev) => [...prev, ...next]);
     } catch {
-      setFileError('读取附件失败，请换一个文件重试。');
+      setFileError(t('common.readAttachmentFailed'));
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
@@ -116,7 +119,7 @@ function AiSidebar({ currentPage, contextLabel, onClose, className = '' }: AiSid
     const userMessage: AiChatMessage = {
       id: `SIDEBAR-USER-${Date.now()}`,
       role: 'user',
-      content: content || '请分析这些附件。',
+      content: content || t('common.analyzeAttachments'),
       createdAt: nowIso(),
       attachments,
     };
@@ -140,7 +143,7 @@ function AiSidebar({ currentPage, contextLabel, onClose, className = '' }: AiSid
         {
           id: `SIDEBAR-ERR-${Date.now()}`,
           role: 'assistant',
-          content: err instanceof Error ? err.message : 'AI 助手暂时不可用，请稍后重试。',
+          content: err instanceof Error ? err.message : t('common.aiUnavailable'),
           createdAt: nowIso(),
           fallback: true,
           generatedBy: 'error',
@@ -156,25 +159,25 @@ function AiSidebar({ currentPage, contextLabel, onClose, className = '' }: AiSid
       <div className="ai-sidebar-header">
         <div className="ai-sidebar-title">
           <Bot size={18} />
-          <span>AI 助手</span>
+          <span>{t('common.aiAssistant')}</span>
         </div>
         {onClose && (
-          <button className="topbar-icon-button" onClick={onClose} aria-label="关闭 AI 助手">
+          <button className="topbar-icon-button" onClick={onClose} aria-label={t('common.closeAiAssistant')}>
             <X size={16} />
           </button>
         )}
       </div>
 
-      <div className="ai-sidebar-context">当前视图：{contextLabel}</div>
+      <div className="ai-sidebar-context">{t('common.currentView', { label: contextLabel })}</div>
 
       <div className="ai-sidebar-chat">
         {messages.map((message) => (
           <div key={message.id} className={`ai-sidebar-message ${message.role}`}>
             <div className="ai-sidebar-message-meta">
-              <span>{message.role === 'assistant' ? 'AI' : '你'}</span>
+              <span>{message.role === 'assistant' ? 'AI' : t('common.you')}</span>
               <span>{formatTime(message.createdAt)}</span>
               {message.modelUsed ? <span>{message.modelUsed}</span> : null}
-              {message.fallback ? <span>兜底</span> : null}
+              {message.fallback ? <span>{t('common.fallback')}</span> : null}
             </div>
             <div className="ai-sidebar-message-body">{renderContent(message.content)}</div>
             {message.attachments?.length ? (
@@ -192,7 +195,7 @@ function AiSidebar({ currentPage, contextLabel, onClose, className = '' }: AiSid
         {sending ? (
           <div className="ai-sidebar-message assistant">
             <div className="ai-sidebar-message-meta"><span>AI</span></div>
-            <div className="ai-sidebar-message-body"><p>正在结合当前页面和项目数据分析...</p></div>
+            <div className="ai-sidebar-message-body"><p>{t('common.aiThinking')}</p></div>
           </div>
         ) : null}
       </div>
@@ -227,7 +230,7 @@ function AiSidebar({ currentPage, contextLabel, onClose, className = '' }: AiSid
                 handleSend();
               }
             }}
-            placeholder="问当前页面的问题..."
+            placeholder={t('common.askPageQuestion')}
             disabled={sending}
           />
           <button className="btn btn-primary btn-sm" type="button" onClick={handleSend} disabled={sending || (!draft.trim() && attachments.length === 0)}>

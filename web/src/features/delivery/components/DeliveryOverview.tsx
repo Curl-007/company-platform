@@ -7,6 +7,7 @@ import {
   Package,
   type LucideIcon,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import Panel from '../../../components/common/Panel';
 import StatusBadge from '../../../components/common/StatusBadge';
 import type { Build, Product, Project } from '../../../types';
@@ -57,10 +58,11 @@ export default function DeliveryOverview({
   const candidates = builds
     .filter((item) => item.status === 'released' && !releaseBuildIds.has(item.id))
     .slice(0, 8);
+  const { t } = useTranslation();
 
   return (
     <div className="dl-overview-grid delivery-overview-grid">
-      <Panel className="dl-pipeline-panel" title="交付流水线" subtitle="构建 → 验证 → 候选 → 发布">
+      <Panel className="dl-pipeline-panel" title={t('features.delivery.deliveryOverview.pipelineTitle')} subtitle={t('features.delivery.deliveryOverview.pipelineSubtitle')}>
         <div className="dl-pipeline delivery-pipeline">
           {pipelineStages.map((stage, index) => (
             <div className={`dl-stage delivery-stage ${stage.tone}`} key={stage.id}>
@@ -70,7 +72,7 @@ export default function DeliveryOverview({
                 </span>
                 <div className="dl-stage-meta delivery-stage-meta">
                   <strong>{stage.label}</strong>
-                  <span>{stage.records.length} 条</span>
+                  <span>{t('features.delivery.deliveryOverview.stageCount', { count: stage.records.length })}</span>
                 </div>
                 {index < pipelineStages.length - 1 ? (
                   <span className="dl-stage-arrow delivery-stage-arrow" aria-hidden>
@@ -89,14 +91,14 @@ export default function DeliveryOverview({
                     <StatusBadge status={record.status} label={statusLabel(record.kind, record.status)} showDot={false} />
                   </button>
                 ))}
-                {stage.records.length === 0 ? <div className="dl-empty-inline delivery-empty-inline">暂无记录</div> : null}
+                {stage.records.length === 0 ? <div className="dl-empty-inline delivery-empty-inline">{t('features.delivery.deliveryOverview.stageEmpty')}</div> : null}
               </div>
             </div>
           ))}
         </div>
       </Panel>
 
-      <Panel className="dl-candidate-panel" title="候选发布" subtitle={`已通过构建、待建发布单 · ${candidateCount}`}>
+      <Panel className="dl-candidate-panel" title={t('features.delivery.deliveryOverview.candidateTitle')} subtitle={t('features.delivery.deliveryOverview.candidateSubtitle', { count: candidateCount })}>
         <div className="dl-candidate-list delivery-candidate-list">
           {candidates.map((build) => (
             <button
@@ -110,10 +112,10 @@ export default function DeliveryOverview({
               <span className="text-mono dl-candidate-version">{build.version || build.id}</span>
               <strong className="dl-candidate-name" title={build.name}>{build.name}</strong>
               <span className="dl-candidate-date">{formatDate(build.buildDate)}</span>
-              {canManageDelivery ? <em>创建发布</em> : <em>查看</em>}
+              {canManageDelivery ? <em>{t('features.delivery.deliveryOverview.createRelease')}</em> : <em>{t('features.delivery.deliveryOverview.view')}</em>}
             </button>
           ))}
-          {candidateCount === 0 ? <div className="dl-empty-inline delivery-empty-inline">暂无待发布候选</div> : null}
+          {candidateCount === 0 ? <div className="dl-empty-inline delivery-empty-inline">{t('features.delivery.deliveryOverview.noCandidates')}</div> : null}
         </div>
       </Panel>
     </div>

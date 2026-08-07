@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 type SignalTone = '' | 'is-success' | 'is-warn' | 'is-risk' | 'is-info';
 
 interface ManagementSignal {
@@ -15,6 +17,7 @@ export default function ManagementSummaryStrip({
 }: {
   items: Array<{ label: string; value: string | number; caption?: string }>;
 }) {
+  const { t } = useTranslation();
   const signals: ManagementSignal[] = items.map((item) => ({
     label: item.label,
     value: item.value,
@@ -23,7 +26,7 @@ export default function ManagementSummaryStrip({
   }));
 
   return (
-    <section className="product-signal-strip" aria-label="管理概况">
+    <section className="product-signal-strip" aria-label={t('features.products.managementSummaryStrip.ariaLabel')}>
       {signals.map((item) => (
         <div key={item.label} className={`product-signal ${item.tone}`.trim()}>
           <span className="product-signal-label">{item.label}</span>

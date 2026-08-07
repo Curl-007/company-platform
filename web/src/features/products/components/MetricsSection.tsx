@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import StructuredListSection from './StructuredListSection';
 import EditableCard from './EditableCard';
 import { EMPTY_METRIC } from '../productModel';
@@ -13,13 +14,14 @@ export default function MetricsSection({
   metrics: ProductMetric[];
   onChange: (next: ProductMetric[]) => void;
 }) {
+  const { t } = useTranslation();
   return (
-    <StructuredListSection title={title} description="逐项维护指标名称、数值、单位和状态。" onAdd={() => onChange([...metrics, { ...EMPTY_METRIC }])}>
+    <StructuredListSection title={title} description={t('features.products.metricsSection.sectionDesc')} onAdd={() => onChange([...metrics, { ...EMPTY_METRIC }])}>
       {metrics.map((item, index) => (
-        <EditableCard key={`${title}-${index}`} onDelete={() => onChange(metrics.filter((_, itemIndex) => itemIndex !== index))} disableDelete={metrics.length === 1} deleteLabel="删除指标">
+        <EditableCard key={`${title}-${index}`} onDelete={() => onChange(metrics.filter((_, itemIndex) => itemIndex !== index))} disableDelete={metrics.length === 1} deleteLabel={t('features.products.metricsSection.deleteMetric')}>
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">指标名称</label>
+              <label className="form-label">{t('features.products.metricsSection.nameLabel')}</label>
               <input className="form-input" value={item.label} onChange={(e) => {
                 const next = [...metrics];
                 next[index] = { ...next[index], label: e.target.value };
@@ -27,7 +29,7 @@ export default function MetricsSection({
               }} />
             </div>
             <div className="form-group">
-              <label className="form-label">指标值</label>
+              <label className="form-label">{t('features.products.metricsSection.valueLabel')}</label>
               <input className="form-input" value={item.value} onChange={(e) => {
                 const next = [...metrics];
                 next[index] = { ...next[index], value: e.target.value };
@@ -37,7 +39,7 @@ export default function MetricsSection({
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">单位</label>
+              <label className="form-label">{t('features.products.metricsSection.unitLabel')}</label>
               <input className="form-input" value={item.unit ?? ''} onChange={(e) => {
                 const next = [...metrics];
                 next[index] = { ...next[index], unit: e.target.value };
@@ -45,7 +47,7 @@ export default function MetricsSection({
               }} />
             </div>
             <div className="form-group">
-              <label className="form-label">状态</label>
+              <label className="form-label">{t('features.products.metricsSection.statusLabel')}</label>
               <select className="form-select" value={item.status ?? 'planned'} onChange={(e) => {
                 const next = [...metrics];
                 next[index] = { ...next[index], status: e.target.value };

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Check, X, AlertTriangle, Clock, Circle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { FlowGate, GateState } from '../../types';
 
 const STATE_COLORS: Record<GateState, { dot: string; ring: string; line: string; label: string }> = {
@@ -7,31 +8,31 @@ const STATE_COLORS: Record<GateState, { dot: string; ring: string; line: string;
     dot: 'var(--color-success, #16a34a)',
     ring: 'var(--color-success, #16a34a)',
     line: 'var(--color-success, #16a34a)',
-    label: '已完成',
+    label: 'enums.flowState.done',
   },
   passed: {
     dot: 'var(--color-success, #16a34a)',
     ring: 'var(--color-success, #16a34a)',
     line: 'var(--color-success, #16a34a)',
-    label: '已通过',
+    label: 'enums.flowState.passed',
   },
   in_progress: {
     dot: 'var(--color-info, #2563eb)',
     ring: 'var(--color-info, #2563eb)',
     line: 'var(--color-info, #2563eb)',
-    label: '进行中',
+    label: 'enums.flowState.in_progress',
   },
   blocked: {
     dot: 'var(--color-risk, #dc2626)',
     ring: 'var(--color-risk, #dc2626)',
     line: 'var(--color-border, #e2e8f0)',
-    label: '阻塞',
+    label: 'enums.flowState.blocked',
   },
   pending: {
     dot: 'var(--color-border, #cbd5e1)',
     ring: 'var(--color-border, #cbd5e1)',
     line: 'var(--color-border, #e2e8f0)',
-    label: '未开始',
+    label: 'enums.flowState.pending',
   },
 };
 
@@ -54,6 +55,7 @@ interface FlowPipelineProps {
 }
 
 export default function FlowPipeline({ gates }: FlowPipelineProps) {
+  const { t } = useTranslation();
   const [active, setActive] = useState<string | null>(
     gates.find((gate) => gate.state === 'in_progress' || gate.state === 'blocked')?.stage ?? gates[0]?.stage ?? null,
   );
@@ -79,7 +81,7 @@ export default function FlowPipeline({ gates }: FlowPipelineProps) {
               <button
                 className={`flow-node ${isActive ? 'flow-node-active' : ''}`}
                 onClick={() => setActive(isActive ? null : gate.stage)}
-                title={color.label}
+                title={t(color.label)}
               >
                 <span className="flow-node-dot" style={{ background: color.dot, borderColor: color.ring }}>
                   {stateIcon(gate.state)}
@@ -94,9 +96,9 @@ export default function FlowPipeline({ gates }: FlowPipelineProps) {
       {activeGate && (
         <div className="flow-gate-detail">
           <div className="flow-gate-header">
-            <span className="font-medium">{activeGate.label}阶段</span>
+            <span className="font-medium">{t('enums.flowState.stageSuffix', { stage: activeGate.label })}</span>
             <span className="tag" style={{ background: `${STATE_COLORS[activeGate.state].dot}22`, color: STATE_COLORS[activeGate.state].dot }}>
-              {STATE_COLORS[activeGate.state].label}
+              {t(STATE_COLORS[activeGate.state].label)}
             </span>
           </div>
           <div className="flow-check-list">

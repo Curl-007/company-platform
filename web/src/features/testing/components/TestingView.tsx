@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Bug, ClipboardCheck } from 'lucide-react';
 import { getSessionUser } from '../../../services/auth';
 import { canOperate } from '../../../constants/roles';
@@ -8,6 +9,7 @@ import TestCasesTab from './TestCasesTab';
 import DefectsTab from './DefectsTab';
 
 export default function TestingView() {
+  const { t } = useTranslation();
   const [routeState, setRouteState] = useState<{ tab: TestingTab; focusId: string | null }>({
     tab: 'cases',
     focusId: null,
@@ -59,7 +61,7 @@ export default function TestingView() {
     <div className="qa-workbench">
       {canUseAi ? <TestingQualityAiPanel /> : null}
 
-      <div className="qa-tab-row" role="tablist" aria-label="测试质量视图">
+      <div className="qa-tab-row" role="tablist" aria-label={t('features.testing.testingView.tablistAria')}>
         <button
           type="button"
           role="tab"
@@ -68,7 +70,7 @@ export default function TestingView() {
           onClick={() => switchTab('cases')}
         >
           <ClipboardCheck size={14} aria-hidden="true" />
-          测试用例
+          {t('features.testing.testingView.casesTab')}
         </button>
         <button
           type="button"
@@ -78,7 +80,7 @@ export default function TestingView() {
           onClick={() => switchTab('defects')}
         >
           <Bug size={14} aria-hidden="true" />
-          缺陷列表
+          {t('features.testing.testingView.defectsTab')}
         </button>
       </div>
 

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Button,
   Empty,
@@ -43,10 +44,14 @@ const PageState: React.FC<PageStateProps> = ({
   loading,
   error,
   isEmpty = false,
-  emptyTitle = '暂无数据',
-  emptyDescription = '当前视图还没有可展示的数据。',
+  emptyTitle,
+  emptyDescription,
   onRetry,
 }) => {
+  const { t } = useTranslation();
+  const resolvedEmptyTitle = emptyTitle ?? t('common.empty');
+  const resolvedEmptyDescription = emptyDescription ?? t('common.emptyDescription');
+
   if (loading) {
     return (
       <Panel className="page-state-panel" noPadding>
@@ -56,7 +61,7 @@ const PageState: React.FC<PageStateProps> = ({
           aria-live="polite"
         >
           <Spinner size={28} className="page-state-spinner" />
-          <div className="page-state-loading-text">加载中...</div>
+          <div className="page-state-loading-text">{t('common.loading')}</div>
         </div>
       </Panel>
     );
@@ -66,11 +71,11 @@ const PageState: React.FC<PageStateProps> = ({
     return (
       <Panel className="page-state-panel" noPadding>
         <PageStateEmpty
-          title="数据加载失败"
+          title={t('common.loadFailed')}
           description={error}
           action={onRetry ? (
             <Button className="page-state-retry" variant="secondary" size="sm" onClick={onRetry}>
-              重试
+              {t('common.retry')}
             </Button>
           ) : undefined}
         />
@@ -81,7 +86,7 @@ const PageState: React.FC<PageStateProps> = ({
   if (isEmpty) {
     return (
       <Panel className="page-state-panel" noPadding>
-        <PageStateEmpty title={emptyTitle} description={emptyDescription} />
+        <PageStateEmpty title={resolvedEmptyTitle} description={resolvedEmptyDescription} />
       </Panel>
     );
   }

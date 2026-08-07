@@ -1,12 +1,16 @@
+import { useTranslation } from 'react-i18next';
+
 export default function SummaryList({
   title,
   items,
-  emptyText = '暂无',
+  emptyText,
 }: {
   title: string;
   items: string[];
   emptyText?: string;
 }) {
+  const { t } = useTranslation();
+  const empty = emptyText ?? t('features.workLogs.common.none');
   return (
     <div>
       <div className="section-title">{title}</div>
@@ -17,7 +21,7 @@ export default function SummaryList({
           ))}
         </div>
       ) : (
-        <div className="body-text" style={{ marginTop: 8 }}>{emptyText}</div>
+        <div className="body-text" style={{ marginTop: 8 }}>{empty}</div>
       )}
     </div>
   );

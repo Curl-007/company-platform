@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
+import { useTranslation } from 'react-i18next';
 import { LoaderCircle, RefreshCw } from 'lucide-react';
 import type { AiJob, AiModelOption, AiProviderConfig } from '../../../types';
 import Panel from '../../../components/common/Panel';
@@ -8,23 +9,23 @@ import AiJobReviewPanel from './AiJobReviewPanel';
 
 type ConnectionTone = 'green' | 'red' | 'unknown';
 
-function connectionMeta(provider?: AiProviderConfig | null): {
+function connectionMeta(t: (key: string) => string, provider?: AiProviderConfig | null): {
   tone: ConnectionTone;
   label: string;
   host: string;
 } {
-  const host = provider?.baseUrlHost || '未设置服务地址';
-  if (!provider) return { tone: 'unknown', label: '读取中', host };
-  if (!provider.enabled) return { tone: 'red', label: '已禁用', host };
-  if (!provider.configured) return { tone: 'red', label: '未配置', host };
+  const host = provider?.baseUrlHost || t('features.ai.aiSidePanel.noServiceUrl');
+  if (!provider) return { tone: 'unknown', label: t('features.ai.aiSidePanel.reading'), host };
+  if (!provider.enabled) return { tone: 'red', label: t('features.ai.aiSidePanel.disabled'), host };
+  if (!provider.configured) return { tone: 'red', label: t('features.ai.aiSidePanel.notConfigured'), host };
 
   const health = provider.health?.status;
-  if (health === 'healthy') return { tone: 'green', label: '已接通', host };
-  if (health === 'degraded') return { tone: 'red', label: '降级', host };
-  if (health === 'unavailable' || health === 'disabled') return { tone: 'red', label: '不可用', host };
-  if (health === 'unconfigured') return { tone: 'red', label: '未配置', host };
+  if (health === 'healthy') return { tone: 'green', label: t('features.ai.aiSidePanel.connected'), host };
+  if (health === 'degraded') return { tone: 'red', label: t('features.ai.aiSidePanel.degraded'), host };
+  if (health === 'unavailable' || health === 'disabled') return { tone: 'red', label: t('features.ai.aiSidePanel.unavailable'), host };
+  if (health === 'unconfigured') return { tone: 'red', label: t('features.ai.aiSidePanel.notConfigured'), host };
   // configured but never verified / unknown → still show green as “可连配置就绪”，测试结果再覆盖
-  return { tone: 'green', label: '已配置', host };
+  return { tone: 'green', label: t('features.ai.aiSidePanel.configured'), host };
 }
 
 export default function AiSidePanel({
@@ -72,7 +73,8 @@ export default function AiSidePanel({
   onReject: () => void;
   onRetry: () => void;
 }) {
-  const base = connectionMeta(data.aiProvider);
+  const { t } = useTranslation();
+  const base = connectionMeta(t, data.aiProvider);
   const tone: ConnectionTone = connectionTesting
     ? 'unknown'
     : connectionOnline === true
@@ -81,11 +83,11 @@ export default function AiSidePanel({
         ? 'red'
         : base.tone;
   const label = connectionTesting
-    ? '检测中'
+    ? t('features.ai.aiSidePanel.testing')
     : connectionOnline === true
-      ? '已接通'
+      ? t('features.ai.aiSidePanel.connected')
       : connectionOnline === false
-        ? '未接通'
+        ? t('features.ai.aiSidePanel.notConnected')
         : base.label;
 
   const modelOptions = models.length
@@ -100,7 +102,7 @@ export default function AiSidePanel({
     <div className="ai-chat-side">
       <Panel
         className="ai-connection-panel"
-        title="接入状态"
+        title={t('features.ai.aiSidePanel.connectionTitle')}
         subtitle={base.host}
         toolbar={(
           <button
@@ -108,12 +110,12 @@ export default function AiSidePanel({
             className="btn btn-text btn-xs btn-with-icon"
             onClick={onRefreshConnection}
             disabled={connectionTesting || modelsLoading}
-            title="刷新接入状态与模型列表"
+            title={t('features.ai.aiSidePanel.refreshConnectionTitle')}
           >
             {connectionTesting || modelsLoading
               ? <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />
               : <RefreshCw size={13} aria-hidden="true" />}
-            检测
+            {t('features.ai.aiSidePanel.testButton')}
           </button>
         )}
       >
@@ -123,29 +125,29 @@ export default function AiSidePanel({
             <strong>{label}</strong>
             <em>
               {connectionTesting
-                ? '正在探测模型服务…'
+                ? t('features.ai.aiSidePanel.probingModelService')
                 : connectionOnline === true
-                  ? `接口可用${connectionLatencyMs != null ? ` · ${connectionLatencyMs}ms` : ''}`
+                  ? t('features.ai.aiSidePanel.interfaceAvailable', { latency: connectionLatencyMs != null ? ` · ${connectionLatencyMs}ms` : '' })
                   : connectionOnline === false
-                    ? (connectionError || '接口不可用，请检查密钥与地址')
+                    ? (connectionError || t('features.ai.aiSidePanel.interfaceUnavailable'))
                     : data.aiProvider?.configured
-                      ? '已配置，可点击检测确认连通性'
-                      : '请先在系统设置中配置 AI Provider'}
+                      ? t('features.ai.aiSidePanel.configuredReadyToTest')
+                      : t('features.ai.aiSidePanel.configureInSettings')}
             </em>
           </div>
         </div>
 
         <div className="ai-model-picker">
-          <label className="form-label" htmlFor="ai-model-select">对话模型</label>
+          <label className="form-label" htmlFor="ai-model-select">{t('features.ai.aiSidePanel.chatModel')}</label>
           <select
             id="ai-model-select"
             className="form-select"
             value={selectedModel || modelOptions[0]?.id || ''}
             onChange={(event) => onModelChange(event.target.value)}
             disabled={modelsLoading || (!modelOptions.length && !selectedModel)}
-            aria-label="选择对话模型"
+            aria-label={t('features.ai.aiSidePanel.selectChatModel')}
           >
-            {!modelOptions.length ? <option value="">暂无可用模型</option> : null}
+            {!modelOptions.length ? <option value="">{t('features.ai.aiSidePanel.noModels')}</option> : null}
             {modelOptions.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name || item.id}
@@ -154,18 +156,18 @@ export default function AiSidePanel({
           </select>
           <div className="ai-model-picker-meta">
             {modelsLoading
-              ? '正在从接口拉取模型…'
+              ? t('features.ai.aiSidePanel.fetchingModels')
               : modelsError
                 ? modelsError
                 : models.length
-                  ? `已从接口获取 ${models.length} 个模型`
-                  : '使用当前配置模型；检测成功后可刷新列表'}
+                  ? t('features.ai.aiSidePanel.modelsLoaded', { count: models.length })
+                  : t('features.ai.aiSidePanel.useCurrentModel')}
           </div>
         </div>
       </Panel>
 
       {data.recentJobs?.length ? (
-        <Panel title="近期 AI 任务" subtitle="文档和日志分析记录">
+        <Panel title={t('features.ai.aiSidePanel.recentJobs')} subtitle={t('features.ai.aiSidePanel.recentJobsSubtitle')}>
           <div className="ai-chat-job-list">
             {data.recentJobs.slice(0, 5).map((job) => (
               <button

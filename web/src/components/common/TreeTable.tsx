@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export interface TreeTableColumn<T> {
   key: string;
@@ -44,11 +45,13 @@ function TreeTable<T extends { id: string }>({
   selectedIds,
   onSelectionChange,
   defaultExpanded = true,
-  emptyText = '暂无数据',
+  emptyText,
   className = '',
   expandedIds: controlledExpandedIds,
   onToggleExpand,
 }: TreeTableProps<T>) {
+  const { t } = useTranslation();
+  const resolvedEmptyText = emptyText ?? t('common.empty');
   const [internalExpandedIds, setInternalExpandedIds] = useState<Set<string>>(() =>
     defaultExpanded ? new Set(data.map((item) => item.id)) : new Set<string>(),
   );
@@ -159,7 +162,7 @@ function TreeTable<T extends { id: string }>({
   if (data.length === 0) {
     return (
       <div className={`tree-table-wrapper ${className}`}>
-        <div className="tree-table-empty">{emptyText}</div>
+        <div className="tree-table-empty">{resolvedEmptyText}</div>
       </div>
     );
   }
@@ -175,7 +178,7 @@ function TreeTable<T extends { id: string }>({
                 className="tree-table-checkbox-col"
                 style={{ width: 40 }}
                 scope="col"
-                aria-label="选择"
+                aria-label={t('common.select')}
               />
             )}
             {columns.map((col) => (
@@ -189,7 +192,7 @@ function TreeTable<T extends { id: string }>({
                 className="tree-table-actions-col"
                 style={{ width: 120 }}
                 scope="col"
-                aria-label="操作"
+                aria-label={t('common.actions')}
               />
             )}
           </tr>
@@ -221,7 +224,7 @@ function TreeTable<T extends { id: string }>({
                       type="checkbox"
                       checked={selectedIds?.has(item.id) ?? false}
                       onChange={() => toggleSelect(item.id)}
-                      aria-label={`选择 ${item.id}`}
+                      aria-label={`${t('common.select')} ${item.id}`}
                     />
                   </td>
                 )}
@@ -242,7 +245,7 @@ function TreeTable<T extends { id: string }>({
                           className="tree-table-toggle"
                           type="button"
                           aria-expanded={isExpanded}
-                          aria-label={`${isExpanded ? '折叠' : '展开'} ${item.id}`}
+                          aria-label={`${t(isExpanded ? 'common.collapse' : 'common.expand')} ${item.id}`}
                           onClick={(event) => {
                             event.stopPropagation();
                             toggleExpand(item.id);
@@ -281,7 +284,7 @@ function TreeTable<T extends { id: string }>({
                   );
                 })}
                 {rowActions && (
-                  <td className="tree-table-actions" aria-label="操作" onClick={(e) => e.stopPropagation()}>
+                  <td className="tree-table-actions" aria-label={t('common.actions')} onClick={(e) => e.stopPropagation()}>
                     {rowActions(item)}
                   </td>
                 )}

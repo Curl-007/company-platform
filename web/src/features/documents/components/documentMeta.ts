@@ -1,24 +1,26 @@
+import i18n from '../../../i18n';
+
 export const DOC_TYPES = [
-  { key: '', label: '全部类型' },
-  { key: 'requirement', label: '需求文档' },
-  { key: 'design', label: '设计文档' },
-  { key: 'test', label: '测试文档' },
-  { key: 'bid', label: '招标文件' },
-  { key: 'report', label: '报告' },
+  { key: '', label: 'features.documents.documentMeta.docTypes.allTypes' },
+  { key: 'requirement', label: 'features.documents.documentMeta.docTypes.requirement' },
+  { key: 'design', label: 'features.documents.documentMeta.docTypes.design' },
+  { key: 'test', label: 'features.documents.documentMeta.docTypes.test' },
+  { key: 'bid', label: 'features.documents.documentMeta.docTypes.bid' },
+  { key: 'report', label: 'features.documents.documentMeta.docTypes.report' },
 ];
 
 export const DOC_CATEGORIES = [
-  { key: '', label: '全部分类' },
-  { key: 'project', label: '项目文档' },
-  { key: 'general', label: '通用文档' },
-  { key: 'announcement', label: '公司公告' },
+  { key: '', label: 'features.documents.documentMeta.docCategories.allCategories' },
+  { key: 'project', label: 'features.documents.documentMeta.docCategories.project' },
+  { key: 'general', label: 'features.documents.documentMeta.docCategories.general' },
+  { key: 'announcement', label: 'features.documents.documentMeta.docCategories.announcement' },
 ];
 
 export const ROLE_DOC_OPTIONS = [
-  { key: 'pm', label: '项目经理文档' },
-  { key: 'pdm', label: '产品经理文档' },
-  { key: 'dev', label: '开发文档' },
-  { key: 'qa', label: '测试文档' },
+  { key: 'pm', label: 'features.documents.documentMeta.roleOptions.pm' },
+  { key: 'pdm', label: 'features.documents.documentMeta.roleOptions.pdm' },
+  { key: 'dev', label: 'features.documents.documentMeta.roleOptions.dev' },
+  { key: 'qa', label: 'features.documents.documentMeta.roleOptions.qa' },
 ];
 
 /** Keep in sync with api/src/security/uploadPolicy.js */
@@ -28,31 +30,31 @@ export const MAX_UPLOAD_FILES = 10;
 export const UPLOAD_FORMAT_GROUPS = [
   {
     key: 'text',
-    label: '文本 / 结构化',
+    label: 'features.documents.documentMeta.uploadFormatGroups.text',
     extensions: ['.txt', '.md', '.markdown', '.csv', '.tsv', '.json', '.xml', '.html', '.htm', '.yaml', '.yml', '.log', '.rtf'],
     extractable: true,
   },
   {
     key: 'document',
-    label: '文档',
+    label: 'features.documents.documentMeta.uploadFormatGroups.document',
     extensions: ['.pdf', '.doc', '.docx', '.dot', '.dotx', '.odt', '.wps'],
     extractable: true,
   },
   {
     key: 'sheet',
-    label: '表格',
+    label: 'features.documents.documentMeta.uploadFormatGroups.sheet',
     extensions: ['.xls', '.xlsx', '.xlt', '.xltx', '.ods', '.et'],
     extractable: false,
   },
   {
     key: 'slide',
-    label: '演示',
+    label: 'features.documents.documentMeta.uploadFormatGroups.slide',
     extensions: ['.ppt', '.pptx', '.pot', '.potx', '.odp', '.dps'],
     extractable: false,
   },
   {
     key: 'image',
-    label: '图片',
+    label: 'features.documents.documentMeta.uploadFormatGroups.image',
     extensions: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tif', '.tiff'],
     extractable: false,
   },
@@ -161,11 +163,12 @@ export function aiStatusVariant(status: string): 'success' | 'warning' | 'info' 
 }
 
 export function categoryLabel(category?: string | null) {
-  if (category === 'general') return '通用文档';
-  if (category === 'announcement') return '公司公告';
-  return '项目文档';
+  if (category === 'general') return i18n.t('features.documents.documentMeta.docCategories.general');
+  if (category === 'announcement') return i18n.t('features.documents.documentMeta.docCategories.announcement');
+  return i18n.t('features.documents.documentMeta.docCategories.project');
 }
 
 export function roleLabel(role?: string | null) {
-  return ROLE_DOC_OPTIONS.find((item) => item.key === role)?.label ?? '未设置';
+  const item = ROLE_DOC_OPTIONS.find((entry) => entry.key === role);
+  return item ? i18n.t(item.label) : i18n.t('enums.unset');
 }

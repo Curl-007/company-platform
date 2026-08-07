@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -47,6 +48,7 @@ export default function TestCasesTab({
   focusId?: string | null;
   onClearFocus: () => void;
 }) {
+  const { t } = useTranslation();
   const toast = useToast();
   const confirm = useConfirm();
   const sessionUser = getSessionUser();
@@ -128,68 +130,68 @@ export default function TestCasesTab({
 
   async function handleDelete(item: TestCase) {
     if (!canManageTesting) {
-      toast.error('当前账号无权删除测试用例。');
+      toast.error(t('features.testing.testCasesTab.noPermissionDelete'));
       return;
     }
     const confirmed = await confirm({
-      title: `删除测试用例“${item.name}”？`,
-      description: '删除后测试步骤、执行入口和关联记录将从测试管理中移除。',
-      confirmText: '删除用例',
+      title: t('features.testing.testCasesTab.deleteConfirm', { name: item.name }),
+      description: t('features.testing.testCasesTab.deleteConfirmDesc'),
+      confirmText: t('features.testing.testCasesTab.deleteCase'),
       tone: 'danger',
     });
     if (!confirmed) return;
     try {
       await deleteTestCase(item.id);
-      toast.success(`已删除测试用例：${item.name}`);
+      toast.success(t('features.testing.testCasesTab.deleted', { name: item.name }));
       reload();
     } catch (err) {
       // 409 = has dependencies; offer cascade delete on explicit confirmation.
       if (err instanceof ApiError && err.status === 409) {
         const summary = summarizeDependencies((err.body as { details?: { dependencies?: Record<string, unknown> } })?.details?.dependencies);
         const cascade = await confirm({
-          title: summary ? '检测到关联记录' : '该用例存在关联记录',
+          title: summary ? t('features.testing.testCasesTab.hasRelatedRecords') : t('features.testing.testCasesTab.hasRelatedRecordsFallback'),
           description: summary
-            ? `“${item.name}”关联了 ${summary}。是否一并删除这些记录？此操作不可恢复。`
-            : `“${item.name}”仍有关联记录。是否一并删除？此操作不可恢复。`,
-          confirmText: '级联删除',
+            ? t('features.testing.testCasesTab.cascadeConfirmWithSummary', { name: item.name, summary })
+            : t('features.testing.testCasesTab.cascadeConfirm', { name: item.name }),
+          confirmText: t('features.testing.testCasesTab.cascadeDelete'),
           tone: 'danger',
         });
         if (!cascade) return;
         try {
           await deleteTestCase(item.id, true);
-          toast.success(`已删除测试用例及其关联记录：${item.name}`);
+          toast.success(t('features.testing.testCasesTab.deletedCascade', { name: item.name }));
           reload();
         } catch (cascadeErr) {
-          toast.error(cascadeErr instanceof ApiError ? cascadeErr.message : '级联删除失败');
+          toast.error(cascadeErr instanceof ApiError ? cascadeErr.message : t('features.testing.testCasesTab.cascadeDeleteFailed'));
         }
         return;
       }
-      toast.error(err instanceof ApiError ? err.message : '删除测试用例失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.testing.testCasesTab.deleteFailed'));
     }
   }
 
   async function handleStatusChange(item: TestCase, nextStatus: string) {
     try {
       await updateTestCaseStatus(item.id, nextStatus);
-      toast.success('测试状态已更新');
+      toast.success(t('features.testing.testCasesTab.statusUpdated'));
       reload();
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '更新测试状态失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.testing.testCasesTab.statusUpdateFailed'));
     }
   }
 
   const focusButtons: { key: CaseFocus; label: string; count: number }[] = [
-    { key: 'all', label: '全部', count: signals.total },
-    { key: 'risky', label: '风险', count: signals.risky },
-    { key: 'failed', label: '失败', count: signals.failed },
-    { key: 'blocked', label: '阻塞', count: signals.blocked },
-    { key: 'passed', label: '通过', count: signals.passed },
+    { key: 'all', label: t('features.testing.testCasesTab.focus.all'), count: signals.total },
+    { key: 'risky', label: t('features.testing.testCasesTab.focus.risky'), count: signals.risky },
+    { key: 'failed', label: t('features.testing.testCasesTab.focus.failed'), count: signals.failed },
+    { key: 'blocked', label: t('features.testing.testCasesTab.focus.blocked'), count: signals.blocked },
+    { key: 'passed', label: t('features.testing.testCasesTab.focus.passed'), count: signals.passed },
   ];
 
   const columns: DataTableColumn<TestCase>[] = [
     {
       key: 'name',
-      title: '用例',
+      title: t('features.testing.testCasesTab.caseTitle'),
       render: (item) => (
         <div className="qa-title-cell">
           <div className="qa-title-main">
@@ -205,17 +207,17 @@ export default function TestCasesTab({
     },
     {
       key: 'role',
-      title: '执行角色',
+      title: t('features.testing.testCasesTab.roleTitle'),
       width: 96,
       render: (item) => (
         <span className="qa-meta-text">
-          {item.assigneeRole ? labelOf(USER_ROLE_LABELS, item.assigneeRole) : '测试'}
+          {item.assigneeRole ? labelOf(USER_ROLE_LABELS, item.assigneeRole) : t('features.testing.testCasesTab.defaultRole')}
         </span>
       ),
     },
     {
       key: 'status',
-      title: '状态',
+      title: t('features.testing.testCasesTab.statusTitle'),
       width: 128,
       render: (item) => (
         canManageTesting ? (
@@ -224,7 +226,7 @@ export default function TestCasesTab({
             value={item.status}
             onClick={(e) => e.stopPropagation()}
             onChange={(e) => void handleStatusChange(item, e.target.value)}
-            aria-label={`更新 ${item.name} 状态`}
+            aria-label={t('features.testing.testCasesTab.updateStatusAria', { name: item.name })}
           >
             {TEST_CASE_STATUSES.map((status) => (
               <option key={status} value={status}>{labelOf(TEST_CASE_STATUS_LABELS, status)}</option>
@@ -237,22 +239,22 @@ export default function TestCasesTab({
     },
     {
       key: 'runs',
-      title: '执行',
+      title: t('features.testing.testCasesTab.runsTitle'),
       width: 120,
       render: (item) => (
         <div className="qa-run-cell">
-          <span>总 {item.totalCases}</span>
+          <span>{t('features.testing.testCasesTab.totalRuns', { count: item.totalCases })}</span>
           <em>
-            过 {item.passedCases}
-            {item.failedCases > 0 ? ` · 败 ${item.failedCases}` : ''}
-            {item.blockedCases > 0 ? ` · 阻 ${item.blockedCases}` : ''}
+            {t('features.testing.testCasesTab.passedRuns', { count: item.passedCases })}
+            {item.failedCases > 0 ? t('features.testing.testCasesTab.failedRunsSuffix', { count: item.failedCases }) : ''}
+            {item.blockedCases > 0 ? t('features.testing.testCasesTab.blockedRunsSuffix', { count: item.blockedCases }) : ''}
           </em>
         </div>
       ),
     },
     {
       key: 'passed',
-      title: '通过率',
+      title: t('features.testing.testCasesTab.passRateTitle'),
       width: 150,
       render: (item) => {
         const rate = passRate(item);
@@ -266,17 +268,17 @@ export default function TestCasesTab({
     },
     {
       key: 'actions',
-      title: '操作',
+      title: t('common.actions'),
       width: 140,
       render: (item) => (
         <div className="qa-row-actions" onClick={(e) => e.stopPropagation()}>
           {canManageTesting ? (
             <>
-              <button className="btn btn-text btn-xs" onClick={() => setExecuting(item)}>执行</button>
-              <button className="btn btn-text btn-xs" onClick={() => setEditing(item)}>编辑</button>
-              <button className="btn btn-text btn-xs qa-danger-btn" onClick={() => void handleDelete(item)}>删除</button>
+              <button className="btn btn-text btn-xs" onClick={() => setExecuting(item)}>{t('features.testing.testCasesTab.execute')}</button>
+              <button className="btn btn-text btn-xs" onClick={() => setEditing(item)}>{t('common.edit')}</button>
+              <button className="btn btn-text btn-xs qa-danger-btn" onClick={() => void handleDelete(item)}>{t('common.delete')}</button>
             </>
-          ) : <span className="text-secondary">只读</span>}
+          ) : <span className="text-secondary">{t('features.testing.testCasesTab.readOnly')}</span>}
         </div>
       ),
     },
@@ -284,52 +286,52 @@ export default function TestCasesTab({
 
   return (
     <div className="qa-section">
-      <section className="qa-signal-strip" aria-label="用例概况">
+      <section className="qa-signal-strip" aria-label={t('features.testing.testCasesTab.signalAria')}>
         <div className="qa-signal">
-          <span className="qa-signal-label"><CircleDashed size={13} aria-hidden="true" /> 用例总数</span>
+          <span className="qa-signal-label"><CircleDashed size={13} aria-hidden="true" /> {t('features.testing.testCasesTab.totalCasesLabel')}</span>
           <strong>{signals.total}</strong>
-          <em>整体通过 {signals.overallPass}%</em>
+          <em>{t('features.testing.testCasesTab.overallPass', { rate: signals.overallPass })}</em>
         </div>
         <div className={`qa-signal ${signals.risky > 0 ? 'is-warn' : ''}`}>
-          <span className="qa-signal-label"><AlertTriangle size={13} aria-hidden="true" /> 风险用例</span>
+          <span className="qa-signal-label"><AlertTriangle size={13} aria-hidden="true" /> {t('features.testing.testCasesTab.riskyLabel')}</span>
           <strong>{signals.risky}</strong>
-          <em>失败 / 阻塞 / 低通过率</em>
+          <em>{t('features.testing.testCasesTab.riskyHint')}</em>
         </div>
         <div className={`qa-signal ${signals.failed > 0 ? 'is-risk' : ''}`}>
-          <span className="qa-signal-label"><XCircle size={13} aria-hidden="true" /> 失败相关</span>
+          <span className="qa-signal-label"><XCircle size={13} aria-hidden="true" /> {t('features.testing.testCasesTab.failedRelated')}</span>
           <strong>{signals.failed}</strong>
-          <em>失败执行 {signals.failedRuns}</em>
+          <em>{t('features.testing.testCasesTab.failedRunsHint', { count: signals.failedRuns })}</em>
         </div>
         <div className={`qa-signal ${signals.blocked > 0 ? 'is-warn' : ''}`}>
-          <span className="qa-signal-label"><CircleDashed size={13} aria-hidden="true" /> 阻塞相关</span>
+          <span className="qa-signal-label"><CircleDashed size={13} aria-hidden="true" /> {t('features.testing.testCasesTab.blockedRelated')}</span>
           <strong>{signals.blocked}</strong>
-          <em>阻塞执行 {signals.blockedRuns}</em>
+          <em>{t('features.testing.testCasesTab.blockedRunsHint', { count: signals.blockedRuns })}</em>
         </div>
         <div className="qa-signal">
-          <span className="qa-signal-label"><CheckCircle2 size={13} aria-hidden="true" /> 通过相关</span>
+          <span className="qa-signal-label"><CheckCircle2 size={13} aria-hidden="true" /> {t('features.testing.testCasesTab.passedRelated')}</span>
           <strong>{signals.passed}</strong>
-          <em>状态通过或 100%</em>
+          <em>{t('features.testing.testCasesTab.passedHint')}</em>
         </div>
       </section>
 
       <Panel
         className="qa-pool-panel"
-        title="测试用例"
-        subtitle={`显示 ${visible.length} / ${tests.length} 条`}
+        title={t('features.testing.testCasesTab.panelTitle')}
+        subtitle={t('features.testing.testCasesTab.showingCount', { shown: visible.length, total: tests.length })}
         toolbar={(
           <div className="qa-pool-toolbar">
             <button className="btn btn-secondary btn-sm btn-with-icon" onClick={reload} disabled={loading}>
-              <RefreshCw size={14} aria-hidden="true" /> 刷新
+              <RefreshCw size={14} aria-hidden="true" /> {t('features.testing.testCasesTab.refresh')}
             </button>
             {canManageTesting ? (
               <button className="btn btn-primary btn-sm btn-with-icon" onClick={() => setCreating(true)}>
-                <Plus size={14} aria-hidden="true" /> 新建用例
+                <Plus size={14} aria-hidden="true" /> {t('features.testing.testCasesTab.newCase')}
               </button>
             ) : null}
           </div>
         )}
       >
-        <div className="qa-focus-row" role="group" aria-label="用例快速聚焦">
+        <div className="qa-focus-row" role="group" aria-label={t('features.testing.testCasesTab.focusAria')}>
           {focusButtons.map((item) => (
             <button
               key={item.key}
@@ -350,19 +352,19 @@ export default function TestCasesTab({
               <Search size={14} className="shrink-0 text-secondary" aria-hidden="true" />
               <input
                 className="form-input border-0 bg-transparent shadow-none"
-                placeholder="搜索用例名称 / 编号 / 负责人"
+                placeholder={t('features.testing.testCasesTab.searchPlaceholder')}
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
-                aria-label="搜索用例"
+                aria-label={t('features.testing.testCasesTab.searchAria')}
               />
             </div>
             <select
               className="form-select"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              aria-label="用例状态"
+              aria-label={t('features.testing.testCasesTab.statusFilterAria')}
             >
-              <option value="">全部状态</option>
+              <option value="">{t('features.testing.testCasesTab.allStatus')}</option>
               {TEST_CASE_STATUSES.map((status) => (
                 <option key={status} value={status}>{labelOf(TEST_CASE_STATUS_LABELS, status)}</option>
               ))}
@@ -371,9 +373,9 @@ export default function TestCasesTab({
               className="form-select filter-project"
               value={projectFilter}
               onChange={(e) => setProjectFilter(e.target.value)}
-              aria-label="所属项目"
+              aria-label={t('features.testing.testCasesTab.projectFilterAria')}
             >
-              <option value="">全部项目</option>
+              <option value="">{t('features.testing.testCasesTab.allProjects')}</option>
               {(projects ?? []).map((project) => (
                 <option key={project.id} value={project.id}>{project.name}</option>
               ))}
@@ -391,7 +393,7 @@ export default function TestCasesTab({
             columns={columns}
             data={visible}
             rowKey="id"
-            emptyText="暂无匹配的测试用例。"
+            emptyText={t('features.testing.testCasesTab.empty')}
             pageSize={10}
             onRowClick={canManageTesting ? (item) => setEditing(item) : undefined}
           />

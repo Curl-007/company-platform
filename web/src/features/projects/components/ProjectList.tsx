@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ArrowUpRight, FolderKanban, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { deleteProject, fetchProjects } from '../api';
 import { filterProjects, sortProjects, type ProjectFilter } from '../listModel';
@@ -34,6 +35,7 @@ export default function ProjectList({
   onOpen: (id: string) => void;
   currentUser?: SessionUser | null;
 }) {
+  const { t } = useTranslation();
   const { data, loading, error, reload } = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
   const [keyword, setKeyword] = useState(() => window.localStorage.getItem(STORAGE_KEYS.projectKeyword) ?? '');
   const [filter, setFilter] = useState<ProjectFilter>(() => {
@@ -79,30 +81,30 @@ export default function ProjectList({
 
   async function handleDelete(project: Project) {
     if (!canDeleteProject) {
-      toast.error('当前账号无权删除项目。');
+      toast.error(t('features.projects.projectList.noDeletePermission'));
       return;
     }
     const confirmed = await confirm({
-      title: `删除项目“${project.name}”？`,
-      description: '该项目下的任务、迭代和项目成员关系也会一并删除，操作后无法恢复。',
-      confirmText: '删除项目',
+      title: t('features.projects.projectList.deleteConfirm', { name: project.name }),
+      description: t('features.projects.projectList.deleteDesc'),
+      confirmText: t('features.projects.projectList.deleteConfirmText'),
       tone: 'danger',
     });
     if (!confirmed) return;
 
     try {
       await deleteProject(project.id);
-      toast.success(`已删除项目：${project.name}`);
+      toast.success(t('features.projects.projectList.deleted', { name: project.name }));
       reload();
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '删除项目失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.projects.projectList.deleteFailed'));
     }
   }
 
   const columns: DataTableColumn<Project>[] = [
     {
       key: 'name',
-      title: '项目',
+      title: t('features.projects.projectList.colProject'),
       width: '34%',
       sorter: (a, b) => a.name.localeCompare(b.name),
       render: (project) => (
@@ -116,7 +118,7 @@ export default function ProjectList({
           <div className="min-w-0">
             <div className="truncate font-medium">{project.name}</div>
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-secondary" style={{ fontSize: 12 }}>
-              <span>{project.code || '未设置代号'}</span>
+              <span>{project.code || t('features.projects.projectList.noCode')}</span>
               <span aria-hidden="true">·</span>
               <span>{labelOf(PROCESS_MODE_LABELS, project.processMode)}</span>
             </div>
@@ -126,19 +128,19 @@ export default function ProjectList({
     },
     {
       key: 'owner',
-      title: '负责人',
+      title: t('features.projects.projectList.colOwner'),
       render: (project) => <span className="whitespace-nowrap">{project.owner || '-'}</span>,
     },
     {
       key: 'status',
-      title: '状态',
+      title: t('features.projects.projectList.colStatus'),
       render: (project) => (
         <StatusBadge label={labelOf(PROJECT_STATUS_LABELS, project.status)} status={project.status} />
       ),
     },
     {
       key: 'healthScore',
-      title: '健康 / 风险',
+      title: t('features.projects.projectList.colHealthRisk'),
       sorter: (a, b) => a.healthScore - b.healthScore,
       render: (project) => (
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -147,39 +149,39 @@ export default function ProjectList({
             variant={healthVariant(project.healthScore)}
             showDot={false}
           />
-          <span className="whitespace-nowrap text-secondary">风险 {project.riskCount}</span>
+          <span className="whitespace-nowrap text-secondary">{t('features.projects.projectList.riskCount', { count: project.riskCount })}</span>
         </div>
       ),
     },
     {
       key: 'progress',
-      title: '进度',
+      title: t('features.projects.projectList.colProgress'),
       width: 180,
       sorter: (a, b) => a.progress - b.progress,
       render: (project) => <ProgressBar percent={project.progress ?? 0} height={6} />,
     },
     {
       key: 'actions',
-      title: '操作',
+      title: t('common.actions'),
       width: 170,
       render: (project) => (
         <div className="flex min-w-0 items-center justify-end gap-1" onClick={(event) => event.stopPropagation()}>
-          <button className="btn btn-text btn-xs btn-with-icon" title="查看项目" onClick={() => onOpen(project.id)}>
-            查看 <ArrowUpRight size={13} aria-hidden="true" />
+          <button className="btn btn-text btn-xs btn-with-icon" title={t('features.projects.projectList.viewTitle')} onClick={() => onOpen(project.id)}>
+            {t('features.projects.projectList.view')} <ArrowUpRight size={13} aria-hidden="true" />
           </button>
           {canUpdateProject ? (
-            <button className="btn btn-text btn-xs btn-with-icon" title="编辑项目" onClick={() => setEditing(project)}>
-              <Pencil size={13} aria-hidden="true" /> 编辑
+            <button className="btn btn-text btn-xs btn-with-icon" title={t('features.projects.projectList.editTitle')} onClick={() => setEditing(project)}>
+              <Pencil size={13} aria-hidden="true" /> {t('common.edit')}
             </button>
           ) : null}
           {canDeleteProject ? (
             <button
               className="btn btn-text btn-xs btn-with-icon"
-              title="删除项目"
+              title={t('features.projects.projectList.deleteTitle')}
               style={{ color: 'var(--color-red, #dc2626)' }}
               onClick={() => handleDelete(project)}
             >
-              <Trash2 size={13} aria-hidden="true" /> 删除
+              <Trash2 size={13} aria-hidden="true" /> {t('common.delete')}
             </button>
           ) : null}
         </div>
@@ -192,19 +194,19 @@ export default function ProjectList({
   }
 
   const filterButtons: { key: ProjectFilter; label: string }[] = [
-    { key: 'all', label: '全部项目' },
-    { key: 'mine', label: '我的项目' },
-    { key: 'risk', label: '高风险' },
-    { key: 'active', label: '进行中' },
+    { key: 'all', label: t('features.projects.projectList.filterAll') },
+    { key: 'mine', label: t('features.projects.projectList.filterMine') },
+    { key: 'risk', label: t('features.projects.projectList.filterRisk') },
+    { key: 'active', label: t('features.projects.projectList.filterActive') },
   ];
 
   return (
     <Panel
-      title="项目"
-      subtitle={`显示 ${filtered.length} / ${sortedProjects.length} 个项目`}
+      title={t('features.projects.projectList.title')}
+      subtitle={t('features.projects.projectList.subtitle', { shown: filtered.length, total: sortedProjects.length })}
       toolbar={canCreateProject ? (
         <button className="btn btn-primary btn-sm btn-with-icon" onClick={() => setCreating(true)}>
-          <Plus size={15} aria-hidden="true" /> 新建项目
+          <Plus size={15} aria-hidden="true" /> {t('features.projects.projectList.newProject')}
         </button>
       ) : undefined}
     >
@@ -213,13 +215,13 @@ export default function ProjectList({
           <Search size={15} className="shrink-0 text-secondary" aria-hidden="true" />
           <Input
             className="w-full border-0 bg-transparent shadow-none"
-            aria-label="搜索项目"
-            placeholder="搜索项目..."
+            aria-label={t('features.projects.projectList.searchAria')}
+            placeholder={t('features.projects.projectList.searchPlaceholder')}
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
           />
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-1" role="group" aria-label="项目筛选">
+        <div className="flex min-w-0 flex-wrap items-center gap-1" role="group" aria-label={t('features.projects.projectList.filterAria')}>
           {filterButtons.map((item) => (
             <button
               key={item.key}
@@ -239,7 +241,7 @@ export default function ProjectList({
           data={filtered}
           rowKey="id"
           onRowClick={(project) => onOpen(project.id)}
-          emptyText={keyword ? '没有匹配的项目。' : '暂无项目。'}
+          emptyText={keyword ? t('features.projects.projectList.noMatch') : t('features.projects.projectList.empty')}
           pageSize={PROJECT_PAGE_SIZE}
         />
       </div>
@@ -248,14 +250,14 @@ export default function ProjectList({
         <div className="divide-y divide-[var(--border)]">
           {filtered.length === 0 ? (
             <div className="py-12 text-center text-secondary">
-              {keyword ? '没有匹配的项目。' : '暂无项目。'}
+              {keyword ? t('features.projects.projectList.noMatch') : t('features.projects.projectList.empty')}
             </div>
           ) : mobilePaged.map((project) => (
             <article key={project.id} className="min-w-0 py-4 first:pt-0 last:pb-0">
               <div className="flex min-w-0 items-start gap-3">
                 <button
                   className="flex min-w-0 flex-1 items-start gap-3 text-left"
-                  title={`查看项目：${project.name}`}
+                  title={t('features.projects.projectList.viewProjectTitle', { name: project.name })}
                   onClick={() => onOpen(project.id)}
                 >
                   <span
@@ -273,26 +275,26 @@ export default function ProjectList({
                       />
                     </span>
                     <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-secondary" style={{ fontSize: 12 }}>
-                      <span>{project.code || '未设置代号'}</span>
+                      <span>{project.code || t('features.projects.projectList.noCode')}</span>
                       <span aria-hidden="true">·</span>
                       <span>{labelOf(PROCESS_MODE_LABELS, project.processMode)}</span>
                     </span>
                     <ProgressBar percent={project.progress ?? 0} height={6} className="mt-3" />
                     <span className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-secondary" style={{ fontSize: 12 }}>
-                      <span>负责人 {project.owner || '-'}</span>
-                      <span>健康 {project.healthScore}</span>
-                      <span>风险 {project.riskCount}</span>
+                      <span>{t('features.projects.projectList.mobileOwner', { owner: project.owner || '-' })}</span>
+                      <span>{t('features.projects.projectList.mobileHealth', { score: project.healthScore })}</span>
+                      <span>{t('features.projects.projectList.mobileRisk', { count: project.riskCount })}</span>
                     </span>
                   </span>
                 </button>
               </div>
               <div className="mt-3 flex min-w-0 items-center justify-end gap-1 border-t border-[var(--border)] pt-2" onClick={(event) => event.stopPropagation()}>
                 <button className="btn btn-text btn-xs btn-with-icon" onClick={() => onOpen(project.id)}>
-                  查看 <ArrowUpRight size={13} aria-hidden="true" />
+                  {t('features.projects.projectList.view')} <ArrowUpRight size={13} aria-hidden="true" />
                 </button>
                 {canUpdateProject ? (
                   <button className="btn btn-text btn-xs btn-with-icon" onClick={() => setEditing(project)}>
-                    <Pencil size={13} aria-hidden="true" /> 编辑
+                    <Pencil size={13} aria-hidden="true" /> {t('common.edit')}
                   </button>
                 ) : null}
                 {canDeleteProject ? (
@@ -301,7 +303,7 @@ export default function ProjectList({
                     style={{ color: 'var(--color-red, #dc2626)' }}
                     onClick={() => handleDelete(project)}
                   >
-                    <Trash2 size={13} aria-hidden="true" /> 删除
+                    <Trash2 size={13} aria-hidden="true" /> {t('common.delete')}
                   </button>
                 ) : null}
               </div>
@@ -311,7 +313,11 @@ export default function ProjectList({
         {filtered.length > PROJECT_PAGE_SIZE ? (
           <div className="list-pagination" data-slot="list-pagination">
             <span className="list-pagination-meta text-secondary">
-              第 {(mobilePage - 1) * PROJECT_PAGE_SIZE + 1}–{Math.min(mobilePage * PROJECT_PAGE_SIZE, filtered.length)} 条，共 {filtered.length} 条
+              {t('features.projects.projectList.pageRange', {
+                start: (mobilePage - 1) * PROJECT_PAGE_SIZE + 1,
+                end: Math.min(mobilePage * PROJECT_PAGE_SIZE, filtered.length),
+                total: filtered.length,
+              })}
             </span>
             <Pagination page={mobilePage} pageCount={mobilePageCount} onPageChange={setMobilePage} />
           </div>

@@ -1,4 +1,5 @@
 import type { Build, Defect, ProjectDetail, Release, Requirement, TestCase } from '../../types';
+import i18n from '../../i18n';
 
 export interface ProjectDeliveryData {
   requirements: Requirement[];
@@ -30,11 +31,11 @@ export function deliverySummary(project: ProjectDetail, data: ProjectDeliveryDat
   const latestBuild = latestBy(delivery.builds, (item) => item.buildDate || item.createdAt);
   const latestRelease = latestBy(delivery.releases, (item) => item.releaseDate || item.createdAt);
   const actionItems = [
-    severeDefects.length > 0 ? `优先收敛 ${severeDefects.length} 个高严重级别缺陷` : null,
-    failedBuilds.length > 0 ? `复盘 ${failedBuilds.length} 次失败构建并明确责任人` : null,
-    openRequirements.length > acceptedRequirements.length ? '推动未验收需求进入评审、测试或验收节点' : null,
-    delivery.releases.length > 0 && releasedReleases.length === 0 ? '发布记录已创建，但还没有正式发布版本' : null,
-    delivery.releases.length === 0 ? '当前项目关联产品下还没有发布记录' : null,
+    severeDefects.length > 0 ? i18n.t('features.projects.deliveryModel.prioritizeSevere', { count: severeDefects.length }) : null,
+    failedBuilds.length > 0 ? i18n.t('features.projects.deliveryModel.reviewFailedBuilds', { count: failedBuilds.length }) : null,
+    openRequirements.length > acceptedRequirements.length ? i18n.t('features.projects.deliveryModel.advanceOpenRequirements') : null,
+    delivery.releases.length > 0 && releasedReleases.length === 0 ? i18n.t('features.projects.deliveryModel.noReleasedVersion') : null,
+    delivery.releases.length === 0 ? i18n.t('features.projects.deliveryModel.noReleaseRecord') : null,
   ].filter((item): item is string => Boolean(item));
   return { delivery, openRequirements, acceptedRequirements, openDefects, severeDefects, failedBuilds, releasedBuilds, releasedReleases, passedCases, testPassRate, latestBuild, latestRelease, actionItems };
 }

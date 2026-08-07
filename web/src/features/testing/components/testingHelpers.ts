@@ -1,3 +1,4 @@
+import i18n from '../../../i18n';
 import type { Defect, Project, TestCase } from '../../../types';
 import {
   DEFECT_SEVERITY_LABELS,
@@ -32,7 +33,9 @@ export function countBy(items: string[]): Record<string, number> {
 
 export function formatCounts(counts: Record<string, number>, labels: Record<string, string>): string {
   const entries = Object.entries(counts);
-  return entries.length ? entries.map(([key, count]) => `${labelOf(labels, key)} ${count}`).join('、') : '无';
+  return entries.length
+    ? entries.map(([key, count]) => `${labelOf(labels, key)} ${count}`).join(i18n.t('features.testing.aiPrompt.countSeparator'))
+    : i18n.t('features.testing.aiPrompt.noCounts');
 }
 
 export function buildTestingQualityAiPrompt(testCases: TestCase[], defects: Defect[], projects: Project[]): string {
@@ -46,14 +49,29 @@ export function buildTestingQualityAiPrompt(testCases: TestCase[], defects: Defe
     .filter((item) => item.failedCases > 0 || item.blockedCases > 0 || passRate(item) < 80)
     .sort((a, b) => passRate(a) - passRate(b))
     .slice(0, 8)
-    .map((item) => `${item.id} ${item.name} / ${projectNameMap.get(item.projectId) ?? item.projectId} / ${labelOf(TEST_CASE_STATUS_LABELS, item.status)} / 通过率 ${passRate(item)}% / 失败 ${item.failedCases} / 阻塞 ${item.blockedCases}`);
+    .map((item) => i18n.t('features.testing.aiPrompt.riskyCaseItem', {
+      id: item.id,
+      name: item.name,
+      project: projectNameMap.get(item.projectId) ?? item.projectId,
+      status: labelOf(TEST_CASE_STATUS_LABELS, item.status),
+      rate: passRate(item),
+      failed: item.failedCases,
+      blocked: item.blockedCases,
+    }));
   const keyDefects = [...openDefects]
     .sort((a, b) => {
       const rank: Record<string, number> = { blocker: 5, critical: 4, high: 3, medium: 2, low: 1 };
       return (rank[b.severity] ?? 0) - (rank[a.severity] ?? 0);
     })
     .slice(0, 10)
-    .map((item) => `${item.id} ${item.title} / ${projectNameMap.get(item.projectId) ?? item.projectId} / ${labelOf(DEFECT_SEVERITY_LABELS, item.severity)} / ${labelOf(DEFECT_STATUS_LABELS, item.status)} / ${item.assignee || '未分配'}`);
+    .map((item) => i18n.t('features.testing.aiPrompt.defectItem', {
+      id: item.id,
+      title: item.title,
+      project: projectNameMap.get(item.projectId) ?? item.projectId,
+      severity: labelOf(DEFECT_SEVERITY_LABELS, item.severity),
+      status: labelOf(DEFECT_STATUS_LABELS, item.status),
+      assignee: item.assignee || i18n.t('features.testing.aiPrompt.unassigned'),
+    }));
   const totalRuns = testCases.reduce((sum, item) => sum + item.totalCases, 0);
   const passedRuns = testCases.reduce((sum, item) => sum + item.passedCases, 0);
   const failedRuns = testCases.reduce((sum, item) => sum + item.failedCases, 0);
@@ -61,21 +79,21 @@ export function buildTestingQualityAiPrompt(testCases: TestCase[], defects: Defe
   const overallPassRate = totalRuns > 0 ? Math.round((passedRuns / totalRuns) * 100) : 0;
 
   return [
-    '请作为项目测试质量 AI 助手，基于下面的测试用例和缺陷快照给出质量分析。',
-    '请控制在 900 字以内，输出：1. 当前质量判断 2. 主要风险 3. 回归/验证重点 4. 缺陷闭环建议 5. 需要补齐的数据。',
-    '建议必须可执行，尽量指出具体用例、缺陷、项目和责任协作点。',
+    i18n.t('features.testing.aiPrompt.intro'),
+    i18n.t('features.testing.aiPrompt.instructions'),
+    i18n.t('features.testing.aiPrompt.advisory'),
     '',
-    `测试用例总数：${testCases.length}`,
-    `执行总数：${totalRuns}，通过：${passedRuns}，失败：${failedRuns}，阻塞：${blockedRuns}，整体通过率：${overallPassRate}%`,
-    `用例状态分布：${formatCounts(caseStatusCounts, TEST_CASE_STATUS_LABELS)}`,
-    `缺陷总数：${defects.length}，未关闭缺陷：${openDefects.length}，高严重未关闭：${seriousDefects.length}`,
-    `缺陷状态分布：${formatCounts(defectStatusCounts, DEFECT_STATUS_LABELS)}`,
-    `缺陷严重级别分布：${formatCounts(defectSeverityCounts, DEFECT_SEVERITY_LABELS)}`,
+    i18n.t('features.testing.aiPrompt.caseTotal', { count: testCases.length }),
+    i18n.t('features.testing.aiPrompt.executionTotal', { total: totalRuns, passed: passedRuns, failed: failedRuns, blocked: blockedRuns, rate: overallPassRate }),
+    i18n.t('features.testing.aiPrompt.caseStatusDist', { value: formatCounts(caseStatusCounts, TEST_CASE_STATUS_LABELS) }),
+    i18n.t('features.testing.aiPrompt.defectTotal', { count: defects.length, open: openDefects.length, severe: seriousDefects.length }),
+    i18n.t('features.testing.aiPrompt.defectStatusDist', { value: formatCounts(defectStatusCounts, DEFECT_STATUS_LABELS) }),
+    i18n.t('features.testing.aiPrompt.defectSeverityDist', { value: formatCounts(defectSeverityCounts, DEFECT_SEVERITY_LABELS) }),
     '',
-    '高风险测试用例：',
-    riskyCases.length ? riskyCases.join('\n') : '暂无失败、阻塞或低通过率用例',
+    i18n.t('features.testing.aiPrompt.riskyCasesTitle'),
+    riskyCases.length ? riskyCases.join('\n') : i18n.t('features.testing.aiPrompt.noRiskyCases'),
     '',
-    '重点未关闭缺陷：',
-    keyDefects.length ? keyDefects.join('\n') : '暂无未关闭缺陷',
+    i18n.t('features.testing.aiPrompt.keyDefectsTitle'),
+    keyDefects.length ? keyDefects.join('\n') : i18n.t('features.testing.aiPrompt.noOpenDefects'),
   ].join('\n');
 }

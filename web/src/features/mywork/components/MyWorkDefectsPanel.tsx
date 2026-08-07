@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Bug } from 'lucide-react';
 import Panel from '../../../components/common/Panel';
 import StatusBadge from '../../../components/common/StatusBadge';
@@ -26,6 +27,7 @@ export default function MyWorkDefectsPanel({
   defects: DefectItem[];
   onChanged?: () => void;
 }) {
+  const { t } = useTranslation();
   const toast = useToast();
   const sessionUser = getSessionUser();
   const role = String(sessionUser?.role || '').toLowerCase();
@@ -113,7 +115,7 @@ export default function MyWorkDefectsPanel({
   async function reassign(toRole: 'dev' | 'qa') {
     if (!selected) return;
     if (!targetName.trim()) {
-      toast.error(toRole === 'dev' ? '请选择开发工程师' : '请选择测试工程师');
+      toast.error(toRole === 'dev' ? t('features.mywork.myWorkDefectsPanel.selectDevEngineer') : t('features.mywork.myWorkDefectsPanel.selectTestEngineer'));
       return;
     }
     setSubmitting(true);
@@ -123,10 +125,10 @@ export default function MyWorkDefectsPanel({
         assignee: targetName.trim(),
         version: Number(selected.version) > 0 ? Number(selected.version) : 1,
       });
-      toast.success(toRole === 'dev' ? '已指派开发工程师修复' : '已指派测试工程师验证');
+      toast.success(toRole === 'dev' ? t('features.mywork.myWorkDefectsPanel.assignedToDev') : t('features.mywork.myWorkDefectsPanel.assignedToQa'));
       onChanged?.();
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : '缺陷指派失败');
+      toast.error(error instanceof ApiError ? error.message : t('features.mywork.myWorkDefectsPanel.assignFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -142,9 +144,9 @@ export default function MyWorkDefectsPanel({
     return (
       <MyWorkEmptyPanel
         icon={<Bug size={26} />}
-        eyebrow="缺陷队列"
-        title="当前没有待处理缺陷"
-        description="没有指派给你的缺陷，新的处理事项会显示在这里。"
+        eyebrow={t('features.mywork.myWorkDefectsPanel.emptyEyebrow')}
+        title={t('features.mywork.myWorkDefectsPanel.emptyTitle')}
+        description={t('features.mywork.myWorkDefectsPanel.emptyDesc')}
         action={
           canOpenTesting ? (
             <button
@@ -152,7 +154,7 @@ export default function MyWorkDefectsPanel({
               className="btn btn-secondary btn-sm"
               onClick={() => navigateTo('testing', { tab: 'defects' })}
             >
-              <Bug size={15} /> 查看测试质量
+              <Bug size={15} /> {t('features.mywork.myWorkDefectsPanel.viewTesting')}
             </button>
           ) : undefined
         }
@@ -162,7 +164,7 @@ export default function MyWorkDefectsPanel({
 
   return (
     <div className="mywork-split">
-      <Panel title="我的缺陷" subtitle={`共 ${defects.length} 条`} className="mywork-panel-left">
+      <Panel title={t('features.mywork.myWorkDefectsPanel.panelTitle')} subtitle={t('features.mywork.myWorkDefectsPanel.countSubtitle', { count: defects.length })} className="mywork-panel-left">
         <div className="mywork-queue">
           {defects.map((item) => (
             <div
@@ -192,12 +194,12 @@ export default function MyWorkDefectsPanel({
       </Panel>
 
       <Panel
-        title="缺陷详情"
+        title={t('features.mywork.myWorkDefectsPanel.detailPanelTitle')}
         className="mywork-panel-center"
         toolbar={
           selected && canOpenTesting ? (
             <button className="btn btn-secondary btn-sm" onClick={() => openInTesting(selected.id)}>
-              打开完整详情
+              {t('features.mywork.myWorkDefectsPanel.openFullDetail')}
             </button>
           ) : undefined
         }
@@ -208,55 +210,55 @@ export default function MyWorkDefectsPanel({
               <div>
                 <h3>{selected.title}</h3>
                 <div className="text-secondary" style={{ fontSize: 13, marginTop: 4 }}>
-                  {selected.id} · 项目 {selected.projectId}
+                  {t('features.mywork.myWorkDefectsPanel.projectPrefix', { id: selected.id, projectId: selected.projectId })}
                 </div>
               </div>
               <StatusBadge status={selected.status} label={labelOf(DEFECT_STATUS_LABELS, selected.status)} />
             </div>
             <div className="mywork-detail-meta">
               <div className="detail-field">
-                <span className="detail-label">严重级别</span>
+                <span className="detail-label">{t('features.mywork.myWorkDefectsPanel.severityLabel')}</span>
                 <span className="detail-value">{labelOf(DEFECT_SEVERITY_LABELS, selected.severity)}</span>
               </div>
               <div className="detail-field">
-                <span className="detail-label">处理人</span>
-                <span className="detail-value">{selected.assignee || '未分配'}</span>
+                <span className="detail-label">{t('features.mywork.myWorkDefectsPanel.assigneeLabel')}</span>
+                <span className="detail-value">{selected.assignee || t('features.mywork.myWorkDefectsPanel.unassigned')}</span>
               </div>
               <div className="detail-field">
-                <span className="detail-label">报告人</span>
+                <span className="detail-label">{t('features.mywork.myWorkDefectsPanel.reporterLabel')}</span>
                 <span className="detail-value">{selected.reporter || '-'}</span>
               </div>
               <div className="detail-field">
-                <span className="detail-label">关联需求</span>
+                <span className="detail-label">{t('features.mywork.myWorkDefectsPanel.requirementLabel')}</span>
                 <span className="detail-value text-mono">{selected.requirementId || '-'}</span>
               </div>
               <div className="detail-field">
-                <span className="detail-label">发现构建</span>
+                <span className="detail-label">{t('features.mywork.myWorkDefectsPanel.foundInBuildLabel')}</span>
                 <span className="detail-value text-mono">{selected.foundInBuild || '-'}</span>
               </div>
               <div className="detail-field">
-                <span className="detail-label">影响版本</span>
+                <span className="detail-label">{t('features.mywork.myWorkDefectsPanel.affectedVersionLabel')}</span>
                 <span className="detail-value">{selected.affectedVersion || '-'}</span>
               </div>
             </div>
             {selected.description ? (
               <div className="detail-field" style={{ marginTop: 12 }}>
-                <span className="detail-label">描述</span>
+                <span className="detail-label">{t('features.mywork.myWorkDefectsPanel.descriptionLabel')}</span>
                 <div className="detail-value" style={{ whiteSpace: 'pre-wrap' }}>{selected.description}</div>
               </div>
             ) : (
-              <div className="body-text" style={{ marginTop: 12 }}>暂无缺陷描述。</div>
+              <div className="body-text" style={{ marginTop: 12 }}>{t('features.mywork.myWorkDefectsPanel.noDescription')}</div>
             )}
 
             {(canAssignToDev || canAssignToQa) ? (
               <div className="mywork-handoff" style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border-color, #e5e7eb)' }}>
                 <div className="detail-label" style={{ marginBottom: 8 }}>
                   {role === 'qa' || (canAssignToDev && !canAssignToQa)
-                    ? '测试发现问题 → 指派开发修复'
-                    : '开发修复完成 → 指派测试验证'}
+                    ? t('features.mywork.myWorkDefectsPanel.handoffToDevTitle')
+                    : t('features.mywork.myWorkDefectsPanel.handoffToQaTitle')}
                 </div>
                 <div className="form-group" style={{ marginBottom: 8 }}>
-                  <label className="form-label">指派给</label>
+                  <label className="form-label">{t('features.mywork.myWorkDefectsPanel.assignToLabel')}</label>
                   {assignOptions.length > 0 ? (
                     <select
                       className="form-select"
@@ -264,10 +266,10 @@ export default function MyWorkDefectsPanel({
                       onChange={(e) => setTargetName(e.target.value)}
                       disabled={submitting}
                     >
-                      <option value="">请选择</option>
+                      <option value="">{t('features.mywork.myWorkDefectsPanel.selectPlaceholder')}</option>
                       {assignOptions.map((m) => (
                         <option key={m.id} value={m.userName}>
-                          {m.userName}（{m.role}）
+                          {t('features.mywork.myWorkDefectsPanel.memberOption', { name: m.userName, role: m.role })}
                         </option>
                       ))}
                     </select>
@@ -276,7 +278,7 @@ export default function MyWorkDefectsPanel({
                       className="form-input"
                       value={targetName}
                       onChange={(e) => setTargetName(e.target.value)}
-                      placeholder="输入处理人姓名"
+                      placeholder={t('features.mywork.myWorkDefectsPanel.assigneePlaceholder')}
                       disabled={submitting}
                     />
                   )}
@@ -289,7 +291,7 @@ export default function MyWorkDefectsPanel({
                       disabled={submitting}
                       onClick={() => void reassign('dev')}
                     >
-                      {submitting ? '提交中…' : '指派开发修复'}
+                      {submitting ? t('features.mywork.myWorkDefectsPanel.submitting') : t('features.mywork.myWorkDefectsPanel.assignDev')}
                     </button>
                   ) : null}
                   {canAssignToQa ? (
@@ -299,7 +301,7 @@ export default function MyWorkDefectsPanel({
                       disabled={submitting}
                       onClick={() => void reassign('qa')}
                     >
-                      {submitting ? '提交中…' : '指派测试验证'}
+                      {submitting ? t('features.mywork.myWorkDefectsPanel.submitting') : t('features.mywork.myWorkDefectsPanel.assignQa')}
                     </button>
                   ) : null}
                 </div>
@@ -308,7 +310,7 @@ export default function MyWorkDefectsPanel({
 
             {!canOpenTesting ? (
               <div className="text-secondary" style={{ marginTop: 12, fontSize: 12 }}>
-                当前角色无「测试质量」页面权限时，可在此查看指派给你的缺陷摘要。
+                {t('features.mywork.myWorkDefectsPanel.noTestingAccessHint')}
               </div>
             ) : null}
           </div>

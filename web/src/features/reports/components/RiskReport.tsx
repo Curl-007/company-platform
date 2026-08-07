@@ -1,6 +1,7 @@
 import Panel from '../../../components/common/Panel';
 import DataTable from '../../../components/common/DataTable';
 import StatusBadge from '../../../components/common/StatusBadge';
+import { useTranslation } from 'react-i18next';
 import type { DashboardData } from '../../../types';
 import type { ReportModel } from '../reportModel';
 import { ActionList, riskyColumns } from './ReportShared';
@@ -14,11 +15,12 @@ export default function RiskReport({
   reportModel: ReportModel;
   healthRankData: Array<{ name: string; health: number; id: string }>;
 }) {
+  const { t } = useTranslation();
   return (
     <>
-      <Panel title="风险项目健康度排名" subtitle="按健康度降序">
+      <Panel title={t('features.reports.riskReport.healthRankTitle')} subtitle={t('features.reports.riskReport.healthRankSubtitle')}>
         {healthRankData.length === 0 ? (
-          <p className="text-secondary" style={{ margin: 0 }}>当前没有风险项目数据。</p>
+          <p className="text-secondary" style={{ margin: 0 }}>{t('features.reports.riskReport.noRiskProjectsData')}</p>
         ) : (
           <div className="health-rank-list">
             {healthRankData.map((item) => (
@@ -38,13 +40,13 @@ export default function RiskReport({
       </Panel>
 
       <div className="grid-2">
-        <Panel title="风险项目" subtitle="存在开放风险的项目">
-          <DataTable columns={riskyColumns} data={reportModel.riskProjects} rowKey="id" emptyText="当前没有风险项目。" />
+        <Panel title={t('features.reports.riskReport.riskProjectsTitle')} subtitle={t('features.reports.riskReport.riskProjectsSubtitle')}>
+          <DataTable columns={riskyColumns} data={reportModel.riskProjects} rowKey="id" emptyText={t('features.reports.riskReport.noRiskProjects')} />
         </Panel>
-        <Panel title="风险处置清单" subtitle="优先处理低健康度、高风险数项目">
+        <Panel title={t('features.reports.riskReport.actionListTitle')} subtitle={t('features.reports.riskReport.actionListSubtitle')}>
           <ActionList items={reportModel.actionItems} />
           <div className="mt-16">
-            <StatusBadge label={`开放风险 ${data.metrics.openRisks}`} variant={data.metrics.openRisks > 0 ? 'risk' : 'success'} />
+            <StatusBadge label={t('features.reports.riskReport.openRisksLabel', { count: data.metrics.openRisks })} variant={data.metrics.openRisks > 0 ? 'risk' : 'success'} />
           </div>
         </Panel>
       </div>

@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pencil, Trash2 } from 'lucide-react';
 import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
@@ -8,7 +9,7 @@ import { Button, FormField, SelectInput, TextArea, TextInput } from '../../../co
 import { ApiError } from '../../../services/api';
 import type { OrganizationUnit, TeamMemberOverview } from '../../../types';
 import { createDepartment, deleteDepartment, updateDepartment } from '../api';
-import { ROLE_LABELS } from './teamMeta';
+import { ROLE_LABELS, statusLabel } from './teamMeta';
 
 export default function DepartmentDirectoryDialog({
   departments,
@@ -21,6 +22,7 @@ export default function DepartmentDirectoryDialog({
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const toast = useToast();
   const confirm = useConfirm();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -73,11 +75,11 @@ export default function DepartmentDirectoryDialog({
       };
       if (editingId) await updateDepartment(editingId, payload);
       else await createDepartment(payload);
-      toast.success(editingId ? '部门已更新' : '部门已创建');
+      toast.success(editingId ? t('features.team.departmentDirectoryDialog.departmentUpdated') : t('features.team.departmentDirectoryDialog.departmentCreated'));
       await onChanged();
       reset();
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '保存部门失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.team.departmentDirectoryDialog.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -85,77 +87,77 @@ export default function DepartmentDirectoryDialog({
 
   async function removeDepartment(item: OrganizationUnit) {
     const approved = await confirm({
-      title: `删除部门“${item.name}”？`,
-      description: '仅无成员且无下级部门的部门可以删除，历史审计记录会保留。',
-      confirmText: '删除部门',
+      title: t('features.team.departmentDirectoryDialog.deleteConfirm', { name: item.name }),
+      description: t('features.team.departmentDirectoryDialog.deleteDesc'),
+      confirmText: t('features.team.departmentDirectoryDialog.deleteDepartment'),
       tone: 'danger',
     });
     if (!approved) return;
     try {
       await deleteDepartment(item.id);
-      toast.success('部门已删除');
+      toast.success(t('features.team.departmentDirectoryDialog.departmentDeleted'));
       await onChanged();
       if (editingId === item.id) reset();
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '删除部门失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.team.departmentDirectoryDialog.deleteFailed'));
     }
   }
 
   return (
-    <Overlay onClose={onClose} maxWidth={980} ariaLabel="部门目录">
+    <Overlay onClose={onClose} maxWidth={980} ariaLabel={t('features.team.departmentDirectoryDialog.title')}>
       <Panel
-        title="部门目录"
-        subtitle="部门用于成员归属、协作范围和资源协调；不用于个人绩效、排名、薪酬或人事决策。"
+        title={t('features.team.departmentDirectoryDialog.title')}
+        subtitle={t('features.team.departmentDirectoryDialog.subtitle')}
       >
         <div className="team-detail-grid">
           <section className="team-detail-section">
-            <div className="team-section-title">{editingId ? '编辑部门' : '新建部门'}</div>
+            <div className="team-section-title">{editingId ? t('features.team.departmentDirectoryDialog.editDepartment') : t('features.team.departmentDirectoryDialog.newDepartment')}</div>
             <form className="form-stack" onSubmit={submit}>
-              <FormField label="名称" htmlFor="department-name" required>
+              <FormField label={t('features.team.departmentDirectoryDialog.nameLabel')} htmlFor="department-name" required>
                 <TextInput ref={nameInputRef} id="department-name" value={draft.name} onChange={(event) => setField('name', event.target.value)} required />
               </FormField>
-              <FormField label="上级部门" htmlFor="department-parent">
+              <FormField label={t('features.team.departmentDirectoryDialog.parentLabel')} htmlFor="department-parent">
                 <SelectInput id="department-parent" value={draft.parentId} onChange={(event) => setField('parentId', event.target.value)}>
-                  <option value="">无上级部门</option>
+                  <option value="">{t('features.team.departmentDirectoryDialog.noParent')}</option>
                   {departments.filter((item) => item.id !== editingId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </SelectInput>
               </FormField>
-              <FormField label="部门负责人" htmlFor="department-manager">
+              <FormField label={t('features.team.departmentDirectoryDialog.managerLabel')} htmlFor="department-manager">
                 <SelectInput id="department-manager" value={draft.managerUserId} onChange={(event) => setField('managerUserId', event.target.value)}>
-                  <option value="">暂不指定</option>
-                  {members.filter((item) => item.status !== 'disabled').map((item) => <option key={item.id} value={item.id}>{item.name} · {ROLE_LABELS[item.role] ?? item.role}</option>)}
+                  <option value="">{t('features.team.departmentDirectoryDialog.notSpecified')}</option>
+                  {members.filter((item) => item.status !== 'disabled').map((item) => <option key={item.id} value={item.id}>{item.name} · {statusLabel(ROLE_LABELS, item.role)}</option>)}
                 </SelectInput>
               </FormField>
-              <FormField label="职责范围" htmlFor="department-responsibilities">
+              <FormField label={t('features.team.departmentDirectoryDialog.responsibilitiesLabel')} htmlFor="department-responsibilities">
                 <TextArea id="department-responsibilities" rows={3} value={draft.responsibilities} onChange={(event) => setField('responsibilities', event.target.value)} />
               </FormField>
-              {editingId ? <FormField label="状态" htmlFor="department-status"><SelectInput id="department-status" value={draft.status} onChange={(event) => setField('status', event.target.value)}><option value="active">启用</option><option value="archived">归档</option></SelectInput></FormField> : null}
+              {editingId ? <FormField label={t('features.team.departmentDirectoryDialog.statusLabel')} htmlFor="department-status"><SelectInput id="department-status" value={draft.status} onChange={(event) => setField('status', event.target.value)}><option value="active">{t('features.team.departmentDirectoryDialog.active')}</option><option value="archived">{t('features.team.departmentDirectoryDialog.archived')}</option></SelectInput></FormField> : null}
               <div className="department-form-actions">
-                {editingId ? <Button variant="secondary" size="sm" onClick={reset} disabled={submitting}>取消编辑</Button> : null}
-                <Button type="submit" variant="primary" size="sm" disabled={submitting}>{submitting ? '保存中...' : editingId ? '保存部门' : '创建部门'}</Button>
+                {editingId ? <Button variant="secondary" size="sm" onClick={reset} disabled={submitting}>{t('features.team.departmentDirectoryDialog.cancelEdit')}</Button> : null}
+                <Button type="submit" variant="primary" size="sm" disabled={submitting}>{submitting ? t('features.team.departmentDirectoryDialog.saving') : editingId ? t('features.team.departmentDirectoryDialog.saveDepartment') : t('features.team.departmentDirectoryDialog.createDepartment')}</Button>
               </div>
             </form>
           </section>
           <section className="team-detail-section">
-            <div className="team-section-title">已登记部门</div>
+            <div className="team-section-title">{t('features.team.departmentDirectoryDialog.registeredDepartments')}</div>
             <div style={{ display: 'grid', gap: 8 }}>
-              {departments.length === 0 ? <div className="team-empty-line">暂无部门，请先创建部门后再分配成员。</div> : departments.map((item) => (
+              {departments.length === 0 ? <div className="team-empty-line">{t('features.team.departmentDirectoryDialog.noDepartments')}</div> : departments.map((item) => (
                 <div key={item.id} className="team-link-row" style={{ cursor: 'default' }}>
                   <div>
                     <strong>{item.name}</strong>
-                    <div className="team-task-meta">{item.memberCount} 名成员 · {item.status === 'archived' ? '已归档' : '启用中'}</div>
+                    <div className="team-task-meta">{t('features.team.departmentDirectoryDialog.memberCount', { count: item.memberCount, status: item.status === 'archived' ? t('features.team.departmentDirectoryDialog.archived') : t('features.team.departmentDirectoryDialog.active') })}</div>
                     {item.responsibilities ? <div className="team-task-meta">{item.responsibilities}</div> : null}
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="secondary" size="sm" icon={<Pencil size={14} />} onClick={() => editDepartment(item)}>编辑</Button>
-                    <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={() => removeDepartment(item)} disabled={item.memberCount > 0}>删除</Button>
+                    <Button variant="secondary" size="sm" icon={<Pencil size={14} />} onClick={() => editDepartment(item)}>{t('common.edit')}</Button>
+                    <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={() => removeDepartment(item)} disabled={item.memberCount > 0}>{t('common.delete')}</Button>
                   </div>
                 </div>
               ))}
             </div>
           </section>
         </div>
-        <div className="team-detail-actions"><Button variant="secondary" size="sm" onClick={onClose}>关闭</Button></div>
+        <div className="team-detail-actions"><Button variant="secondary" size="sm" onClick={onClose}>{t('common.close')}</Button></div>
       </Panel>
     </Overlay>
   );

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
 import { ApiError } from '../../../services/api';
@@ -19,6 +20,7 @@ export default function CapacityPlanForm({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useTranslation();
   const existing = member.plan;
   const [values, setValues] = useState<CapacityPlanFormValues>(() => ({
     workingDays: existing?.workingDays ?? 5,
@@ -45,7 +47,7 @@ export default function CapacityPlanForm({
       await upsertCapacityPlan(member.userId, { ...values, periodStart, periodEnd });
       onSaved();
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : '保存容量计划失败');
+      setError(reason instanceof ApiError ? reason.message : t('features.capacity.capacityPlanForm.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -53,20 +55,20 @@ export default function CapacityPlanForm({
 
   return (
     <Overlay onClose={onClose}>
-      <Panel title={`配置 ${member.userName} 的有效容量`} subtitle={`${periodStart} 至 ${periodEnd}`}>
+      <Panel title={t('features.capacity.capacityPlanForm.title', { name: member.userName })} subtitle={t('features.capacity.capacityPlanForm.subtitle', { start: periodStart, end: periodEnd })}>
         <form className="form-stack" onSubmit={submit} style={{ minWidth: 520 }}>
           <div className="form-grid form-grid-2">
-            <label className="form-field"><span>工作日</span><input className="form-input" type="number" min="0" max="31" disabled={values.useCalendar} value={values.workingDays} onChange={(event) => updateNumber('workingDays', event.target.value)} /></label>
-            <label className="form-field"><span>每日标准工时</span><input className="form-input" type="number" min="0" max="24" value={values.dailyHours} onChange={(event) => updateNumber('dailyHours', event.target.value)} /></label>
-            <label className="form-field"><span>固定会议工时</span><input className="form-input" type="number" min="0" value={values.meetingHours} onChange={(event) => updateNumber('meetingHours', event.target.value)} /></label>
-            <label className="form-field"><span>培训工时</span><input className="form-input" type="number" min="0" value={values.trainingHours} onChange={(event) => updateNumber('trainingHours', event.target.value)} /></label>
-            <label className="form-field"><span>支持/值班工时</span><input className="form-input" type="number" min="0" value={values.supportHours} onChange={(event) => updateNumber('supportHours', event.target.value)} /></label>
-            <label className="form-field"><span>其他承诺工时</span><input className="form-input" type="number" min="0" value={values.otherCommitmentHours} onChange={(event) => updateNumber('otherCommitmentHours', event.target.value)} /></label>
+            <label className="form-field"><span>{t('features.capacity.capacityPlanForm.workingDays')}</span><input className="form-input" type="number" min="0" max="31" disabled={values.useCalendar} value={values.workingDays} onChange={(event) => updateNumber('workingDays', event.target.value)} /></label>
+            <label className="form-field"><span>{t('features.capacity.capacityPlanForm.dailyHours')}</span><input className="form-input" type="number" min="0" max="24" value={values.dailyHours} onChange={(event) => updateNumber('dailyHours', event.target.value)} /></label>
+            <label className="form-field"><span>{t('features.capacity.capacityPlanForm.meetingHours')}</span><input className="form-input" type="number" min="0" value={values.meetingHours} onChange={(event) => updateNumber('meetingHours', event.target.value)} /></label>
+            <label className="form-field"><span>{t('features.capacity.capacityPlanForm.trainingHours')}</span><input className="form-input" type="number" min="0" value={values.trainingHours} onChange={(event) => updateNumber('trainingHours', event.target.value)} /></label>
+            <label className="form-field"><span>{t('features.capacity.capacityPlanForm.supportHours')}</span><input className="form-input" type="number" min="0" value={values.supportHours} onChange={(event) => updateNumber('supportHours', event.target.value)} /></label>
+            <label className="form-field"><span>{t('features.capacity.capacityPlanForm.otherCommitmentHours')}</span><input className="form-input" type="number" min="0" value={values.otherCommitmentHours} onChange={(event) => updateNumber('otherCommitmentHours', event.target.value)} /></label>
           </div>
-          <label className="form-field"><span><input type="checkbox" checked={values.useCalendar} onChange={(event) => setValues((current) => ({ ...current, useCalendar: event.target.checked }))} /> 使用默认工作日历</span><small className="text-secondary">{values.useCalendar ? `当前周期将按日历计算 ${existing?.calendarWorkingDays ?? values.workingDays} 个工作日。` : '关闭后使用手工录入的工作日。'}</small></label>
-          <label className="form-field"><span>说明</span><textarea className="form-textarea" value={values.notes} onChange={(event) => setValues((current) => ({ ...current, notes: event.target.value }))} /></label>
+          <label className="form-field"><span><input type="checkbox" checked={values.useCalendar} onChange={(event) => setValues((current) => ({ ...current, useCalendar: event.target.checked }))} /> {t('features.capacity.capacityPlanForm.useCalendar')}</span><small className="text-secondary">{values.useCalendar ? t('features.capacity.capacityPlanForm.calendarHint', { count: existing?.calendarWorkingDays ?? values.workingDays }) : t('features.capacity.capacityPlanForm.manualHint')}</small></label>
+          <label className="form-field"><span>{t('features.capacity.capacityPlanForm.notes')}</span><textarea className="form-textarea" value={values.notes} onChange={(event) => setValues((current) => ({ ...current, notes: event.target.value }))} /></label>
           {error ? <div className="form-error">{error}</div> : null}
-          <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}><button className="btn btn-secondary" type="button" onClick={onClose}>取消</button><button className="btn btn-primary" disabled={saving}>{saving ? '保存中…' : '保存容量'}</button></div>
+          <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}><button className="btn btn-secondary" type="button" onClick={onClose}>{t('common.cancel')}</button><button className="btn btn-primary" disabled={saving}>{saving ? t('features.capacity.capacityPlanForm.saving') : t('features.capacity.capacityPlanForm.saveCapacity')}</button></div>
         </form>
       </Panel>
     </Overlay>

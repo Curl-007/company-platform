@@ -1,4 +1,5 @@
 import type { AiProviderHealth } from '../../types';
+import i18n, { getInterfaceLocale } from '../../i18n';
 
 export type AiTestState =
   | { status: 'idle'; message: string }
@@ -38,9 +39,9 @@ export function loadConfig<T>(key: string, defaults: T): T {
 }
 
 export function formatTestTime(value?: string) {
-  if (!value) return '未测试';
+  if (!value) return i18n.t('features.settings.settingsModel.notTested');
   try {
-    return new Intl.DateTimeFormat('zh-CN', {
+    return new Intl.DateTimeFormat(getInterfaceLocale(), {
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
@@ -48,14 +49,14 @@ export function formatTestTime(value?: string) {
       second: '2-digit',
     }).format(new Date(value));
   } catch {
-    return '刚刚';
+    return i18n.t('common.justNow');
   }
 }
 
 export function formatHealthTime(value?: string | null) {
-  if (!value) return '暂无记录';
+  if (!value) return i18n.t('features.settings.settingsModel.noRecords');
   try {
-    return new Intl.DateTimeFormat('zh-CN', {
+    return new Intl.DateTimeFormat(getInterfaceLocale(), {
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
@@ -63,18 +64,18 @@ export function formatHealthTime(value?: string | null) {
       second: '2-digit',
     }).format(new Date(value));
   } catch {
-    return '刚刚';
+    return i18n.t('common.justNow');
   }
 }
 
 export function aiHealthLabel(status?: AiProviderHealth['status']) {
   const labels: Record<AiProviderHealth['status'], string> = {
-    healthy: '健康',
-    degraded: '降级',
-    unavailable: '不可用',
-    unconfigured: '未配置',
-    unknown: '待验证',
-    disabled: '已禁用',
+    healthy: i18n.t('features.settings.settingsModel.aiHealth.healthy'),
+    degraded: i18n.t('features.settings.settingsModel.aiHealth.degraded'),
+    unavailable: i18n.t('features.settings.settingsModel.aiHealth.unavailable'),
+    unconfigured: i18n.t('features.settings.settingsModel.aiHealth.unconfigured'),
+    unknown: i18n.t('features.settings.settingsModel.aiHealth.unknown'),
+    disabled: i18n.t('features.settings.settingsModel.aiHealth.disabled'),
   };
   return labels[status || 'unknown'];
 }

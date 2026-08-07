@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, AlertCircle, Info, RefreshCw, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { subscribeToAsyncRefreshFailures } from '../../services/asyncRefreshEvents';
 
 // ---------------------------------------------------------------------------
@@ -46,6 +47,7 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 let counter = 0;
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { t } = useTranslation();
   const [items, setItems] = useState<ToastItem[]>([]);
   const timers = useRef(new Map<number, number>());
   const idsByDedupeKey = useRef(new Map<string, number>());
@@ -101,12 +103,12 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [remove]);
 
   useEffect(() => subscribeToAsyncRefreshFailures(({ detail }) => {
-    push('error', `数据刷新失败：${detail.message}`, {
+    push('error', t('common.refreshFailed', { message: detail.message }), {
       dedupeKey: `async-refresh:${detail.cacheKey}`,
-      action: { label: '重试', onClick: detail.retry },
+      action: { label: t('common.retry'), onClick: detail.retry },
       autoDismissMs: 10_000,
     });
-  }), [push]);
+  }), [push, t]);
 
   useEffect(() => () => {
     timers.current.forEach((timer) => window.clearTimeout(timer));
@@ -146,7 +148,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 <span>{item.action.label}</span>
               </button>
             )}
-            <button className="toast-close" onClick={() => remove(item.id)} aria-label="关闭">
+            <button className="toast-close" onClick={() => remove(item.id)} aria-label={t('common.close')}>
               <X size={14} />
             </button>
           </div>

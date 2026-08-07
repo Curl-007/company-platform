@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   applyProductImageChanges,
   createProduct,
@@ -16,6 +17,7 @@ import ProductForm from './ProductForm';
 import ProductImage from './ProductImage';
 import ProductSummaryStrip from './ProductSummaryStrip';
 import DetailGrid from './DetailGrid';
+import i18n from '../../../i18n';
 import { getSessionUser } from '../../../services/auth';
 import { useAsync } from '../../../hooks/useAsync';
 import { ApiError } from '../../../services/api';
@@ -37,15 +39,19 @@ import type { ProductImageChangeResult } from '../api';
 
 function productImageFailureMessage(result: ProductImageChangeResult): string {
   const details = result.failures.slice(0, 2).map((failure) => {
-    const action = failure.operation === 'upload' ? `上传 ${failure.subject}` : `删除图片 ${failure.subject}`;
-    const message = failure.error instanceof ApiError ? failure.error.message : '操作失败';
-    return `${action}：${message}`;
+    const action = failure.operation === 'upload'
+      ? i18n.t('features.products.productsTab.imageUpload', { subject: failure.subject })
+      : i18n.t('features.products.productsTab.imageDelete', { subject: failure.subject });
+    const message = failure.error instanceof ApiError ? failure.error.message : i18n.t('features.products.productsTab.imageOpFailed');
+    return i18n.t('features.products.productsTab.imageOpDetail', { action, message });
   });
   const omitted = result.failures.length - details.length;
-  return `产品资料已保存，但有 ${result.failures.length} 个图片操作失败。${details.join('；')}${omitted > 0 ? `；另有 ${omitted} 项失败` : ''}`;
+  const base = i18n.t('features.products.productsTab.imageFailures', { count: result.failures.length, details: details.join('；') });
+  return omitted > 0 ? `${base}${i18n.t('features.products.productsTab.imageOmittedFailures', { count: omitted })}` : base;
 }
 
 export default function ProductsTab() {
+  const { t } = useTranslation();
   const toast = useToast();
   const confirm = useConfirm();
   const user = getSessionUser();
@@ -81,31 +87,31 @@ export default function ProductsTab() {
 
   async function handleDelete(product: Product) {
     if (!canManageProducts) {
-      toast.error('当前账号无权删除产品。');
+      toast.error(t('features.products.productsTab.noPermissionDelete'));
       return;
     }
     const confirmed = await confirm({
-      title: `删除产品“${product.name}”？`,
-      description: '删除后产品资料、图片和路线图配置将不可恢复。',
-      confirmText: '删除产品',
+      title: t('features.products.productsTab.deleteConfirm', { name: product.name }),
+      description: t('features.products.productsTab.deleteConfirmDesc'),
+      confirmText: t('features.products.productsTab.delete'),
       tone: 'danger',
     });
     if (!confirmed) return;
     setDeletingId(product.id);
     try {
       await deleteProduct(product.id);
-      toast.success('产品已删除');
+      toast.success(t('features.products.productsTab.deleted'));
       reload();
     } catch (error) {
       // 409 = has dependencies (requirements/releases/images/portfolios); offer cascade.
       if (error instanceof ApiError && error.status === 409) {
         const summary = summarizeDependencies((error.body as { details?: { dependencies?: Record<string, unknown> } })?.details?.dependencies);
         const cascade = await confirm({
-          title: summary ? '检测到关联记录' : '该产品存在关联记录',
+          title: summary ? t('features.products.productsTab.dependenciesTitle') : t('features.products.productsTab.dependenciesTitleAlt'),
           description: summary
-            ? `“${product.name}”关联了 ${summary}。是否一并删除/解除这些记录？此操作不可恢复。`
-            : `“${product.name}”仍有关联记录。是否一并删除/解除？此操作不可恢复。`,
-          confirmText: '级联删除',
+            ? t('features.products.productsTab.dependenciesConfirm', { name: product.name, summary })
+            : t('features.products.productsTab.dependenciesConfirmAlt', { name: product.name }),
+          confirmText: t('features.products.productsTab.cascadeDelete'),
           tone: 'danger',
         });
         if (!cascade) {
@@ -114,16 +120,16 @@ export default function ProductsTab() {
         }
         try {
           await deleteProduct(product.id, true);
-          toast.success(`已删除产品及其关联记录：${product.name}`);
+          toast.success(t('features.products.productsTab.deletedWithDependencies', { name: product.name }));
           reload();
         } catch (cascadeErr) {
-          toast.error(cascadeErr instanceof ApiError ? cascadeErr.message : '级联删除失败');
+          toast.error(cascadeErr instanceof ApiError ? cascadeErr.message : t('features.products.productsTab.cascadeDeleteFailed'));
         } finally {
           setDeletingId(null);
         }
         return;
       }
-      toast.error(error instanceof ApiError ? error.message : '删除失败');
+      toast.error(error instanceof ApiError ? error.message : t('features.products.productsTab.deleteFailed'));
     } finally {
       setDeletingId(null);
     }
@@ -139,20 +145,20 @@ export default function ProductsTab() {
         <div className="product-workbench product-workbench-flush">
           <Panel
             className="product-workbench-main"
-            title="产品工作台"
-            subtitle="先建立一个产品，再维护版本、图片、能力模块、资产参数和路线图。"
-            toolbar={canManageProducts ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建产品</button> : undefined}
+            title={t('features.products.productsTab.workbenchTitle')}
+            subtitle={t('features.products.productsTab.workbenchSubtitleEmpty')}
+            toolbar={canManageProducts ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>{t('features.products.productsTab.new')}</button> : undefined}
             noPadding
           >
             <div className="product-workbench-grid">
               <div className="product-list-pane">
-                <div className="product-list-pane-header">产品清单</div>
+                <div className="product-list-pane-header">{t('features.products.productsTab.listTitle')}</div>
                 <div className="product-list">
-                  <div className="product-empty-line">暂无产品。</div>
+                  <div className="product-empty-line">{t('features.products.productsTab.noProducts')}</div>
                 </div>
               </div>
               <div className="product-detail-pane">
-                <PageState loading={false} error={null} isEmpty emptyTitle="暂无产品" emptyDescription="当前还没有录入任何产品信息。" />
+                <PageState loading={false} error={null} isEmpty emptyTitle={t('features.products.productsTab.emptyTitle')} emptyDescription={t('features.products.productsTab.emptyDescription')} />
               </div>
             </div>
           </Panel>
@@ -161,9 +167,9 @@ export default function ProductsTab() {
         <div className="product-workbench product-workbench-flush">
           <Panel
             className="product-workbench-main"
-            title="产品工作台"
-            subtitle="把产品当成真实交付对象维护：图片、版本、负责人、能力模块、资产参数和后续路线图都在这里闭环。"
-            toolbar={canManageProducts ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建产品</button> : undefined}
+            title={t('features.products.productsTab.workbenchTitle')}
+            subtitle={t('features.products.productsTab.workbenchSubtitle')}
+            toolbar={canManageProducts ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>{t('features.products.productsTab.new')}</button> : undefined}
             noPadding
           >
             <div className="product-workbench-metrics">
@@ -172,7 +178,7 @@ export default function ProductsTab() {
 
             <div className="product-workbench-grid">
               <div className="product-list-pane">
-                <div className="product-list-pane-header">产品清单</div>
+                <div className="product-list-pane-header">{t('features.products.productsTab.listTitle')}</div>
                 <div className="product-list">
                   {products.map((product) => (
                     <button
@@ -209,30 +215,30 @@ export default function ProductsTab() {
                       <span className="tag">{selectedProduct.id}</span>
                     </div>
                     <h2>{selectedProduct.name}</h2>
-                    <p>{selectedProduct.description || '还没有填写产品介绍，建议补充产品定位、目标用户、交付边界和核心价值。'}</p>
+                    <p>{selectedProduct.description || t('features.products.productsTab.noDescription')}</p>
                     <div className="product-hero-facts">
                       <div>
-                        <span>产品负责人</span>
+                        <span>{t('features.products.productsTab.ownerLabel')}</span>
                         <strong>{selectedProduct.owner || '-'}</strong>
                       </div>
                       <div>
-                        <span>产品版本</span>
+                        <span>{t('features.products.productsTab.versionLabel')}</span>
                         <strong>{selectedProduct.version || '-'}</strong>
                       </div>
                       <div>
-                        <span>系统版本</span>
+                        <span>{t('features.products.productsTab.systemVersionLabel')}</span>
                         <strong>{selectedProduct.systemVersion || '-'}</strong>
                       </div>
                       <div>
-                        <span>应用版本</span>
+                        <span>{t('features.products.productsTab.applicationVersionLabel')}</span>
                         <strong>{selectedProduct.applicationVersion || '-'}</strong>
                       </div>
                     </div>
                     {canManageProducts ? (
                       <div className="product-hero-actions">
-                        <button className="btn btn-secondary btn-sm" onClick={() => setEditing(selectedProduct)}>编辑产品</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setEditing(selectedProduct)}>{t('features.products.productsTab.edit')}</button>
                         <button className="btn btn-danger btn-sm" onClick={() => handleDelete(selectedProduct)} disabled={deletingId === selectedProduct.id}>
-                          {deletingId === selectedProduct.id ? '删除中...' : '删除产品'}
+                          {deletingId === selectedProduct.id ? t('features.products.productsTab.deleting') : t('features.products.productsTab.delete')}
                         </button>
                       </div>
                     ) : null}
@@ -251,8 +257,8 @@ export default function ProductsTab() {
                   <div className="product-section">
                     <div className="product-section-head">
                       <div>
-                        <h3>能力模块</h3>
-                        <p>{selectedProduct.modules.length} 个模块，按负责人和状态追踪。</p>
+                        <h3>{t('features.products.productsTab.modulesTitle')}</h3>
+                        <p>{t('features.products.productsTab.modulesCount', { count: selectedProduct.modules.length })}</p>
                       </div>
                     </div>
                     {selectedProduct.modules.length ? (
@@ -260,23 +266,23 @@ export default function ProductsTab() {
                         {selectedProduct.modules.map((item, index) => (
                           <div key={`${item.name}-${index}`} className="product-module-item">
                             <div>
-                              <strong>{item.name || `模块 ${index + 1}`}</strong>
-                              <span>{item.owner ? `负责人：${item.owner}` : '未设置负责人'}</span>
+                              <strong>{item.name || t('features.products.productsTab.moduleFallback', { index: index + 1 })}</strong>
+                              <span>{item.owner ? t('features.products.productsTab.moduleOwner', { owner: item.owner }) : t('features.products.productsTab.noModuleOwner')}</span>
                             </div>
                             <StatusBadge status={String(item.status || 'planned')} label={labelOf(MODULE_STATUS_LABELS, String(item.status || 'planned'))} showDot={false} />
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="product-empty-line">还没有维护能力模块。</div>
+                      <div className="product-empty-line">{t('features.products.productsTab.emptyModules')}</div>
                     )}
                   </div>
 
                   <div className="product-section">
                     <div className="product-section-head">
                       <div>
-                        <h3>版本路线图</h3>
-                        <p>下一步版本目标和季度节奏。</p>
+                        <h3>{t('features.products.productsTab.roadmapTitle')}</h3>
+                        <p>{t('features.products.productsTab.roadmapDesc')}</p>
                       </div>
                     </div>
                     {selectedProduct.roadmap.length ? (
@@ -285,15 +291,15 @@ export default function ProductsTab() {
                           <div key={`${item.title}-${index}`} className="product-roadmap-item">
                             <div className="product-roadmap-dot" />
                             <div>
-                              <strong>{item.title || item.version || `规划项 ${index + 1}`}</strong>
-                              <span>{item.version || '未设置版本'}{item.quarter ? ` · ${item.quarter}` : ''}</span>
+                              <strong>{item.title || item.version || t('features.products.productsTab.planningItem', { index: index + 1 })}</strong>
+                              <span>{item.version || t('features.products.productsTab.noVersion')}{item.quarter ? ` · ${item.quarter}` : ''}</span>
                             </div>
                             <StatusBadge status={String(item.status || 'planned')} label={labelOf(ROADMAP_STATUS_LABELS, String(item.status || 'planned'))} showDot={false} />
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="product-empty-line">还没有维护路线图。</div>
+                      <div className="product-empty-line">{t('features.products.productsTab.emptyRoadmap')}</div>
                     )}
                   </div>
                 </div>
@@ -302,23 +308,23 @@ export default function ProductsTab() {
                   <div className="product-section">
                     <div className="product-section-head">
                       <div>
-                        <h3>资产画像</h3>
-                        <p>硬件、系统、应用的关键参数。</p>
+                        <h3>{t('features.products.productsTab.assetsTitle')}</h3>
+                        <p>{t('features.products.productsTab.assetsDesc')}</p>
                       </div>
                     </div>
-                    <DetailGrid title="硬件信息" data={selectedProduct.hardwareInfo} />
-                    <DetailGrid title="系统信息" data={selectedProduct.systemInfo} />
-                    <DetailGrid title="应用信息" data={selectedProduct.applicationInfo} />
+                    <DetailGrid title={t('features.products.productForm.hardwareInfo')} data={selectedProduct.hardwareInfo} />
+                    <DetailGrid title={t('features.products.productForm.systemInfo')} data={selectedProduct.systemInfo} />
+                    <DetailGrid title={t('features.products.productForm.applicationInfo')} data={selectedProduct.applicationInfo} />
                     {!Object.keys(selectedProduct.hardwareInfo ?? {}).length && !Object.keys(selectedProduct.systemInfo ?? {}).length && !Object.keys(selectedProduct.applicationInfo ?? {}).length ? (
-                      <div className="product-empty-line">还没有维护资产参数。</div>
+                      <div className="product-empty-line">{t('features.products.productsTab.emptyAssets')}</div>
                     ) : null}
                   </div>
 
                   <div className="product-section">
                     <div className="product-section-head">
                       <div>
-                        <h3>运行指标</h3>
-                        <p>产品规格、容量、性能或质量指标。</p>
+                        <h3>{t('features.products.productsTab.metricsTitle')}</h3>
+                        <p>{t('features.products.productsTab.metricsDesc')}</p>
                       </div>
                     </div>
                     {selectedMetrics.length ? (
@@ -332,7 +338,7 @@ export default function ProductsTab() {
                         ))}
                       </div>
                     ) : (
-                      <div className="product-empty-line">还没有维护运行指标。</div>
+                      <div className="product-empty-line">{t('features.products.productsTab.emptyMetrics')}</div>
                     )}
                   </div>
                 </div>
@@ -345,11 +351,11 @@ export default function ProductsTab() {
 
       {creating && canManageProducts ? (
         <ProductForm
-          title="新建产品"
+          title={t('features.products.productsTab.newFormTitle')}
           onClose={() => setCreating(false)}
           onSubmit={async ({ product, imageChanges }) => {
             const created = await createProduct(product);
-            await saveProductImages(created.id, imageChanges, '产品已创建');
+            await saveProductImages(created.id, imageChanges, t('features.products.productsTab.created'));
             setCreating(false);
             reload();
           }}
@@ -358,12 +364,12 @@ export default function ProductsTab() {
 
       {editing && canManageProducts ? (
         <ProductForm
-          title="编辑产品"
+          title={t('features.products.productsTab.editFormTitle')}
           initial={editing}
           onClose={() => setEditing(null)}
           onSubmit={async ({ product, imageChanges }) => {
             const updated = await updateProduct(editing.id, product);
-            await saveProductImages(updated.id, imageChanges, '产品已更新');
+            await saveProductImages(updated.id, imageChanges, t('features.products.productsTab.updated'));
             setEditing(null);
             reload();
           }}

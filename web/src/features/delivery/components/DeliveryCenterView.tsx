@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   Package,
@@ -51,10 +52,10 @@ import { canOperate } from '../../../constants/roles';
 import type { Build, Defect, DeliveryGateResult, Product, Project, Release, Requirement } from '../../../types';
 
 const DELIVERY_TABS: Array<{ key: DeliveryTab; label: string; icon: typeof Package }> = [
-  { key: 'overview', label: '全链路', icon: Sparkles },
-  { key: 'builds', label: '构建', icon: Package },
-  { key: 'releases', label: '发布', icon: Rocket },
-  { key: 'gates', label: '质量门禁', icon: ShieldCheck },
+  { key: 'overview', label: 'features.delivery.deliveryCenterView.tabOverview', icon: Sparkles },
+  { key: 'builds', label: 'features.delivery.deliveryCenterView.tabBuilds', icon: Package },
+  { key: 'releases', label: 'features.delivery.deliveryCenterView.tabReleases', icon: Rocket },
+  { key: 'gates', label: 'features.delivery.deliveryCenterView.tabGates', icon: ShieldCheck },
 ];
 
 function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
@@ -76,6 +77,7 @@ function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
 }
 
 export default function DeliveryCenterView() {
+  const { t } = useTranslation();
   const toast = useToast();
   const confirm = useConfirm();
   const sessionUser = getSessionUser();
@@ -205,7 +207,7 @@ export default function DeliveryCenterView() {
         linkedStories: Array.isArray(record.linkedStories) ? record.linkedStories : [],
         linkedBugs: Array.isArray(record.linkedBugs) ? record.linkedBugs : [],
         title: record.title || record.id,
-        ownerLabel: record.ownerLabel || (record.kind === 'build' ? '未关联项目' : '未关联产品'),
+        ownerLabel: record.ownerLabel || (record.kind === 'build' ? t('features.delivery.deliveryPageModel.noLinkedProject') : t('features.delivery.deliveryPageModel.noLinkedProduct')),
       });
       return;
     }
@@ -214,18 +216,18 @@ export default function DeliveryCenterView() {
 
   async function handleStatus(record: DeliveryRecord, status: string) {
     if (!canManageDelivery) {
-      toast.error('当前账号无权更新构建发布状态。');
+      toast.error(t('features.delivery.deliveryCenterView.noPermissionStatus'));
       return;
     }
     setStatusError(null);
     try {
       if (record.kind === 'build') await updateBuildStatus(record.id, status);
       else await updateReleaseStatus(record.id, status);
-      toast.success('状态已更新');
+      toast.success(t('features.delivery.deliveryCenterView.statusUpdated'));
       setSelected(null);
       reloadAll();
     } catch (err: unknown) {
-      const message = err instanceof ApiError ? err.message : '更新失败';
+      const message = err instanceof ApiError ? err.message : t('features.delivery.deliveryCenterView.statusUpdateFailed');
       setStatusError(message);
       toast.error(message);
     }
@@ -233,24 +235,27 @@ export default function DeliveryCenterView() {
 
   async function handleDelete(record: DeliveryRecord) {
     if (!canManageDelivery) {
-      toast.error('当前账号无权删除交付记录。');
+      toast.error(t('features.delivery.deliveryCenterView.noPermissionDelete'));
       return;
     }
     const confirmed = await confirm({
-      title: `删除${record.kind === 'build' ? '构建' : '发布'}“${record.title}”？`,
-      description: '删除后该记录将从构建发布中心移除，关联追踪信息也不可恢复。',
-      confirmText: '删除',
+      title: t('features.delivery.deliveryCenterView.deleteConfirm', {
+        kind: record.kind === 'build' ? t('features.delivery.deliveryCenterView.build') : t('features.delivery.deliveryCenterView.release'),
+        name: record.title,
+      }),
+      description: t('features.delivery.deliveryCenterView.deleteConfirmDesc'),
+      confirmText: t('common.delete'),
       tone: 'danger',
     });
     if (!confirmed) return;
     try {
       if (record.kind === 'build') await deleteBuild(record.id);
       else await deleteRelease(record.id);
-      toast.success('记录已删除');
+      toast.success(t('features.delivery.deliveryCenterView.recordDeleted'));
       setSelected(null);
       reloadAll();
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '删除失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.delivery.deliveryCenterView.deleteFailed'));
     }
   }
 
@@ -258,31 +263,31 @@ export default function DeliveryCenterView() {
 
   return (
     <div className="dl-workbench delivery-center-page">
-      <section className="dl-signal-strip" aria-label="交付概况">
+      <section className="dl-signal-strip" aria-label={t('features.delivery.deliveryCenterView.overviewAria')}>
         <div className="dl-signal">
-          <span className="dl-signal-label"><Package size={13} aria-hidden="true" /> 构建</span>
+          <span className="dl-signal-label"><Package size={13} aria-hidden="true" /> {t('features.delivery.deliveryCenterView.builds')}</span>
           <strong>{summary.builds}</strong>
-          <em>候选发布 {summary.candidates}</em>
+          <em>{t('features.delivery.deliveryCenterView.candidates', { count: summary.candidates })}</em>
         </div>
         <div className="dl-signal">
-          <span className="dl-signal-label"><Rocket size={13} aria-hidden="true" /> 发布</span>
+          <span className="dl-signal-label"><Rocket size={13} aria-hidden="true" /> {t('features.delivery.deliveryCenterView.releases')}</span>
           <strong>{summary.releases}</strong>
-          <em>已发布 {summary.released}</em>
+          <em>{t('features.delivery.deliveryCenterView.released', { count: summary.released })}</em>
         </div>
         <div className={`dl-signal ${summary.inValidation > 0 ? 'is-info' : ''}`}>
-          <span className="dl-signal-label"><ShieldCheck size={13} aria-hidden="true" /> 验证中</span>
+          <span className="dl-signal-label"><ShieldCheck size={13} aria-hidden="true" /> {t('features.delivery.deliveryCenterView.inValidation')}</span>
           <strong>{summary.inValidation}</strong>
-          <em>测试 + 预发</em>
+          <em>{t('features.delivery.deliveryCenterView.testingStaging')}</em>
         </div>
         <div className={`dl-signal ${summary.blockedGates > 0 ? 'is-warn' : ''}`}>
-          <span className="dl-signal-label"><ShieldCheck size={13} aria-hidden="true" /> 门禁阻断</span>
+          <span className="dl-signal-label"><ShieldCheck size={13} aria-hidden="true" /> {t('features.delivery.deliveryCenterView.blockedGates')}</span>
           <strong>{summary.blockedGates}</strong>
-          <em>准入规则待处理</em>
+          <em>{t('features.delivery.deliveryCenterView.gatesPending')}</em>
         </div>
         <div className={`dl-signal ${summary.risks > 0 ? 'is-risk' : ''}`}>
-          <span className="dl-signal-label"><AlertTriangle size={13} aria-hidden="true" /> 风险项</span>
+          <span className="dl-signal-label"><AlertTriangle size={13} aria-hidden="true" /> {t('features.delivery.deliveryCenterView.risks')}</span>
           <strong>{summary.risks}</strong>
-          <em>失败 {summary.failedBuilds} · 回滚 {summary.rollbacks}</em>
+          <em>{t('features.delivery.deliveryCenterView.risksDetail', { failed: summary.failedBuilds, rollbacks: summary.rollbacks })}</em>
         </div>
       </section>
 
@@ -299,7 +304,7 @@ export default function DeliveryCenterView() {
       ) : null}
 
       <div className="dl-toolbar">
-        <div className="dl-tab-row" role="tablist" aria-label="构建发布视图">
+        <div className="dl-tab-row" role="tablist" aria-label={t('features.delivery.deliveryCenterView.viewAria')}>
           {DELIVERY_TABS.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
@@ -314,17 +319,17 @@ export default function DeliveryCenterView() {
               onKeyDown={handleTabKeyDown}
             >
               <Icon size={14} aria-hidden="true" />
-              {label}
+              {t(label)}
             </button>
           ))}
         </div>
         {canManageDelivery ? (
           <div className="dl-actions">
             <button className="btn btn-secondary btn-sm btn-with-icon" onClick={() => setCreatingBuild(true)}>
-              <Plus size={14} aria-hidden="true" /> 新建构建
+              <Plus size={14} aria-hidden="true" /> {t('features.delivery.deliveryCenterView.newBuild')}
             </button>
             <button className="btn btn-primary btn-sm btn-with-icon" onClick={() => setCreatingRelease(true)}>
-              <Rocket size={14} aria-hidden="true" /> 新建发布
+              <Rocket size={14} aria-hidden="true" /> {t('features.delivery.deliveryCenterView.newRelease')}
             </button>
           </div>
         ) : null}
@@ -362,17 +367,17 @@ export default function DeliveryCenterView() {
                   className="dl-pool-panel"
                   title={
                     tab === 'overview'
-                      ? '最近交付记录'
+                      ? t('features.delivery.deliveryCenterView.recentRecords')
                       : tab === 'builds'
-                        ? '构建清单'
+                        ? t('features.delivery.deliveryCenterView.buildsList')
                         : tab === 'releases'
-                          ? '发布清单'
-                          : '质量门禁'
+                          ? t('features.delivery.deliveryCenterView.releasesList')
+                          : t('features.delivery.deliveryCenterView.gatesList')
                   }
                   subtitle={
                     tab === 'gates'
-                      ? `显示 ${tabRecords.length} / ${records.length} 条 · 阻断 ${summary.blockedGates}`
-                      : `显示 ${tabRecords.length} / ${records.length} 条交付记录`
+                      ? t('features.delivery.deliveryCenterView.gatesSubtitle', { shown: tabRecords.length, total: records.length, blocked: summary.blockedGates })
+                      : t('features.delivery.deliveryCenterView.recordsSubtitle', { shown: tabRecords.length, total: records.length })
                   }
                 >
                   <DeliveryFilters

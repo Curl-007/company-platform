@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import Panel from '../../../components/common/Panel';
 import PageState from '../../../components/common/PageState';
 import StatusBadge from '../../../components/common/StatusBadge';
@@ -23,6 +24,7 @@ export default function ProjectDeliveryPanel({
   error: string | null;
   onRetry: () => void;
 }) {
+  const { t } = useTranslation();
   const {
     delivery,
     openRequirements,
@@ -56,39 +58,39 @@ export default function ProjectDeliveryPanel({
 
   const signals = [
     {
-      label: '需求验收',
+      label: t('features.projects.projectDeliveryPanel.signalReqAccept'),
       value: `${acceptedRequirements.length}/${delivery.requirements.length}`,
-      meta: `${openRequirements.length} 未关闭`,
+      meta: t('features.projects.projectDeliveryPanel.signalReqOpen', { count: openRequirements.length }),
       tone: 'info' as const,
     },
     {
-      label: '任务进度',
+      label: t('features.projects.projectDeliveryPanel.signalTaskProgress'),
       value: `${project.progress}%`,
-      meta: `${project.tasks.length} 个任务`,
+      meta: t('features.projects.projectDeliveryPanel.signalTaskCount', { count: project.tasks.length }),
       tone: project.progress >= 80 ? 'success' as const : 'info' as const,
     },
     {
-      label: '测试通过',
+      label: t('features.projects.projectDeliveryPanel.signalTestPass'),
       value: `${testPassRate}%`,
       meta: `${passedCases.length}/${delivery.testCases.length}`,
       tone: testPassRate >= 90 ? 'success' as const : testPassRate >= 70 ? 'warning' as const : 'risk' as const,
     },
     {
-      label: '开放缺陷',
+      label: t('features.projects.projectDeliveryPanel.signalOpenDefects'),
       value: String(openDefects.length),
-      meta: `${severeDefects.length} 高严重`,
+      meta: t('features.projects.projectDeliveryPanel.signalSevere', { count: severeDefects.length }),
       tone: severeDefects.length > 0 ? 'risk' as const : openDefects.length > 0 ? 'warning' as const : 'success' as const,
     },
     {
-      label: '构建',
+      label: t('features.projects.projectDeliveryPanel.signalBuild'),
       value: `${releasedBuilds.length}/${delivery.builds.length}`,
-      meta: latestBuild?.version || latestBuild?.name || '暂无',
+      meta: latestBuild?.version || latestBuild?.name || t('features.projects.projectDeliveryPanel.none'),
       tone: failedBuilds.length > 0 ? 'risk' as const : 'success' as const,
     },
     {
-      label: '发布',
+      label: t('features.projects.projectDeliveryPanel.signalRelease'),
       value: String(releasedReleases.length),
-      meta: latestRelease?.version || latestRelease?.name || '暂无',
+      meta: latestRelease?.version || latestRelease?.name || t('features.projects.projectDeliveryPanel.none'),
       tone: releasedReleases.length > 0 ? 'success' as const : 'warning' as const,
     },
   ];
@@ -102,7 +104,7 @@ export default function ProjectDeliveryPanel({
       ) : (
         <>
           {error ? (
-            <div className="pd-banner-warn">部分交付数据刷新失败，当前展示缓存结果。</div>
+            <div className="pd-banner-warn">{t('features.projects.projectDeliveryPanel.staleDataWarning')}</div>
           ) : null}
 
           <section className="pd-signal-strip">
@@ -114,15 +116,15 @@ export default function ProjectDeliveryPanel({
               </div>
             ))}
             <button type="button" className="pd-signal-refresh btn btn-secondary btn-sm" onClick={onRetry}>
-              刷新
+              {t('features.projects.projectDeliveryPanel.refresh')}
             </button>
           </section>
 
           <section className="pd-focus-row">
             <div className="pd-focus-card">
-              <div className="pd-focus-title">下一步动作</div>
+              <div className="pd-focus-title">{t('features.projects.projectDeliveryPanel.nextActions')}</div>
               {actionItems.length === 0 ? (
-                <p className="pd-empty">当前链路无明显阻塞，保持验收与发布节奏。</p>
+                <p className="pd-empty">{t('features.projects.projectDeliveryPanel.noBlockage')}</p>
               ) : (
                 <ol className="pd-action-list">
                   {actionItems.slice(0, 3).map((item, index) => (
@@ -135,32 +137,32 @@ export default function ProjectDeliveryPanel({
               )}
             </div>
             <div className="pd-focus-card">
-              <div className="pd-focus-title">最新交付物</div>
+              <div className="pd-focus-title">{t('features.projects.projectDeliveryPanel.latestArtifacts')}</div>
               <div className="pd-artifact">
-                <span>构建</span>
-                <strong className="truncate">{latestBuild?.name || '暂无构建'}</strong>
+                <span>{t('features.projects.projectDeliveryPanel.artifactBuild')}</span>
+                <strong className="truncate">{latestBuild?.name || t('features.projects.projectDeliveryPanel.noBuild')}</strong>
                 {latestBuild ? <StatusBadge label={labelOf(BUILD_STATUS_LABELS, latestBuild.status)} status={latestBuild.status} /> : null}
               </div>
               <div className="pd-artifact">
-                <span>发布</span>
-                <strong className="truncate">{latestRelease?.name || '暂无发布'}</strong>
+                <span>{t('features.projects.projectDeliveryPanel.artifactRelease')}</span>
+                <strong className="truncate">{latestRelease?.name || t('features.projects.projectDeliveryPanel.noRelease')}</strong>
                 {latestRelease ? <StatusBadge label={labelOf(RELEASE_STATUS_LABELS, latestRelease.status)} status={latestRelease.status} /> : null}
               </div>
             </div>
           </section>
 
-          <Panel title="需求交付追踪" subtitle={`展示前 ${traceRows.length} 条需求链路`} className="pd-trace-panel" noPadding>
+          <Panel title={t('features.projects.projectDeliveryPanel.traceTitle')} subtitle={t('features.projects.projectDeliveryPanel.traceSubtitle', { count: traceRows.length })} className="pd-trace-panel" noPadding>
             {traceRows.length === 0 ? (
-              <div className="pd-empty pd-empty-pad">该项目暂无需求，先从需求管理录入业务条目。</div>
+              <div className="pd-empty pd-empty-pad">{t('features.projects.projectDeliveryPanel.noRequirements')}</div>
             ) : (
               <div className="pd-trace-table">
                 <div className="pd-trace-head">
-                  <span>需求</span>
-                  <span>任务</span>
-                  <span>测试</span>
-                  <span>缺陷</span>
-                  <span>构建</span>
-                  <span>发布</span>
+                  <span>{t('features.projects.projectDeliveryPanel.traceReq')}</span>
+                  <span>{t('features.projects.projectDeliveryPanel.traceTask')}</span>
+                  <span>{t('features.projects.projectDeliveryPanel.traceTest')}</span>
+                  <span>{t('features.projects.projectDeliveryPanel.traceDefect')}</span>
+                  <span>{t('features.projects.projectDeliveryPanel.traceBuild')}</span>
+                  <span>{t('features.projects.projectDeliveryPanel.traceRelease')}</span>
                 </div>
                 {traceRows.map((row) => (
                   <div className="pd-trace-row" key={row.requirement.id}>
@@ -174,28 +176,28 @@ export default function ProjectDeliveryPanel({
                     <TraceMetric
                       complete={row.tasks.filter((item) => item.status === 'done').length}
                       total={row.tasks.length}
-                      label="完成"
+                      label={t('features.projects.projectDeliveryPanel.traceDone')}
                     />
                     <TraceMetric
                       complete={row.tests.filter((item) => item.status === 'passed').length}
                       total={row.tests.length}
-                      label="通过"
+                      label={t('features.projects.projectDeliveryPanel.tracePassed')}
                     />
                     <TraceMetric
                       complete={row.defects.filter((item) => ['closed', 'rejected'].includes(item.status)).length}
                       total={row.defects.length}
-                      label="关闭"
+                      label={t('features.projects.projectDeliveryPanel.traceClosed')}
                     />
                     <TraceStatus
                       items={row.builds}
-                      empty="未构建"
+                      empty={t('features.projects.projectDeliveryPanel.traceNotBuilt')}
                       label={(item) => item.name}
                       status={(item) => item.status}
                       labels={BUILD_STATUS_LABELS}
                     />
                     <TraceStatus
                       items={row.releases}
-                      empty="未发布"
+                      empty={t('features.projects.projectDeliveryPanel.traceNotReleased')}
                       label={(item) => item.name}
                       status={(item) => item.status}
                       labels={RELEASE_STATUS_LABELS}

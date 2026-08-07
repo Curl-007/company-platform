@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   LineChart,
   Line,
@@ -52,6 +53,7 @@ function shortDate(iso: string): string {
 }
 
 export default function BurndownChart({ data, height = 300 }: BurndownChartProps) {
+  const { t } = useTranslation();
   const chartData = useMemo<ChartPoint[]>(() => {
     // Index actual points by date for fast lookup.
     const actualByDate = new Map<string, number>();
@@ -74,20 +76,20 @@ export default function BurndownChart({ data, height = 300 }: BurndownChartProps
   }, [data]);
 
   if (chartData.length === 0) {
-    return <p className="text-secondary">燃尽数据不足，无法绘制图表。</p>;
+    return <p className="text-secondary">{t('common.insufficientBurndown')}</p>;
   }
 
   return (
     <div className="burndown-chart">
       <div className="flex items-center gap-4" style={{ marginBottom: 8 }}>
         <span className="text-secondary" style={{ fontSize: 13 }}>
-          总预估：<strong className="text-mono">{data.totalEstimate}h</strong>
+          {t('common.totalEstimate')}<strong className="text-mono">{data.totalEstimate}h</strong>
         </span>
         <span className="text-secondary" style={{ fontSize: 13 }}>
-          任务数：<strong className="text-mono">{data.taskCount}</strong>
+          {t('common.taskCount')}<strong className="text-mono">{data.taskCount}</strong>
         </span>
         <span className="text-secondary" style={{ fontSize: 13 }}>
-          周期：<span className="text-mono">{shortDate(data.startDate)} → {shortDate(data.endDate)}</span>
+          {t('common.period')}<span className="text-mono">{shortDate(data.startDate)} → {shortDate(data.endDate)}</span>
         </span>
       </div>
       <ResponsiveContainer width="100%" height={height}>
@@ -96,7 +98,7 @@ export default function BurndownChart({ data, height = 300 }: BurndownChartProps
           <RC.XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--color-text-secondary, #64748b)' }} />
           <RC.YAxis
             tick={{ fontSize: 11, fill: 'var(--color-text-secondary, #64748b)' }}
-            label={{ value: '剩余工时(h)', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: 'var(--color-text-secondary, #64748b)' } }}
+            label={{ value: t('common.remainingHours'), angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: 'var(--color-text-secondary, #64748b)' } }}
             allowDecimals={false}
           />
           <RC.Tooltip
@@ -112,7 +114,7 @@ export default function BurndownChart({ data, height = 300 }: BurndownChartProps
           <RC.Line
             type="monotone"
             dataKey="ideal"
-            name="理想燃尽线"
+            name={t('common.idealBurnDown')}
             stroke="var(--color-text-secondary, #94a3b8)"
             strokeDasharray="5 4"
             dot={false}
@@ -121,7 +123,7 @@ export default function BurndownChart({ data, height = 300 }: BurndownChartProps
           <RC.Line
             type="monotone"
             dataKey="remaining"
-            name="实际剩余"
+            name={t('common.actualRemaining')}
             stroke="var(--color-primary, #2563eb)"
             dot={{ r: 3 }}
             strokeWidth={2.5}

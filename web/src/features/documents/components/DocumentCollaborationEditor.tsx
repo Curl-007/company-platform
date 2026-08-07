@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Overlay from '../../../components/common/Overlay';
@@ -10,6 +11,7 @@ import {
   resolveCollaborationSaveAck,
   type PendingCollaborationSave,
 } from '../collaborationState';
+import { getInterfaceLocale, default as i18n } from '../../../i18n';
 
 type CollabStatus = 'connecting' | 'connected' | 'saving' | 'saved' | 'conflict' | 'error' | 'closed';
 
@@ -32,21 +34,25 @@ interface CollabMessage {
 }
 
 function collabStatusText(status: CollabStatus) {
-  if (status === 'connecting') return '正在连接协同通道';
-  if (status === 'connected') return '已连接';
-  if (status === 'saving') return '保存中';
-  if (status === 'saved') return '已保存';
-  if (status === 'conflict') return '存在版本冲突';
-  if (status === 'error') return '连接异常';
-  return '已关闭';
+  if (status === 'connecting') return i18n.t('features.documents.documentCollaborationEditor.statusConnecting');
+  if (status === 'connected') return i18n.t('features.documents.documentCollaborationEditor.statusConnected');
+  if (status === 'saving') return i18n.t('features.documents.documentCollaborationEditor.statusSaving');
+  if (status === 'saved') return i18n.t('features.documents.documentCollaborationEditor.statusSaved');
+  if (status === 'conflict') return i18n.t('features.documents.documentCollaborationEditor.statusConflict');
+  if (status === 'error') return i18n.t('features.documents.documentCollaborationEditor.statusError');
+  return i18n.t('features.documents.documentCollaborationEditor.statusClosed');
 }
 
 function formatPresence(peers: CollabPeer[]) {
-  if (!peers.length) return '仅自己在线';
-  if (peers.length === 1) return `在线 1 人 · ${peers[0]?.name || peers[0]?.id || '用户'}`;
-  const names = peers.slice(0, 3).map((peer) => peer.name || peer.id || '用户').join('、');
-  const extra = peers.length > 3 ? ` 等 ${peers.length} 人` : '';
-  return `在线 ${peers.length} 人 · ${names}${extra}`;
+  if (!peers.length) return i18n.t('features.documents.documentCollaborationEditor.onlySelfOnline');
+  if (peers.length === 1) {
+    const first = peers[0]?.name || peers[0]?.id || i18n.t('features.documents.documentCollaborationEditor.user');
+    return i18n.t('features.documents.documentCollaborationEditor.oneOnline', { name: first });
+  }
+  const nameSeparator = i18n.t('features.documents.documentCollaborationEditor.nameSeparator');
+  const names = peers.slice(0, 3).map((peer) => peer.name || peer.id || i18n.t('features.documents.documentCollaborationEditor.user')).join(nameSeparator);
+  const extra = peers.length > 3 ? i18n.t('features.documents.documentCollaborationEditor.morePeople', { count: peers.length }) : '';
+  return i18n.t('features.documents.documentCollaborationEditor.onlineCount', { count: peers.length, names, extra });
 }
 
 function buildCollaborationUrl(documentId: string) {
@@ -64,6 +70,7 @@ export default function DocumentCollaborationEditor({
   onClose: () => void;
   onSaved: (content: string, revision: number) => void;
 }) {
+  const { t } = useTranslation();
   const socketRef = useRef<WebSocket | null>(null);
   const dirtyRef = useRef(false);
   const contentRef = useRef(doc.content ?? '');
@@ -99,7 +106,7 @@ export default function DocumentCollaborationEditor({
       attributes: {
         class: 'collab-editor-prose form-textarea',
         'data-slot': 'collab-editor',
-        'aria-label': '文档正文',
+        'aria-label': t('features.documents.documentCollaborationEditor.documentBody'),
       },
     },
     onUpdate: ({ editor: current }) => {
@@ -119,7 +126,7 @@ export default function DocumentCollaborationEditor({
     const token = getToken();
     if (!token) {
       setStatus('error');
-      setMessage('登录态已失效，请重新登录后再编辑。');
+      setMessage(t('features.documents.documentCollaborationEditor.sessionExpired'));
       return;
     }
 
@@ -158,7 +165,7 @@ export default function DocumentCollaborationEditor({
           const snapshot = { content: nextContent, revision: nextRevision };
           serverSnapshotRef.current = snapshot;
           setServerSnapshot(snapshot);
-          setMessage('服务器有更新正文。本地草稿已保留，可选择采用服务器版本或继续编辑后保存。');
+          setMessage(t('features.documents.documentCollaborationEditor.serverUpdateConflict'));
           setStatus('conflict');
           return;
         }
@@ -189,18 +196,18 @@ export default function DocumentCollaborationEditor({
         if (!resolved.draftIsDirty) {
           dirtyRef.current = false;
           setStatus('saved');
-          setLastSavedAt(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-          setMessage('正文已保存，其他在线编辑者会收到更新。');
+          setLastSavedAt(new Date().toLocaleTimeString(getInterfaceLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+          setMessage(t('features.documents.documentCollaborationEditor.bodySaved'));
           serverSnapshotRef.current = null;
           setServerSnapshot(null);
         } else {
           dirtyRef.current = true;
           if (serverSnapshotRef.current && serverSnapshotRef.current.revision > nextRevision) {
             setStatus('conflict');
-            setMessage('本地保存已确认，但服务器还有更新版本；本地草稿与服务器版本均已保留。');
+            setMessage(t('features.documents.documentCollaborationEditor.savedButServerNewer'));
           } else {
             setStatus('connected');
-            setMessage('收到保存确认，但本地已有更新内容，请再次保存。');
+            setMessage(t('features.documents.documentCollaborationEditor.savedButDirty'));
           }
         }
         return;
@@ -212,7 +219,7 @@ export default function DocumentCollaborationEditor({
           const snapshot = { content: payload.content ?? '', revision: nextRevision };
           serverSnapshotRef.current = snapshot;
           setServerSnapshot(snapshot);
-          setMessage('其他人刚刚更新了正文。本地草稿已保留；保存可能触发冲突，可先对比服务器版本。');
+          setMessage(t('features.documents.documentCollaborationEditor.remoteUpdateConflict'));
           setStatus('conflict');
           return;
         }
@@ -222,7 +229,7 @@ export default function DocumentCollaborationEditor({
         setContent(nextContent);
         setRevision(nextRevision);
         setStatus('connected');
-        setMessage('已同步其他编辑者的最新正文。');
+        setMessage(t('features.documents.documentCollaborationEditor.syncedRemote'));
         onSaved(nextContent, nextRevision);
         return;
       }
@@ -237,7 +244,7 @@ export default function DocumentCollaborationEditor({
         setServerSnapshot(snapshot);
         dirtyRef.current = true;
         setStatus('conflict');
-        setMessage('保存时发现版本冲突。本地草稿已保留，请先采用服务器版本或合并后再保存。');
+        setMessage(t('features.documents.documentCollaborationEditor.saveConflict'));
         return;
       }
       if (payload.type === 'error') {
@@ -245,12 +252,12 @@ export default function DocumentCollaborationEditor({
         if (payload.clientMutationId && pending && payload.clientMutationId !== pending.clientMutationId) return;
         pendingSaveRef.current = null;
         setStatus(socketRef.current?.readyState === WebSocket.OPEN ? 'connected' : 'error');
-        setMessage(payload.message || payload.code || '协同编辑发生错误。');
+        setMessage(payload.message || payload.code || t('features.documents.documentCollaborationEditor.collabError'));
       }
     };
     socket.onerror = () => {
       setStatus('error');
-      setMessage('协同通道连接失败，请确认后端服务仍在运行。');
+      setMessage(t('features.documents.documentCollaborationEditor.connectionFailed'));
     };
     socket.onclose = () => {
       setStatus((current) => current === 'error' ? current : 'closed');
@@ -277,12 +284,12 @@ export default function DocumentCollaborationEditor({
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
       setStatus('error');
-      setMessage('协同通道未连接，暂时不能保存。');
+      setMessage(t('features.documents.documentCollaborationEditor.notConnectedSave'));
       return;
     }
     if (serverSnapshotRef.current) {
       setStatus('conflict');
-      setMessage('请先处理服务器版本与本地草稿的冲突。');
+      setMessage(t('features.documents.documentCollaborationEditor.resolveConflictFirst'));
       return;
     }
     const clientMutationId = typeof crypto.randomUUID === 'function'
@@ -315,7 +322,7 @@ export default function DocumentCollaborationEditor({
     serverSnapshotRef.current = null;
     setServerSnapshot(null);
     setStatus('connected');
-    setMessage('已采用服务器最新正文。');
+    setMessage(t('features.documents.documentCollaborationEditor.adoptedServer'));
     onSaved(serverSnapshot.content, serverSnapshot.revision);
   }
 
@@ -328,12 +335,12 @@ export default function DocumentCollaborationEditor({
     setServerSnapshot(null);
     dirtyRef.current = true;
     setStatus('connected');
-    setMessage('本地草稿已保留，可基于服务器最新 revision 再次保存。');
+    setMessage(t('features.documents.documentCollaborationEditor.keptLocalDraft'));
   }
 
   function requestClose() {
     if (dirtyRef.current) {
-      const confirmed = window.confirm('正文尚未保存，确定关闭并丢弃本地修改？');
+      const confirmed = window.confirm(t('features.documents.documentCollaborationEditor.unsavedCloseConfirm'));
       if (!confirmed) return;
     }
     onClose();
@@ -342,8 +349,8 @@ export default function DocumentCollaborationEditor({
   return (
     <Overlay onClose={requestClose}>
       <Panel
-        title="协同编辑正文"
-        subtitle={`${doc.title} · revision ${revision}${lastSavedAt ? ` · 上次保存 ${lastSavedAt}` : ''}${dirtyRef.current ? ' · 未保存' : ''}`}
+        title={t('features.documents.documentCollaborationEditor.panelTitle')}
+        subtitle={`${doc.title} · ${t('features.documents.documentCollaborationEditor.subtitleRevision', { revision })}${lastSavedAt ? ` · ${t('features.documents.documentCollaborationEditor.subtitleLastSaved', { time: lastSavedAt })}` : ''}${dirtyRef.current ? ` · ${t('features.documents.documentCollaborationEditor.subtitleUnsaved')}` : ''}`}
         toolbar={(
           <div className="collab-toolbar">
             <span className="collab-presence">{formatPresence(peers)}</span>
@@ -354,25 +361,25 @@ export default function DocumentCollaborationEditor({
         {message ? <div className={status === 'error' || status === 'conflict' ? 'form-error' : 'form-help-text'} style={{ marginBottom: 10 }}>{message}</div> : null}
         {serverSnapshot ? (
           <div className="form-help-text" style={{ marginBottom: 10 }}>
-            服务器 revision {serverSnapshot.revision} 与本地草稿并存。
-            <button type="button" className="btn btn-text btn-xs" onClick={adoptServerVersion}>采用服务器版本</button>
-            <button type="button" className="btn btn-text btn-xs" onClick={keepLocalDraft}>保留本地继续</button>
+            {t('features.documents.documentCollaborationEditor.serverAndLocalCoexist', { revision: serverSnapshot.revision })}
+            <button type="button" className="btn btn-text btn-xs" onClick={adoptServerVersion}>{t('features.documents.documentCollaborationEditor.adoptServerVersion')}</button>
+            <button type="button" className="btn btn-text btn-xs" onClick={keepLocalDraft}>{t('features.documents.documentCollaborationEditor.keepLocal')}</button>
             <details>
-              <summary>服务器正文</summary>
+              <summary>{t('features.documents.documentCollaborationEditor.serverBody')}</summary>
               <pre style={{ whiteSpace: 'pre-wrap' }}>{serverSnapshot.content}</pre>
             </details>
           </div>
         ) : null}
         <div className="form-group">
-          <label className="form-label">文档正文</label>
-          <div className="collab-editor-toolbar" role="toolbar" aria-label="格式工具栏">
+          <label className="form-label">{t('features.documents.documentCollaborationEditor.documentBody')}</label>
+          <div className="collab-editor-toolbar" role="toolbar" aria-label={t('features.documents.documentCollaborationEditor.formatToolbar')}>
             <button
               type="button"
               className={`btn btn-text btn-xs ${editor?.isActive('bold') ? 'active' : ''}`}
               onClick={() => editor?.chain().focus().toggleBold().run()}
               disabled={!editor}
             >
-              粗体
+              {t('features.documents.documentCollaborationEditor.bold')}
             </button>
             <button
               type="button"
@@ -380,7 +387,7 @@ export default function DocumentCollaborationEditor({
               onClick={() => editor?.chain().focus().toggleItalic().run()}
               disabled={!editor}
             >
-              斜体
+              {t('features.documents.documentCollaborationEditor.italic')}
             </button>
             <button
               type="button"
@@ -388,7 +395,7 @@ export default function DocumentCollaborationEditor({
               onClick={() => editor?.chain().focus().toggleBulletList().run()}
               disabled={!editor}
             >
-              列表
+              {t('features.documents.documentCollaborationEditor.list')}
             </button>
             <button
               type="button"
@@ -396,7 +403,7 @@ export default function DocumentCollaborationEditor({
               onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
               disabled={!editor}
             >
-              标题
+              {t('features.documents.documentCollaborationEditor.heading')}
             </button>
             <button
               type="button"
@@ -404,24 +411,24 @@ export default function DocumentCollaborationEditor({
               onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
               disabled={!editor}
             >
-              代码块
+              {t('features.documents.documentCollaborationEditor.codeBlock')}
             </button>
           </div>
           <div className="collab-editor-surface">
             {editor ? (
               <EditorContent editor={editor} />
             ) : (
-              <div className="form-textarea collab-editor-fallback" aria-busy="true">编辑器加载中…</div>
+              <div className="form-textarea collab-editor-fallback" aria-busy="true">{t('features.documents.documentCollaborationEditor.editorLoading')}</div>
             )}
           </div>
           <div className="form-help-text">
-            保存使用服务器 revision 做冲突检测；顶部会显示当前在线人数与最近保存时间。冲突与远端更新不会覆盖本地未保存草稿。协同通道仍以纯文本同步，格式工具仅增强本地编辑体验。
+            {t('features.documents.documentCollaborationEditor.collabHelpText')}
           </div>
         </div>
         <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end' }}>
-          <button className="btn btn-secondary btn-sm" onClick={requestClose}>关闭</button>
+          <button className="btn btn-secondary btn-sm" onClick={requestClose}>{t('common.close')}</button>
           <button className="btn btn-primary btn-sm" onClick={save} disabled={status === 'connecting' || status === 'saving' || status === 'conflict' || status === 'error' || status === 'closed' || Boolean(serverSnapshot)}>
-            {status === 'saving' ? '保存中...' : '保存并广播'}
+            {status === 'saving' ? t('features.documents.documentCollaborationEditor.savingButton') : t('features.documents.documentCollaborationEditor.saveAndBroadcast')}
           </button>
         </div>
       </Panel>

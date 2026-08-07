@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   createReleaseApproval,
   createRollbackRecord,
@@ -47,6 +48,7 @@ export default function DeliveryDetail({
   canManageDelivery: boolean;
   canUseAi: boolean;
 }) {
+  const { t } = useTranslation();
   const readiness = Number(gate?.score ?? releaseReadiness(record)) || 0;
   const toast = useToast();
   const releaseId = record.kind === 'release' ? record.id : '';
@@ -85,10 +87,10 @@ export default function DeliveryDetail({
       approvalsState.reload();
       reportState.reload();
       onChanged();
-      toast.success(decision === 'approve' ? '发布审批已通过' : '发布审批已驳回');
+      toast.success(decision === 'approve' ? t('features.delivery.deliveryDetail.approvalPassed') : t('features.delivery.deliveryDetail.approvalRejected'));
 
     } catch (err: unknown) {
-      const message = err instanceof ApiError ? err.message : '审批提交失败';
+      const message = err instanceof ApiError ? err.message : t('features.delivery.deliveryDetail.approvalSubmitFailed');
       setGovernanceError(message);
       toast.error(message);
     } finally {
@@ -99,7 +101,7 @@ export default function DeliveryDetail({
   async function submitRollback() {
     if (!releaseId) return;
     if (!rollbackReason.trim()) {
-      setGovernanceError('请填写回滚原因');
+      setGovernanceError(t('features.delivery.deliveryDetail.rollbackReasonRequired'));
       return;
     }
     setSubmittingGovernance(true);
@@ -116,9 +118,9 @@ export default function DeliveryDetail({
       rollbacksState.reload();
       reportState.reload();
       onChanged();
-      toast.success('回滚记录已创建');
+      toast.success(t('features.delivery.deliveryDetail.rollbackCreated'));
     } catch (err: unknown) {
-      const message = err instanceof ApiError ? err.message : '回滚登记失败';
+      const message = err instanceof ApiError ? err.message : t('features.delivery.deliveryDetail.rollbackSubmitFailed');
       setGovernanceError(message);
       toast.error(message);
     } finally {
@@ -131,18 +133,18 @@ export default function DeliveryDetail({
       <Panel
         className="delivery-detail-panel"
         title={record.title}
-        subtitle={`${record.kind === 'build' ? '构建记录' : '发布记录'} · ${record.ownerLabel}`}
+        subtitle={`${record.kind === 'build' ? t('features.delivery.deliveryDetail.buildRecord') : t('features.delivery.deliveryDetail.releaseRecord')} · ${record.ownerLabel}`}
         toolbar={<StatusBadge status={record.status} label={statusLabel(record.kind, record.status)} />}
       >
         <div className="delivery-detail-grid">
-          <DetailItem label="版本" value={record.version ? `v${record.version}` : '未设置'} />
-          <DetailItem label="日期" value={formatDate(record.date)} />
-          <DetailItem label={record.kind === 'build' ? '所属项目' : '所属产品'} value={record.ownerLabel} />
-          <DetailItem label="就绪度" value={`${readiness}%`} />
+          <DetailItem label={t('features.delivery.deliveryDetail.versionLabel')} value={record.version ? `v${record.version}` : t('enums.unset')} />
+          <DetailItem label={t('features.delivery.deliveryDetail.dateLabel')} value={formatDate(record.date)} />
+          <DetailItem label={record.kind === 'build' ? t('features.delivery.deliveryDetail.projectLabel') : t('features.delivery.deliveryDetail.productLabel')} value={record.ownerLabel} />
+          <DetailItem label={t('features.delivery.deliveryDetail.readinessLabel')} value={`${readiness}%`} />
         </div>
         <div className="delivery-detail-readiness">
           <div className="delivery-detail-readiness-head">
-            <span>发布就绪度</span>
+            <span>{t('features.delivery.deliveryDetail.readinessTitle')}</span>
             <strong>{readiness}%</strong>
           </div>
           <ProgressBar percent={readiness} height={8} variant={gate?.ready ? 'success' : statusTone(record)} />
@@ -151,14 +153,14 @@ export default function DeliveryDetail({
           <BusinessAdvicePanel
             targetType={record.kind}
             targetId={record.id}
-            title={record.kind === 'build' ? 'AI 构建建议' : 'AI 发布建议'}
+            title={record.kind === 'build' ? t('features.delivery.deliveryDetail.aiBuildAdvice') : t('features.delivery.deliveryDetail.aiReleaseAdvice')}
             description={record.kind === 'build'
-              ? '基于后端构建门禁、关联需求、任务、测试和缺陷生成。'
-              : '基于后端发布门禁、审批、回滚、发布报告和审计链路生成。'}
-            buttonText={record.kind === 'build' ? 'AI 分析构建' : 'AI 分析发布'}
+              ? t('features.delivery.deliveryDetail.aiBuildDesc')
+              : t('features.delivery.deliveryDetail.aiReleaseDesc')}
+            buttonText={record.kind === 'build' ? t('features.delivery.deliveryDetail.aiAnalyzeBuild') : t('features.delivery.deliveryDetail.aiAnalyzeRelease')}
             question={record.kind === 'build'
-              ? '请分析该构建是否适合进入发布，并指出阻断门禁、质量风险和下一步动作。'
-              : '请分析该发布是否适合正式发布或复盘，并指出审批、回滚、质量和审计风险。'}
+              ? t('features.delivery.deliveryDetail.aiBuildQuestion')
+              : t('features.delivery.deliveryDetail.aiReleaseQuestion')}
             draft={() => ({
               status: record.status,
               readiness,
@@ -170,84 +172,84 @@ export default function DeliveryDetail({
         <section className={`delivery-detail-gates ${gate?.ready ? 'ready' : 'blocked'}`}>
           <div className="delivery-detail-gates-head">
             <div>
-              <h3>准入门禁</h3>
-              <p>{gate?.summary ?? '暂未获取到后端预检结果。'}</p>
+              <h3>{t('features.delivery.deliveryDetail.gatesTitle')}</h3>
+              <p>{gate?.summary ?? t('features.delivery.deliveryDetail.noGateSummary')}</p>
             </div>
-            <StatusBadge status={gate?.ready ? 'passed' : 'blocked'} label={gate?.ready ? '可发布' : '需处理'} showDot={false} />
+            <StatusBadge status={gate?.ready ? 'passed' : 'blocked'} label={gate?.ready ? t('features.delivery.deliveryDetail.releasable') : t('features.delivery.deliveryDetail.needsAction')} showDot={false} />
           </div>
           <div className="delivery-detail-gate-list">
             {gateLines.map((line, index) => (
               <GateLine
                 key={line.id || `${line.label || 'gate'}-${index}`}
-                label={line.label || '门禁项'}
+                label={line.label || t('features.delivery.deliveryDetail.gateItem')}
                 passed={Boolean(line.passed)}
-                value={line.message || (line.passed ? '通过' : '未通过')}
+                value={line.message || (line.passed ? t('features.delivery.deliveryDetail.passed') : t('features.delivery.deliveryDetail.notPassed'))}
               />
             ))}
             {!gate || gateLines.length === 0 ? (
-              <GateLine label="门禁预检" passed={false} value="后端预检结果暂不可用" />
+              <GateLine label={t('features.delivery.deliveryDetail.gatePrecheck')} passed={false} value={t('features.delivery.deliveryDetail.precheckUnavailable')} />
             ) : null}
           </div>
         </section>
         <div className="delivery-detail-sections">
           <section>
-            <h3>关联需求</h3>
-            <TagList items={linkedStories} empty="暂无关联需求" />
+            <h3>{t('features.delivery.deliveryDetail.linkedStoriesTitle')}</h3>
+            <TagList items={linkedStories} empty={t('features.delivery.deliveryDetail.noLinkedStories')} />
           </section>
           <section>
-            <h3>关联缺陷</h3>
-            <TagList items={linkedBugs} empty="暂无关联缺陷" />
+            <h3>{t('features.delivery.deliveryDetail.linkedBugsTitle')}</h3>
+            <TagList items={linkedBugs} empty={t('features.delivery.deliveryDetail.noLinkedBugs')} />
           </section>
           <section className="wide">
-            <h3>{record.kind === 'build' ? '构建备注' : '发布说明'}</h3>
-            <p>{record.notes || '暂无说明。'}</p>
+            <h3>{record.kind === 'build' ? t('features.delivery.deliveryDetail.buildNotes') : t('features.delivery.deliveryDetail.releaseNotes')}</h3>
+            <p>{record.notes || t('features.delivery.deliveryDetail.noNotes')}</p>
           </section>
         </div>
         {record.kind === 'release' ? (
           <section className="delivery-governance">
             <div className="delivery-governance-head">
               <div>
-                <h3>发布治理</h3>
-                <p>审批、驳回和回滚都会写入审计链路。</p>
+                <h3>{t('features.delivery.deliveryDetail.governanceTitle')}</h3>
+                <p>{t('features.delivery.deliveryDetail.governanceDesc')}</p>
               </div>
               <StatusBadge status={record.status} label={statusLabel(record.kind, record.status)} showDot={false} />
             </div>
             {governanceError ? <div className="form-error">{governanceError}</div> : null}
             <div className="delivery-governance-grid">
               <div className="delivery-governance-box">
-                <h4>审批意见</h4>
+                <h4>{t('features.delivery.deliveryDetail.approvalTitle')}</h4>
                 <textarea
                   className="form-textarea"
                   rows={3}
                   value={approvalComment}
                   onChange={(event) => setApprovalComment(event.target.value)}
-                  placeholder="补充审批意见、风险提醒或驳回原因"
+                  placeholder={t('features.delivery.deliveryDetail.approvalPlaceholder')}
                   disabled={!canManageDelivery || submittingGovernance}
                 />
                 {canManageDelivery ? (
                   <div className="delivery-governance-actions">
-                    <button className="btn btn-primary btn-sm" disabled={submittingGovernance} onClick={() => void submitApproval('approve')}>通过审批</button>
-                    <button className="btn btn-secondary btn-sm" disabled={submittingGovernance} onClick={() => void submitApproval('reject')}>驳回</button>
+                    <button className="btn btn-primary btn-sm" disabled={submittingGovernance} onClick={() => void submitApproval('approve')}>{t('features.delivery.deliveryDetail.approve')}</button>
+                    <button className="btn btn-secondary btn-sm" disabled={submittingGovernance} onClick={() => void submitApproval('reject')}>{t('features.delivery.deliveryDetail.reject')}</button>
                   </div>
                 ) : null}
                 <RecordList
                   loading={approvalsState.loading}
-                  empty="暂无审批记录"
+                  empty={t('features.delivery.deliveryDetail.noApprovals')}
                   records={(approvalsState.data ?? []).map((item) => ({
                     id: item.id,
-                    title: item.decision === 'approve' ? '审批通过' : '审批驳回',
-                    meta: `${item.approverName || '未知'} · ${formatDate(item.createdAt)}`,
-                    body: item.comment || '未填写审批意见',
+                    title: item.decision === 'approve' ? t('features.delivery.deliveryDetail.approved') : t('features.delivery.deliveryDetail.rejected'),
+                    meta: `${item.approverName || t('features.delivery.deliveryDetail.unknown')} · ${formatDate(item.createdAt)}`,
+                    body: item.comment || t('features.delivery.deliveryDetail.noApprovalComment'),
                   }))}
                 />
               </div>
               <div className="delivery-governance-box">
-                <h4>回滚登记</h4>
+                <h4>{t('features.delivery.deliveryDetail.rollbackTitle')}</h4>
                 <input
                   className="form-input"
                   value={rollbackReason}
                   onChange={(event) => setRollbackReason(event.target.value)}
-                  placeholder="回滚原因"
+                  placeholder={t('features.delivery.deliveryDetail.rollbackReasonPlaceholder')}
                   disabled={!canManageDelivery || submittingGovernance}
                 />
                 <textarea
@@ -255,7 +257,7 @@ export default function DeliveryDetail({
                   rows={2}
                   value={rollbackImpact}
                   onChange={(event) => setRollbackImpact(event.target.value)}
-                  placeholder="影响范围"
+                  placeholder={t('features.delivery.deliveryDetail.impactPlaceholder')}
                   disabled={!canManageDelivery || submittingGovernance}
                 />
                 <textarea
@@ -263,22 +265,22 @@ export default function DeliveryDetail({
                   rows={2}
                   value={rollbackPlan}
                   onChange={(event) => setRollbackPlan(event.target.value)}
-                  placeholder="回滚方案或验证计划"
+                  placeholder={t('features.delivery.deliveryDetail.planPlaceholder')}
                   disabled={!canManageDelivery || submittingGovernance}
                 />
                 {canManageDelivery ? (
                   <div className="delivery-governance-actions">
-                    <button className="btn btn-danger btn-sm" disabled={submittingGovernance} onClick={() => void submitRollback()}>登记回滚</button>
+                    <button className="btn btn-danger btn-sm" disabled={submittingGovernance} onClick={() => void submitRollback()}>{t('features.delivery.deliveryDetail.registerRollback')}</button>
                   </div>
                 ) : null}
                 <RecordList
                   loading={rollbacksState.loading}
-                  empty="暂无回滚记录"
+                  empty={t('features.delivery.deliveryDetail.noRollbacks')}
                   records={(rollbacksState.data ?? []).map((item) => ({
                     id: item.id,
                     title: item.reason,
-                    meta: `${item.operatorName || '未知'} · ${formatDate(item.createdAt)}`,
-                    body: [item.impact, item.plan].filter(Boolean).join(' / ') || '未填写影响范围或方案',
+                    meta: `${item.operatorName || t('features.delivery.deliveryDetail.unknown')} · ${formatDate(item.createdAt)}`,
+                    body: [item.impact, item.plan].filter(Boolean).join(' / ') || t('features.delivery.deliveryDetail.noImpactOrPlan'),
                   }))}
                 />
               </div>
@@ -304,12 +306,12 @@ export default function DeliveryDetail({
                 <option value={status} key={status}>{statusLabel(record.kind, status)}</option>
               ))}
             </select>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>关闭</button>
-            <button type="button" className="btn btn-danger btn-sm" onClick={() => onDelete(record)}>删除</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>{t('common.close')}</button>
+            <button type="button" className="btn btn-danger btn-sm" onClick={() => onDelete(record)}>{t('common.delete')}</button>
           </div>
         ) : (
           <div className="delivery-detail-actions">
-            <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>关闭</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>{t('common.close')}</button>
           </div>
         )}
       </Panel>

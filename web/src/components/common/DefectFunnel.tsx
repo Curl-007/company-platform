@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { DefectFunnelData } from '../../types';
 
 // ---------------------------------------------------------------------------
@@ -13,14 +14,15 @@ interface DefectFunnelProps {
 }
 
 const STAGES = [
-  { key: 'new', label: '新建', color: 'var(--color-risk, #dc2626)' },
-  { key: 'confirmed', label: '已确认', color: 'var(--color-warning, #d97706)' },
-  { key: 'in_fix', label: '修复中', color: 'var(--color-info, #2563eb)' },
-  { key: 'resolved', label: '已解决', color: 'var(--color-success, #16a34a)' },
-  { key: 'closed', label: '已关闭', color: 'var(--text-tertiary, #8C959F)' },
+  { key: 'new', label: 'enums.defectStatus.new', color: 'var(--color-risk, #dc2626)' },
+  { key: 'confirmed', label: 'enums.defectStatus.confirmed', color: 'var(--color-warning, #d97706)' },
+  { key: 'in_fix', label: 'enums.defectStatus.in_fix', color: 'var(--color-info, #2563eb)' },
+  { key: 'resolved', label: 'enums.defectStatus.resolved', color: 'var(--color-success, #16a34a)' },
+  { key: 'closed', label: 'enums.defectStatus.closed', color: 'var(--text-tertiary, #8C959F)' },
 ] as const;
 
 export default function DefectFunnel({ data }: DefectFunnelProps) {
+  const { t } = useTranslation();
   const total = data.total || 1; // avoid divide-by-zero on empty
   const closureRate = data.total > 0 ? Math.round((data.closed / data.total) * 100) : 0;
 
@@ -28,7 +30,7 @@ export default function DefectFunnel({ data }: DefectFunnelProps) {
     <div className="defect-funnel">
       <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
         <span className="text-secondary" style={{ fontSize: 13 }}>
-          共 <strong className="text-mono">{data.total}</strong> 个缺陷 · 关闭率 <strong className="text-mono">{closureRate}%</strong>
+          {t('common.defectTotal', { count: data.total, rate: closureRate })}
         </span>
       </div>
       {/* Stacked bar */}
@@ -42,7 +44,7 @@ export default function DefectFunnel({ data }: DefectFunnelProps) {
               key={s.key}
               className="funnel-segment"
               style={{ width: `${pct}%`, background: s.color }}
-              title={`${s.label}: ${val}`}
+              title={`${t(s.label)}: ${val}`}
             />
           );
         })}
@@ -54,14 +56,14 @@ export default function DefectFunnel({ data }: DefectFunnelProps) {
           return (
             <div key={s.key} className="funnel-legend-item">
               <span className="funnel-legend-dot" style={{ background: s.color }} />
-              <span className="text-secondary" style={{ fontSize: 12 }}>{s.label}</span>
+              <span className="text-secondary" style={{ fontSize: 12 }}>{t(s.label)}</span>
               <span className="font-medium text-mono" style={{ fontSize: 13 }}>{val}</span>
             </div>
           );
         })}
       </div>
       {data.total === 0 && (
-        <p className="text-secondary" style={{ fontSize: 13, margin: '8px 0 0' }}>暂无缺陷记录。</p>
+        <p className="text-secondary" style={{ fontSize: 13, margin: '8px 0 0' }}>{t('common.noDefectRecords')}</p>
       )}
     </div>
   );

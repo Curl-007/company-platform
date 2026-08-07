@@ -1,4 +1,5 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getSessionUser } from '../../../services/auth';
 import {
   activateAiProviderConfig,
@@ -28,22 +29,26 @@ import ApiConfigPanel from './ApiConfigPanel';
 import AiProviderPanel from './AiProviderPanel';
 import AiPrefsPanel from './AiPrefsPanel';
 import NotificationsPanel from './NotificationsPanel';
+import LanguagePanel from './LanguagePanel';
 import '../../../styles/settings.css';
 
-type TabId = 'account' | 'api' | 'ai' | 'prefs' | 'notifications';
+type TabId = 'account' | 'api' | 'ai' | 'prefs' | 'notifications' | 'language';
 
 interface TabDef {
   id: TabId;
   label: string;
+  /** 可选 i18n key，存在时渲染翻译后的标签（未翻译的 Tab 保持中文兜底）。 */
+  labelKey?: string;
   badge?: string;
 }
 
 const TABS: TabDef[] = [
-  { id: 'account', label: '账号信息' },
-  { id: 'api', label: 'API 配置' },
-  { id: 'ai', label: 'AI 模型配置', badge: '高级' },
-  { id: 'prefs', label: '偏好设置' },
-  { id: 'notifications', label: '通知设置' },
+  { id: 'account', label: '账号信息', labelKey: 'features.settings.tabs.account' },
+  { id: 'api', label: 'API 配置', labelKey: 'features.settings.tabs.api' },
+  { id: 'ai', label: 'AI 模型配置', labelKey: 'features.settings.tabs.ai', badge: 'features.settings.tabs.aiBadge' },
+  { id: 'prefs', label: '偏好设置', labelKey: 'features.settings.tabs.prefs' },
+  { id: 'notifications', label: '通知设置', labelKey: 'features.settings.tabs.notifications' },
+  { id: 'language', label: '语言', labelKey: 'settings.tab.language' },
 ];
 
 function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
@@ -66,6 +71,7 @@ function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
 
 export default function SettingsTabs() {
   const [activeTab, setActiveTab] = useState<TabId>('account');
+  const { t } = useTranslation();
   const sessionUser = getSessionUser();
   const canManageAiProvider = canOperate(sessionUser, 'aiProvider:manage');
   const toast = useToast();
@@ -90,7 +96,7 @@ export default function SettingsTabs() {
   );
   const [notifDraft, setNotifDraft] = useState(notifConfig);
   const [aiDraft, setAiDraft] = useState<UpdateAiProviderInput & { apiKey: string }>({
-    name: '默认模型',
+    name: t('features.settings.actions.defaultModel'),
     provider: 'openai-compatible',
     baseUrl: 'https://api.openai.com/v1',
     model: 'gpt-4o-mini',
@@ -105,7 +111,7 @@ export default function SettingsTabs() {
   const [testingAiProvider, setTestingAiProvider] = useState(false);
   const [aiTestResult, setAiTestResult] = useState<AiTestState>({
     status: 'idle',
-    message: '保存或修改模型配置后，请点击“测试连接”确认当前配置真实可用。',
+    message: t('features.settings.actions.testHintIdle'),
   });
 
   useEffect(() => {
@@ -116,7 +122,7 @@ export default function SettingsTabs() {
     setAiDraft((prev) => ({
       ...prev,
       id: selected.id || undefined,
-      name: selected.name || selected.provider || '默认模型',
+      name: selected.name || selected.provider || t('features.settings.actions.defaultModel'),
       provider: selected.provider || 'openai-compatible',
       baseUrl: selected.baseUrl || 'https://api.openai.com/v1',
       model: selected.model || 'gpt-4o-mini',
@@ -133,27 +139,27 @@ export default function SettingsTabs() {
   function saveApiConfig() {
     setApiConfig(apiDraft);
     localStorage.setItem(SETTINGS_STORAGE_KEYS.api, JSON.stringify(apiDraft));
-    toast.success('API 配置已保存');
+    toast.success(t('features.settings.actions.apiConfigSaved'));
   }
 
   function saveAiPrefs() {
     setAiPrefs(aiPrefsDraft);
     localStorage.setItem(SETTINGS_STORAGE_KEYS.aiPrefs, JSON.stringify(aiPrefsDraft));
-    toast.success('AI 分析策略已保存');
+    toast.success(t('features.settings.actions.aiPrefsSaved'));
   }
 
   function saveNotifConfig() {
     setNotifConfig(notifDraft);
     localStorage.setItem(SETTINGS_STORAGE_KEYS.notifications, JSON.stringify(notifDraft));
-    toast.success('通知偏好已保存');
+    toast.success(t('features.settings.actions.notifPrefsSaved'));
   }
 
   async function saveAiProvider() {
-    if (!canManageAiProvider) return toast.error('当前账号无权维护 AI 模型配置');
-    if (!aiDraft.baseUrl.trim()) return toast.error('请填写 Base URL');
-    if (!aiDraft.model.trim()) return toast.error('请填写模型名称');
+    if (!canManageAiProvider) return toast.error(t('features.settings.actions.noPermissionManageAi'));
+    if (!aiDraft.baseUrl.trim()) return toast.error(t('features.settings.actions.baseUrlRequired'));
+    if (!aiDraft.model.trim()) return toast.error(t('features.settings.actions.modelNameRequired'));
     setSavingAiProvider(true);
-    setAiTestResult({ status: 'idle', message: '模型配置已变更，保存完成后需要重新测试连接。' });
+    setAiTestResult({ status: 'idle', message: t('features.settings.actions.changedNeedRetest') });
     try {
       const payload: UpdateAiProviderInput = {
         ...(aiDraft.id && !aiDraft.createNew ? { id: aiDraft.id } : {}),
@@ -172,10 +178,10 @@ export default function SettingsTabs() {
       const next = await updateAiProviderConfig(payload);
       const selected = payload.createNew ? next.activeId : payload.id;
       if (selected) setSelectedAiProviderId(selected);
-      toast.success('AI 模型配置已保存');
+      toast.success(t('features.settings.actions.aiConfigSaved'));
       await reloadAiProvider();
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : 'AI 模型配置保存失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.settings.actions.aiConfigSaveFailed'));
     } finally {
       setSavingAiProvider(false);
     }
@@ -184,7 +190,7 @@ export default function SettingsTabs() {
   function createAiProviderDraft() {
     setSelectedAiProviderId('__new__');
     setAiDraft({
-      name: '新模型配置',
+      name: t('features.settings.actions.newModelConfig'),
       provider: 'openai-compatible',
       baseUrl: 'https://api.openai.com/v1',
       model: 'gpt-4o-mini',
@@ -219,65 +225,65 @@ export default function SettingsTabs() {
   }
 
   async function handleActivateAiProvider(id: string) {
-    if (!canManageAiProvider) return toast.error('当前账号无权维护 AI 模型配置');
+    if (!canManageAiProvider) return toast.error(t('features.settings.actions.noPermissionManageAi'));
     try {
       await activateAiProviderConfig(id);
       setSelectedAiProviderId(id);
-      toast.success('AI 模型配置已启用');
+      toast.success(t('features.settings.actions.aiConfigEnabled'));
       await reloadAiProvider();
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '启用失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.settings.actions.enableFailed'));
     }
   }
 
   async function handleToggleAiProvider(id: string, enabled: boolean) {
-    if (!canManageAiProvider) return toast.error('当前账号无权维护 AI 模型配置');
+    if (!canManageAiProvider) return toast.error(t('features.settings.actions.noPermissionManageAi'));
     try {
       await updateAiProviderStatus(id, enabled);
-      toast.success(enabled ? 'AI 模型配置已启用' : 'AI 模型配置已禁用');
+      toast.success(enabled ? t('features.settings.actions.aiConfigEnabled') : t('features.settings.actions.aiConfigDisabled'));
       await reloadAiProvider();
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '状态更新失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.settings.actions.statusUpdateFailed'));
     }
   }
 
   async function handleDeleteAiProvider(id: string) {
-    if (!canManageAiProvider) return toast.error('当前账号无权维护 AI 模型配置');
+    if (!canManageAiProvider) return toast.error(t('features.settings.actions.noPermissionManageAi'));
     const item = aiProvider?.providers?.find((provider) => provider.id === id);
     const ok = await confirm({
-      title: `删除 AI 配置“${item?.name || item?.model || id}”？`,
-      description: '删除后不会影响历史 AI 结果，但该模型连接配置不可恢复。',
-      confirmText: '删除配置',
+      title: t('features.settings.actions.deleteAiConfirm', { name: item?.name || item?.model || id }),
+      description: t('features.settings.actions.deleteAiConfirmDesc'),
+      confirmText: t('features.settings.actions.deleteConfig'),
       tone: 'danger',
     });
     if (!ok) return;
     try {
       const next = await deleteAiProviderConfig(id);
       setSelectedAiProviderId(next.activeId || next.providers?.[0]?.id || null);
-      toast.success('AI 模型配置已删除');
+      toast.success(t('features.settings.actions.aiConfigDeleted'));
       await reloadAiProvider();
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '删除失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.settings.actions.deleteFailed'));
     }
   }
 
   async function handleTestAiProvider() {
-    if (!canManageAiProvider) return toast.error('当前账号无权测试 AI Provider');
+    if (!canManageAiProvider) return toast.error(t('features.settings.actions.noPermissionTestAi'));
     setTestingAiProvider(true);
-    setAiTestResult({ status: 'idle', message: '正在调用模型服务进行连通性测试...' });
+    setAiTestResult({ status: 'idle', message: t('features.settings.actions.testingConnection') });
     try {
       const result = await testAiProviderConfig();
       setAiTestResult({
         status: 'success',
-        message: '连接成功，当前配置可用于 AI 对话、文档分析和图片识别。',
+        message: t('features.settings.actions.connectionSuccess'),
         latencyMs: result.latencyMs,
-        sample: result.sample || '无内容',
+        sample: result.sample || t('features.settings.actions.noContent'),
         testedAt: new Date().toISOString(),
       });
-      toast.success('AI Provider 连接成功');
+      toast.success(t('features.settings.actions.providerConnected'));
       await reloadAiProvider();
     } catch (err: unknown) {
-      const message = err instanceof ApiError ? err.message : 'AI Provider 测试失败';
+      const message = err instanceof ApiError ? err.message : t('features.settings.actions.testFailed');
       setAiTestResult({ status: 'error', message, testedAt: new Date().toISOString() });
       toast.error(message);
       await reloadAiProvider();
@@ -289,7 +295,7 @@ export default function SettingsTabs() {
   return (
     <div className="settings-page">
       {/* 顶部 Tab 栏（全站 nav-tabs 规范：role=tablist + 方向键导航） */}
-      <div className="nav-tabs settings-page-tabs" role="tablist" aria-label="系统设置视图">
+      <div className="nav-tabs settings-page-tabs" role="tablist" aria-label={t('features.settings.settingsTabs.tablistAria')}>
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -303,8 +309,8 @@ export default function SettingsTabs() {
             onClick={() => setActiveTab(tab.id)}
             onKeyDown={handleTabKeyDown}
           >
-            {tab.label}
-            {tab.badge ? <Badge variant="secondary" className="ml-2">{tab.badge}</Badge> : null}
+            {tab.labelKey ? t(tab.labelKey) : tab.label}
+            {tab.badge ? <Badge variant="secondary" className="ml-2">{t(tab.badge)}</Badge> : null}
           </button>
         ))}
       </div>
@@ -368,6 +374,11 @@ export default function SettingsTabs() {
               setNotifDraft={setNotifDraft}
               onSave={saveNotifConfig}
             />
+          </div>
+        )}
+        {activeTab === 'language' && (
+          <div id="settings-panel-language" role="tabpanel" aria-labelledby="settings-tab-language">
+            <LanguagePanel />
           </div>
         )}
       </div>

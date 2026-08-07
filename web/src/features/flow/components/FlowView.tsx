@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { fetchFlowOverview } from '../../projects/api';
 import { fetchWorkflowTemplates } from '../../workflow/api';
 import { useAsync } from '../../../hooks/useAsync';
@@ -25,6 +26,7 @@ interface FlowSignal {
 }
 
 export default function FlowView() {
+  const { t } = useTranslation();
   const { data: overview, loading, error, reload } = useAsync<FlowOverviewItem[]>(
     fetchFlowOverview,
     [],
@@ -70,13 +72,13 @@ export default function FlowView() {
     const blocked = gates.filter((gate) => gate.state === 'blocked').length;
     const pending = gates.filter((gate) => gate.state === 'pending').length;
     return [
-      { label: '项目总数', value: overview.length, caption: '当前流程范围', tone: '' },
-      { label: '已通过门禁', value: passed, caption: 'done / passed', tone: 'is-success' },
-      { label: '进行中门禁', value: inProgress, caption: '当前推进阶段', tone: 'is-info' },
-      { label: '阻塞门禁', value: blocked, caption: blocked > 0 ? '需介入处理' : '无阻塞', tone: blocked > 0 ? 'is-risk' : '' },
-      { label: '未开始门禁', value: pending, caption: '尚未启动', tone: pending > 0 ? 'is-warn' : '' },
+      { label: t('features.flow.flowView.signalProjects'), value: overview.length, caption: t('features.flow.flowView.signalProjectsCaption'), tone: '' },
+      { label: t('features.flow.flowView.signalPassed'), value: passed, caption: 'done / passed', tone: 'is-success' },
+      { label: t('features.flow.flowView.signalInProgress'), value: inProgress, caption: t('features.flow.flowView.signalInProgressCaption'), tone: 'is-info' },
+      { label: t('features.flow.flowView.signalBlocked'), value: blocked, caption: blocked > 0 ? t('features.flow.flowView.signalBlockedCaptionNeed') : t('features.flow.flowView.signalBlockedCaptionNone'), tone: blocked > 0 ? 'is-risk' : '' },
+      { label: t('features.flow.flowView.signalPending'), value: pending, caption: t('features.flow.flowView.signalPendingCaption'), tone: pending > 0 ? 'is-warn' : '' },
     ];
-  }, [overview]);
+  }, [overview, t]);
 
   if (loading || error || !overview) {
     return (
@@ -92,16 +94,16 @@ export default function FlowView() {
     <div className="flow-workbench flow-page">
       <div className="flow-toolbar">
         <p className="flow-toolbar-summary">
-          只保留两个模板：固定交付 / 轻量交付 · 共 {overview.length} 个项目
+          {t('features.flow.flowView.toolbarSummary', { count: overview.length })}
         </p>
         <div className="flow-toolbar-actions">
           <button className="btn btn-secondary btn-sm" onClick={handleRefresh}>
-            刷新
+            {t('features.flow.flowView.refresh')}
           </button>
         </div>
       </div>
 
-      <section className="flow-signal-strip" aria-label="研发流程概况">
+      <section className="flow-signal-strip" aria-label={t('features.flow.flowView.signalAria')}>
         {signals.map((item) => (
           <div key={item.label} className={`flow-signal ${item.tone}`.trim()}>
             <span className="flow-signal-label">{item.label}</span>
@@ -112,11 +114,11 @@ export default function FlowView() {
       </section>
 
       <Panel
-        title="流程模板（二选一）"
-        subtitle="系统只提供固定交付与轻量交付；项目在详情页绑定其一。此处预览阶段列顺序。"
+        title={t('features.flow.flowView.templatesTitle')}
+        subtitle={t('features.flow.flowView.templatesSubtitle')}
         className="flow-template-panel"
       >
-        {templateLoading && <p className="text-secondary">加载模板中...</p>}
+        {templateLoading && <p className="text-secondary">{t('features.flow.flowView.loadingTemplates')}</p>}
         {templateError && <p className="form-error">{templateError}</p>}
         {!templateLoading && !templateError && (
           <>
@@ -132,9 +134,9 @@ export default function FlowView() {
                   >
                     <div className="flow-template-card-head">
                       <strong>{template.name}</strong>
-                      <span className="flow-template-badge">{template.stages?.length || 0} 阶段</span>
+                      <span className="flow-template-badge">{t('features.flow.flowView.stageCount', { count: template.stages?.length || 0 })}</span>
                     </div>
-                    <p>{template.description || '系统内置交付模板'}</p>
+                    <p>{template.description || t('features.flow.flowView.builtinTemplateDesc')}</p>
                   </button>
                 );
               })}
@@ -158,23 +160,23 @@ export default function FlowView() {
       </Panel>
 
       <Panel
-        title="项目阶段矩阵"
-        subtitle="点击项目行展开详情；列顺序跟随上方选中的模板预览"
+        title={t('features.flow.flowView.matrixTitle')}
+        subtitle={t('features.flow.flowView.matrixSubtitle')}
         className="flow-matrix-panel"
       >
         <div className="flow-legend-bar">
-          <span className="flow-legend-item"><span className="flow-legend-dot" style={{ background: STATE_DOT.passed }} />已通过</span>
-          <span className="flow-legend-item"><span className="flow-legend-dot" style={{ background: STATE_DOT.in_progress }} />进行中</span>
-          <span className="flow-legend-item"><span className="flow-legend-dot" style={{ background: STATE_DOT.blocked }} />阻塞</span>
-          <span className="flow-legend-item"><span className="flow-legend-dot" style={{ background: STATE_DOT.pending }} />未开始</span>
+          <span className="flow-legend-item"><span className="flow-legend-dot" style={{ background: STATE_DOT.passed }} />{t('features.flow.flowView.legendPassed')}</span>
+          <span className="flow-legend-item"><span className="flow-legend-dot" style={{ background: STATE_DOT.in_progress }} />{t('features.flow.flowView.legendInProgress')}</span>
+          <span className="flow-legend-item"><span className="flow-legend-dot" style={{ background: STATE_DOT.blocked }} />{t('features.flow.flowView.legendBlocked')}</span>
+          <span className="flow-legend-item"><span className="flow-legend-dot" style={{ background: STATE_DOT.pending }} />{t('features.flow.flowView.legendPending')}</span>
         </div>
         <div className="flow-matrix" style={matrixStyle}>
           <div className="flow-matrix-row flow-matrix-header">
-            <div className="flow-matrix-cell flow-matrix-project">项目</div>
+            <div className="flow-matrix-cell flow-matrix-project">{t('features.flow.flowView.colProject')}</div>
             {stageOrder.map((stage) => (
               <div key={stage} className="flow-matrix-cell flow-matrix-stage-head">{stageLabels[stage] || stage}</div>
             ))}
-            <div className="flow-matrix-cell flow-matrix-health">健康度</div>
+            <div className="flow-matrix-cell flow-matrix-health">{t('features.flow.flowView.colHealth')}</div>
           </div>
           {overview.map((item) => {
             const isOpen = selectedId === item.projectId;

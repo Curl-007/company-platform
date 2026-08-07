@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Clock3, GripVertical, KanbanSquare, Plus, UserRound } from 'lucide-react';
 import { fetchProjectKanban, updateTaskKanban } from '../../tasks/api';
 import { useAsync } from '../../../hooks/useAsync';
@@ -18,6 +19,7 @@ export default function KanbanTab({
   projectId: string;
   canManageProject: boolean;
 }) {
+  const { t } = useTranslation();
   const { data, loading, error, reload } = useAsync<KanbanColumn[]>(
     () => fetchProjectKanban(projectId),
     [projectId],
@@ -91,9 +93,9 @@ export default function KanbanTab({
 
     try {
       await updateTaskKanban(taskId, { version: task.version, kanbanColumn: targetColumnId });
-      toast.success(`任务已移动到「${labelOf(TASK_STATUS_LABELS, targetColumnId)}」`);
+      toast.success(t('features.projects.kanbanTab.moved', { status: labelOf(TASK_STATUS_LABELS, targetColumnId) }));
     } catch (err: unknown) {
-      setMovingError(err instanceof ApiError ? err.message : '移动失败，已回滚。');
+      setMovingError(err instanceof ApiError ? err.message : t('features.projects.kanbanTab.moveFailed'));
       setColumns(columns);
     }
   }
@@ -114,18 +116,18 @@ export default function KanbanTab({
         <div className="pd-kanban-toolbar-main">
           <span className="pd-kanban-icon"><KanbanSquare size={16} /></span>
           <div>
-            <div className="pd-kanban-title">项目看板</div>
+            <div className="pd-kanban-title">{t('features.projects.kanbanTab.title')}</div>
             <div className="pd-kanban-subtitle">
-              {canManageProject ? '拖拽卡片即可流转状态' : '只读模式'}
+              {canManageProject ? t('features.projects.kanbanTab.dragHint') : t('features.projects.kanbanTab.readonly')}
             </div>
           </div>
         </div>
         <div className="pd-kanban-toolbar-right">
           <div className="pd-kanban-stats">
-            <span><strong>{totalTasks}</strong>全部</span>
-            <span><strong>{activeTasks}</strong>进行中</span>
-            <span className={blockedTasks > 0 ? 'is-risk' : ''}><strong>{blockedTasks}</strong>阻塞</span>
-            <span><strong>{doneTasks}</strong>完成</span>
+            <span><strong>{totalTasks}</strong>{t('features.projects.kanbanTab.all')}</span>
+            <span><strong>{activeTasks}</strong>{t('features.projects.kanbanTab.inProgress')}</span>
+            <span className={blockedTasks > 0 ? 'is-risk' : ''}><strong>{blockedTasks}</strong>{t('features.projects.kanbanTab.blocked')}</span>
+            <span><strong>{doneTasks}</strong>{t('features.projects.kanbanTab.done')}</span>
           </div>
           {hiddenEmpty > 0 ? (
             <button
@@ -133,7 +135,7 @@ export default function KanbanTab({
               className="btn btn-secondary btn-sm"
               onClick={() => setShowEmpty((value) => !value)}
             >
-              {showEmpty ? '隐藏空列' : `显示空列 (${hiddenEmpty})`}
+              {showEmpty ? t('features.projects.kanbanTab.hideEmpty') : t('features.projects.kanbanTab.showEmpty', { count: hiddenEmpty })}
             </button>
           ) : null}
         </div>
@@ -162,7 +164,7 @@ export default function KanbanTab({
                   <div className="min-w-0">
                     <div className="pd-kanban-column-title">{labelOf(TASK_STATUS_LABELS, column.id)}</div>
                     <div className="pd-kanban-column-meta">
-                      {column.tasks.length ? `${averageProgress}% 均进度` : '可拖入'}
+                      {column.tasks.length ? t('features.projects.kanbanTab.avgProgress', { value: averageProgress }) : t('features.projects.kanbanTab.dropTarget')}
                     </div>
                   </div>
                 </div>
@@ -173,7 +175,7 @@ export default function KanbanTab({
                 {column.tasks.length === 0 ? (
                   <div className="pd-kanban-empty">
                     <Plus size={14} />
-                    <span>空列</span>
+                    <span>{t('features.projects.kanbanTab.emptyColumn')}</span>
                   </div>
                 ) : (
                   column.tasks.map((task) => (
@@ -197,12 +199,12 @@ export default function KanbanTab({
                           {task.owner
                             ? <span className="pd-kanban-avatar">{task.owner.slice(0, 1)}</span>
                             : <UserRound size={12} />}
-                          {task.owner || '未指派'}
+                          {task.owner || t('features.projects.common.unassigned')}
                         </span>
                         <span className="text-mono">{task.progress ?? 0}%</span>
                         {task.dueDate ? <span><Clock3 size={12} />{task.dueDate.slice(5)}</span> : null}
                         {task.status === 'blocked' ? (
-                          <span className="is-risk"><AlertTriangle size={12} />阻塞</span>
+                          <span className="is-risk"><AlertTriangle size={12} />{t('features.projects.kanbanTab.blocked')}</span>
                         ) : null}
                       </div>
                     </article>

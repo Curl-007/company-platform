@@ -7,5 +7,6 @@ export default defineConfig({
     globals: false,
     restoreMocks: true,
     clearMocks: true,
+    setupFiles: ['src/test/setup-i18n.ts'],
   },
 });

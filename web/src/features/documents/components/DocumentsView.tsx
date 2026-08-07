@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   FileText,
   FolderOpen,
@@ -27,6 +28,7 @@ import {
 } from './documentMeta';
 
 export default function DocumentsView() {
+  const { t } = useTranslation();
   const toast = useToast();
   const confirm = useConfirm();
   const sessionUser = getSessionUser();
@@ -87,35 +89,35 @@ export default function DocumentsView() {
 
   async function handleDelete(doc: Document) {
     if (!canManageDocuments) {
-      toast.error('当前账号无权删除文档。');
+      toast.error(t('features.documents.documentsView.noDeletePermission'));
       return;
     }
     const confirmed = await confirm({
-      title: `删除文档“${doc.title}”？`,
-      description: '删除后该文档及其分析记录入口将从文档中心移除。',
-      confirmText: '删除文档',
+      title: t('features.documents.documentsView.deleteConfirmTitle', { name: doc.title }),
+      description: t('features.documents.documentsView.deleteConfirmDescription'),
+      confirmText: t('features.documents.documentsView.deleteDocument'),
       tone: 'danger',
     });
     if (!confirmed) return;
     try {
       await deleteDocument(doc.id);
-      toast.success(`已删除文档“${doc.title}”`);
+      toast.success(t('features.documents.documentsView.deletedDocument', { name: doc.title }));
       if (selectedDoc?.id === doc.id) setSelectedDoc(null);
       reload();
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '删除失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.documents.documentsView.deleteFailed'));
     }
   }
 
   async function handleUploaded(docs: Document[]) {
     setUploading(false);
     reload();
-    if (docs.length === 1) toast.success(`已上传文档“${docs[0].title}”`);
-    else toast.success(`已上传 ${docs.length} 份文档`);
+    if (docs.length === 1) toast.success(t('features.documents.documentsView.uploadedDocument', { name: docs[0].title }));
+    else toast.success(t('features.documents.documentsView.uploadedCount', { count: docs.length }));
 
     if (!shouldAutoAnalyzeDocuments()) return;
     if (!canUseAi) {
-      toast.info('已开启自动分析，但当前账号没有 AI 分析权限。');
+      toast.info(t('features.documents.documentsView.autoAnalyzeNoPermission'));
       return;
     }
 
@@ -133,10 +135,10 @@ export default function DocumentsView() {
       }
     }
     if (ok > 0) {
-      toast.success(`已自动创建 ${ok} 个 AI 分析任务`);
+      toast.success(t('features.documents.documentsView.autoAnalyzeJobsCreated', { count: ok }));
       reload();
     } else {
-      toast.error('文档已上传，但自动 AI 分析启动失败');
+      toast.error(t('features.documents.documentsView.autoAnalyzeFailed'));
     }
   }
 
@@ -146,31 +148,31 @@ export default function DocumentsView() {
 
   return (
     <div className="doc-workbench">
-      <section className="doc-signal-strip" aria-label="文档中心概况">
+      <section className="doc-signal-strip" aria-label={t('features.documents.documentsView.overviewAria')}>
         <div className="doc-signal">
-          <span className="doc-signal-label"><FileText size={13} aria-hidden="true" /> 文档总数</span>
+          <span className="doc-signal-label"><FileText size={13} aria-hidden="true" /> {t('features.documents.documentsView.totalDocuments')}</span>
           <strong>{signals.total}</strong>
-          <em>当前筛选范围</em>
+          <em>{t('features.documents.documentsView.currentFilterScope')}</em>
         </div>
         <div className="doc-signal">
-          <span className="doc-signal-label"><FolderOpen size={13} aria-hidden="true" /> 项目文档</span>
+          <span className="doc-signal-label"><FolderOpen size={13} aria-hidden="true" /> {t('features.documents.documentsView.projectDocuments')}</span>
           <strong>{signals.projectDocs}</strong>
-          <em>已关联项目</em>
+          <em>{t('features.documents.documentsView.linkedToProjects')}</em>
         </div>
         <div className="doc-signal">
-          <span className="doc-signal-label"><Sparkles size={13} aria-hidden="true" /> 已分析</span>
+          <span className="doc-signal-label"><Sparkles size={13} aria-hidden="true" /> {t('features.documents.documentsView.analyzed')}</span>
           <strong>{signals.analyzed}</strong>
-          <em>AI 完成</em>
+          <em>{t('features.documents.documentsView.aiDone')}</em>
         </div>
         <div className={`doc-signal ${signals.pendingAi > 0 ? 'is-warn' : ''}`}>
-          <span className="doc-signal-label"><RefreshCw size={13} aria-hidden="true" /> 待分析</span>
+          <span className="doc-signal-label"><RefreshCw size={13} aria-hidden="true" /> {t('features.documents.documentsView.pendingAnalysis')}</span>
           <strong>{signals.pendingAi}</strong>
-          <em>上传 / 处理中</em>
+          <em>{t('features.documents.documentsView.uploadingOrProcessing')}</em>
         </div>
         <div className="doc-signal">
-          <span className="doc-signal-label"><FileText size={13} aria-hidden="true" /> 格式种类</span>
+          <span className="doc-signal-label"><FileText size={13} aria-hidden="true" /> {t('features.documents.documentsView.formatCount')}</span>
           <strong>{signals.formats}</strong>
-          <em>多格式附件池</em>
+          <em>{t('features.documents.documentsView.multiFormatPool')}</em>
         </div>
       </section>
 

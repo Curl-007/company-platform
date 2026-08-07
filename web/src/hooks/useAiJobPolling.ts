@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import i18n from '../i18n';
 import type { AiJob } from '../types';
 import type { AiJobStatus } from '../constants/enums';
 
@@ -32,7 +33,7 @@ interface AiJobPollingState {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : '未知错误';
+  return error instanceof Error ? error.message : i18n.t('common.unknownError');
 }
 
 export function useAiJobPolling({
@@ -110,7 +111,7 @@ export function useAiJobPolling({
         failures += 1;
         setConsecutiveErrors(failures);
         if (failures >= 3) {
-          setError(`AI 任务状态连续刷新失败 ${failures} 次：${errorMessage(reason)}。系统将自动重试。`);
+          setError(i18n.t('features.ai.aiJobPolling.refreshFailed', { count: failures, message: errorMessage(reason) }));
         }
         schedule(aiJobPollingRetryDelay(failures));
       } finally {

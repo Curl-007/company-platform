@@ -1,11 +1,13 @@
+import { useTranslation } from 'react-i18next';
 import type { AuditLogRecord } from '../../../types';
 import { buildChangeSummary } from './dynamicMeta';
 
 export default function DiffView({ record }: { record: AuditLogRecord }) {
+  const { t } = useTranslation();
   const changes = buildChangeSummary(record);
 
   if (!changes.length) {
-    return <div className="body-text">这次操作没有需要展开的字段变化，通常是登录、进入页面或简单新增删除。</div>;
+    return <div className="body-text">{t('features.audit.diffView.noChanges')}</div>;
   }
 
   return (

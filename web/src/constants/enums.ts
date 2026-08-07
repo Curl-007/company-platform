@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import {
   AI_JOB_STATUSES as GENERATED_AI_JOB_STATUSES,
   BUILD_STATUSES as GENERATED_BUILD_STATUSES,
@@ -95,254 +96,260 @@ export function healthVariant(score: number): HealthVariant {
   return 'risk';
 }
 
+// 说明：以下 label 字典的 value 均为 i18n key（enums.<group>.<code>），
+// 实际文案位于 src/i18n/locales/*.json 的 enums 命名空间。
+// 请勿将中文写回 value；通过 labelOf() 翻译后使用。
+
 export const PROJECT_STATUS_LABELS: Record<string, string> = {
-  planning: '规划中',
-  active: '进行中',
-  on_hold: '暂停',
-  done: '已完成',
-  archived: '已归档',
+  planning: 'enums.projectStatus.planning',
+  active: 'enums.projectStatus.active',
+  on_hold: 'enums.projectStatus.on_hold',
+  done: 'enums.projectStatus.done',
+  archived: 'enums.projectStatus.archived',
 };
 
 export const REQUIREMENT_STATUS_LABELS: Record<string, string> = {
-  draft: '草稿',
-  reviewing: '评审中',
-  approved: '已批准',
-  in_dev: '开发中',
-  testing: '测试中',
-  accepted: '已验收',
-  closed: '已关闭',
-  cancelled: '已取消',
+  draft: 'enums.requirementStatus.draft',
+  reviewing: 'enums.requirementStatus.reviewing',
+  approved: 'enums.requirementStatus.approved',
+  in_dev: 'enums.requirementStatus.in_dev',
+  testing: 'enums.requirementStatus.testing',
+  accepted: 'enums.requirementStatus.accepted',
+  closed: 'enums.requirementStatus.closed',
+  cancelled: 'enums.requirementStatus.cancelled',
 };
 
 export const PRIORITY_LABELS: Record<string, string> = {
-  high: '高',
-  medium: '中',
-  low: '低',
+  high: 'enums.priority.high',
+  medium: 'enums.priority.medium',
+  low: 'enums.priority.low',
 };
 
 export const TASK_STATUS_LABELS: Record<string, string> = {
-  todo: '待处理',
-  in_progress: '进行中',
-  blocked: '阻塞',
-  code_review: '代码评审',
-  testing: '测试中',
-  acceptance: '待验收',
-  done: '已完成',
-  cancelled: '已取消',
+  todo: 'enums.taskStatus.todo',
+  in_progress: 'enums.taskStatus.in_progress',
+  blocked: 'enums.taskStatus.blocked',
+  code_review: 'enums.taskStatus.code_review',
+  testing: 'enums.taskStatus.testing',
+  acceptance: 'enums.taskStatus.acceptance',
+  done: 'enums.taskStatus.done',
+  cancelled: 'enums.taskStatus.cancelled',
 };
 
 export const TASK_TYPE_LABELS: Record<string, string> = {
-  epic: '史诗',
-  story: '故事',
-  task: '任务',
-  bug: '缺陷',
-  milestone: '里程碑',
-  work_package: '工作包',
+  epic: 'enums.taskType.epic',
+  story: 'enums.taskType.story',
+  task: 'enums.taskType.task',
+  bug: 'enums.taskType.bug',
+  milestone: 'enums.taskType.milestone',
+  work_package: 'enums.taskType.work_package',
 };
 
 export const SPRINT_STATUS_LABELS: Record<string, string> = {
-  planned: '已规划',
-  active: '进行中',
-  closed: '已关闭',
+  planned: 'enums.sprintStatus.planned',
+  active: 'enums.sprintStatus.active',
+  closed: 'enums.sprintStatus.closed',
 };
 
 export const TEST_CASE_STATUS_LABELS: Record<string, string> = {
-  draft: '草稿',
-  active: '活跃',
-  passed: '通过',
-  failed: '失败',
-  blocked: '阻塞',
+  draft: 'enums.testCaseStatus.draft',
+  active: 'enums.testCaseStatus.active',
+  passed: 'enums.testCaseStatus.passed',
+  failed: 'enums.testCaseStatus.failed',
+  blocked: 'enums.testCaseStatus.blocked',
 };
 
 export const TEST_RUN_RESULT_LABELS: Record<string, string> = {
-  passed: '通过',
-  failed: '失败',
-  blocked: '阻塞',
+  passed: 'enums.testRunResult.passed',
+  failed: 'enums.testRunResult.failed',
+  blocked: 'enums.testRunResult.blocked',
 };
 
 export const DEFECT_STATUS_LABELS: Record<string, string> = {
-  new: '新建',
-  confirmed: '已确认',
-  in_fix: '修复中',
-  resolved: '已解决',
-  verified: '已验证',
-  closed: '已关闭',
-  rejected: '已驳回',
+  new: 'enums.defectStatus.new',
+  confirmed: 'enums.defectStatus.confirmed',
+  in_fix: 'enums.defectStatus.in_fix',
+  resolved: 'enums.defectStatus.resolved',
+  verified: 'enums.defectStatus.verified',
+  closed: 'enums.defectStatus.closed',
+  rejected: 'enums.defectStatus.rejected',
 };
 
 export const DEFECT_SEVERITY_LABELS: Record<string, string> = {
-  low: '低',
-  medium: '中',
-  high: '高',
-  critical: '严重',
+  low: 'enums.defectSeverity.low',
+  medium: 'enums.defectSeverity.medium',
+  high: 'enums.defectSeverity.high',
+  critical: 'enums.defectSeverity.critical',
 };
 
 export const PROCESS_MODE_LABELS: Record<string, string> = {
-  scrum: 'Scrum',
-  kanban: '看板',
-  waterfall: '瀑布',
+  scrum: 'enums.processMode.scrum',
+  kanban: 'enums.processMode.kanban',
+  waterfall: 'enums.processMode.waterfall',
 };
 
 export const MILESTONE_STATUS_LABELS: Record<string, string> = {
-  planned: '已规划',
-  running: '进行中',
-  done: '已完成',
+  planned: 'enums.milestoneStatus.planned',
+  running: 'enums.milestoneStatus.running',
+  done: 'enums.milestoneStatus.done',
 };
 
 export const DOC_TYPE_LABELS: Record<string, string> = {
-  requirement: '需求文档',
-  design: '设计文档',
-  test: '测试文档',
-  bid: '投标文件',
-  report: '报告',
-  other: '其他',
+  requirement: 'enums.docType.requirement',
+  design: 'enums.docType.design',
+  test: 'enums.docType.test',
+  bid: 'enums.docType.bid',
+  report: 'enums.docType.report',
+  other: 'enums.docType.other',
 };
 
 export const DOC_AI_STATUS_LABELS: Record<string, string> = {
-  uploaded: '已上传',
-  processing: '分析中',
-  awaiting_review: '待审核',
-  done: '已完成',
-  failed: '处理失败',
+  uploaded: 'enums.docAiStatus.uploaded',
+  processing: 'enums.docAiStatus.processing',
+  awaiting_review: 'enums.docAiStatus.awaiting_review',
+  done: 'enums.docAiStatus.done',
+  failed: 'enums.docAiStatus.failed',
 };
 
 export const USER_ROLE_LABELS: Record<string, string> = {
-  admin: '管理员',
-  pm: '项目经理',
-  pdm: '产品经理',
-  member: '成员',
-  dev: '开发',
-  qa: '测试',
+  admin: 'enums.userRole.admin',
+  pm: 'enums.userRole.pm',
+  pdm: 'enums.userRole.pdm',
+  member: 'enums.userRole.member',
+  dev: 'enums.userRole.dev',
+  qa: 'enums.userRole.qa',
 };
 
 export const USER_STATUS_LABELS: Record<string, string> = {
-  active: '正常',
-  disabled: '已禁用',
+  active: 'enums.userStatus.active',
+  disabled: 'enums.userStatus.disabled',
 };
 
 export const PRODUCT_STAGE_LABELS: Record<string, string> = {
-  concept: '概念阶段',
-  design: '设计阶段',
-  development: '开发阶段',
-  mvp: 'MVP 交付',
-  released: '已发布',
-  maintenance: '维护期',
-  evaluating: '评估中',
-  planned: '已规划',
+  concept: 'enums.productStage.concept',
+  design: 'enums.productStage.design',
+  development: 'enums.productStage.development',
+  mvp: 'enums.productStage.mvp',
+  released: 'enums.productStage.released',
+  maintenance: 'enums.productStage.maintenance',
+  evaluating: 'enums.productStage.evaluating',
+  planned: 'enums.productStage.planned',
 };
 
 export const ROADMAP_STATUS_LABELS: Record<string, string> = {
-  planned: '已规划',
-  design: '设计中',
-  development: '开发中',
-  evaluating: '评估中',
-  released: '已发布',
-  done: '已完成',
+  planned: 'enums.roadmapStatus.planned',
+  design: 'enums.roadmapStatus.design',
+  development: 'enums.roadmapStatus.development',
+  evaluating: 'enums.roadmapStatus.evaluating',
+  released: 'enums.roadmapStatus.released',
+  done: 'enums.roadmapStatus.done',
 };
 
 export const MODULE_STATUS_LABELS: Record<string, string> = {
-  planned: '已规划',
-  design: '设计中',
-  development: '开发中',
-  done: '已完成',
-  released: '已发布',
+  planned: 'enums.moduleStatus.planned',
+  design: 'enums.moduleStatus.design',
+  development: 'enums.moduleStatus.development',
+  done: 'enums.moduleStatus.done',
+  released: 'enums.moduleStatus.released',
 };
 
 export const GATE_STATUS_LABELS: Record<string, string> = {
-  pending: '待评审',
-  in_progress: '评审中',
-  completed: '已通过',
-  rejected: '已驳回',
+  pending: 'enums.gateStatus.pending',
+  in_progress: 'enums.gateStatus.in_progress',
+  completed: 'enums.gateStatus.completed',
+  rejected: 'enums.gateStatus.rejected',
 };
 
 export const BUILD_STATUS_LABELS: Record<string, string> = {
-  building: '构建中',
-  testing: '测试中',
-  released: '已发布',
-  failed: '构建失败',
+  building: 'enums.buildStatus.building',
+  testing: 'enums.buildStatus.testing',
+  released: 'enums.buildStatus.released',
+  failed: 'enums.buildStatus.failed',
 };
 
 export const RELEASE_STATUS_LABELS: Record<string, string> = {
-  draft: '草稿',
-  staging: '预发布',
-  released: '已发布',
-  rollback: '已回滚',
+  draft: 'enums.releaseStatus.draft',
+  staging: 'enums.releaseStatus.staging',
+  released: 'enums.releaseStatus.released',
+  rollback: 'enums.releaseStatus.rollback',
 };
 
 export const RELEASE_TYPE_LABELS: Record<string, string> = {
-  official: '正式版',
-  stable: '稳定版',
-  hotfix: '热修复',
+  official: 'enums.releaseType.official',
+  stable: 'enums.releaseType.stable',
+  hotfix: 'enums.releaseType.hotfix',
 };
 
 export const AI_JOB_STATUS_LABELS: Record<string, string> = {
-  queued: '排队中',
-  running: '运行中',
-  awaiting_review: '待审核',
-  confirmed: '已确认',
-  rejected: '已驳回',
-  failed: '失败',
-  retried: '重试中',
+  queued: 'enums.aiJobStatus.queued',
+  running: 'enums.aiJobStatus.running',
+  awaiting_review: 'enums.aiJobStatus.awaiting_review',
+  confirmed: 'enums.aiJobStatus.confirmed',
+  rejected: 'enums.aiJobStatus.rejected',
+  failed: 'enums.aiJobStatus.failed',
+  retried: 'enums.aiJobStatus.retried',
 };
 
 export const RESOURCE_TYPE_LABELS: Record<string, string> = {
-  project: '项目',
-  task: '任务',
-  requirement: '需求',
-  sprint: '迭代',
-  test_case: '测试用例',
-  test_run: '测试执行',
-  defect: '缺陷',
-  document: '文档',
-  object: '文件',
-  ai_job: 'AI 任务',
-  work_log: '工作日志',
-  user: '用户',
+  project: 'enums.resourceType.project',
+  task: 'enums.resourceType.task',
+  requirement: 'enums.resourceType.requirement',
+  sprint: 'enums.resourceType.sprint',
+  test_case: 'enums.resourceType.test_case',
+  test_run: 'enums.resourceType.test_run',
+  defect: 'enums.resourceType.defect',
+  document: 'enums.resourceType.document',
+  object: 'enums.resourceType.object',
+  ai_job: 'enums.resourceType.ai_job',
+  work_log: 'enums.resourceType.work_log',
+  user: 'enums.resourceType.user',
 };
 
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
-  'auth.login': '登录',
-  'auth.login_failed': '登录失败',
-  'auth.login_disabled': '账号已禁用',
-  'project.create': '创建项目',
-  'project.update': '更新项目',
-  'project.status_update': '变更项目状态',
-  'project.delete': '删除项目',
-  'project.milestone_add': '添加里程碑',
-  'project.milestone_remove': '移除里程碑',
-  'sprint.create': '创建迭代',
-  'sprint.update': '更新迭代',
-  'sprint.delete': '删除迭代',
-  'sprint.add_task': '加入迭代',
-  'task.create': '创建任务',
-  'task.update': '更新任务',
-  'task.status_update': '变更任务状态',
-  'task.kanban_move': '移动看板',
-  'task.delete': '删除任务',
-  'requirement.create': '创建需求',
-  'requirement.update': '更新需求',
-  'requirement.status_update': '变更需求状态',
-  'requirement.delete': '删除需求',
-  'test_case.create': '创建测试用例',
-  'test_case.update': '更新测试用例',
-  'test_case.status_update': '变更用例状态',
-  'test_case.delete': '删除测试用例',
-  'test_run.create': '记录测试执行',
-  'document.upload': '上传文档',
-  'document.update': '更新文档',
-  'document.delete': '删除文档',
-  'object.upload': '上传文件',
-  'ai.document_analyze': 'AI 文档分析',
-  'ai.job_confirm': '确认 AI 结果',
-  'ai.job_reject': '驳回 AI 结果',
-  'ai.job_retry': '重试 AI 任务',
-  'ai.job_retry_failed': 'AI 重试失败',
-  'work_log.create': '提交工作日志',
-  'user.create': '创建用户',
-  'user.update': '更新用户',
+  'auth.login': 'enums.auditAction.auth.login',
+  'auth.login_failed': 'enums.auditAction.auth.login_failed',
+  'auth.login_disabled': 'enums.auditAction.auth.login_disabled',
+  'project.create': 'enums.auditAction.project.create',
+  'project.update': 'enums.auditAction.project.update',
+  'project.status_update': 'enums.auditAction.project.status_update',
+  'project.delete': 'enums.auditAction.project.delete',
+  'project.milestone_add': 'enums.auditAction.project.milestone_add',
+  'project.milestone_remove': 'enums.auditAction.project.milestone_remove',
+  'sprint.create': 'enums.auditAction.sprint.create',
+  'sprint.update': 'enums.auditAction.sprint.update',
+  'sprint.delete': 'enums.auditAction.sprint.delete',
+  'sprint.add_task': 'enums.auditAction.sprint.add_task',
+  'task.create': 'enums.auditAction.task.create',
+  'task.update': 'enums.auditAction.task.update',
+  'task.status_update': 'enums.auditAction.task.status_update',
+  'task.kanban_move': 'enums.auditAction.task.kanban_move',
+  'task.delete': 'enums.auditAction.task.delete',
+  'requirement.create': 'enums.auditAction.requirement.create',
+  'requirement.update': 'enums.auditAction.requirement.update',
+  'requirement.status_update': 'enums.auditAction.requirement.status_update',
+  'requirement.delete': 'enums.auditAction.requirement.delete',
+  'test_case.create': 'enums.auditAction.test_case.create',
+  'test_case.update': 'enums.auditAction.test_case.update',
+  'test_case.status_update': 'enums.auditAction.test_case.status_update',
+  'test_case.delete': 'enums.auditAction.test_case.delete',
+  'test_run.create': 'enums.auditAction.test_run.create',
+  'document.upload': 'enums.auditAction.document.upload',
+  'document.update': 'enums.auditAction.document.update',
+  'document.delete': 'enums.auditAction.document.delete',
+  'object.upload': 'enums.auditAction.object.upload',
+  'ai.document_analyze': 'enums.auditAction.ai.document_analyze',
+  'ai.job_confirm': 'enums.auditAction.ai.job_confirm',
+  'ai.job_reject': 'enums.auditAction.ai.job_reject',
+  'ai.job_retry': 'enums.auditAction.ai.job_retry',
+  'ai.job_retry_failed': 'enums.auditAction.ai.job_retry_failed',
+  'work_log.create': 'enums.auditAction.work_log.create',
+  'user.create': 'enums.auditAction.user.create',
+  'user.update': 'enums.auditAction.user.update',
 };
 
 export function labelOf(dict: Record<string, string>, value: string | undefined | null): string {
-  if (!value) return '未设置';
-  return dict[value] ?? value;
+  if (!value) return i18n.t('enums.unset');
+  const key = dict[value];
+  if (!key) return value;
+  return i18n.t(key);
 }

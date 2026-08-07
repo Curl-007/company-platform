@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createProject, type CreateProjectInput } from '../api';
 import { ApiError } from '../../../services/api';
 import { createIdempotencyKey } from '../../../services/idempotency';
@@ -6,6 +7,7 @@ import Panel from '../../../components/common/Panel';
 import Overlay from '../../../components/common/Overlay';
 
 export default function CreateProjectForm({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [owner, setOwner] = useState('');
   const [objective, setObjective] = useState('');
@@ -16,8 +18,8 @@ export default function CreateProjectForm({ onClose, onCreated }: { onClose: () 
 
   async function handleSubmit() {
     setFormError(null);
-    if (!name.trim()) return setFormError('请输入项目名称。');
-    if (!owner.trim()) return setFormError('请输入负责人。');
+    if (!name.trim()) return setFormError(t('features.projects.createProjectForm.nameRequired'));
+    if (!owner.trim()) return setFormError(t('features.projects.createProjectForm.ownerRequired'));
 
     setSubmitting(true);
     try {
@@ -32,7 +34,7 @@ export default function CreateProjectForm({ onClose, onCreated }: { onClose: () 
       await createProject(input, createRequest.current.key);
       onCreated();
     } catch (err: unknown) {
-      setFormError(err instanceof ApiError ? err.message : '创建项目失败');
+      setFormError(err instanceof ApiError ? err.message : t('features.projects.createProjectForm.createFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -42,13 +44,13 @@ export default function CreateProjectForm({ onClose, onCreated }: { onClose: () 
     <Overlay onClose={onClose} maxWidth={720}>
       <Panel
         className="project-form-panel"
-        title="新建项目"
-        subtitle="录入项目基本信息，后续可继续补充排期、关联产品和里程碑。"
+        title={t('features.projects.createProjectForm.title')}
+        subtitle={t('features.projects.createProjectForm.subtitle')}
         footer={(
           <div className="project-form-actions">
-            <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>取消</button>
+            <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>{t('common.cancel')}</button>
             <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={submitting}>
-              {submitting ? '创建中...' : '创建'}
+              {submitting ? t('features.projects.createProjectForm.creating') : t('features.projects.createProjectForm.create')}
             </button>
           </div>
         )}
@@ -57,38 +59,38 @@ export default function CreateProjectForm({ onClose, onCreated }: { onClose: () 
 
         <div className="project-create-layout">
           <div className="project-form-section">
-            <div className="project-form-section-title">项目基础</div>
+            <div className="project-form-section-title">{t('features.projects.createProjectForm.basicSection')}</div>
             <div className="form-group">
-              <label className="form-label">项目名称</label>
-              <input className="form-input" value={name} onChange={(event) => setName(event.target.value)} placeholder="请输入项目名称" />
+              <label className="form-label">{t('features.projects.createProjectForm.nameLabel')}</label>
+              <input className="form-input" value={name} onChange={(event) => setName(event.target.value)} placeholder={t('features.projects.createProjectForm.namePlaceholder')} />
             </div>
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">负责人</label>
-                <input className="form-input" value={owner} onChange={(event) => setOwner(event.target.value)} placeholder="请输入负责人姓名" />
+                <label className="form-label">{t('features.projects.createProjectForm.ownerLabel')}</label>
+                <input className="form-input" value={owner} onChange={(event) => setOwner(event.target.value)} placeholder={t('features.projects.createProjectForm.ownerPlaceholder')} />
               </div>
               <div className="form-group">
-                <label className="form-label">流程模式</label>
+                <label className="form-label">{t('features.projects.createProjectForm.processModeLabel')}</label>
                 <select className="form-select" value={processMode} onChange={(event) => setProcessMode(event.target.value)}>
                   <option value="scrum">Scrum</option>
-                  <option value="kanban">看板</option>
-                  <option value="waterfall">瀑布</option>
+                  <option value="kanban">{t('features.projects.createProjectForm.kanbanOption')}</option>
+                  <option value="waterfall">{t('features.projects.createProjectForm.waterfallOption')}</option>
                 </select>
               </div>
             </div>
             <div className="form-group">
-              <label className="form-label">项目目标</label>
-              <textarea className="form-textarea" rows={2} value={objective} onChange={(event) => setObjective(event.target.value)} placeholder="例如：将客户自助开通时长缩短至 5 分钟以内" />
+              <label className="form-label">{t('features.projects.createProjectForm.objectiveLabel')}</label>
+              <textarea className="form-textarea" rows={2} value={objective} onChange={(event) => setObjective(event.target.value)} placeholder={t('features.projects.createProjectForm.objectivePlaceholder')} />
             </div>
           </div>
 
           <div className="project-create-hint">
-            <div className="project-create-hint-title">创建后可继续完善</div>
+            <div className="project-create-hint-title">{t('features.projects.createProjectForm.afterCreateHint')}</div>
             <div className="project-create-hint-grid">
-              <span>排期计划</span>
-              <span>项目成员</span>
-              <span>关联产品</span>
-              <span>交付里程碑</span>
+              <span>{t('features.projects.createProjectForm.hintSchedule')}</span>
+              <span>{t('features.projects.createProjectForm.hintMembers')}</span>
+              <span>{t('features.projects.createProjectForm.hintProduct')}</span>
+              <span>{t('features.projects.createProjectForm.hintMilestone')}</span>
             </div>
           </div>
         </div>

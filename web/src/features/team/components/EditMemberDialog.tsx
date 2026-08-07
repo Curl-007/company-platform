@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { KeyRound } from 'lucide-react';
 import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
@@ -18,6 +19,7 @@ export default function EditMemberDialog({
   onClose: () => void;
   onSubmit: (input: UpdateUserInput) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [draft, setDraft] = useState({
     name: member.name,
     email: member.email,
@@ -58,55 +60,55 @@ export default function EditMemberDialog({
 
   return (
     <Overlay onClose={onClose} maxWidth={680}>
-      <Panel title="编辑成员账号" subtitle="这里维护成员的账号状态、角色职责和协作资料；项目内分工仍在项目成员中维护。">
+      <Panel title={t('features.team.editMemberDialog.editTitle')} subtitle={t('features.team.editMemberDialog.subtitle')}>
         <form className="team-create-form" onSubmit={handleSubmit}>
           <div className="form-row">
-            <FormField label="姓名" htmlFor="team-edit-name" required>
+            <FormField label={t('features.team.editMemberDialog.nameLabel')} htmlFor="team-edit-name" required>
               <TextInput id="team-edit-name" value={draft.name} onChange={(event) => setField('name', event.target.value)} required />
             </FormField>
-            <FormField label="邮箱" htmlFor="team-edit-email" required>
+            <FormField label={t('features.team.editMemberDialog.emailLabel')} htmlFor="team-edit-email" required>
               <TextInput id="team-edit-email" type="email" value={draft.email} onChange={(event) => setField('email', event.target.value)} required />
             </FormField>
           </div>
           <div className="form-row">
-            <FormField label="角色" htmlFor="team-edit-role" required>
+            <FormField label={t('features.team.editMemberDialog.roleLabel')} htmlFor="team-edit-role" required>
               <SelectInput id="team-edit-role" value={draft.role} onChange={(event) => setField('role', event.target.value)}>
-                {ROLE_OPTIONS.filter((item) => item.value).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                {ROLE_OPTIONS.filter((item) => item.value).map((item) => <option key={item.value} value={item.value}>{t(item.label)}</option>)}
               </SelectInput>
             </FormField>
-            <FormField label="账号状态" htmlFor="team-edit-status">
+            <FormField label={t('features.team.editMemberDialog.statusLabel')} htmlFor="team-edit-status">
               <SelectInput id="team-edit-status" value={draft.status} onChange={(event) => setField('status', event.target.value)}>
-                <option value="active">已启用</option>
-                <option value="disabled">已停用</option>
+                <option value="active">{t('features.team.editMemberDialog.enabled')}</option>
+                <option value="disabled">{t('features.team.editMemberDialog.disabled')}</option>
               </SelectInput>
             </FormField>
           </div>
           <div className="form-row">
-            <FormField label="手机号" htmlFor="team-edit-phone">
+            <FormField label={t('features.team.editMemberDialog.phoneLabel')} htmlFor="team-edit-phone">
               <TextInput id="team-edit-phone" value={draft.phone} onChange={(event) => setField('phone', event.target.value)} />
             </FormField>
-            <FormField label="职位" htmlFor="team-edit-position">
+            <FormField label={t('features.team.editMemberDialog.positionLabel')} htmlFor="team-edit-position">
               <TextInput id="team-edit-position" value={draft.position} onChange={(event) => setField('position', event.target.value)} />
             </FormField>
           </div>
-          <FormField label="部门" htmlFor="team-edit-department">
+          <FormField label={t('features.team.editMemberDialog.departmentLabel')} htmlFor="team-edit-department">
             <SelectInput id="team-edit-department" value={draft.departmentId} onChange={(event) => setField('departmentId', event.target.value)}>
-              <option value="">未归属部门</option>
-              {departments.filter((item) => item.status === 'active' || item.id === member.departmentId).map((item) => <option key={item.id} value={item.id}>{item.name}{item.status === 'archived' ? '（已归档）' : ''}</option>)}
+              <option value="">{t('features.team.createMemberDialog.noDepartment')}</option>
+              {departments.filter((item) => item.status === 'active' || item.id === member.departmentId).map((item) => <option key={item.id} value={item.id}>{item.name}{item.status === 'archived' ? t('features.team.editMemberDialog.archivedSuffix') : ''}</option>)}
             </SelectInput>
           </FormField>
-          <FormField label="简介" htmlFor="team-edit-bio">
+          <FormField label={t('features.team.editMemberDialog.bioLabel')} htmlFor="team-edit-bio">
             <TextArea id="team-edit-bio" rows={3} value={draft.bio} onChange={(event) => setField('bio', event.target.value)} />
           </FormField>
-          <FormField label="重置密码" htmlFor="team-edit-password" helpText="不填写则保持原密码。">
+          <FormField label={t('features.team.editMemberDialog.passwordLabel')} htmlFor="team-edit-password" helpText={t('features.team.editMemberDialog.passwordHelp')}>
             <div className="input-with-icon">
               <KeyRound size={14} />
               <TextInput id="team-edit-password" type="password" value={draft.password} onChange={(event) => setField('password', event.target.value)} minLength={4} />
             </div>
           </FormField>
           <div className="team-create-actions">
-            <Button variant="secondary" size="sm" onClick={onClose} disabled={submitting}>取消</Button>
-            <Button type="submit" variant="primary" size="sm" disabled={submitting}>{submitting ? '保存中...' : '保存修改'}</Button>
+            <Button variant="secondary" size="sm" onClick={onClose} disabled={submitting}>{t('common.cancel')}</Button>
+            <Button type="submit" variant="primary" size="sm" disabled={submitting}>{submitting ? t('features.team.editMemberDialog.saving') : t('features.team.editMemberDialog.saveChanges')}</Button>
           </div>
         </form>
       </Panel>

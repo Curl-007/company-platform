@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Building2, ChevronRight, FileText, Search, UserPlus } from 'lucide-react';
 import Panel from '../../../components/common/Panel';
 import PageState from '../../../components/common/PageState';
@@ -37,6 +38,7 @@ import {
 } from './teamMeta';
 
 export default function TeamView() {
+  const { t } = useTranslation();
   const sessionUser = getSessionUser();
   const canCreateUsers = canOperate(sessionUser, 'users:create');
   const canUpdateUsers = canOperate(sessionUser, 'users:update');
@@ -82,38 +84,38 @@ export default function TeamView() {
   async function handleCreate(input: CreateUserInput) {
     try {
       await createUser(input);
-      toast.success(`已创建成员 ${input.name}`);
+      toast.success(t('features.team.teamView.memberCreated', { name: input.name }));
       setCreating(false);
       await reload();
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '创建成员失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.team.teamView.createFailed'));
     }
   }
 
   async function handleUpdate(member: TeamMemberOverview, input: UpdateUserInput) {
     try {
       const updated = await updateUser(member.id, input);
-      toast.success(`已更新 ${updated.name}`);
+      toast.success(t('features.team.teamView.memberUpdated', { name: updated.name }));
       setEditing(null);
       setSelected((current) => (current?.id === member.id ? { ...current, ...updated } : current));
       await reload();
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '更新成员失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.team.teamView.updateFailed'));
     }
   }
 
   async function handleToggleStatus(member: TeamMemberOverview) {
     if (member.id === sessionUser?.id && member.status !== 'disabled') {
-      toast.info('不能停用当前登录账号');
+      toast.info(t('features.team.teamView.cannotDisableSelf'));
       return;
     }
     const isDisabled = member.status === 'disabled';
     const confirmed = await confirm({
-      title: isDisabled ? '启用成员账号？' : '停用成员账号？',
+      title: isDisabled ? t('features.team.teamView.enableTitle') : t('features.team.teamView.disableTitle'),
       description: isDisabled
-        ? `启用后，${member.name} 可以重新登录并参与协作。`
-        : `停用后，${member.name} 将不能登录系统，但历史数据会保留。`,
-      confirmText: isDisabled ? '启用账号' : '停用账号',
+        ? t('features.team.teamView.enableDesc', { name: member.name })
+        : t('features.team.teamView.disableDesc', { name: member.name }),
+      confirmText: isDisabled ? t('features.team.teamView.enableAccount') : t('features.team.teamView.disableAccount'),
       tone: isDisabled ? 'info' : 'danger',
     });
     if (!confirmed) return;
@@ -121,11 +123,11 @@ export default function TeamView() {
     setTogglingMemberId(member.id);
     try {
       const updated = await updateUser(member.id, { status: isDisabled ? 'active' : 'disabled' });
-      toast.success(isDisabled ? '账号已启用' : '账号已停用');
+      toast.success(isDisabled ? t('features.team.teamView.accountEnabled') : t('features.team.teamView.accountDisabled'));
       setSelected((current) => (current?.id === member.id ? { ...current, ...updated } : current));
       await reload();
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '更新账号状态失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.team.teamView.updateStatusFailed'));
     } finally {
       setTogglingMemberId(null);
     }
@@ -138,7 +140,7 @@ export default function TeamView() {
   const columns = useMemo<DataTableColumn<TeamMemberOverview>[]>(() => [
     {
       key: 'member',
-      title: '成员',
+      title: t('features.team.teamView.memberTitle'),
       width: '42%',
       render: (member) => (
         <div className="flex min-w-0 items-center gap-3">
@@ -148,10 +150,10 @@ export default function TeamView() {
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
               <span className="min-w-0 truncate font-medium">{member.name}</span>
-              {member.id === sessionUser?.id ? <span className="shrink-0 text-xs text-[var(--muted-foreground)]">当前账号</span> : null}
+              {member.id === sessionUser?.id ? <span className="shrink-0 text-xs text-[var(--muted-foreground)]">{t('features.team.teamView.currentAccount')}</span> : null}
             </div>
             <div className="truncate text-xs text-[var(--muted-foreground)]">
-              {member.email} · {member.department || '未设置部门'}
+              {member.email} · {member.department || t('features.team.teamView.unsetDepartment')}
             </div>
           </div>
         </div>
@@ -159,7 +161,7 @@ export default function TeamView() {
     },
     {
       key: 'role',
-      title: '角色',
+      title: t('features.team.teamView.roleTitle'),
       width: '20%',
       render: (member) => (
         <StatusBadge
@@ -171,7 +173,7 @@ export default function TeamView() {
     },
     {
       key: 'status',
-      title: '状态',
+      title: t('features.team.teamView.statusTitle'),
       width: '28%',
       render: (member) => (
         <div className="flex min-w-0 flex-col gap-1">
@@ -181,24 +183,24 @@ export default function TeamView() {
               label={statusLabel(USER_STATUS_LABELS, member.status ?? 'active')}
               showDot={false}
             />
-            <span className="text-xs text-[var(--muted-foreground)]">{PRESENCE_LABELS[member.presence]}</span>
+            <span className="text-xs text-[var(--muted-foreground)]">{statusLabel(PRESENCE_LABELS, member.presence)}</span>
           </div>
           <span className="truncate text-xs text-[var(--muted-foreground)]">
-            {member.stats.activeTasks} 项进行中 · {member.projects.length} 个项目
+            {t('features.team.teamView.workSummary', { active: member.stats.activeTasks, projects: member.projects.length })}
           </span>
         </div>
       ),
     },
     {
       key: 'actions',
-      title: '操作',
+      title: t('common.actions'),
       width: 56,
       align: 'right',
       render: (member) => (
         <div className="flex justify-end">
           <IconButton
             icon={<ChevronRight size={16} />}
-            label={`查看${member.name}详情`}
+            label={t('features.team.teamView.viewDetailAria', { name: member.name })}
             onClick={(event) => {
               event.stopPropagation();
               setSelected(member);
@@ -207,27 +209,27 @@ export default function TeamView() {
         </div>
       ),
     },
-  ], [sessionUser?.id]);
+  ], [sessionUser?.id, t]);
 
   return (
     <div className="team-page">
       {canCreateUsers ? (
         <div className="team-page-actions mb-4 flex justify-end gap-2">
           <Button variant="secondary" size="sm" icon={<Building2 size={16} />} onClick={() => setManagingDepartments(true)}>
-            部门目录
+            {t('features.team.teamView.departmentDirectory')}
           </Button>
           <Button variant="primary" size="sm" icon={<UserPlus size={16} />} onClick={() => setCreating(true)}>
-            新建成员
+            {t('features.team.teamView.createMember')}
           </Button>
         </div>
       ) : null}
 
       <Panel
-        title="成员"
-        subtitle={`当前显示 ${filteredMembers.length} / ${members.length} 人`}
+        title={t('features.team.teamView.membersTitle')}
+        subtitle={t('features.team.teamView.membersSubtitle', { shown: filteredMembers.length, total: members.length })}
         toolbar={
           <Button variant="secondary" size="sm" icon={<FileText size={14} />} onClick={() => navigateTo('teamlogs')}>
-            查看团队日报
+            {t('features.team.teamView.viewTeamLogs')}
           </Button>
         }
         noPadding
@@ -238,30 +240,30 @@ export default function TeamView() {
             <Input
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
-              placeholder="搜索姓名、邮箱、手机号、职责或部门"
-              aria-label="搜索成员"
+              placeholder={t('features.team.teamView.searchPlaceholder')}
+              aria-label={t('features.team.teamView.searchAria')}
             />
           </div>
           <ComboSelect
-            options={ROLE_OPTIONS}
+            options={ROLE_OPTIONS.map((item) => ({ ...item, label: t(item.label) }))}
             value={role}
             onChange={(v) => setRole(v)}
-            ariaLabel="按角色筛选"
+            ariaLabel={t('features.team.teamView.roleFilterAria')}
             className="min-w-[8rem]"
           />
           <ComboSelect
-            options={[{ value: '', label: '全部部门' }, ...departments.map((d) => ({ value: d, label: d }))]}
+            options={[{ value: '', label: t('features.team.teamView.allDepartments') }, ...departments.map((d) => ({ value: d, label: d }))]}
             value={department}
             onChange={(v) => setDepartment(v)}
-            searchPlaceholder="搜索部门..."
-            ariaLabel="按部门筛选"
+            searchPlaceholder={t('features.team.teamView.departmentSearchPlaceholder')}
+            ariaLabel={t('features.team.teamView.departmentFilterAria')}
             className="min-w-[8rem]"
           />
           <ComboSelect
-            options={PRESENCE_OPTIONS}
+            options={PRESENCE_OPTIONS.map((item) => ({ ...item, label: t(item.label) }))}
             value={presence}
             onChange={(v) => setPresence(v as PresenceFilter)}
-            ariaLabel="按活跃状态筛选"
+            ariaLabel={t('features.team.teamView.presenceFilterAria')}
             className="min-w-[8rem]"
           />
         </div>
@@ -269,7 +271,7 @@ export default function TeamView() {
         {loading || error ? (
           <div className="px-4 pb-4"><PageState loading={loading} error={error} onRetry={reload} /></div>
         ) : filteredMembers.length === 0 ? (
-          <div className="px-4 pb-4"><PageState loading={false} error={null} isEmpty emptyTitle="暂无成员" emptyDescription="当前筛选条件下没有匹配的团队成员。" /></div>
+          <div className="px-4 pb-4"><PageState loading={false} error={null} isEmpty emptyTitle={t('features.team.teamView.emptyTitle')} emptyDescription={t('features.team.teamView.emptyDescription')} /></div>
         ) : (
           <DataTable
             columns={columns}
@@ -277,7 +279,7 @@ export default function TeamView() {
             rowKey="id"
             onRowClick={setSelected}
             className="rounded-none border-x-0 border-b-0"
-            emptyText="暂无成员"
+            emptyText={t('features.team.teamView.emptyTitle')}
           />
         )}
       </Panel>

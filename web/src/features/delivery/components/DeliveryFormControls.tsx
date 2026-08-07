@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 export function DeliveryFormError({ message }: { message: string | null }) {
   return message ? <div className="form-error" style={{ marginBottom: 12 }}>{message}</div> : null;
 }
@@ -74,10 +76,11 @@ export function QuickIdInput({
   onChange: (value: string) => void;
   items: string[];
 }) {
+  const { t } = useTranslation();
   return (
     <div className="form-group">
       <label className="form-label">{label}</label>
-      <input className="form-input" value={value} onChange={(event) => onChange(event.target.value)} placeholder="可输入多个 ID，用逗号或空格分隔" />
+      <input className="form-input" value={value} onChange={(event) => onChange(event.target.value)} placeholder={t('features.delivery.deliveryFormControls.multiIdPlaceholder')} />
       {items.length > 0 ? (
         <div className="delivery-id-suggestions">
           {items.slice(0, 8).map((item) => (
@@ -98,10 +101,11 @@ export function FormActions({
   submitText: string;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="delivery-form-actions">
-      <button type="button" className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>取消</button>
-      <button type="submit" className="btn btn-primary btn-sm" disabled={submitting}>{submitting ? '提交中...' : submitText}</button>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>{t('common.cancel')}</button>
+      <button type="submit" className="btn btn-primary btn-sm" disabled={submitting}>{submitting ? t('features.delivery.deliveryFormControls.submitting') : submitText}</button>
     </div>
   );
 }

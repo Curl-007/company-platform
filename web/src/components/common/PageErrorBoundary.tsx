@@ -1,4 +1,5 @@
 import React from 'react';
+import { withTranslation, type WithTranslation } from 'react-i18next';
 
 interface PageErrorBoundaryProps {
   children: React.ReactNode;
@@ -14,8 +15,8 @@ interface PageErrorBoundaryState {
  * Catches lazy-route import failures and render errors so a single page
  * crash does not blank the whole viewport (Layout chrome stays mounted).
  */
-export default class PageErrorBoundary extends React.Component<
-  PageErrorBoundaryProps,
+class PageErrorBoundary extends React.Component<
+  PageErrorBoundaryProps & WithTranslation,
   PageErrorBoundaryState
 > {
   state: PageErrorBoundaryState = { error: null };
@@ -40,6 +41,7 @@ export default class PageErrorBoundary extends React.Component<
 
   render() {
     const { error } = this.state;
+    const { t, pageLabel } = this.props;
     if (!error) {
       return this.props.children;
     }
@@ -49,10 +51,10 @@ export default class PageErrorBoundary extends React.Component<
         error.message || '',
       ) || error.name === 'ChunkLoadError';
 
-    const title = isChunkError ? '页面资源加载失败' : '页面渲染出错';
+    const title = isChunkError ? t('common.pageLoadFailed') : t('common.pageRenderError');
     const description = isChunkError
-      ? '前端分包未能加载（常见于网络中断、部署后旧缓存，或 HTTP 被错误升级为 HTTPS）。请重试；若仍失败请硬刷新。'
-      : error.message || '未知错误';
+      ? t('common.pageLoadFailedDesc')
+      : error.message || t('common.unknownError');
 
     return (
       <div className="panel">
@@ -60,15 +62,15 @@ export default class PageErrorBoundary extends React.Component<
           <div className="empty-state">
             <div className="empty-state-title">{title}</div>
             <p className="empty-state-desc">
-              {this.props.pageLabel ? `页面：${this.props.pageLabel}。` : null}
+              {pageLabel ? t('common.pageLabel', { label: pageLabel }) : null}
               {description}
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
               <button type="button" className="btn btn-secondary btn-sm" onClick={this.handleRetry}>
-                重试
+                {t('common.retry')}
               </button>
               <button type="button" className="btn btn-primary btn-sm" onClick={this.handleReload}>
-                刷新整页
+                {t('common.reloadPage')}
               </button>
             </div>
           </div>
@@ -77,3 +79,5 @@ export default class PageErrorBoundary extends React.Component<
     );
   }
 }
+
+export default withTranslation()(PageErrorBoundary);

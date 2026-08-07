@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { fetchPersonalDashboard } from '../../dashboard/api';
 import { fetchMyCapacity } from '../../capacity/api';
 import { deleteTimeEntry, fetchTimeEntries } from '../../timeEntries/api';
@@ -27,6 +28,7 @@ const STORAGE_KEYS = {
 };
 
 export default function MyWorkView() {
+  const { t } = useTranslation();
   const toast = useToast();
   const confirm = useConfirm();
   const [tab, setTab] = useState<Tab>(() => {
@@ -48,18 +50,18 @@ export default function MyWorkView() {
 
   async function removeTimeEntry(entry: TimeEntry) {
     const confirmed = await confirm({
-      title: '删除实际工时记录？',
-      description: `${entry.workDate} 的 ${entry.hours} 小时记录将被删除，并重新计算个人容量。`,
-      confirmText: '删除记录',
+      title: t('features.mywork.myWorkView.deleteTimeEntryTitle'),
+      description: t('features.mywork.myWorkView.deleteTimeEntryDesc', { date: entry.workDate, hours: entry.hours }),
+      confirmText: t('features.mywork.myWorkView.deleteRecord'),
       tone: 'warning',
     });
     if (!confirmed) return;
     try {
       await deleteTimeEntry(entry.id);
       await Promise.all([timeEntriesAsync.reload(), personalCapacityAsync.reload()]);
-      toast.success('实际工时记录已删除，个人容量已更新');
+      toast.success(t('features.mywork.myWorkView.timeEntryDeleted'));
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : '删除工时记录失败');
+      toast.error(error instanceof ApiError ? error.message : t('features.mywork.myWorkView.deleteTimeEntryFailed'));
     }
   }
 
@@ -125,9 +127,9 @@ export default function MyWorkView() {
   }
 
   const metricCards = [
-    { label: '任务总数', value: data.metrics.tasks.total ?? 0 },
-    { label: '待修复缺陷', value: data.myDefects?.filter((item) => item.status !== 'closed').length ?? 0 },
-    { label: '需求跟进', value: data.requirementProgress.length },
+    { label: t('features.mywork.myWorkView.totalTasks'), value: data.metrics.tasks.total ?? 0 },
+    { label: t('features.mywork.myWorkView.openDefects'), value: data.myDefects?.filter((item) => item.status !== 'closed').length ?? 0 },
+    { label: t('features.mywork.myWorkView.requirementsFollowed'), value: data.requirementProgress.length },
   ];
 
   return (
@@ -141,10 +143,10 @@ export default function MyWorkView() {
       />
 
       <div className="tab-bar mywork-tab-bar">
-        <button className={`tab-item ${tab === 'tasks' ? 'active' : ''}`} onClick={() => setTab('tasks')}>我的任务</button>
-        <button className={`tab-item ${tab === 'bugs' ? 'active' : ''}`} onClick={() => setTab('bugs')}>我的缺陷</button>
-        <button className={`tab-item ${tab === 'requirements' ? 'active' : ''}`} onClick={() => setTab('requirements')}>我的需求</button>
-        <button className={`tab-item ${tab === 'logs' ? 'active' : ''}`} onClick={() => setTab('logs')}>日报周报</button>
+        <button className={`tab-item ${tab === 'tasks' ? 'active' : ''}`} onClick={() => setTab('tasks')}>{t('features.mywork.myWorkView.tabTasks')}</button>
+        <button className={`tab-item ${tab === 'bugs' ? 'active' : ''}`} onClick={() => setTab('bugs')}>{t('features.mywork.myWorkView.tabBugs')}</button>
+        <button className={`tab-item ${tab === 'requirements' ? 'active' : ''}`} onClick={() => setTab('requirements')}>{t('features.mywork.myWorkView.tabRequirements')}</button>
+        <button className={`tab-item ${tab === 'logs' ? 'active' : ''}`} onClick={() => setTab('logs')}>{t('features.mywork.myWorkView.tabLogs')}</button>
       </div>
 
       {tab === 'tasks' ? (
@@ -194,7 +196,7 @@ export default function MyWorkView() {
           onClose={() => setShowLogForm(false)}
           onSaved={async () => {
             setShowLogForm(false);
-            toast.success('日报已提交');
+            toast.success(t('features.mywork.myWorkView.dailyLogSubmitted'));
             await weeklySummaryAsync.reload();
           }}
         />
@@ -208,7 +210,7 @@ export default function MyWorkView() {
             setShowTimeEntryForm(false);
             setEditingTimeEntry(null);
             await Promise.all([timeEntriesAsync.reload(), personalCapacityAsync.reload()]);
-            toast.success(isEditing ? '实际工时已更新' : '实际工时已记录');
+            toast.success(isEditing ? t('features.mywork.myWorkView.timeEntryUpdated') : t('features.mywork.myWorkView.timeEntryRecorded'));
           }}
         />
       ) : null}

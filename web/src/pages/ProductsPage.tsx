@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import ProductsTab from '../features/products/components/ProductsTab';
 import ProgramsTab from '../features/products/components/ProgramsTab';
 import PortfoliosTab from '../features/products/components/PortfoliosTab';
@@ -6,10 +7,10 @@ import PageFrame from '../components/common/PageFrame';
 
 type Tab = 'products' | 'programs' | 'portfolios';
 
-const PRODUCT_TABS: Array<{ key: Tab; label: string }> = [
-  { key: 'products', label: '产品' },
-  { key: 'programs', label: '项目集' },
-  { key: 'portfolios', label: '组合' },
+const PRODUCT_TABS: Array<{ key: Tab; labelKey: string }> = [
+  { key: 'products', labelKey: 'features.products.productsPage.tabProducts' },
+  { key: 'programs', labelKey: 'features.products.productsPage.tabPrograms' },
+  { key: 'portfolios', labelKey: 'features.products.productsPage.tabPortfolios' },
 ];
 
 function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
@@ -31,6 +32,7 @@ function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
 }
 
 function ProductsPage() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('products');
 
   return (
@@ -38,8 +40,8 @@ function ProductsPage() {
       className="page-frame-products"
       contentClassName="products-page"
     >
-      <div className="nav-tabs products-page-tabs" role="tablist" aria-label="产品管理视图">
-        {PRODUCT_TABS.map(({ key, label }) => (
+      <div className="nav-tabs products-page-tabs" role="tablist" aria-label={t('features.products.productsPage.viewAria')}>
+        {PRODUCT_TABS.map(({ key, labelKey }) => (
           <button
             key={key}
             id={`products-page-tab-${key}`}
@@ -52,7 +54,7 @@ function ProductsPage() {
             onClick={() => setTab(key)}
             onKeyDown={handleTabKeyDown}
           >
-            {label}
+            {t(labelKey)}
           </button>
         ))}
       </div>

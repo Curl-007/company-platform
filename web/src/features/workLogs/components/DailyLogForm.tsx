@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { fetchProjects } from '../../projects/api';
 import { useAsync } from '../../../hooks/useAsync';
 import Overlay from '../../../components/common/Overlay';
@@ -10,6 +11,7 @@ import { createWorkLog } from '../api';
 import { businessDateKey } from '../../../utils/businessDate';
 
 export default function DailyLogForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => Promise<void> }) {
+  const { t } = useTranslation();
   const [projectId, setProjectId] = useState('');
   const [content, setContent] = useState('');
   const [blockers, setBlockers] = useState('');
@@ -28,7 +30,7 @@ export default function DailyLogForm({ onClose, onSaved }: { onClose: () => void
   async function handleSubmit() {
     setFormError(null);
     if (!content.trim() && !file) {
-      setFormError('请填写日报正文，或上传日报文件。');
+      setFormError(t('features.workLogs.dailyLogForm.contentRequired'));
       return;
     }
 
@@ -39,7 +41,7 @@ export default function DailyLogForm({ onClose, onSaved }: { onClose: () => void
         contentBase64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(String(reader.result ?? ''));
-          reader.onerror = () => reject(new Error('读取文件失败'));
+          reader.onerror = () => reject(new Error(t('features.workLogs.dailyLogForm.fileReadFailed')));
           reader.readAsDataURL(file);
         });
       }
@@ -61,47 +63,47 @@ export default function DailyLogForm({ onClose, onSaved }: { onClose: () => void
       await createWorkLog(input, createRequest.current.key);
       await onSaved();
     } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : '提交失败');
+      setFormError(error instanceof ApiError ? error.message : t('features.workLogs.dailyLogForm.submitFailed'));
       setSubmitting(false);
     }
   }
 
   return (
     <Overlay onClose={onClose}>
-      <Panel title="上传每日日报" subtitle="支持手填内容，也支持导入 .md / .txt / .doc / .docx 文件。">
+      <Panel title={t('features.workLogs.dailyLogForm.title')} subtitle={t('features.workLogs.dailyLogForm.subtitle')}>
         {formError ? <div className="form-error" style={{ marginBottom: 8 }}>{formError}</div> : null}
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">日期</label>
+            <label className="form-label">{t('features.workLogs.dailyLogForm.date')}</label>
             <input className="form-input" type="date" value={logDate} onChange={(event) => setLogDate(event.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">所属项目</label>
+            <label className="form-label">{t('features.workLogs.dailyLogForm.project')}</label>
             <select className="form-select" value={projectId} onChange={(event) => setProjectId(event.target.value)}>
-              <option value="">未绑定项目</option>
+              <option value="">{t('features.workLogs.dailyLogForm.unboundProject')}</option>
               {(projects ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label">日报正文</label>
-          <textarea className="form-textarea" rows={6} value={content} onChange={(event) => setContent(event.target.value)} placeholder="建议填写今日完成、提交、验证和联调情况。" />
+          <label className="form-label">{t('features.workLogs.dailyLogForm.content')}</label>
+          <textarea className="form-textarea" rows={6} value={content} onChange={(event) => setContent(event.target.value)} placeholder={t('features.workLogs.dailyLogForm.contentPlaceholder')} />
         </div>
         <div className="form-group">
-          <label className="form-label">阻塞项</label>
+          <label className="form-label">{t('features.workLogs.dailyLogForm.blockers')}</label>
           <textarea className="form-textarea" rows={3} value={blockers} onChange={(event) => setBlockers(event.target.value)} />
         </div>
         <div className="form-group">
-          <label className="form-label">明日计划</label>
+          <label className="form-label">{t('features.workLogs.dailyLogForm.nextPlan')}</label>
           <textarea className="form-textarea" rows={3} value={nextPlan} onChange={(event) => setNextPlan(event.target.value)} />
         </div>
         <div className="form-group">
-          <label className="form-label">日报文件</label>
+          <label className="form-label">{t('features.workLogs.dailyLogForm.file')}</label>
           <input className="form-input" type="file" accept=".md,.txt,.doc,.docx,text/plain" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
         </div>
         <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end' }}>
-          <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>取消</button>
-          <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={submitting}>{submitting ? '提交中…' : '提交日报'}</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>{t('common.cancel')}</button>
+          <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={submitting}>{submitting ? t('features.workLogs.dailyLogForm.submitting') : t('features.workLogs.dailyLogForm.submit')}</button>
         </div>
       </Panel>
     </Overlay>

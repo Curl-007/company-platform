@@ -1,4 +1,5 @@
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import StatusBadge from '../../../components/common/StatusBadge';
 import type { DeliveryGateResult } from '../../../types';
 import {
@@ -28,6 +29,7 @@ export default function GateBoard({
   gateMap: Map<string, DeliveryGateResult>;
   onOpen: (record: DeliveryRecord) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="dl-gate-board delivery-gate-board">
       {records.map((record) => {
@@ -48,7 +50,7 @@ export default function GateBoard({
             </div>
 
             <div className="dl-gate-summary-row delivery-gate-summary">
-              <span>{gate?.summary ?? '正在读取门禁结果'}</span>
+              <span>{gate?.summary ?? t('features.delivery.gateBoard.readingGateResult')}</span>
               <strong className="text-mono">{score}%</strong>
             </div>
 
@@ -56,20 +58,20 @@ export default function GateBoard({
               {(gate?.gates ?? []).map((line) => (
                 <GateLine key={line.id} label={line.label} passed={line.passed} value={line.message} />
               ))}
-              {!gate ? <GateLine label="门禁预检" passed={false} value="暂未获取到后端预检结果" /> : null}
+              {!gate ? <GateLine label={t('features.delivery.gateBoard.gatePrecheck')} passed={false} value={t('features.delivery.gateBoard.precheckUnavailable')} /> : null}
             </div>
 
             <div className="dl-linked-list delivery-linked-list">
-              {record.linkedStories.slice(0, 3).map((item) => <span key={item}>需求 {item}</span>)}
-              {record.linkedBugs.slice(0, 3).map((item) => <span key={item}>缺陷 {item}</span>)}
+              {record.linkedStories.slice(0, 3).map((item) => <span key={item}>{t('features.delivery.gateBoard.requirement', { id: item })}</span>)}
+              {record.linkedBugs.slice(0, 3).map((item) => <span key={item}>{t('features.delivery.gateBoard.defect', { id: item })}</span>)}
               {record.linkedStories.length === 0 && record.linkedBugs.length === 0 ? (
-                <span className="is-muted">暂无关联需求 / 缺陷</span>
+                <span className="is-muted">{t('features.delivery.gateBoard.noLinkedItems')}</span>
               ) : null}
             </div>
           </button>
         );
       })}
-      {records.length === 0 ? <div className="dl-empty delivery-empty-block">暂无门禁记录。</div> : null}
+      {records.length === 0 ? <div className="dl-empty delivery-empty-block">{t('features.delivery.gateBoard.empty')}</div> : null}
     </div>
   );
 }

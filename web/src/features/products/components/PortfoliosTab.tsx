@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   createPortfolio,
   deletePortfolio,
@@ -23,6 +24,7 @@ import { ROADMAP_STATUS_LABELS, labelOf } from '../../../constants/enums';
 import type { Portfolio, Product } from '../../../types';
 
 export default function PortfoliosTab() {
+  const { t } = useTranslation();
   const { data, loading, error, reload } = useAsync<Portfolio[]>(fetchPortfolios, [], { cacheKey: 'portfolios:list' });
   const products = useAsync<Product[]>(fetchProducts, [], { cacheKey: 'products:list' });
   const productNameById = useMemo(
@@ -51,15 +53,15 @@ export default function PortfoliosTab() {
   }, [portfolios, selectedId]);
 
   async function handleDelete(portfolio: Portfolio) {
-    const approved = await confirm({ title: `删除产品组合“${portfolio.name}”？`, description: '仅当已解除该组合下的需求关联时才能删除。', confirmText: '删除产品组合', tone: 'danger' });
+    const approved = await confirm({ title: t('features.products.portfoliosTab.deleteConfirm', { name: portfolio.name }), description: t('features.products.portfoliosTab.deleteConfirmDesc'), confirmText: t('features.products.portfoliosTab.delete'), tone: 'danger' });
     if (!approved) return;
     setDeletingId(portfolio.id);
     try {
       await deletePortfolio(portfolio.id);
-      toast.success('产品组合已删除。');
+      toast.success(t('features.products.portfoliosTab.deleted'));
       reload();
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : '删除失败。');
+      toast.error(error instanceof ApiError ? error.message : t('features.products.portfoliosTab.deleteFailed'));
     } finally {
       setDeletingId(null);
     }
@@ -72,13 +74,13 @@ export default function PortfoliosTab() {
   if (!portfolios.length) {
     return (
       <>
-        {canManagePortfolios ? <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建产品组合</button></div> : null}
+        {canManagePortfolios ? <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>{t('features.products.portfoliosTab.new')}</button></div> : null}
         <ManagementEmptyState
-          title="还没有产品组合"
-          description="产品组合用于按业务目标统一管理产品范围和路线图。"
-          steps={['新建产品组合并定义目标', '选择需要关联的产品', '维护组合路线图']}
+          title={t('features.products.portfoliosTab.emptyTitle')}
+          description={t('features.products.portfoliosTab.emptyDescription')}
+          steps={[t('features.products.portfoliosTab.step1'), t('features.products.portfoliosTab.step2'), t('features.products.portfoliosTab.step3')]}
         />
-        {creating ? <StrategyForm kind="portfolio" onClose={() => setCreating(false)} onSubmit={async (input) => { await createPortfolio(input); toast.success('产品组合已创建。'); setCreating(false); reload(); }} /> : null}
+        {creating ? <StrategyForm kind="portfolio" onClose={() => setCreating(false)} onSubmit={async (input) => { await createPortfolio(input); toast.success(t('features.products.portfoliosTab.created')); setCreating(false); reload(); }} /> : null}
       </>
     );
   }
@@ -88,36 +90,36 @@ export default function PortfoliosTab() {
       <div className="management-workbench management-workbench-flush">
         <Panel
           className="management-workbench-main"
-          title="产品组合工作台"
-          subtitle="把多个产品组织成业务组合，统一查看产品范围、组合状态和路线图节奏。"
-          toolbar={canManagePortfolios ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建产品组合</button> : undefined}
+          title={t('features.products.portfoliosTab.workbenchTitle')}
+          subtitle={t('features.products.portfoliosTab.workbenchSubtitle')}
+          toolbar={canManagePortfolios ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>{t('features.products.portfoliosTab.new')}</button> : undefined}
           noPadding
         >
           <div className="management-workbench-metrics">
             <ManagementSummaryStrip
               items={[
-                { label: '组合数', value: portfolios.length },
-                { label: '组合内产品', value: totalProducts },
-                { label: '推进中组合', value: activePortfolios },
-                { label: '路线图事项', value: roadmapCount },
-                { label: '平均产品数', value: portfolios.length ? Math.round(totalProducts / portfolios.length) : 0 },
+                { label: t('features.products.portfoliosTab.summaryPortfolioCount'), value: portfolios.length },
+                { label: t('features.products.portfoliosTab.summaryProducts'), value: totalProducts },
+                { label: t('features.products.portfoliosTab.summaryActive'), value: activePortfolios },
+                { label: t('features.products.portfoliosTab.summaryRoadmap'), value: roadmapCount },
+                { label: t('features.products.portfoliosTab.summaryAvgProducts'), value: portfolios.length ? Math.round(totalProducts / portfolios.length) : 0 },
               ]}
             />
           </div>
 
           <div className="management-grid">
             <div className="management-list-pane">
-              <div className="management-list-pane-header">组合清单</div>
+              <div className="management-list-pane-header">{t('features.products.portfoliosTab.listTitle')}</div>
               <div className="management-list">
                 {portfolios.map((item) => (
                   <ManagementListItem
                     key={item.id}
                     active={selected?.id === item.id}
                     title={item.name}
-                    subtitle={`${item.owner} · ${item.productIds.length} 个产品`}
+                    subtitle={t('features.products.portfoliosTab.listSubtitle', { owner: item.owner, count: item.productIds.length })}
                     status={item.status}
                     statusLabel={labelOf(ROADMAP_STATUS_LABELS, item.status)}
-                    meta={`${item.roadmap.length} 项`}
+                    meta={t('features.products.portfoliosTab.listMeta', { count: item.roadmap.length })}
                     onClick={() => setSelectedId(item.id)}
                   />
                 ))}
@@ -133,20 +135,20 @@ export default function PortfoliosTab() {
                       <span className="tag">{selected.id}</span>
                     </div>
                     <h2>{selected.name}</h2>
-                    <p><strong>目标：</strong>{selected.objective || '尚未定义目标。'}</p>
-                    <p>负责人 {selected.owner}，组合内包含 {selected.productIds.length} 个产品，用于按业务线或交付包统一规划。</p>
+                    <p><strong>{t('features.products.portfoliosTab.objective')}</strong>{selected.objective || t('features.products.portfoliosTab.noObjective')}</p>
+                    <p>{t('features.products.portfoliosTab.heroDesc', { owner: selected.owner, count: selected.productIds.length })}</p>
                   </div>
                   <div className="management-score-grid">
                     <div>
-                      <span>产品数</span>
+                      <span>{t('features.products.portfoliosTab.productCount')}</span>
                       <strong>{selected.productIds.length}</strong>
                     </div>
                     <div>
-                      <span>路线图</span>
+                      <span>{t('features.products.portfoliosTab.roadmap')}</span>
                       <strong>{selected.roadmap.length}</strong>
                     </div>
                     <div>
-                      <span>状态</span>
+                      <span>{t('features.products.portfoliosTab.status')}</span>
                       <strong>{labelOf(ROADMAP_STATUS_LABELS, selected.status)}</strong>
                     </div>
                   </div>
@@ -155,21 +157,21 @@ export default function PortfoliosTab() {
                   <div className="product-section">
                     <div className="product-section-head">
                       <div>
-                        <h3>组合产品</h3>
-                        <p>当前组合覆盖的产品范围。</p>
+                        <h3>{t('features.products.portfoliosTab.portfolioProducts')}</h3>
+                        <p>{t('features.products.portfoliosTab.portfolioProductsDesc')}</p>
                       </div>
                     </div>
                     <div className="management-chip-list">
                       {selected.productIds.length ? selected.productIds.map((id) => (
-                        <span key={id} title={productNameById.has(id) ? `编号 ${id}` : undefined}>{productNameById.get(id) ?? id}</span>
-                      )) : <div className="product-empty-line">暂无产品。</div>}
+                        <span key={id} title={productNameById.has(id) ? t('features.products.portfoliosTab.idPrefix', { id }) : undefined}>{productNameById.get(id) ?? id}</span>
+                      )) : <div className="product-empty-line">{t('features.products.portfoliosTab.noProducts')}</div>}
                     </div>
                   </div>
                   <div className="product-section">
                     <div className="product-section-head">
                       <div>
-                        <h3>组合路线图</h3>
-                        <p>来自组合内产品的路线图聚合。</p>
+                        <h3>{t('features.products.portfoliosTab.portfolioRoadmap')}</h3>
+                        <p>{t('features.products.portfoliosTab.portfolioRoadmapDesc')}</p>
                       </div>
                     </div>
                     {selected.roadmap.length ? (
@@ -178,23 +180,23 @@ export default function PortfoliosTab() {
                           <div key={`${roadmap.title}-${index}`} className="product-roadmap-item">
                             <div className="product-roadmap-dot" />
                             <div>
-                              <strong>{roadmap.title || roadmap.version || `规划项 ${index + 1}`}</strong>
-                              <span>{roadmap.version || '未设置版本'}{roadmap.quarter ? ` · ${roadmap.quarter}` : ''}</span>
+                              <strong>{roadmap.title || roadmap.version || t('features.products.portfoliosTab.planningItem', { index: index + 1 })}</strong>
+                              <span>{roadmap.version || t('features.products.portfoliosTab.noVersion')}{roadmap.quarter ? ` · ${roadmap.quarter}` : ''}</span>
                             </div>
                             {roadmap.status ? <StatusBadge status={String(roadmap.status)} label={labelOf(ROADMAP_STATUS_LABELS, String(roadmap.status))} showDot={false} /> : null}
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="product-empty-line">当前组合还没有路线图条目。</div>
+                      <div className="product-empty-line">{t('features.products.portfoliosTab.emptyRoadmap')}</div>
                     )}
                   </div>
                 </div>
                 {canManagePortfolios ? (
                   <div className="product-hero-actions">
-                    <button className="btn btn-secondary btn-sm" onClick={() => setEditing(selected)}>编辑产品组合</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setEditing(selected)}>{t('features.products.portfoliosTab.edit')}</button>
                     <button className="btn btn-danger btn-sm" onClick={() => handleDelete(selected)} disabled={deletingId === selected.id}>
-                      {deletingId === selected.id ? '删除中…' : '删除产品组合'}
+                      {deletingId === selected.id ? t('features.products.portfoliosTab.deleting') : t('features.products.portfoliosTab.delete')}
                     </button>
                   </div>
                 ) : null}
@@ -203,8 +205,8 @@ export default function PortfoliosTab() {
           </div>
         </Panel>
       </div>
-      {creating && canManagePortfolios ? <StrategyForm kind="portfolio" onClose={() => setCreating(false)} onSubmit={async (input) => { await createPortfolio(input); toast.success('产品组合已创建。'); setCreating(false); reload(); }} /> : null}
-      {editing && canManagePortfolios ? <StrategyForm kind="portfolio" initial={editing} onClose={() => setEditing(null)} onSubmit={async (input) => { await updatePortfolio(editing.id, input); toast.success('产品组合已更新。'); setEditing(null); reload(); }} /> : null}
+      {creating && canManagePortfolios ? <StrategyForm kind="portfolio" onClose={() => setCreating(false)} onSubmit={async (input) => { await createPortfolio(input); toast.success(t('features.products.portfoliosTab.created')); setCreating(false); reload(); }} /> : null}
+      {editing && canManagePortfolios ? <StrategyForm kind="portfolio" initial={editing} onClose={() => setEditing(null)} onSubmit={async (input) => { await updatePortfolio(editing.id, input); toast.success(t('features.products.portfoliosTab.updated')); setEditing(null); reload(); }} /> : null}
     </>
   );
 }

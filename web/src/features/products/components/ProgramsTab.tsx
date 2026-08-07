@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   createProgram,
   deleteProgram,
@@ -23,6 +24,7 @@ import { PROJECT_STATUS_LABELS, labelOf } from '../../../constants/enums';
 import type { Program, Project } from '../../../types';
 
 export default function ProgramsTab() {
+  const { t } = useTranslation();
   const { data, loading, error, reload } = useAsync<Program[]>(fetchPrograms, [], { cacheKey: 'programs:list' });
   const projects = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
   const projectNameById = useMemo(
@@ -52,15 +54,15 @@ export default function ProgramsTab() {
   }, [programs, selectedId]);
 
   async function handleDelete(program: Program) {
-    const approved = await confirm({ title: `删除项目集“${program.name}”？`, description: '仅当已解除所有项目关联时才能删除。', confirmText: '删除项目集', tone: 'danger' });
+    const approved = await confirm({ title: t('features.products.programsTab.deleteConfirm', { name: program.name }), description: t('features.products.programsTab.deleteConfirmDesc'), confirmText: t('features.products.programsTab.delete'), tone: 'danger' });
     if (!approved) return;
     setDeletingId(program.id);
     try {
       await deleteProgram(program.id);
-      toast.success('项目集已删除。');
+      toast.success(t('features.products.programsTab.deleted'));
       reload();
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : '删除失败。');
+      toast.error(error instanceof ApiError ? error.message : t('features.products.programsTab.deleteFailed'));
     } finally {
       setDeletingId(null);
     }
@@ -73,13 +75,13 @@ export default function ProgramsTab() {
   if (!programs.length) {
     return (
       <>
-        {canManagePrograms ? <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建项目集</button></div> : null}
+        {canManagePrograms ? <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>{t('features.products.programsTab.new')}</button></div> : null}
         <ManagementEmptyState
-          title="还没有项目集"
-          description="项目集用于按共同目标管理多个项目的交付状态、进度和风险。"
-          steps={['新建项目集并定义目标', '选择需要关联的项目', '在项目集视图跟踪整体交付风险']}
+          title={t('features.products.programsTab.emptyTitle')}
+          description={t('features.products.programsTab.emptyDescription')}
+          steps={[t('features.products.programsTab.step1'), t('features.products.programsTab.step2'), t('features.products.programsTab.step3')]}
         />
-        {creating ? <StrategyForm kind="program" onClose={() => setCreating(false)} onSubmit={async (input) => { await createProgram(input); toast.success('项目集已创建。'); setCreating(false); reload(); }} /> : null}
+        {creating ? <StrategyForm kind="program" onClose={() => setCreating(false)} onSubmit={async (input) => { await createProgram(input); toast.success(t('features.products.programsTab.created')); setCreating(false); reload(); }} /> : null}
       </>
     );
   }
@@ -89,33 +91,33 @@ export default function ProgramsTab() {
       <div className="management-workbench management-workbench-flush">
         <Panel
           className="management-workbench-main"
-          title="项目集工作台"
-          subtitle="按交付目标聚合多个项目，集中查看跨项目进度、健康度、风险和项目清单。"
-          toolbar={canManagePrograms ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建项目集</button> : undefined}
+          title={t('features.products.programsTab.workbenchTitle')}
+          subtitle={t('features.products.programsTab.workbenchSubtitle')}
+          toolbar={canManagePrograms ? <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>{t('features.products.programsTab.new')}</button> : undefined}
           noPadding
         >
           <div className="management-workbench-metrics">
             <ManagementSummaryStrip
               items={[
-                { label: '项目集', value: programs.length },
-                { label: '关联项目', value: totalProjects },
-                { label: '平均进度', value: `${avgProgress}%` },
-                { label: '平均健康度', value: avgHealth },
-                { label: '风险提示', value: riskCount },
+                { label: t('features.products.programsTab.summaryPrograms'), value: programs.length },
+                { label: t('features.products.programsTab.summaryProjects'), value: totalProjects },
+                { label: t('features.products.programsTab.summaryAvgProgress'), value: `${avgProgress}%` },
+                { label: t('features.products.programsTab.summaryAvgHealth'), value: avgHealth },
+                { label: t('features.products.programsTab.summaryRisks'), value: riskCount },
               ]}
             />
           </div>
 
           <div className="management-grid">
             <div className="management-list-pane">
-              <div className="management-list-pane-header">项目集清单</div>
+              <div className="management-list-pane-header">{t('features.products.programsTab.listTitle')}</div>
               <div className="management-list">
                 {programs.map((item) => (
                   <ManagementListItem
                     key={item.id}
                     active={selected?.id === item.id}
                     title={item.name}
-                    subtitle={`${item.owner} · ${item.projectIds.length} 个项目`}
+                    subtitle={t('features.products.programsTab.listSubtitle', { owner: item.owner, count: item.projectIds.length })}
                     status={item.status}
                     statusLabel={labelOf(PROJECT_STATUS_LABELS, item.status)}
                     meta={`${item.progress}%`}
@@ -134,33 +136,33 @@ export default function ProgramsTab() {
                       <span className="tag">{selected.id}</span>
                     </div>
                     <h2>{selected.name}</h2>
-                    <p><strong>目标：</strong>{selected.objective || '尚未定义目标。'}</p>
-                    <p>负责人 {selected.owner}，当前聚合 {selected.projectIds.length} 个项目。用于看项目群是否按共同目标推进。</p>
+                    <p><strong>{t('features.products.programsTab.objective')}</strong>{selected.objective || t('features.products.programsTab.noObjective')}</p>
+                    <p>{t('features.products.programsTab.heroDesc', { owner: selected.owner, count: selected.projectIds.length })}</p>
                   </div>
                   <div className="management-score-grid">
                     <div>
-                      <span>平均进度</span>
+                      <span>{t('features.products.programsTab.avgProgress')}</span>
                       <strong>{selected.progress}%</strong>
                     </div>
                     <div>
-                      <span>健康度</span>
+                      <span>{t('features.products.programsTab.health')}</span>
                       <strong>{selected.healthScore}</strong>
                     </div>
                     <div>
-                      <span>风险数</span>
+                      <span>{t('features.products.programsTab.riskCount')}</span>
                       <strong>{selected.risks.length}</strong>
                     </div>
                   </div>
                 </div>
                 <div className="management-progress">
-                  <span>项目集推进</span>
+                  <span>{t('features.products.programsTab.progressLabel')}</span>
                   <div><i style={{ width: `${Math.min(100, Math.max(0, selected.progress))}%` }} /></div>
                 </div>
                 {canManagePrograms ? (
                   <div className="product-hero-actions">
-                    <button className="btn btn-secondary btn-sm" onClick={() => setEditing(selected)}>编辑项目集</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setEditing(selected)}>{t('features.products.programsTab.edit')}</button>
                     <button className="btn btn-danger btn-sm" onClick={() => handleDelete(selected)} disabled={deletingId === selected.id}>
-                      {deletingId === selected.id ? '删除中…' : '删除项目集'}
+                      {deletingId === selected.id ? t('features.products.programsTab.deleting') : t('features.products.programsTab.delete')}
                     </button>
                   </div>
                 ) : null}
@@ -168,21 +170,21 @@ export default function ProgramsTab() {
                   <div className="product-section">
                     <div className="product-section-head">
                       <div>
-                        <h3>关联项目</h3>
-                        <p>当前项目集下的项目范围。</p>
+                        <h3>{t('features.products.programsTab.linkedProjects')}</h3>
+                        <p>{t('features.products.programsTab.linkedProjectsDesc')}</p>
                       </div>
                     </div>
                     <div className="management-chip-list">
                       {selected.projectIds.length ? selected.projectIds.map((id) => (
-                        <span key={id} title={projectNameById.has(id) ? `编号 ${id}` : undefined}>{projectNameById.get(id) ?? id}</span>
-                      )) : <div className="product-empty-line">暂无关联项目。</div>}
+                        <span key={id} title={projectNameById.has(id) ? t('features.products.programsTab.idPrefix', { id }) : undefined}>{projectNameById.get(id) ?? id}</span>
+                      )) : <div className="product-empty-line">{t('features.products.programsTab.noProjects')}</div>}
                     </div>
                   </div>
                   <div className="product-section">
                     <div className="product-section-head">
                       <div>
-                        <h3>风险提示</h3>
-                        <p>从项目风险聚合而来。</p>
+                        <h3>{t('features.products.programsTab.risks')}</h3>
+                        <p>{t('features.products.programsTab.risksDesc')}</p>
                       </div>
                     </div>
                     {selected.risks.length ? (
@@ -190,7 +192,7 @@ export default function ProgramsTab() {
                         {selected.risks.map((risk, index) => <div key={`${risk}-${index}`}>{risk}</div>)}
                       </div>
                     ) : (
-                      <div className="product-empty-line">当前没有明显风险项。</div>
+                      <div className="product-empty-line">{t('features.products.programsTab.noRisks')}</div>
                     )}
                   </div>
                 </div>
@@ -199,8 +201,8 @@ export default function ProgramsTab() {
           </div>
         </Panel>
       </div>
-      {creating && canManagePrograms ? <StrategyForm kind="program" onClose={() => setCreating(false)} onSubmit={async (input) => { await createProgram(input); toast.success('项目集已创建。'); setCreating(false); reload(); }} /> : null}
-      {editing && canManagePrograms ? <StrategyForm kind="program" initial={editing} onClose={() => setEditing(null)} onSubmit={async (input) => { await updateProgram(editing.id, input); toast.success('项目集已更新。'); setEditing(null); reload(); }} /> : null}
+      {creating && canManagePrograms ? <StrategyForm kind="program" onClose={() => setCreating(false)} onSubmit={async (input) => { await createProgram(input); toast.success(t('features.products.programsTab.created')); setCreating(false); reload(); }} /> : null}
+      {editing && canManagePrograms ? <StrategyForm kind="program" initial={editing} onClose={() => setEditing(null)} onSubmit={async (input) => { await updateProgram(editing.id, input); toast.success(t('features.products.programsTab.updated')); setEditing(null); reload(); }} /> : null}
     </>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
 import { useAsync } from '../../../hooks/useAsync';
@@ -24,6 +25,7 @@ export default function WorkCalendarOverlay({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const { t } = useTranslation();
   const calendarAsync = useAsync<WorkCalendar & { period: { periodStart: string; periodEnd: string } }>(
     () => fetchWorkCalendar({ periodStart, periodEnd }),
     [periodStart, periodEnd],
@@ -51,15 +53,15 @@ export default function WorkCalendarOverlay({
 
   async function saveCalendar(event: React.FormEvent) {
     event.preventDefault();
-    if (workingWeekdays.length === 0) return toast.error('至少选择一个常规工作日。');
+    if (workingWeekdays.length === 0) return toast.error(t('features.capacity.workCalendarOverlay.requireWeekday'));
     setSaving(true);
     try {
       await updateWorkCalendar({ name: name.trim() || undefined, workingWeekdays, periodStart, periodEnd });
       calendarAsync.reload();
       onChanged();
-      toast.success('工作日历已保存，容量已重新计算。');
+      toast.success(t('features.capacity.workCalendarOverlay.calendarSaved'));
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : '保存工作日历失败');
+      toast.error(error instanceof ApiError ? error.message : t('features.capacity.workCalendarOverlay.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -73,9 +75,9 @@ export default function WorkCalendarOverlay({
       setExceptionName('');
       calendarAsync.reload();
       onChanged();
-      toast.success('日历例外已保存，容量已重新计算。');
+      toast.success(t('features.capacity.workCalendarOverlay.exceptionSaved'));
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : '保存日历例外失败');
+      toast.error(error instanceof ApiError ? error.message : t('features.capacity.workCalendarOverlay.exceptionSaveFailed'));
     } finally {
       setSaving(false);
     }
@@ -87,9 +89,9 @@ export default function WorkCalendarOverlay({
       await deleteWorkCalendarException(id);
       calendarAsync.reload();
       onChanged();
-      toast.success('日历例外已删除。');
+      toast.success(t('features.capacity.workCalendarOverlay.exceptionDeleted'));
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : '删除日历例外失败');
+      toast.error(error instanceof ApiError ? error.message : t('features.capacity.workCalendarOverlay.exceptionDeleteFailed'));
     } finally {
       setSaving(false);
     }
@@ -97,61 +99,61 @@ export default function WorkCalendarOverlay({
 
   return (
     <Overlay onClose={onClose} maxWidth={900}>
-      <Panel title="工作日历" subtitle="容量按常规工作日与节假日/调休例外计算。">
+      <Panel title={t('features.capacity.workCalendarOverlay.title')} subtitle={t('features.capacity.workCalendarOverlay.subtitle')}>
         {calendarAsync.loading ? (
-          <div className="body-text">正在加载工作日历…</div>
+          <div className="body-text">{t('features.capacity.workCalendarOverlay.loading')}</div>
         ) : calendarAsync.error ? (
           <div className="form-error">{calendarAsync.error}</div>
         ) : calendarAsync.data ? (
           <div className="form-stack">
             <form className="form-stack" onSubmit={saveCalendar}>
               <div className="form-row">
-                <label className="form-field"><span>日历名称</span><input className="form-input" value={name} onChange={(event) => setName(event.target.value)} /></label>
-                <div className="form-field"><span>当前周期工作日</span><strong>{calendarAsync.data.workingDays} 天</strong></div>
+                <label className="form-field"><span>{t('features.capacity.workCalendarOverlay.calendarName')}</span><input className="form-input" value={name} onChange={(event) => setName(event.target.value)} /></label>
+                <div className="form-field"><span>{t('features.capacity.workCalendarOverlay.currentPeriodWorkdays')}</span><strong>{t('features.capacity.workCalendarOverlay.workdaysCount', { count: calendarAsync.data.workingDays })}</strong></div>
               </div>
               <div className="form-field">
-                <span>常规工作日</span>
+                <span>{t('features.capacity.workCalendarOverlay.regularWorkdays')}</span>
                 <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
                   {WEEKDAYS.map((day) => (
                     <label key={day.value} className="btn btn-secondary btn-sm">
-                      <input type="checkbox" checked={workingWeekdays.includes(day.value)} onChange={() => toggleWeekday(day.value)} /> {day.label}
+                      <input type="checkbox" checked={workingWeekdays.includes(day.value)} onChange={() => toggleWeekday(day.value)} /> {t(day.label)}
                     </label>
                   ))}
                 </div>
               </div>
               <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
-                <button className="btn btn-primary btn-sm" disabled={saving}>保存工作日历</button>
+                <button className="btn btn-primary btn-sm" disabled={saving}>{t('features.capacity.workCalendarOverlay.saveCalendar')}</button>
               </div>
             </form>
             <form className="form-stack" onSubmit={saveException}>
-              <div className="section-title">节假日与调休例外</div>
+              <div className="section-title">{t('features.capacity.workCalendarOverlay.exceptionsTitle')}</div>
               <div className="form-row">
-                <label className="form-field"><span>日期</span><input className="form-input" type="date" value={exceptionDate} onChange={(event) => setExceptionDate(event.target.value)} /></label>
-                <label className="form-field"><span>名称</span><input className="form-input" value={exceptionName} onChange={(event) => setExceptionName(event.target.value)} placeholder="例如：国庆节 / 调休" /></label>
-                <label className="form-field"><span><input type="checkbox" checked={isWorkingDay} onChange={(event) => setIsWorkingDay(event.target.checked)} /> 设为工作日</span></label>
+                <label className="form-field"><span>{t('features.capacity.workCalendarOverlay.date')}</span><input className="form-input" type="date" value={exceptionDate} onChange={(event) => setExceptionDate(event.target.value)} /></label>
+                <label className="form-field"><span>{t('features.capacity.workCalendarOverlay.name')}</span><input className="form-input" value={exceptionName} onChange={(event) => setExceptionName(event.target.value)} placeholder={t('features.capacity.workCalendarOverlay.namePlaceholder')} /></label>
+                <label className="form-field"><span><input type="checkbox" checked={isWorkingDay} onChange={(event) => setIsWorkingDay(event.target.checked)} /> {t('features.capacity.workCalendarOverlay.setAsWorkingDay')}</span></label>
               </div>
               <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
-                <button className="btn btn-secondary btn-sm" disabled={saving}>保存例外</button>
+                <button className="btn btn-secondary btn-sm" disabled={saving}>{t('features.capacity.workCalendarOverlay.saveException')}</button>
               </div>
             </form>
             {calendarAsync.data.exceptions.length ? (
               <div className="table-scroll">
                 <table className="data-table">
-                  <thead><tr><th>日期</th><th>名称</th><th>规则</th><th>操作</th></tr></thead>
+                  <thead><tr><th>{t('features.capacity.workCalendarOverlay.date')}</th><th>{t('features.capacity.workCalendarOverlay.name')}</th><th>{t('features.capacity.workCalendarOverlay.rule')}</th><th>{t('common.actions')}</th></tr></thead>
                   <tbody>
                     {calendarAsync.data.exceptions.map((item) => (
                       <tr key={item.id}>
                         <td>{item.date}</td>
                         <td>{item.name || '—'}</td>
-                        <td>{item.isWorkingDay ? '工作日（调休）' : '非工作日（节假日）'}</td>
-                        <td><button className="btn btn-text btn-sm" disabled={saving} onClick={() => removeException(item.id)}>删除</button></td>
+                        <td>{item.isWorkingDay ? t('features.capacity.workCalendarOverlay.workingDayException') : t('features.capacity.workCalendarOverlay.nonWorkingDayException')}</td>
+                        <td><button className="btn btn-text btn-sm" disabled={saving} onClick={() => removeException(item.id)}>{t('common.delete')}</button></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <div className="body-text">当前周期没有日历例外。</div>
+              <div className="body-text">{t('features.capacity.workCalendarOverlay.noExceptions')}</div>
             )}
           </div>
         ) : null}

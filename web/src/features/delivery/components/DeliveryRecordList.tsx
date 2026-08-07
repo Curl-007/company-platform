@@ -1,4 +1,5 @@
 import { Package, Rocket, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import ProgressBar from '../../../components/common/ProgressBar';
 import StatusBadge from '../../../components/common/StatusBadge';
 import type { DeliveryGateResult } from '../../../types';
@@ -26,9 +27,10 @@ export default function DeliveryRecordList({
   onDelete: (record: DeliveryRecord) => void;
   canManageDelivery: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="dl-record-list delivery-record-list">
-      {records.length === 0 ? <div className="dl-empty delivery-empty-block">暂无匹配的交付记录。</div> : null}
+      {records.length === 0 ? <div className="dl-empty delivery-empty-block">{t('features.delivery.deliveryRecordList.empty')}</div> : null}
       {records.map((record) => {
         const gate = gateMap?.get(`${record.kind}:${record.id}`);
         const readiness = gate?.score ?? releaseReadiness(record);
@@ -59,21 +61,21 @@ export default function DeliveryRecordList({
                 <strong className="dl-record-name" title={record.title}>{record.title}</strong>
                 <StatusBadge status={record.status} label={statusLabel(record.kind, record.status)} showDot={false} />
                 <span className={`dl-gate-chip ${gateReady ? 'is-ready' : 'is-blocked'}`}>
-                  {gate ? (gate.ready ? '门禁通过' : '门禁阻断') : '就绪预估'}
+                  {gate ? (gate.ready ? t('features.delivery.deliveryRecordList.gatePassed') : t('features.delivery.deliveryRecordList.gateBlocked')) : t('features.delivery.deliveryRecordList.readinessEstimate')}
                 </span>
               </div>
               <div className="dl-record-meta delivery-record-meta">
-                <span>{record.kind === 'build' ? '项目' : '产品'} · {record.ownerLabel}</span>
+                <span>{record.kind === 'build' ? t('features.delivery.deliveryRecordList.project') : t('features.delivery.deliveryRecordList.product')} · {record.ownerLabel}</span>
                 <span>{formatDate(record.date)}</span>
-                {record.buildId ? <span className="text-mono">构建 {record.buildId}</span> : null}
+                {record.buildId ? <span className="text-mono">{t('features.delivery.deliveryRecordList.build', { id: record.buildId })}</span> : null}
               </div>
               {record.notes ? <p className="dl-record-notes">{record.notes}</p> : null}
             </div>
 
             <div className="dl-record-side delivery-record-side">
               <div className="dl-mini-metrics delivery-mini-metrics">
-                <span>{record.linkedStories.length} 需求</span>
-                <span>{record.linkedBugs.length} 缺陷</span>
+                <span>{t('features.delivery.deliveryRecordList.storiesCount', { count: record.linkedStories.length })}</span>
+                <span>{t('features.delivery.deliveryRecordList.bugsCount', { count: record.linkedBugs.length })}</span>
                 <strong className="text-mono">{readiness}%</strong>
               </div>
               <ProgressBar percent={readiness} height={6} showPercent={false} variant={statusTone(record)} />
@@ -86,7 +88,7 @@ export default function DeliveryRecordList({
                   className="form-select form-select-xs dl-inline-select"
                   value={record.status}
                   onChange={(event) => onStatus(record, event.target.value)}
-                  aria-label={`更新 ${record.title} 状态`}
+                  aria-label={t('features.delivery.deliveryRecordList.updateStatusAria', { name: record.title })}
                 >
                   {statusOptions(record.kind).map((status) => (
                     <option value={status} key={status}>{statusLabel(record.kind, status)}</option>
@@ -95,9 +97,9 @@ export default function DeliveryRecordList({
                 <button
                   className="btn btn-text btn-xs dl-danger-btn"
                   onClick={() => onDelete(record)}
-                  title="删除"
+                  title={t('common.delete')}
                 >
-                  <Trash2 size={13} aria-hidden="true" /> 删除
+                  <Trash2 size={13} aria-hidden="true" /> {t('common.delete')}
                 </button>
               </div>
             ) : null}

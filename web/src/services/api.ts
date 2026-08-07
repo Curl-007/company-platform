@@ -1,4 +1,5 @@
 import type { ApiResponse } from '../types';
+import i18n from '../i18n';
 import { clearAsyncCache, setAsyncCacheUser } from './asyncCache';
 
 // ---------------------------------------------------------------------------
@@ -107,7 +108,7 @@ export class ApiError extends Error {
 /** Raised when a response belongs to a session that is no longer active. */
 export class SessionSupersededError extends Error {
   constructor() {
-    super('会话已更新，已忽略过期请求');
+    super(i18n.t('common.sessionRenewed'));
     this.name = 'SessionSupersededError';
   }
 }
@@ -172,10 +173,10 @@ async function request<T>(
         throw new SessionSupersededError();
       }
       if (networkError instanceof DOMException && networkError.name === 'AbortError') {
-        throw new ApiError(timedOut ? '请求超时' : '请求已取消', 0);
+        throw new ApiError(timedOut ? i18n.t('common.requestTimeout') : i18n.t('common.requestCancelled'), 0);
       }
       throw new ApiError(
-        networkError instanceof Error ? networkError.message : '网络错误',
+        networkError instanceof Error ? networkError.message : i18n.t('common.networkError'),
         0,
       );
     }
@@ -188,7 +189,7 @@ async function request<T>(
     if (response.status === 401) {
       clearAuthArtifacts();
       window.location.hash = '#/login';
-      throw new ApiError('未授权 - 登录已过期', 401);
+      throw new ApiError(i18n.t('common.sessionExpiredAuth'), 401);
     }
 
     let data: unknown;
@@ -209,7 +210,7 @@ async function request<T>(
       const message =
         typeof data === 'object' && data !== null && 'message' in data
           ? String((data as Record<string, unknown>).message)
-          : `请求失败，状态码 ${response.status}`;
+          : i18n.t('common.requestFailedStatus', { status: response.status });
       throw new ApiError(message, response.status, data);
     }
 

@@ -1,4 +1,5 @@
 import { useRef, type Dispatch, type SetStateAction } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Bot, FileText, Image as ImageIcon, Paperclip, Send, X } from 'lucide-react';
 import type { AiChatAttachment, AiChatMessage, Project } from '../../../types';
 import Panel from '../../../components/common/Panel';
@@ -41,24 +42,25 @@ export default function AiChatPanel({
   projects?: Project[];
   onActionDone?: (result: { type: string; id: string; label: string }) => void;
 }) {
+  const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <Panel
       className="ai-chat-panel"
-      title="项目 AI 对话"
+      title={t('features.ai.aiChatPanel.title')}
       subtitle={providerStatus}
-      toolbar={<StatusBadge label={providerConfigured ? '真实模型' : '规则兜底'} status={providerConfigured ? 'success' : 'warning'} />}
+      toolbar={<StatusBadge label={providerConfigured ? t('features.ai.aiChatModel.sourceRealModel') : t('features.ai.aiChatModel.sourceRuleFallback')} status={providerConfigured ? 'success' : 'warning'} />}
     >
       <div className="ai-chat-messages">
         {messages.map((message) => (
           <div key={message.id} className={`ai-chat-message ${message.role}`}>
             <div className="ai-chat-avatar">
-              {message.role === 'assistant' ? <Bot size={16} /> : '我'}
+              {message.role === 'assistant' ? <Bot size={16} /> : t('features.ai.aiChatPanel.me')}
             </div>
             <div className="ai-chat-bubble">
               <div className="ai-chat-meta">
-                <span>{message.role === 'assistant' ? 'AI 助手' : '你'}</span>
+                <span>{message.role === 'assistant' ? t('common.aiAssistant') : t('common.you')}</span>
                 <span>{formatTime(message.createdAt)}</span>
                 {messageSource(message) ? (
                   <StatusBadge
@@ -102,8 +104,8 @@ export default function AiChatPanel({
           <div className="ai-chat-message assistant">
             <div className="ai-chat-avatar"><Bot size={16} /></div>
             <div className="ai-chat-bubble">
-              <div className="ai-chat-meta"><span>AI 助手</span></div>
-              <div className="ai-chat-content"><p>正在结合项目数据和附件分析...</p></div>
+              <div className="ai-chat-meta"><span>{t('common.aiAssistant')}</span></div>
+              <div className="ai-chat-content"><p>{t('features.ai.aiChatPanel.analyzingHint')}</p></div>
             </div>
           </div>
         ) : null}
@@ -140,12 +142,12 @@ export default function AiChatPanel({
                 onSend();
               }
             }}
-            placeholder="例：新建需求/缺陷/任务/用例/项目/产品/构建/发布/文档/迭代/日报/工时；改状态；删除…"
+            placeholder={t('features.ai.aiChatPanel.inputPlaceholder')}
             disabled={sending}
           />
           <button className="btn btn-primary btn-sm" type="button" onClick={onSend} disabled={sending || (!draft.trim() && attachments.length === 0)}>
             <Send size={15} />
-            发送
+            {t('features.ai.aiChatPanel.send')}
           </button>
           <input
             ref={fileInputRef}

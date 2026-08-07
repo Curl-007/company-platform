@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   Bug,
@@ -52,6 +53,7 @@ export default function DefectsTab({
 }) {
   const toast = useToast();
   const confirm = useConfirm();
+  const { t } = useTranslation();
   const sessionUser = getSessionUser();
   const canManageTesting = canOperate(sessionUser, 'testing:manage');
   const canUseAi = canOperate(sessionUser, 'ai:analyze');
@@ -114,47 +116,47 @@ export default function DefectsTab({
 
   async function handleDelete(item: Defect) {
     if (!canManageTesting) {
-      toast.error('当前账号无权删除缺陷。');
+      toast.error(t('features.testing.defectsTab.noPermissionDelete'));
       return;
     }
     const confirmed = await confirm({
-      title: `删除缺陷“${item.title}”？`,
-      description: '删除后缺陷记录及其关联任务入口将不可恢复。',
-      confirmText: '删除缺陷',
+      title: t('features.testing.defectsTab.deleteConfirm', { title: item.title }),
+      description: t('features.testing.defectsTab.deleteConfirmDesc'),
+      confirmText: t('features.testing.defectsTab.deleteDefect'),
       tone: 'danger',
     });
     if (!confirmed) return;
     try {
       await deleteDefect(item.id);
-      toast.success(`已删除缺陷：${item.title}`);
+      toast.success(t('features.testing.defectsTab.deleted', { title: item.title }));
       reload();
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '删除缺陷失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.testing.defectsTab.deleteFailed'));
     }
   }
 
   async function handleStatusChange(item: Defect, nextStatus: string) {
     try {
       await updateDefectStatus(item.id, nextStatus, item.version);
-      toast.success('缺陷状态已更新');
+      toast.success(t('features.testing.defectsTab.statusUpdated'));
       reload();
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : '更新缺陷状态失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.testing.defectsTab.statusUpdateFailed'));
     }
   }
 
   const focusButtons: { key: DefectFocus; label: string; count: number }[] = [
-    { key: 'all', label: '全部', count: signals.total },
-    { key: 'open', label: '未关闭', count: signals.open },
-    { key: 'severe', label: '高严重', count: signals.severe },
-    { key: 'unassigned', label: '待指派', count: signals.unassigned },
-    { key: 'closed', label: '已关闭', count: signals.closed },
+    { key: 'all', label: t('features.testing.defectsTab.focus.all'), count: signals.total },
+    { key: 'open', label: t('features.testing.defectsTab.focus.open'), count: signals.open },
+    { key: 'severe', label: t('features.testing.defectsTab.focus.severe'), count: signals.severe },
+    { key: 'unassigned', label: t('features.testing.defectsTab.focus.unassigned'), count: signals.unassigned },
+    { key: 'closed', label: t('features.testing.defectsTab.focus.closed'), count: signals.closed },
   ];
 
   const columns: DataTableColumn<Defect>[] = [
     {
       key: 'title',
-      title: '缺陷',
+      title: t('features.testing.defectsTab.defectTitle'),
       render: (item) => (
         <div className="qa-title-cell">
           <div className="qa-title-main">
@@ -170,7 +172,7 @@ export default function DefectsTab({
     },
     {
       key: 'severity',
-      title: '严重级别',
+      title: t('features.testing.defectsTab.severityTitle'),
       width: 96,
       render: (item) => (
         <StatusBadge
@@ -182,7 +184,7 @@ export default function DefectsTab({
     },
     {
       key: 'status',
-      title: '状态',
+      title: t('features.testing.defectsTab.statusTitle'),
       width: 128,
       render: (item) => (
         canManageTesting ? (
@@ -191,7 +193,7 @@ export default function DefectsTab({
             value={item.status}
             onClick={(e) => e.stopPropagation()}
             onChange={(e) => void handleStatusChange(item, e.target.value)}
-            aria-label={`更新 ${item.title} 状态`}
+            aria-label={t('features.testing.defectsTab.updateStatusAria', { title: item.title })}
           >
             {DEFECT_STATUSES.map((status) => (
               <option key={status} value={status}>{labelOf(DEFECT_STATUS_LABELS, status)}</option>
@@ -204,27 +206,27 @@ export default function DefectsTab({
     },
     {
       key: 'assignee',
-      title: '处理人',
+      title: t('features.testing.defectsTab.assigneeTitle'),
       width: 140,
       render: (item) => (
         <div className="qa-assignee-cell">
-          <span className={item.assignee ? '' : 'is-muted'}>{item.assignee || '未分配'}</span>
+          <span className={item.assignee ? '' : 'is-muted'}>{item.assignee || t('features.testing.defectsTab.unassigned')}</span>
           {item.assigneeRole ? <em>{labelOf(USER_ROLE_LABELS, item.assigneeRole)}</em> : null}
         </div>
       ),
     },
     {
       key: 'actions',
-      title: '操作',
+      title: t('common.actions'),
       width: 110,
       render: (item) => (
         <div className="qa-row-actions" onClick={(e) => e.stopPropagation()}>
           {canManageTesting ? (
             <>
-              <button className="btn btn-text btn-xs" onClick={() => setEditing(item)}>编辑</button>
-              <button className="btn btn-text btn-xs qa-danger-btn" onClick={() => void handleDelete(item)}>删除</button>
+              <button className="btn btn-text btn-xs" onClick={() => setEditing(item)}>{t('common.edit')}</button>
+              <button className="btn btn-text btn-xs qa-danger-btn" onClick={() => void handleDelete(item)}>{t('common.delete')}</button>
             </>
-          ) : <span className="text-secondary">只读</span>}
+          ) : <span className="text-secondary">{t('features.testing.defectsTab.readOnly')}</span>}
         </div>
       ),
     },
@@ -232,52 +234,52 @@ export default function DefectsTab({
 
   return (
     <div className="qa-section">
-      <section className="qa-signal-strip" aria-label="缺陷概况">
+      <section className="qa-signal-strip" aria-label={t('features.testing.defectsTab.signalAria')}>
         <div className="qa-signal">
-          <span className="qa-signal-label"><Bug size={13} aria-hidden="true" /> 缺陷总数</span>
+          <span className="qa-signal-label"><Bug size={13} aria-hidden="true" /> {t('features.testing.defectsTab.totalLabel')}</span>
           <strong>{signals.total}</strong>
-          <em>修复中 {signals.inFix}</em>
+          <em>{t('features.testing.defectsTab.inFixHint', { count: signals.inFix })}</em>
         </div>
         <div className={`qa-signal ${signals.open > 0 ? 'is-warn' : ''}`}>
-          <span className="qa-signal-label"><CircleDashed size={13} aria-hidden="true" /> 未关闭</span>
+          <span className="qa-signal-label"><CircleDashed size={13} aria-hidden="true" /> {t('features.testing.defectsTab.openLabel')}</span>
           <strong>{signals.open}</strong>
-          <em>需持续跟踪</em>
+          <em>{t('features.testing.defectsTab.openHint')}</em>
         </div>
         <div className={`qa-signal ${signals.severe > 0 ? 'is-risk' : ''}`}>
-          <span className="qa-signal-label"><AlertTriangle size={13} aria-hidden="true" /> 高严重未关</span>
+          <span className="qa-signal-label"><AlertTriangle size={13} aria-hidden="true" /> {t('features.testing.defectsTab.severeLabel')}</span>
           <strong>{signals.severe}</strong>
-          <em>优先收敛</em>
+          <em>{t('features.testing.defectsTab.severeHint')}</em>
         </div>
         <div className={`qa-signal ${signals.unassigned > 0 ? 'is-warn' : ''}`}>
-          <span className="qa-signal-label"><UserRound size={13} aria-hidden="true" /> 待指派</span>
+          <span className="qa-signal-label"><UserRound size={13} aria-hidden="true" /> {t('features.testing.defectsTab.unassignedLabel')}</span>
           <strong>{signals.unassigned}</strong>
-          <em>缺少处理人</em>
+          <em>{t('features.testing.defectsTab.unassignedHint')}</em>
         </div>
         <div className="qa-signal">
-          <span className="qa-signal-label"><CheckCircle2 size={13} aria-hidden="true" /> 已关闭</span>
+          <span className="qa-signal-label"><CheckCircle2 size={13} aria-hidden="true" /> {t('features.testing.defectsTab.closedLabel')}</span>
           <strong>{signals.closed}</strong>
-          <em>关闭 / 驳回</em>
+          <em>{t('features.testing.defectsTab.closedHint')}</em>
         </div>
       </section>
 
       <Panel
         className="qa-pool-panel"
-        title="缺陷列表"
-        subtitle={`显示 ${visible.length} / ${defects.length} 条`}
+        title={t('features.testing.defectsTab.panelTitle')}
+        subtitle={t('features.testing.defectsTab.showingCount', { shown: visible.length, total: defects.length })}
         toolbar={(
           <div className="qa-pool-toolbar">
             <button className="btn btn-secondary btn-sm btn-with-icon" onClick={reload} disabled={loading}>
-              <RefreshCw size={14} aria-hidden="true" /> 刷新
+              <RefreshCw size={14} aria-hidden="true" /> {t('features.testing.defectsTab.refresh')}
             </button>
             {canManageTesting ? (
               <button className="btn btn-primary btn-sm btn-with-icon" onClick={() => setCreating(true)}>
-                <Plus size={14} aria-hidden="true" /> 新建缺陷
+                <Plus size={14} aria-hidden="true" /> {t('features.testing.defectsTab.newDefect')}
               </button>
             ) : null}
           </div>
         )}
       >
-        <div className="qa-focus-row" role="group" aria-label="缺陷快速聚焦">
+        <div className="qa-focus-row" role="group" aria-label={t('features.testing.defectsTab.focusAria')}>
           {focusButtons.map((item) => (
             <button
               key={item.key}
@@ -298,19 +300,19 @@ export default function DefectsTab({
               <Search size={14} className="shrink-0 text-secondary" aria-hidden="true" />
               <input
                 className="form-input border-0 bg-transparent shadow-none"
-                placeholder="搜索缺陷标题 / 编号"
+                placeholder={t('features.testing.defectsTab.searchPlaceholder')}
                 value={filters.keyword ?? ''}
                 onChange={(e) => setFilter('keyword', e.target.value)}
-                aria-label="搜索缺陷"
+                aria-label={t('features.testing.defectsTab.searchAria')}
               />
             </div>
             <select
               className="form-select"
               value={filters.status ?? ''}
               onChange={(e) => setFilter('status', e.target.value)}
-              aria-label="缺陷状态"
+              aria-label={t('features.testing.defectsTab.statusFilterAria')}
             >
-              <option value="">全部状态</option>
+              <option value="">{t('features.testing.defectsTab.allStatus')}</option>
               {DEFECT_STATUSES.map((item) => (
                 <option key={item} value={item}>{labelOf(DEFECT_STATUS_LABELS, item)}</option>
               ))}
@@ -319,9 +321,9 @@ export default function DefectsTab({
               className="form-select"
               value={filters.severity ?? ''}
               onChange={(e) => setFilter('severity', e.target.value)}
-              aria-label="严重级别"
+              aria-label={t('features.testing.defectsTab.severityFilterAria')}
             >
-              <option value="">全部严重级别</option>
+              <option value="">{t('features.testing.defectsTab.allSeverities')}</option>
               {DEFECT_SEVERITIES.map((item) => (
                 <option key={item} value={item}>{labelOf(DEFECT_SEVERITY_LABELS, item)}</option>
               ))}
@@ -330,9 +332,9 @@ export default function DefectsTab({
               className="form-select filter-project"
               value={filters.projectId ?? ''}
               onChange={(e) => setFilter('projectId', e.target.value)}
-              aria-label="所属项目"
+              aria-label={t('features.testing.defectsTab.projectFilterAria')}
             >
-              <option value="">全部项目</option>
+              <option value="">{t('features.testing.defectsTab.allProjects')}</option>
               {(projects ?? []).map((item) => (
                 <option key={item.id} value={item.id}>{item.name}</option>
               ))}
@@ -350,7 +352,7 @@ export default function DefectsTab({
             columns={columns}
             data={visible}
             rowKey="id"
-            emptyText="暂无匹配的缺陷。"
+            emptyText={t('features.testing.defectsTab.empty')}
             onRowClick={canManageTesting ? (item) => setEditing(item) : undefined}
             pageSize={10}
           />

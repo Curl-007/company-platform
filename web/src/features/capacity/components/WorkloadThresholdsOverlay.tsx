@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
 import { ApiError } from '../../../services/api';
@@ -13,6 +14,7 @@ export default function WorkloadThresholdsOverlay({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useTranslation();
   const [values, setValues] = useState<WorkloadThresholds>(initial);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +27,7 @@ export default function WorkloadThresholdsOverlay({
       await updateWorkloadThresholds(values);
       onSaved();
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : '保存风险阈值失败');
+      setError(reason instanceof ApiError ? reason.message : t('features.capacity.workloadThresholdsOverlay.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -33,12 +35,12 @@ export default function WorkloadThresholdsOverlay({
 
   return (
     <Overlay onClose={onClose}>
-      <Panel title="容量风险阈值" subtitle="阈值仅改变资源风险提示，不用于个人绩效评分。">
+      <Panel title={t('features.capacity.workloadThresholdsOverlay.title')} subtitle={t('features.capacity.workloadThresholdsOverlay.subtitle')}>
         <form className="form-stack" onSubmit={submit}>
           {error ? <div className="form-error">{error}</div> : null}
           <div className="form-grid form-grid-3">
             <label className="form-field">
-              <span>平衡下限</span>
+              <span>{t('features.capacity.workloadThresholdsOverlay.balancedMin')}</span>
               <input
                 className="form-input"
                 type="number"
@@ -49,7 +51,7 @@ export default function WorkloadThresholdsOverlay({
               />
             </label>
             <label className="form-field">
-              <span>关注下限</span>
+              <span>{t('features.capacity.workloadThresholdsOverlay.attentionMin')}</span>
               <input
                 className="form-input"
                 type="number"
@@ -60,7 +62,7 @@ export default function WorkloadThresholdsOverlay({
               />
             </label>
             <label className="form-field">
-              <span>过载阈值</span>
+              <span>{t('features.capacity.workloadThresholdsOverlay.overloadedAbove')}</span>
               <input
                 className="form-input"
                 type="number"
@@ -71,10 +73,10 @@ export default function WorkloadThresholdsOverlay({
               />
             </label>
           </div>
-          <small className="text-secondary">要求：平衡下限 ≤ 关注下限 ≤ 过载阈值。比例 1 代表 100%。</small>
+          <small className="text-secondary">{t('features.capacity.workloadThresholdsOverlay.requirementHint')}</small>
           <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={onClose} disabled={saving}>取消</button>
-            <button className="btn btn-primary btn-sm" disabled={saving}>{saving ? '保存中…' : '保存阈值'}</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onClose} disabled={saving}>{t('common.cancel')}</button>
+            <button className="btn btn-primary btn-sm" disabled={saving}>{saving ? t('features.capacity.workloadThresholdsOverlay.saving') : t('features.capacity.workloadThresholdsOverlay.saveThresholds')}</button>
           </div>
         </form>
       </Panel>

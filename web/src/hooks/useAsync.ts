@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import i18n from '../i18n';
 import { ApiError } from '../services/api';
 import {
   ASYNC_CACHE_FRESH_MS,
@@ -46,7 +47,7 @@ export interface UseAsyncOptions {
 function messageFromError(error: unknown): string {
   if (error instanceof ApiError) return error.message;
   if (error instanceof Error) return error.message;
-  return '数据加载时发生意外错误';
+  return i18n.t('common.unexpectedLoadError');
 }
 
 export function useAsync<T>(

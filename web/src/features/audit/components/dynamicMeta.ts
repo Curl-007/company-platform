@@ -1,6 +1,8 @@
 import type { AuditLogFilters } from '../api';
 import type { AuditLogRecord } from '../../../types';
 import { businessDateKey, businessWeekStart } from '../../../utils/businessDate';
+import { getInterfaceLocale } from '../../../i18n';
+import i18n from '../../../i18n';
 
 export interface TimelineEntry {
   record: AuditLogRecord;
@@ -24,123 +26,125 @@ export type EntryCategory = 'auth' | 'page' | 'project' | 'product' | 'requireme
 export type TimeRange = 'all' | 'today' | 'week';
 
 export const PAGE_LABELS: Record<string, string> = {
-  dashboard: '工作台',
-  projects: '项目管理',
-  mywork: '我的工作',
-  teamlogs: '团队日报',
-  requirements: '需求管理',
-  testing: '测试管理',
-  documents: '文档中心',
-  products: '产品管理',
-  reports: '报表中心',
-  flow: '研发流程',
-  dynamic: '动态中心',
-  ai: 'AI 分析中心',
-  settings: '系统设置',
-  builds: '构建管理',
-  releases: '发布管理',
-  users: '用户管理',
+  dashboard: 'features.audit.dynamicMeta.page.dashboard',
+  projects: 'features.audit.dynamicMeta.page.projects',
+  mywork: 'features.audit.dynamicMeta.page.mywork',
+  teamlogs: 'features.audit.dynamicMeta.page.teamlogs',
+  requirements: 'features.audit.dynamicMeta.page.requirements',
+  testing: 'features.audit.dynamicMeta.page.testing',
+  documents: 'features.audit.dynamicMeta.page.documents',
+  products: 'features.audit.dynamicMeta.page.products',
+  reports: 'features.audit.dynamicMeta.page.reports',
+  flow: 'features.audit.dynamicMeta.page.flow',
+  dynamic: 'features.audit.dynamicMeta.page.dynamic',
+  ai: 'features.audit.dynamicMeta.page.ai',
+  settings: 'features.audit.dynamicMeta.page.settings',
+  builds: 'features.audit.dynamicMeta.page.builds',
+  releases: 'features.audit.dynamicMeta.page.releases',
+  users: 'features.audit.dynamicMeta.page.users',
 };
 
 export const ROLE_LABELS: Record<string, string> = {
-  admin: '系统管理员',
-  pm: '项目经理',
-  pdm: '产品经理',
-  dev: '开发人员',
-  qa: '测试人员',
-  member: '项目成员',
+  admin: 'enums.userRole.admin',
+  pm: 'enums.userRole.pm',
+  pdm: 'enums.userRole.pdm',
+  dev: 'enums.userRole.dev',
+  qa: 'enums.userRole.qa',
+  member: 'enums.userRole.member',
 };
 
 export const USER_STATUS_LABELS: Record<string, string> = {
-  active: '已启用',
-  disabled: '已禁用',
+  active: 'enums.userStatus.active',
+  disabled: 'enums.userStatus.disabled',
 };
 
 export const PROJECT_STATUS_LABELS: Record<string, string> = {
-  planning: '规划中',
-  active: '进行中',
-  on_hold: '已暂停',
-  done: '已完成',
-  archived: '已归档',
+  planning: 'enums.projectStatus.planning',
+  active: 'enums.projectStatus.active',
+  on_hold: 'enums.projectStatus.on_hold',
+  done: 'enums.projectStatus.done',
+  archived: 'enums.projectStatus.archived',
 };
 
 export const REQUIREMENT_STATUS_LABELS: Record<string, string> = {
-  draft: '草稿',
-  reviewing: '评审中',
-  approved: '已批准',
-  in_dev: '开发中',
-  testing: '测试中',
-  accepted: '已验收',
-  closed: '已关闭',
-  cancelled: '已取消',
+  draft: 'enums.requirementStatus.draft',
+  reviewing: 'enums.requirementStatus.reviewing',
+  approved: 'enums.requirementStatus.approved',
+  in_dev: 'enums.requirementStatus.in_dev',
+  testing: 'enums.requirementStatus.testing',
+  accepted: 'enums.requirementStatus.accepted',
+  closed: 'enums.requirementStatus.closed',
+  cancelled: 'enums.requirementStatus.cancelled',
 };
 
 export const TASK_STATUS_LABELS: Record<string, string> = {
-  todo: '待处理',
-  in_progress: '进行中',
-  blocked: '阻塞',
-  code_review: '代码评审',
-  testing: '测试中',
-  acceptance: '待验收',
-  done: '已完成',
-  cancelled: '已取消',
+  todo: 'enums.taskStatus.todo',
+  in_progress: 'enums.taskStatus.in_progress',
+  blocked: 'enums.taskStatus.blocked',
+  code_review: 'enums.taskStatus.code_review',
+  testing: 'enums.taskStatus.testing',
+  acceptance: 'enums.taskStatus.acceptance',
+  done: 'enums.taskStatus.done',
+  cancelled: 'enums.taskStatus.cancelled',
 };
 
 export const DEFECT_STATUS_LABELS: Record<string, string> = {
-  new: '新建',
-  confirmed: '已确认',
-  in_fix: '修复中',
-  resolved: '已解决',
-  verified: '已验证',
-  closed: '已关闭',
-  rejected: '已驳回',
+  new: 'enums.defectStatus.new',
+  confirmed: 'enums.defectStatus.confirmed',
+  in_fix: 'enums.defectStatus.in_fix',
+  resolved: 'enums.defectStatus.resolved',
+  verified: 'enums.defectStatus.verified',
+  closed: 'enums.defectStatus.closed',
+  rejected: 'enums.defectStatus.rejected',
 };
 
 export const TEST_CASE_STATUS_LABELS: Record<string, string> = {
-  draft: '草稿',
-  active: '进行中',
-  passed: '已通过',
-  failed: '未通过',
-  blocked: '阻塞',
+  draft: 'enums.testCaseStatus.draft',
+  active: 'enums.testCaseStatus.active',
+  passed: 'enums.testCaseStatus.passed',
+  failed: 'enums.testCaseStatus.failed',
+  blocked: 'enums.testCaseStatus.blocked',
 };
 
 export const DOCUMENT_CATEGORY_LABELS: Record<string, string> = {
-  project: '项目文档',
-  common: '通用文档',
-  announcement: '公司公告',
-  requirement: '需求文档',
-  design: '设计文档',
-  test: '测试文档',
-  report: '报告文档',
-  other: '其他文档',
+  project: 'enums.documentCategory.project',
+  common: 'enums.documentCategory.common',
+  announcement: 'enums.documentCategory.announcement',
+  requirement: 'enums.documentCategory.requirement',
+  design: 'enums.documentCategory.design',
+  test: 'enums.documentCategory.test',
+  report: 'enums.documentCategory.report',
+  other: 'enums.documentCategory.other',
 };
 
 export const CATEGORY_META: Record<EntryCategory, { label: string; variant: TimelineEntry['categoryVariant'] }> = {
-  auth: { label: '登录动态', variant: 'info' },
-  page: { label: '页面访问', variant: 'neutral' },
-  project: { label: '项目协同', variant: 'success' },
-  product: { label: '产品管理', variant: 'warning' },
-  requirement: { label: '需求流转', variant: 'info' },
-  task: { label: '任务推进', variant: 'success' },
-  testing: { label: '测试缺陷', variant: 'risk' },
-  document: { label: '文档日报', variant: 'warning' },
-  report: { label: '构建发布', variant: 'blocked' },
-  user: { label: '账号权限', variant: 'risk' },
-  other: { label: '其他操作', variant: 'neutral' },
+  auth: { label: 'features.audit.dynamicMeta.category.auth', variant: 'info' },
+  page: { label: 'features.audit.dynamicMeta.category.page', variant: 'neutral' },
+  project: { label: 'features.audit.dynamicMeta.category.project', variant: 'success' },
+  product: { label: 'features.audit.dynamicMeta.category.product', variant: 'warning' },
+  requirement: { label: 'features.audit.dynamicMeta.category.requirement', variant: 'info' },
+  task: { label: 'features.audit.dynamicMeta.category.task', variant: 'success' },
+  testing: { label: 'features.audit.dynamicMeta.category.testing', variant: 'risk' },
+  document: { label: 'features.audit.dynamicMeta.category.document', variant: 'warning' },
+  report: { label: 'features.audit.dynamicMeta.category.report', variant: 'blocked' },
+  user: { label: 'features.audit.dynamicMeta.category.user', variant: 'risk' },
+  other: { label: 'features.audit.dynamicMeta.category.other', variant: 'neutral' },
 };
 
 export function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
-export function labelOf(map: Record<string, string>, key: unknown, fallback = '未填写'): string {
-  if (key === null || key === undefined || key === '') return fallback;
+export function labelOf(map: Record<string, string>, key: unknown, fallback?: string): string {
+  if (key === null || key === undefined || key === '') return fallback ?? i18n.t('enums.unfilled');
   const text = String(key);
-  return map[text] ?? text;
+  const tKey = map[text];
+  if (!tKey) return text;
+  return i18n.t(tKey);
 }
 
 export function getActorName(record: AuditLogRecord): string {
-  return record.actorName || '匿名用户';
+  return record.actorName || i18n.t('features.audit.dynamicMeta.anonymousUser');
 }
 
 export function getRoleLabel(record: AuditLogRecord): string {
@@ -152,33 +156,33 @@ export function getRoleLabel(record: AuditLogRecord): string {
 
 export function getPageLabel(page: unknown): string {
   const key = String(page ?? '').trim();
-  if (!key) return '未知页面';
-  return PAGE_LABELS[key] ?? key;
+  if (!key) return i18n.t('features.audit.dynamicMeta.unknownPage');
+  return labelOf(PAGE_LABELS, key);
 }
 
 export function getResourceTypeLabel(type: string): string {
   const labels: Record<string, string> = {
-    page: '页面',
-    user: '用户',
-    project: '项目',
-    product: '产品',
-    requirement: '需求',
-    task: '任务',
-    defect: '缺陷',
-    test_case: '测试用例',
-    work_log: '日报',
-    document: '文档',
-    release: '发布',
-    build: '构建',
-    sprint: '迭代',
+    page: 'features.audit.dynamicMeta.resourceType.page',
+    user: 'features.audit.dynamicMeta.resourceType.user',
+    project: 'features.audit.dynamicMeta.resourceType.project',
+    product: 'features.audit.dynamicMeta.resourceType.product',
+    requirement: 'features.audit.dynamicMeta.resourceType.requirement',
+    task: 'features.audit.dynamicMeta.resourceType.task',
+    defect: 'features.audit.dynamicMeta.resourceType.defect',
+    test_case: 'features.audit.dynamicMeta.resourceType.test_case',
+    work_log: 'features.audit.dynamicMeta.resourceType.work_log',
+    document: 'features.audit.dynamicMeta.resourceType.document',
+    release: 'features.audit.dynamicMeta.resourceType.release',
+    build: 'features.audit.dynamicMeta.resourceType.build',
+    sprint: 'features.audit.dynamicMeta.resourceType.sprint',
   };
-  return labels[type] ?? type;
+  return labels[type] ? i18n.t(labels[type]) : type;
 }
 
 export function getResourceLabel(record: AuditLogRecord): string {
   if (record.resourceType === 'page') {
     const after = asObject(record.after);
-    return `${getPageLabel(after.page ?? record.resourceId)}页面`;
+    return i18n.t('features.audit.dynamicMeta.pageResourceFormat', { page: getPageLabel(after.page ?? record.resourceId) });
   }
   const type = getResourceTypeLabel(record.resourceType);
   return record.resourceId ? `${type} ${record.resourceId}` : type;
@@ -186,18 +190,18 @@ export function getResourceLabel(record: AuditLogRecord): string {
 
 export function formatTime(iso: string) {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString('zh-CN', { hour12: false });
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString(getInterfaceLocale(), { hour12: false });
 }
 
 export function formatSimpleValue(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '未填写';
+  if (value === null || value === undefined || value === '') return i18n.t('enums.unfilled');
   if (Array.isArray(value)) {
     const text = value.map((item) => formatSimpleValue(item)).join('、');
-    return text || '未填写';
+    return text || i18n.t('enums.unfilled');
   }
-  if (typeof value === 'boolean') return value ? '是' : '否';
+  if (typeof value === 'boolean') return value ? i18n.t('features.audit.dynamicMeta.yes') : i18n.t('features.audit.dynamicMeta.no');
   if (typeof value === 'number') return String(value);
-  if (typeof value === 'string') return value.trim() || '未填写';
+  if (typeof value === 'string') return value.trim() || i18n.t('enums.unfilled');
   try {
     return JSON.stringify(value);
   } catch {
@@ -207,34 +211,34 @@ export function formatSimpleValue(value: unknown): string {
 
 export function getFieldLabel(field: string): string {
   const labels: Record<string, string> = {
-    name: '名称',
-    title: '标题',
-    role: '角色',
-    owner: '负责人',
-    status: '状态',
-    progress: '进度',
-    page: '访问页面',
-    pageTitle: '页面标题',
-    description: '描述',
-    expectedResult: '预期结果',
-    category: '文档分类',
-    fileName: '文件名',
-    projectName: '所属项目',
-    projectId: '项目',
-    productId: '产品',
-    assignee: '指派给',
-    assigneeId: '指派对象',
-    assigneeRole: '指派角色',
-    blockers: '阻塞项',
-    nextPlan: '下一步计划',
-    content: '内容',
-    email: '邮箱',
-    stage: '产品阶段',
-    systemVersion: '系统版本',
-    appVersion: '应用版本',
-    kanbanColumn: '看板列',
+    name: 'features.audit.dynamicMeta.field.name',
+    title: 'features.audit.dynamicMeta.field.title',
+    role: 'features.audit.dynamicMeta.field.role',
+    owner: 'features.audit.dynamicMeta.field.owner',
+    status: 'features.audit.dynamicMeta.field.status',
+    progress: 'features.audit.dynamicMeta.field.progress',
+    page: 'features.audit.dynamicMeta.field.page',
+    pageTitle: 'features.audit.dynamicMeta.field.pageTitle',
+    description: 'features.audit.dynamicMeta.field.description',
+    expectedResult: 'features.audit.dynamicMeta.field.expectedResult',
+    category: 'features.audit.dynamicMeta.field.category',
+    fileName: 'features.audit.dynamicMeta.field.fileName',
+    projectName: 'features.audit.dynamicMeta.field.projectName',
+    projectId: 'features.audit.dynamicMeta.field.projectId',
+    productId: 'features.audit.dynamicMeta.field.productId',
+    assignee: 'features.audit.dynamicMeta.field.assignee',
+    assigneeId: 'features.audit.dynamicMeta.field.assigneeId',
+    assigneeRole: 'features.audit.dynamicMeta.field.assigneeRole',
+    blockers: 'features.audit.dynamicMeta.field.blockers',
+    nextPlan: 'features.audit.dynamicMeta.field.nextPlan',
+    content: 'features.audit.dynamicMeta.field.content',
+    email: 'features.audit.dynamicMeta.field.email',
+    stage: 'features.audit.dynamicMeta.field.stage',
+    systemVersion: 'features.audit.dynamicMeta.field.systemVersion',
+    appVersion: 'features.audit.dynamicMeta.field.appVersion',
+    kanbanColumn: 'features.audit.dynamicMeta.field.kanbanColumn',
   };
-  return labels[field] ?? field;
+  return labels[field] ? i18n.t(labels[field]) : field;
 }
 
 export function formatFieldValue(field: string, value: unknown): string {
@@ -326,73 +330,73 @@ export function buildChangeSummary(record: AuditLogRecord): ChangeItem[] {
   const changes: ChangeItem[] = [];
 
   if (record.action === 'user.update') {
-    pushChange(changes, '账号状态', labelOf(USER_STATUS_LABELS, before.status), labelOf(USER_STATUS_LABELS, after.status));
-    pushChange(changes, '角色', labelOf(ROLE_LABELS, before.role), labelOf(ROLE_LABELS, after.role));
-    pushChange(changes, '姓名', before.name, after.name);
-    pushChange(changes, '邮箱', before.email, after.email);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.change.accountStatus'), labelOf(USER_STATUS_LABELS, before.status), labelOf(USER_STATUS_LABELS, after.status));
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.role'), labelOf(ROLE_LABELS, before.role), labelOf(ROLE_LABELS, after.role));
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.change.name'), before.name, after.name);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.email'), before.email, after.email);
     return changes;
   }
 
   if (record.action === 'project.update' || record.action === 'project.status_update') {
-    pushChange(changes, '项目名称', before.name, after.name);
-    pushChange(changes, '负责人', before.owner, after.owner);
-    pushChange(changes, '项目状态', labelOf(PROJECT_STATUS_LABELS, before.status), labelOf(PROJECT_STATUS_LABELS, after.status));
-    pushChange(changes, '进度', before.progress, after.progress);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.change.projectName'), before.name, after.name);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.owner'), before.owner, after.owner);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.change.projectStatus'), labelOf(PROJECT_STATUS_LABELS, before.status), labelOf(PROJECT_STATUS_LABELS, after.status));
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.progress'), before.progress, after.progress);
     return changes;
   }
 
   if (record.action.startsWith('requirement.')) {
-    pushChange(changes, '需求标题', before.title ?? before.name, after.title ?? after.name);
-    pushChange(changes, '负责人', before.owner, after.owner);
-    pushChange(changes, '需求状态', labelOf(REQUIREMENT_STATUS_LABELS, before.status), labelOf(REQUIREMENT_STATUS_LABELS, after.status));
-    pushChange(changes, '描述', before.description, after.description);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.change.requirementTitle'), before.title ?? before.name, after.title ?? after.name);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.owner'), before.owner, after.owner);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.change.requirementStatus'), labelOf(REQUIREMENT_STATUS_LABELS, before.status), labelOf(REQUIREMENT_STATUS_LABELS, after.status));
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.description'), before.description, after.description);
     return changes;
   }
 
   if (record.action.startsWith('task.')) {
-    pushChange(changes, '任务标题', before.title ?? before.name, after.title ?? after.name);
-    pushChange(changes, '负责人', before.owner, after.owner);
-    pushChange(changes, '任务状态', labelOf(TASK_STATUS_LABELS, before.status), labelOf(TASK_STATUS_LABELS, after.status));
-    pushChange(changes, '看板列', before.kanbanColumn, after.kanbanColumn);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.change.taskTitle'), before.title ?? before.name, after.title ?? after.name);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.owner'), before.owner, after.owner);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.change.taskStatus'), labelOf(TASK_STATUS_LABELS, before.status), labelOf(TASK_STATUS_LABELS, after.status));
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.kanbanColumn'), before.kanbanColumn, after.kanbanColumn);
     return changes;
   }
 
   if (record.action.startsWith('defect.')) {
-    pushChange(changes, '缺陷标题', before.title ?? before.name, after.title ?? after.name);
-    pushChange(changes, '缺陷状态', labelOf(DEFECT_STATUS_LABELS, before.status), labelOf(DEFECT_STATUS_LABELS, after.status));
-    pushChange(changes, '负责人', before.owner, after.owner);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.change.defectTitle'), before.title ?? before.name, after.title ?? after.name);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.change.defectStatus'), labelOf(DEFECT_STATUS_LABELS, before.status), labelOf(DEFECT_STATUS_LABELS, after.status));
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.owner'), before.owner, after.owner);
     return changes;
   }
 
   if (record.action.startsWith('test_case.')) {
-    pushChange(changes, '用例名称', before.name ?? before.title, after.name ?? after.title);
-    pushChange(changes, '负责人', before.owner, after.owner);
-    pushChange(changes, '用例状态', labelOf(TEST_CASE_STATUS_LABELS, before.status), labelOf(TEST_CASE_STATUS_LABELS, after.status));
-    pushChange(changes, '步骤', before.steps, after.steps);
-    pushChange(changes, '预期结果', before.expectedResult ?? before.expected_result, after.expectedResult ?? after.expected_result);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.change.caseName'), before.name ?? before.title, after.name ?? after.title);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.owner'), before.owner, after.owner);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.change.caseStatus'), labelOf(TEST_CASE_STATUS_LABELS, before.status), labelOf(TEST_CASE_STATUS_LABELS, after.status));
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.change.steps'), before.steps, after.steps);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.expectedResult'), before.expectedResult ?? before.expected_result, after.expectedResult ?? after.expected_result);
     return changes;
   }
 
   if (record.action.startsWith('document.')) {
-    pushChange(changes, '文档标题', before.title ?? before.name, after.title ?? after.name);
-    pushChange(changes, '文档分类', labelOf(DOCUMENT_CATEGORY_LABELS, before.category), labelOf(DOCUMENT_CATEGORY_LABELS, after.category));
-    pushChange(changes, '所属项目', before.projectName ?? before.projectId, after.projectName ?? after.projectId);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.change.documentTitle'), before.title ?? before.name, after.title ?? after.name);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.category'), labelOf(DOCUMENT_CATEGORY_LABELS, before.category), labelOf(DOCUMENT_CATEGORY_LABELS, after.category));
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.projectName'), before.projectName ?? before.projectId, after.projectName ?? after.projectId);
     return changes;
   }
 
   if (record.action === 'product.update') {
-    pushChange(changes, '产品名称', before.name, after.name);
-    pushChange(changes, '产品阶段', before.stage, after.stage);
-    pushChange(changes, '系统版本', before.systemVersion, after.systemVersion);
-    pushChange(changes, '应用版本', before.appVersion, after.appVersion);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.change.productName'), before.name, after.name);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.stage'), before.stage, after.stage);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.systemVersion'), before.systemVersion, after.systemVersion);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.appVersion'), before.appVersion, after.appVersion);
     return changes;
   }
 
   if (record.action === 'work_log.create') {
-    pushChange(changes, '所属项目', before.project, after.project);
-    pushChange(changes, '工作内容', before.content, after.content);
-    pushChange(changes, '阻塞项', before.blockers, after.blockers);
-    pushChange(changes, '下一步计划', before.nextPlan, after.nextPlan);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.projectName'), before.project, after.project);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.change.workContent'), before.content, after.content);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.blockers'), before.blockers, after.blockers);
+    pushChange(changes, i18n.t('features.audit.dynamicMeta.field.nextPlan'), before.nextPlan, after.nextPlan);
     return changes;
   }
 
@@ -423,11 +427,13 @@ export function createEntry(record: AuditLogRecord): TimelineEntry {
     if (beforeStatus !== afterStatus && afterStatus === 'disabled') {
       return {
         record,
-        title: `${actor}禁用了账号`,
-        detail: `已将 ${after.name ?? record.resourceId ?? '目标用户'} 设置为已禁用。`,
-        actionLabel: '禁用账号',
+        title: i18n.t('features.audit.dynamicMeta.entry.disableAccountTitle', { actor }),
+        detail: i18n.t('features.audit.dynamicMeta.entry.disableAccountDetail', {
+          user: after.name ?? record.resourceId ?? i18n.t('features.audit.dynamicMeta.entry.targetUser'),
+        }),
+        actionLabel: i18n.t('features.audit.dynamicMeta.entry.disableAccountAction'),
         category,
-        categoryLabel: categoryMeta.label,
+        categoryLabel: i18n.t(categoryMeta.label),
         categoryVariant: categoryMeta.variant,
         isImportant: true,
         resourceLabel,
@@ -437,11 +443,13 @@ export function createEntry(record: AuditLogRecord): TimelineEntry {
     if (beforeStatus !== afterStatus && afterStatus === 'active') {
       return {
         record,
-        title: `${actor}启用了账号`,
-        detail: `已恢复 ${after.name ?? record.resourceId ?? '目标用户'} 的登录权限。`,
-        actionLabel: '启用账号',
+        title: i18n.t('features.audit.dynamicMeta.entry.enableAccountTitle', { actor }),
+        detail: i18n.t('features.audit.dynamicMeta.entry.enableAccountDetail', {
+          user: after.name ?? record.resourceId ?? i18n.t('features.audit.dynamicMeta.entry.targetUser'),
+        }),
+        actionLabel: i18n.t('features.audit.dynamicMeta.entry.enableAccountAction'),
         category,
-        categoryLabel: categoryMeta.label,
+        categoryLabel: i18n.t(categoryMeta.label),
         categoryVariant: categoryMeta.variant,
         isImportant: true,
         resourceLabel,
@@ -452,7 +460,7 @@ export function createEntry(record: AuditLogRecord): TimelineEntry {
   const base: Omit<TimelineEntry, 'title' | 'detail' | 'actionLabel'> = {
     record,
     category,
-    categoryLabel: categoryMeta.label,
+    categoryLabel: i18n.t(categoryMeta.label),
     categoryVariant: categoryMeta.variant,
     isImportant: isImportantAction(record),
     resourceLabel,
@@ -460,74 +468,74 @@ export function createEntry(record: AuditLogRecord): TimelineEntry {
 
   switch (record.action) {
     case 'auth.login':
-      return { ...base, title: `${actor}登录了平台`, detail: '成功进入管理平台。', actionLabel: '登录' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.loginTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.loginDetail'), actionLabel: i18n.t('features.audit.dynamicMeta.entry.loginAction') };
     case 'auth.login_failed':
-      return { ...base, title: `${actor}登录失败`, detail: '账号或密码校验未通过。', actionLabel: '登录失败' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.loginFailedTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.loginFailedDetail'), actionLabel: i18n.t('features.audit.dynamicMeta.entry.loginFailedAction') };
     case 'auth.login_disabled':
-      return { ...base, title: `${actor}尝试登录被拦截`, detail: '该账号已被禁用，平台拒绝登录。', actionLabel: '账号禁用' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.loginDisabledTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.loginDisabledDetail'), actionLabel: i18n.t('features.audit.dynamicMeta.entry.loginDisabledAction') };
     case 'page.view': {
       const pageName = getPageLabel(after.page ?? record.resourceId);
-      return { ...base, title: `${actor}进入了${pageName}`, detail: `访问页面：${pageName}。`, actionLabel: '进入页面' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.pageViewTitle', { actor, pageName }), detail: i18n.t('features.audit.dynamicMeta.entry.pageViewDetail', { pageName }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.pageViewAction') };
     }
     case 'project.create':
-      return { ...base, title: `${actor}新建了项目`, detail: `已创建 ${resourceLabel}。`, actionLabel: '新建项目' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.projectCreateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.createdDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.projectCreateAction') };
     case 'project.update':
-      return { ...base, title: `${actor}更新了项目`, detail: `已调整 ${resourceLabel} 的信息。`, actionLabel: '更新项目' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.projectUpdateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.projectUpdateDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.projectUpdateAction') };
     case 'project.status_update':
-      return { ...base, title: `${actor}更新了项目状态`, detail: `已推进 ${resourceLabel} 的状态。`, actionLabel: '项目状态变更' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.projectStatusUpdateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.projectStatusUpdateDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.projectStatusUpdateAction') };
     case 'project.member_add':
-      return { ...base, title: `${actor}为项目添加了成员`, detail: `已把 ${after.userName ?? after.name ?? '新成员'} 加入 ${resourceLabel}。`, actionLabel: '添加成员' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.memberAddTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.memberAddDetail', { member: after.userName ?? after.name ?? i18n.t('features.audit.dynamicMeta.entry.newMember'), resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.memberAddAction') };
     case 'project.member_remove':
-      return { ...base, title: `${actor}从项目中移除了成员`, detail: `已将 ${before.userName ?? before.name ?? '成员'} 从 ${resourceLabel} 移出。`, actionLabel: '移除成员' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.memberRemoveTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.memberRemoveDetail', { member: before.userName ?? before.name ?? i18n.t('features.audit.dynamicMeta.entry.member'), resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.memberRemoveAction') };
     case 'product.create':
-      return { ...base, title: `${actor}新建了产品`, detail: `已创建 ${resourceLabel}。`, actionLabel: '新建产品' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.productCreateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.createdDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.productCreateAction') };
     case 'product.update':
-      return { ...base, title: `${actor}编辑了产品`, detail: `已更新 ${resourceLabel} 的资料。`, actionLabel: '编辑产品' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.productUpdateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.productUpdateDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.productUpdateAction') };
     case 'product.delete':
-      return { ...base, title: `${actor}删除了产品`, detail: `已删除 ${resourceLabel}。`, actionLabel: '删除产品' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.productDeleteTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.deletedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.productDeleteAction') };
     case 'document.upload':
-      return { ...base, title: `${actor}上传了文档`, detail: `已新增 ${resourceLabel}。`, actionLabel: '上传文档' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.documentUploadTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.addedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.documentUploadAction') };
     case 'document.update':
-      return { ...base, title: `${actor}更新了文档`, detail: `已修改 ${resourceLabel}。`, actionLabel: '更新文档' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.documentUpdateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.updatedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.documentUpdateAction') };
     case 'document.delete':
-      return { ...base, title: `${actor}删除了文档`, detail: `已删除 ${resourceLabel}。`, actionLabel: '删除文档' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.documentDeleteTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.deletedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.documentDeleteAction') };
     case 'work_log.create':
-      return { ...base, title: `${actor}提交了日报`, detail: `已提交 ${resourceLabel}，可用于周报汇总。`, actionLabel: '提交日报' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.workLogCreateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.workLogCreateDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.workLogCreateAction') };
     case 'requirement.create':
-      return { ...base, title: `${actor}创建了需求`, detail: `已新增 ${resourceLabel}。`, actionLabel: '创建需求' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.requirementCreateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.addedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.requirementCreateAction') };
     case 'requirement.update':
-      return { ...base, title: `${actor}更新了需求`, detail: `已修改 ${resourceLabel}。`, actionLabel: '更新需求' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.requirementUpdateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.updatedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.requirementUpdateAction') };
     case 'requirement.status_update':
-      return { ...base, title: `${actor}推进了需求状态`, detail: `已更新 ${resourceLabel} 的当前阶段。`, actionLabel: '需求状态变更' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.requirementStatusUpdateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.requirementStatusUpdateDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.requirementStatusUpdateAction') };
     case 'defect.create':
-      return { ...base, title: `${actor}提交了缺陷`, detail: `已新增 ${resourceLabel}。`, actionLabel: '提交缺陷' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.defectCreateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.addedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.defectCreateAction') };
     case 'defect.update':
-      return { ...base, title: `${actor}更新了缺陷`, detail: `已修改 ${resourceLabel}。`, actionLabel: '更新缺陷' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.defectUpdateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.updatedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.defectUpdateAction') };
     case 'defect.status_update':
-      return { ...base, title: `${actor}推进了缺陷状态`, detail: `已更新 ${resourceLabel} 的处理进度。`, actionLabel: '缺陷状态变更' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.defectStatusUpdateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.defectStatusUpdateDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.defectStatusUpdateAction') };
     case 'test_case.create':
-      return { ...base, title: `${actor}创建了测试用例`, detail: `已新增 ${resourceLabel}。`, actionLabel: '创建用例' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.testCaseCreateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.addedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.testCaseCreateAction') };
     case 'test_case.update':
-      return { ...base, title: `${actor}更新了测试用例`, detail: `已修改 ${resourceLabel}。`, actionLabel: '更新用例' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.testCaseUpdateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.updatedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.testCaseUpdateAction') };
     case 'task.create':
-      return { ...base, title: `${actor}创建了任务`, detail: `已新增 ${resourceLabel}。`, actionLabel: '创建任务' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.taskCreateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.addedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.taskCreateAction') };
     case 'task.update':
-      return { ...base, title: `${actor}更新了任务`, detail: `已修改 ${resourceLabel}。`, actionLabel: '更新任务' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.taskUpdateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.updatedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.taskUpdateAction') };
     case 'task.status_update':
-      return { ...base, title: `${actor}更新了任务状态`, detail: `已推进 ${resourceLabel} 的执行进度。`, actionLabel: '任务状态变更' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.taskStatusUpdateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.taskStatusUpdateDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.taskStatusUpdateAction') };
     case 'task.kanban_move':
-      return { ...base, title: `${actor}移动了任务卡片`, detail: `已调整 ${resourceLabel} 的看板位置。`, actionLabel: '移动卡片' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.taskKanbanMoveTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.taskKanbanMoveDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.taskKanbanMoveAction') };
     case 'release.create':
-      return { ...base, title: `${actor}创建了发布计划`, detail: `已新增 ${resourceLabel}。`, actionLabel: '创建发布' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.releaseCreateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.addedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.releaseCreateAction') };
     case 'release.update':
-      return { ...base, title: `${actor}更新了发布计划`, detail: `已修改 ${resourceLabel}。`, actionLabel: '更新发布' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.releaseUpdateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.updatedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.releaseUpdateAction') };
     case 'release.delete':
-      return { ...base, title: `${actor}删除了发布计划`, detail: `已删除 ${resourceLabel}。`, actionLabel: '删除发布' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.releaseDeleteTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.deletedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.releaseDeleteAction') };
     case 'build.create':
-      return { ...base, title: `${actor}创建了构建记录`, detail: `已新增 ${resourceLabel}。`, actionLabel: '创建构建' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.buildCreateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.addedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.buildCreateAction') };
     case 'build.update':
-      return { ...base, title: `${actor}更新了构建记录`, detail: `已修改 ${resourceLabel}。`, actionLabel: '更新构建' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.buildUpdateTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.updatedDetail', { resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.buildUpdateAction') };
     default:
-      return { ...base, title: `${actor}执行了一次操作`, detail: `操作类型：${record.action}，关联对象：${resourceLabel}。`, actionLabel: '其他操作' };
+      return { ...base, title: i18n.t('features.audit.dynamicMeta.entry.defaultTitle', { actor }), detail: i18n.t('features.audit.dynamicMeta.entry.defaultDetail', { action: record.action, resource: resourceLabel }), actionLabel: i18n.t('features.audit.dynamicMeta.entry.defaultAction') };
   }
 }

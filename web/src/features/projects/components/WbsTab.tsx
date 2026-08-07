@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { deleteTask } from '../../tasks/api';
 import { STORAGE_KEYS } from '../detailModel';
 import CreateWbsTaskForm from './CreateWbsTaskForm';
@@ -25,6 +26,7 @@ export default function WbsTab({
   onReload: () => void;
   canManageProject: boolean;
 }) {
+  const { t } = useTranslation();
   const [creating, setCreating] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -76,7 +78,7 @@ export default function WbsTab({
   const columns: TreeTableColumn<Task>[] = [
     {
       key: 'title',
-      title: '任务',
+      title: t('features.projects.wbsTab.colTask'),
       width: '36%',
       render: (task) => (
         <div className="pd-wbs-task">
@@ -87,33 +89,33 @@ export default function WbsTab({
     },
     {
       key: 'owner',
-      title: '负责人',
+      title: t('features.projects.wbsTab.colOwner'),
       width: 110,
-      render: (task) => <span className="pd-wbs-owner">{task.owner || '未指派'}</span>,
+      render: (task) => <span className="pd-wbs-owner">{task.owner || t('features.projects.common.unassigned')}</span>,
     },
     {
       key: 'status',
-      title: '状态',
+      title: t('features.projects.wbsTab.colStatus'),
       width: 100,
       render: (task) => <StatusBadge label={labelOf(TASK_STATUS_LABELS, task.status)} status={task.status} />,
     },
     {
       key: 'estimatedHours',
-      title: '预估',
+      title: t('features.projects.wbsTab.colEstimated'),
       width: 64,
       align: 'right',
       render: (task) => <span className="text-mono">{task.estimatedHours ?? '-'}</span>,
     },
     {
       key: 'remainingHours',
-      title: '剩余',
+      title: t('features.projects.wbsTab.colRemaining'),
       width: 64,
       align: 'right',
       render: (task) => <span className="text-mono">{task.remainingHours ?? 0}</span>,
     },
     {
       key: 'progress',
-      title: '进度',
+      title: t('features.projects.wbsTab.colProgress'),
       width: 150,
       render: (task) => (
         <div className="pd-wbs-progress">
@@ -126,23 +128,23 @@ export default function WbsTab({
 
   async function handleDelete(taskId: string) {
     if (!canManageProject) {
-      toast.error('当前账号无权删除任务。');
+      toast.error(t('features.projects.wbsTab.noDeletePermission'));
       return;
     }
     const confirmed = await confirm({
-      title: '删除该任务？',
-      description: '删除后任务进度、工时和看板位置将不可恢复。',
-      confirmText: '删除任务',
+      title: t('features.projects.wbsTab.deleteConfirm'),
+      description: t('features.projects.wbsTab.deleteDesc'),
+      confirmText: t('features.projects.wbsTab.deleteConfirmText'),
       tone: 'danger',
     });
     if (!confirmed) return;
 
     try {
       await deleteTask(taskId);
-      toast.success('任务已删除');
+      toast.success(t('features.projects.wbsTab.deleted'));
       onReload();
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '删除任务失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.projects.wbsTab.deleteFailed'));
     }
   }
 
@@ -150,18 +152,18 @@ export default function WbsTab({
     <div className="pd-tab pd-wbs-tab">
       <div className="pd-wbs-toolbar">
         <div className="pd-wbs-stats">
-          <span><strong>{filteredTasks.length}</strong>任务</span>
-          <span><strong>{doneCount}</strong>完成</span>
-          <span className={blockedCount > 0 ? 'is-risk' : ''}><strong>{blockedCount}</strong>阻塞</span>
+          <span><strong>{filteredTasks.length}</strong>{t('features.projects.wbsTab.statTasks')}</span>
+          <span><strong>{doneCount}</strong>{t('features.projects.wbsTab.statDone')}</span>
+          <span className={blockedCount > 0 ? 'is-risk' : ''}><strong>{blockedCount}</strong>{t('features.projects.wbsTab.statBlocked')}</span>
         </div>
         <div className="pd-wbs-filters">
           <select
             className="form-select"
             value={ownerFilter}
             onChange={(event) => setOwnerFilter(event.target.value)}
-            aria-label="负责人"
+            aria-label={t('features.projects.wbsTab.ownerFilterAria')}
           >
-            <option value="">全部负责人</option>
+            <option value="">{t('features.projects.wbsTab.allOwners')}</option>
             {ownerOptions.map((owner) => (
               <option key={owner} value={owner}>{owner}</option>
             ))}
@@ -170,15 +172,15 @@ export default function WbsTab({
             className="form-select"
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
-            aria-label="任务状态"
+            aria-label={t('features.projects.wbsTab.statusFilterAria')}
           >
-            <option value="">全部状态</option>
+            <option value="">{t('features.projects.wbsTab.allStatuses')}</option>
             {Object.entries(TASK_STATUS_LABELS).map(([key, value]) => (
-              <option key={key} value={key}>{value}</option>
+              <option key={key} value={key}>{t(value)}</option>
             ))}
           </select>
           {canManageProject ? (
-            <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>新建任务</button>
+            <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>{t('features.projects.wbsTab.newTask')}</button>
           ) : null}
         </div>
       </div>
@@ -209,22 +211,22 @@ export default function WbsTab({
           onRowClick={(task) => setSelectedId(task.id)}
           rowActions={(task) => (
             <div className="pd-wbs-actions">
-              <button className="btn btn-text btn-xs" onClick={() => setDetailTask(task)}>详情</button>
+              <button className="btn btn-text btn-xs" onClick={() => setDetailTask(task)}>{t('features.projects.wbsTab.detail')}</button>
               {canManageProject ? (
                 <>
-                  <button className="btn btn-text btn-xs" onClick={() => setEditingTask(task)}>编辑</button>
+                  <button className="btn btn-text btn-xs" onClick={() => setEditingTask(task)}>{t('common.edit')}</button>
                   <button
                     className="btn btn-text btn-xs"
                     onClick={() => handleDelete(task.id)}
                     style={{ color: 'var(--color-red, #dc2626)' }}
                   >
-                    删除
+                    {t('common.delete')}
                   </button>
                 </>
               ) : null}
             </div>
           )}
-          emptyText="该项目下还没有匹配的 WBS 任务。"
+          emptyText={t('features.projects.wbsTab.emptyWbs')}
         />
       </Panel>
 

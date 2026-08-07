@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { fetchAiBusinessAdvice } from '../../features/ai/api';
 import { ApiError } from '../../services/api';
 import type { AiBusinessAdvice, AiBusinessAdviceInput } from '../../types';
@@ -32,11 +33,13 @@ function BusinessAdvicePanel({
   targetId,
   title,
   description,
-  buttonText = 'AI 分析',
+  buttonText,
   question,
   draft,
   className = '',
 }: BusinessAdvicePanelProps) {
+  const { t } = useTranslation();
+  const resolvedButtonText = buttonText ?? t('common.aiAnalyze');
   const [advice, setAdvice] = useState<AiBusinessAdvice | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +57,7 @@ function BusinessAdvicePanel({
       });
       setAdvice(result);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'AI 分析失败，请检查模型配置或稍后重试。');
+      setError(err instanceof ApiError ? err.message : t('common.aiAnalyzeFailed'));
     } finally {
       setLoading(false);
     }
@@ -68,24 +71,24 @@ function BusinessAdvicePanel({
           <div className="body-text">
             {description}
             {advice?.modelUsed ? ` · ${advice.modelUsed}` : ''}
-            {advice?.fallback ? ' · 规则兜底' : ''}
+            {advice?.fallback ? t('common.ruleFallback') : ''}
           </div>
         </div>
         <button className="btn btn-primary btn-sm" onClick={handleAnalyze} disabled={loading || !targetId}>
-          {loading ? 'AI 分析中...' : advice ? '重新分析' : buttonText}
+          {loading ? t('common.aiAnalyzing') : advice ? t('common.reanalyze') : resolvedButtonText}
         </button>
       </div>
       {(advice || loading || error) ? (
         <div className="business-ai-result">
-          {loading ? <div className="body-text">AI 正在读取业务上下文并生成建议，请稍候...</div> : null}
+          {loading ? <div className="body-text">{t('common.aiReadingContext')}</div> : null}
           {error ? <div className="form-error">{error}</div> : null}
           {advice ? (
             <div className="business-ai-content">
               <p>{advice.summary}</p>
-              <AdviceList title="风险" items={advice.risks} />
-              <AdviceList title="建议" items={advice.suggestions} />
-              <AdviceList title="下一步" items={advice.nextActions} />
-              <AdviceList title="缺少信息" items={advice.missingInfo} />
+              <AdviceList title={t('common.risks')} items={advice.risks} />
+              <AdviceList title={t('common.suggestions')} items={advice.suggestions} />
+              <AdviceList title={t('common.nextSteps')} items={advice.nextActions} />
+              <AdviceList title={t('common.missingInfo')} items={advice.missingInfo} />
             </div>
           ) : null}
         </div>

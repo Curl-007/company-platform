@@ -1,10 +1,12 @@
 import { useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   FileText,
   Trash2,
   Upload,
   X,
 } from 'lucide-react';
+import i18n from '../../../i18n';
 import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
 import { ApiError } from '../../../services/api';
@@ -38,7 +40,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result ?? ''));
-    reader.onerror = () => reject(new Error('读取文件失败'));
+    reader.onerror = () => reject(new Error(i18n.t('features.documents.uploadDocumentForm.readFileFailed')));
     reader.readAsDataURL(file);
   });
 }
@@ -54,6 +56,7 @@ export default function UploadDocumentForm({
   onClose: () => void;
   onUploaded: (docs: Document[]) => void;
 }) {
+  const { t } = useTranslation();
   const [type, setType] = useState('requirement');
   const [category, setCategory] = useState('project');
   const [owner, setOwner] = useState('');
@@ -80,15 +83,15 @@ export default function UploadDocumentForm({
 
       for (const file of incoming) {
         if (next.length >= MAX_UPLOAD_FILES) {
-          errors.push(`单次最多上传 ${MAX_UPLOAD_FILES} 个文件。`);
+          errors.push(t('features.documents.uploadDocumentForm.maxFiles', { count: MAX_UPLOAD_FILES }));
           break;
         }
         if (!isAllowedUploadFile(file.name)) {
-          errors.push(`不支持的格式：${file.name}`);
+          errors.push(t('features.documents.uploadDocumentForm.unsupportedFormat', { name: file.name }));
           continue;
         }
         if (file.size > MAX_UPLOAD_BYTES) {
-          errors.push(`${file.name} 超过 25MB 限制。`);
+          errors.push(t('features.documents.uploadDocumentForm.fileTooLarge', { name: file.name }));
           continue;
         }
         const duplicated = next.some((item) => item.file.name === file.name && item.file.size === file.size);
@@ -116,12 +119,12 @@ export default function UploadDocumentForm({
 
   async function handleSubmit() {
     setFormError(null);
-    if (!owner.trim()) return setFormError('请输入负责人。');
-    if (category === 'project' && !projectId) return setFormError('项目文档必须选择归属项目。');
-    if (!queue.length) return setFormError('请选择要上传的文件。');
+    if (!owner.trim()) return setFormError(t('features.documents.uploadDocumentForm.ownerRequired'));
+    if (category === 'project' && !projectId) return setFormError(t('features.documents.uploadDocumentForm.projectRequired'));
+    if (!queue.length) return setFormError(t('features.documents.uploadDocumentForm.selectFiles'));
 
     const targets = queue.filter((item) => item.status === 'pending' || item.status === 'error');
-    if (!targets.length) return setFormError('没有待上传的文件。');
+    if (!targets.length) return setFormError(t('features.documents.uploadDocumentForm.nothingToUpload'));
 
     setSubmitting(true);
     const uploadedDocs: Document[] = [];
@@ -129,7 +132,7 @@ export default function UploadDocumentForm({
     try {
       for (const item of targets) {
         if (!item.title.trim()) {
-          updateItem(item.id, { status: 'error', error: '请填写文档标题' });
+          updateItem(item.id, { status: 'error', error: t('features.documents.uploadDocumentForm.titleRequired') });
           continue;
         }
         updateItem(item.id, { status: 'uploading', error: undefined });
@@ -152,7 +155,7 @@ export default function UploadDocumentForm({
         } catch (err: unknown) {
           updateItem(item.id, {
             status: 'error',
-            error: err instanceof ApiError ? err.message : '上传失败',
+            error: err instanceof ApiError ? err.message : t('features.documents.uploadDocumentForm.uploadFailed'),
           });
         }
       }
@@ -160,7 +163,7 @@ export default function UploadDocumentForm({
       if (uploadedDocs.length) {
         onUploaded(uploadedDocs);
       } else {
-        setFormError('没有文件上传成功，请检查格式或稍后重试。');
+        setFormError(t('features.documents.uploadDocumentForm.uploadAllFailed'));
       }
     } finally {
       setSubmitting(false);
@@ -168,13 +171,13 @@ export default function UploadDocumentForm({
   }
 
   return (
-    <Overlay onClose={onClose} maxWidth={760} ariaLabel="上传文档">
+    <Overlay onClose={onClose} maxWidth={760} ariaLabel={t('features.documents.uploadDocumentForm.uploadDocumentAria')}>
       <Panel
         className="doc-upload-panel"
-        title="上传文档"
-        subtitle={`支持 ${ALLOWED_COUNT_LABEL} 等常见格式 · 单文件 ≤ 25MB · 单次最多 ${MAX_UPLOAD_FILES} 个`}
+        title={t('features.documents.uploadDocumentForm.panelTitle')}
+        subtitle={t('features.documents.uploadDocumentForm.subtitle', { formats: t(ALLOWED_COUNT_LABEL), count: MAX_UPLOAD_FILES })}
         toolbar={(
-          <button className="btn btn-text btn-sm btn-with-icon" onClick={onClose} aria-label="关闭">
+          <button className="btn btn-text btn-sm btn-with-icon" onClick={onClose} aria-label={t('common.close')}>
             <X size={15} aria-hidden="true" />
           </button>
         )}
@@ -184,43 +187,43 @@ export default function UploadDocumentForm({
 
           <div className="doc-form-grid">
             <div className="form-group">
-              <label className="form-label">类型</label>
+              <label className="form-label">{t('features.documents.uploadDocumentForm.type')}</label>
               <select className="form-select" value={type} onChange={(e) => setType(e.target.value)}>
                 {DOC_TYPES.filter((item) => item.key).map((item) => (
-                  <option key={item.key} value={item.key}>{item.label}</option>
+                  <option key={item.key} value={item.key}>{t(item.label)}</option>
                 ))}
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">分类</label>
+              <label className="form-label">{t('features.documents.uploadDocumentForm.category')}</label>
               <select className="form-select" value={category} onChange={(e) => setCategory(e.target.value)}>
                 {DOC_CATEGORIES.filter((item) => item.key).map((item) => (
-                  <option key={item.key} value={item.key}>{item.label}</option>
+                  <option key={item.key} value={item.key}>{t(item.label)}</option>
                 ))}
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">负责角色</label>
+              <label className="form-label">{t('features.documents.uploadDocumentForm.ownerRole')}</label>
               <select className="form-select" value={ownerRole} onChange={(e) => setOwnerRole(e.target.value)}>
                 {ROLE_DOC_OPTIONS.map((item) => (
-                  <option key={item.key} value={item.key}>{item.label}</option>
+                  <option key={item.key} value={item.key}>{t(item.label)}</option>
                 ))}
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">负责人</label>
+              <label className="form-label">{t('features.documents.uploadDocumentForm.owner')}</label>
               <input
                 className="form-input"
                 value={owner}
                 onChange={(e) => setOwner(e.target.value)}
-                placeholder="填写文档负责人"
+                placeholder={t('features.documents.uploadDocumentForm.ownerPlaceholder')}
               />
             </div>
             {category === 'project' ? (
               <div className="form-group doc-form-span">
-                <label className="form-label">归属项目</label>
+                <label className="form-label">{t('features.documents.uploadDocumentForm.project')}</label>
                 <select className="form-select" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-                  <option value="">请选择项目</option>
+                  <option value="">{t('features.documents.uploadDocumentForm.selectProject')}</option>
                   {projects.map((project) => (
                     <option key={project.id} value={project.id}>{project.name}</option>
                   ))}
@@ -254,8 +257,8 @@ export default function UploadDocumentForm({
               <Upload size={20} />
             </div>
             <div className="doc-dropzone-copy">
-              <strong>拖拽文件到此处，或点击选择</strong>
-              <span>可一次选择多个文件；Office / PDF / 文本 / 图片均支持</span>
+              <strong>{t('features.documents.uploadDocumentForm.dragDropHint')}</strong>
+              <span>{t('features.documents.uploadDocumentForm.multiSelectHint')}</span>
             </div>
             <button
               type="button"
@@ -263,7 +266,7 @@ export default function UploadDocumentForm({
               onClick={() => fileInputRef.current?.click()}
               disabled={submitting}
             >
-              选择文件
+              {t('features.documents.uploadDocumentForm.chooseFiles')}
             </button>
             <input
               ref={fileInputRef}
@@ -278,12 +281,12 @@ export default function UploadDocumentForm({
             />
           </div>
 
-          <div className="doc-format-board" aria-label="支持的上传格式">
+          <div className="doc-format-board" aria-label={t('features.documents.uploadDocumentForm.supportedFormats')}>
             {UPLOAD_FORMAT_GROUPS.map((group) => (
               <div key={group.key} className="doc-format-group">
-                <strong>{group.label}</strong>
+                <strong>{t(group.label)}</strong>
                 <span>{group.extensions.join(' ')}</span>
-                <em>{group.extractable ? '可抽取正文' : '按附件保存'}</em>
+                <em>{group.extractable ? t('features.documents.uploadDocumentForm.extractable') : t('features.documents.uploadDocumentForm.attachmentOnly')}</em>
               </div>
             ))}
           </div>
@@ -291,8 +294,8 @@ export default function UploadDocumentForm({
           {queue.length ? (
             <div className="doc-queue">
               <div className="doc-queue-head">
-                <strong>待上传 {queue.length} 个</strong>
-                <span>{formatFileSize(totalBytes)} · 待处理 {pendingCount}</span>
+                <strong>{t('features.documents.uploadDocumentForm.pendingUpload', { count: queue.length })}</strong>
+                <span>{formatFileSize(totalBytes)} · {t('features.documents.uploadDocumentForm.pendingCount', { count: pendingCount })}</span>
               </div>
               <div className="doc-queue-list">
                 {queue.map((item) => (
@@ -303,7 +306,7 @@ export default function UploadDocumentForm({
                         <strong title={item.file.name}>{item.file.name}</strong>
                         <span>
                           {formatFileSize(item.file.size)}
-                          {isExtractableFormat(item.file.name) ? ' · 可抽取正文' : ' · 附件保存'}
+                          {isExtractableFormat(item.file.name) ? ` · ${t('features.documents.uploadDocumentForm.extractable')}` : ` · ${t('features.documents.uploadDocumentForm.attachmentOnly')}`}
                         </span>
                       </div>
                     </div>
@@ -312,21 +315,21 @@ export default function UploadDocumentForm({
                       value={item.title}
                       disabled={item.status === 'uploading' || item.status === 'done'}
                       onChange={(e) => updateItem(item.id, { title: e.target.value })}
-                      aria-label={`${item.file.name} 文档标题`}
-                      placeholder="文档标题"
+                      aria-label={t('features.documents.uploadDocumentForm.docTitleAria', { name: item.file.name })}
+                      placeholder={t('features.documents.uploadDocumentForm.documentTitlePlaceholder')}
                     />
                     <div className="doc-queue-status">
-                      {item.status === 'pending' ? '待上传' : null}
-                      {item.status === 'uploading' ? '上传中…' : null}
-                      {item.status === 'done' ? '已完成' : null}
-                      {item.status === 'error' ? (item.error || '失败') : null}
+                      {item.status === 'pending' ? t('features.documents.uploadDocumentForm.pending') : null}
+                      {item.status === 'uploading' ? t('features.documents.uploadDocumentForm.uploading') : null}
+                      {item.status === 'done' ? t('features.documents.uploadDocumentForm.done') : null}
+                      {item.status === 'error' ? (item.error || t('features.documents.uploadDocumentForm.failed')) : null}
                     </div>
                     <button
                       type="button"
                       className="btn btn-text btn-xs doc-queue-remove"
                       onClick={() => removeItem(item.id)}
                       disabled={item.status === 'uploading' || submitting}
-                      aria-label={`移除 ${item.file.name}`}
+                      aria-label={t('features.documents.uploadDocumentForm.removeAria', { name: item.file.name })}
                     >
                       <Trash2 size={13} aria-hidden="true" />
                     </button>
@@ -337,15 +340,19 @@ export default function UploadDocumentForm({
           ) : (
             <div className="doc-queue-empty">
               <FileText size={16} aria-hidden="true" />
-              还没有选择文件。支持 Word / Excel / PPT / PDF / Markdown / 图片等。
+              {t('features.documents.uploadDocumentForm.noFilesSelected')}
             </div>
           )}
 
           <div className="doc-form-footer">
-            <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>取消</button>
+            <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>{t('common.cancel')}</button>
             <button className="btn btn-primary btn-sm btn-with-icon" onClick={handleSubmit} disabled={submitting || !queue.length}>
               <Upload size={14} aria-hidden="true" />
-              {submitting ? '上传中...' : `上传${queue.length ? ` ${queue.length} 个文件` : ''}`}
+              {submitting
+                ? t('features.documents.uploadDocumentForm.uploadButtonSubmitting')
+                : queue.length
+                  ? t('features.documents.uploadDocumentForm.uploadButtonCount', { count: queue.length })
+                  : t('features.documents.uploadDocumentForm.uploadButton')}
             </button>
           </div>
         </div>
@@ -354,4 +361,4 @@ export default function UploadDocumentForm({
   );
 }
 
-const ALLOWED_COUNT_LABEL = 'Word / Excel / PPT / PDF / Markdown / 图片';
+const ALLOWED_COUNT_LABEL = 'features.documents.uploadDocumentForm.allowedFormats';

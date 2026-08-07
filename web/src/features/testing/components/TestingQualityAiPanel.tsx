@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   Bug,
@@ -15,6 +16,7 @@ import type { Defect, Project, TestCase } from '../../../types';
 import { buildTestingQualityAiPrompt, passRate } from './testingHelpers';
 
 export default function TestingQualityAiPanel() {
+  const { t } = useTranslation();
   const { data, loading, error, reload } = useAsync<{
     testCases: TestCase[];
     defects: Defect[];
@@ -75,7 +77,7 @@ export default function TestingQualityAiPanel() {
       });
       setAiAdvice(reply.content);
     } catch (err) {
-      setAiError(err instanceof ApiError ? err.message : 'AI 质量分析生成失败，请检查模型配置或稍后重试。');
+      setAiError(err instanceof ApiError ? err.message : t('features.testing.testingQualityAiPanel.analyzeFailed'));
     } finally {
       setAiLoading(false);
     }
@@ -87,14 +89,14 @@ export default function TestingQualityAiPanel() {
         <div className="qa-ai-copy">
           <div className="section-title qa-ai-title">
             <Sparkles size={15} aria-hidden="true" />
-            AI 质量驾驶舱
+            {t('features.testing.testingQualityAiPanel.title')}
           </div>
-          <div className="body-text">汇总用例执行与缺陷闭环，给出回归重点与风险建议。</div>
+          <div className="body-text">{t('features.testing.testingQualityAiPanel.description')}</div>
         </div>
         <div className="qa-ai-actions testing-ai-actions">
           <button className="btn btn-secondary btn-sm btn-with-icon" onClick={reload} disabled={loading}>
             <RefreshCw size={14} aria-hidden="true" />
-            {loading ? '加载中' : '刷新快照'}
+            {loading ? t('features.testing.testingQualityAiPanel.loading') : t('features.testing.testingQualityAiPanel.refreshSnapshot')}
           </button>
           <button
             className="btn btn-primary btn-sm btn-with-icon"
@@ -102,34 +104,34 @@ export default function TestingQualityAiPanel() {
             disabled={loading || aiLoading || Boolean(error)}
           >
             <Sparkles size={14} aria-hidden="true" />
-            {aiLoading ? '分析中...' : aiAdvice ? '重新分析' : 'AI 质量建议'}
+            {aiLoading ? t('features.testing.testingQualityAiPanel.analyzing') : aiAdvice ? t('common.reanalyze') : t('features.testing.testingQualityAiPanel.advice')}
           </button>
         </div>
       </div>
 
-      <div className="qa-ai-signals" aria-label="质量快照">
+      <div className="qa-ai-signals" aria-label={t('features.testing.testingQualityAiPanel.snapshotAria')}>
         <div className="qa-ai-signal">
-          <span><ClipboardCheck size={13} aria-hidden="true" /> 用例</span>
+          <span><ClipboardCheck size={13} aria-hidden="true" /> {t('features.testing.testingQualityAiPanel.casesLabel')}</span>
           <strong>{stats.caseCount}</strong>
-          <em>整体通过 {stats.overallPassRate}%</em>
+          <em>{t('features.testing.testingQualityAiPanel.overallPass', { rate: stats.overallPassRate })}</em>
         </div>
         <div className={`qa-ai-signal ${stats.riskyCases > 0 ? 'is-warn' : ''}`}>
-          <span><AlertTriangle size={13} aria-hidden="true" /> 风险用例</span>
+          <span><AlertTriangle size={13} aria-hidden="true" /> {t('features.testing.testingQualityAiPanel.riskyCasesLabel')}</span>
           <strong>{stats.riskyCases}</strong>
-          <em>失败 {stats.failedRuns} · 阻塞 {stats.blockedRuns}</em>
+          <em>{t('features.testing.testingQualityAiPanel.failedBlocked', { failed: stats.failedRuns, blocked: stats.blockedRuns })}</em>
         </div>
         <div className={`qa-ai-signal ${stats.openDefects > 0 ? 'is-warn' : ''}`}>
-          <span><Bug size={13} aria-hidden="true" /> 未关闭缺陷</span>
+          <span><Bug size={13} aria-hidden="true" /> {t('features.testing.testingQualityAiPanel.openDefectsLabel')}</span>
           <strong>{stats.openDefects}</strong>
-          <em>高严重 {stats.severeOpen}</em>
+          <em>{t('features.testing.testingQualityAiPanel.severeOpen', { count: stats.severeOpen })}</em>
         </div>
       </div>
 
-      {error ? <div className="form-error">质量数据加载失败，暂时无法生成 AI 建议。</div> : null}
+      {error ? <div className="form-error">{t('features.testing.testingQualityAiPanel.dataLoadFailed')}</div> : null}
 
       {(aiAdvice || aiLoading || aiError) ? (
         <div className="testing-ai-result qa-ai-result">
-          {aiLoading ? <div className="body-text">AI 正在分析测试通过率、阻塞用例和缺陷闭环…</div> : null}
+          {aiLoading ? <div className="body-text">{t('features.testing.testingQualityAiPanel.analyzingDesc')}</div> : null}
           {aiError ? <div className="form-error">{aiError}</div> : null}
           {aiAdvice ? <div className="testing-ai-content">{aiAdvice}</div> : null}
         </div>

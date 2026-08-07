@@ -7,6 +7,7 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import DataTable, { type DataTableColumn } from '../../../components/common/DataTable';
 import FilterBar from '../../../components/common/FilterBar';
 import Panel from '../../../components/common/Panel';
@@ -64,10 +65,11 @@ export default function DocumentsList({
   onCollaborate: (doc: Document) => void;
   onDelete: (doc: Document) => void;
 }) {
+  const { t } = useTranslation();
   const columns: DataTableColumn<Document>[] = [
     {
       key: 'title',
-      title: '文档',
+      title: t('features.documents.documentsList.document'),
       render: (doc) => (
         <div className="doc-title-cell">
           <div className="doc-title-main">
@@ -75,7 +77,7 @@ export default function DocumentsList({
             <strong className="doc-title-text" title={doc.title}>{doc.title}</strong>
           </div>
           <span className="doc-title-meta" title={doc.fileName}>
-            {doc.fileName || '未命名文件'}
+            {doc.fileName || t('features.documents.documentsList.unnamedFile')}
             {doc.fileSize ? ` · ${formatFileSize(doc.fileSize)}` : ''}
           </span>
         </div>
@@ -83,51 +85,51 @@ export default function DocumentsList({
     },
     {
       key: 'type',
-      title: '类型',
+      title: t('features.documents.documentsList.type'),
       width: 110,
       render: (doc) => <StatusBadge label={labelOf(DOC_TYPE_LABELS, doc.type)} status={doc.type} />,
     },
     {
       key: 'category',
-      title: '分类',
+      title: t('features.documents.documentsList.category'),
       width: 96,
       render: (doc) => <span className="doc-meta-text">{categoryLabel(doc.category)}</span>,
     },
     {
       key: 'project',
-      title: '项目',
+      title: t('features.documents.documentsList.project'),
       width: 140,
       render: (doc) => (
-        <span className="doc-meta-text truncate" title={doc.projectId ? (projectMap.get(doc.projectId) ?? doc.projectId) : '无'}>
-          {doc.projectId ? (projectMap.get(doc.projectId) ?? doc.projectId) : '无'}
+        <span className="doc-meta-text truncate" title={doc.projectId ? (projectMap.get(doc.projectId) ?? doc.projectId) : t('features.documents.documentsList.none')}>
+          {doc.projectId ? (projectMap.get(doc.projectId) ?? doc.projectId) : t('features.documents.documentsList.none')}
         </span>
       ),
     },
     {
       key: 'owner',
-      title: '负责人',
+      title: t('features.documents.documentsList.owner'),
       width: 120,
       render: (doc) => (
         <div className="doc-owner-cell">
-          <span>{doc.owner || '未填写'}</span>
+          <span>{doc.owner || t('common.unfilled')}</span>
           <em>{roleLabel(doc.ownerRole)}</em>
         </div>
       ),
     },
     {
       key: 'aiStatus',
-      title: 'AI 状态',
+      title: t('features.documents.documentsList.aiStatus'),
       width: 100,
       render: (doc) => (
         <StatusBadge
-          label={labelOf(DOC_AI_STATUS_LABELS, doc.aiStatus) || '未分析'}
+          label={labelOf(DOC_AI_STATUS_LABELS, doc.aiStatus) || t('features.documents.documentsList.notAnalyzed')}
           variant={aiStatusVariant(doc.aiStatus)}
         />
       ),
     },
     {
       key: 'updatedAt',
-      title: '更新时间',
+      title: t('features.documents.documentsList.updatedAt'),
       width: 140,
       render: (doc) => {
         const raw = doc.updatedAt || '';
@@ -137,26 +139,26 @@ export default function DocumentsList({
     },
     {
       key: 'actions',
-      title: '操作',
+      title: t('common.actions'),
       width: 150,
       render: (doc) => (
         <div className="doc-row-actions" onClick={(e) => e.stopPropagation()}>
           {canManageDocuments ? (
             <>
               <button className="btn btn-text btn-xs btn-with-icon" onClick={() => onEdit(doc)}>
-                <Pencil size={12} aria-hidden="true" /> 编辑
+                <Pencil size={12} aria-hidden="true" /> {t('common.edit')}
               </button>
               <button className="btn btn-text btn-xs btn-with-icon" onClick={() => onCollaborate(doc)}>
-                <Users size={12} aria-hidden="true" /> 协同
+                <Users size={12} aria-hidden="true" /> {t('features.documents.documentsList.collaborate')}
               </button>
               <button
                 className="btn btn-text btn-xs btn-with-icon doc-danger-btn"
                 onClick={() => onDelete(doc)}
               >
-                <Trash2 size={12} aria-hidden="true" /> 删除
+                <Trash2 size={12} aria-hidden="true" /> {t('common.delete')}
               </button>
             </>
-          ) : <span className="text-secondary">只读</span>}
+          ) : <span className="text-secondary">{t('features.documents.documentsList.readOnly')}</span>}
         </div>
       ),
     },
@@ -164,17 +166,17 @@ export default function DocumentsList({
 
   return (
     <Panel
-      title="文档列表"
-      subtitle={`显示 ${documents.length} / ${totalCount} 份`}
+      title={t('features.documents.documentsList.panelTitle')}
+      subtitle={t('features.documents.documentsList.showingCount', { count: documents.length, total: totalCount })}
       className="documents-list-panel doc-pool-panel"
       toolbar={(
         <div className="doc-pool-toolbar">
           <button className="btn btn-secondary btn-sm btn-with-icon" onClick={onReload}>
-            <RefreshCw size={14} aria-hidden="true" /> 刷新
+            <RefreshCw size={14} aria-hidden="true" /> {t('features.documents.documentsList.refresh')}
           </button>
           {canManageDocuments ? (
             <button className="btn btn-primary btn-sm btn-with-icon" onClick={onUpload}>
-              <Plus size={14} aria-hidden="true" /> 上传文档
+              <Plus size={14} aria-hidden="true" /> {t('features.documents.documentsList.uploadDocument')}
             </button>
           ) : null}
         </div>
@@ -188,37 +190,37 @@ export default function DocumentsList({
               className="form-input border-0 bg-transparent shadow-none"
               value={keyword}
               onChange={(e) => onKeywordChange(e.target.value)}
-              placeholder="搜索标题 / 文件名 / 负责人 / 格式"
-              aria-label="搜索文档"
+              placeholder={t('features.documents.documentsList.searchPlaceholder')}
+              aria-label={t('features.documents.documentsList.searchAria')}
             />
           </div>
           <select
             className="form-select"
             value={typeFilter}
             onChange={(e) => onTypeFilterChange(e.target.value)}
-            aria-label="文档类型"
+            aria-label={t('features.documents.documentsList.typeAria')}
           >
             {DOC_TYPES.map((item) => (
-              <option key={item.key || 'all-type'} value={item.key}>{item.label}</option>
+              <option key={item.key || 'all-type'} value={item.key}>{t(item.label)}</option>
             ))}
           </select>
           <select
             className="form-select"
             value={categoryFilter}
             onChange={(e) => onCategoryFilterChange(e.target.value)}
-            aria-label="文档分类"
+            aria-label={t('features.documents.documentsList.categoryAria')}
           >
             {DOC_CATEGORIES.map((item) => (
-              <option key={item.key || 'all-category'} value={item.key}>{item.label}</option>
+              <option key={item.key || 'all-category'} value={item.key}>{t(item.label)}</option>
             ))}
           </select>
           <select
             className="form-select filter-project"
             value={projectFilter}
             onChange={(e) => onProjectFilterChange(e.target.value)}
-            aria-label="所属项目"
+            aria-label={t('features.documents.documentsList.projectAria')}
           >
-            <option value="">全部项目</option>
+            <option value="">{t('features.documents.documentsList.allProjects')}</option>
             {projects.map((project) => (
               <option key={project.id} value={project.id}>{project.name}</option>
             ))}
@@ -232,13 +234,13 @@ export default function DocumentsList({
         data={documents}
         rowKey="id"
         onRowClick={onRowClick}
-        emptyText="当前筛选条件下暂无文档。可上传 Word / Excel / PPT / PDF / Markdown / 图片等格式。"
+        emptyText={t('features.documents.documentsList.emptyText')}
         pageSize={10}
       />
       {!documents.length ? null : (
         <div className="doc-list-hint">
           <FileText size={13} aria-hidden="true" />
-          支持多格式上传；文本类可抽取正文供 AI 分析，Office/图片按附件保存。
+          {t('features.documents.documentsList.multiFormatHint')}
         </div>
       )}
     </Panel>

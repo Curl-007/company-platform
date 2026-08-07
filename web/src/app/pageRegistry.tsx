@@ -44,12 +44,15 @@ export interface NavEntry {
 }
 
 export interface NavGroup {
+  /** 稳定标识，用于 i18n 翻译 key（nav:group.<id>）。 */
+  id: string;
   label: string;
   items: NavEntry[];
 }
 
 export const NAV_GROUPS: NavGroup[] = [
   {
+    id: 'daily',
     label: '日常工作',
     items: [
       { key: 'dashboard', label: '工作台', icon: LayoutDashboard, phase: 1 },
@@ -61,6 +64,7 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    id: 'delivery',
     label: '项目交付',
     items: [
       { key: 'projects', label: '项目执行', icon: FolderKanban, phase: 1 },
@@ -70,6 +74,7 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    id: 'knowledge',
     label: '知识与智能',
     items: [
       { key: 'documents', label: '文档中心', icon: FileText, phase: 1 },
@@ -78,6 +83,7 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    id: 'admin',
     label: '管理配置',
     items: [
       { key: 'products', label: '产品管理', icon: Box, phase: 3 },

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createBuild } from '../api';
 import { splitIds, today } from '../deliveryPageModel';
 import {
@@ -27,6 +28,7 @@ export default function CreateBuildDialog({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const { t } = useTranslation();
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
   const [name, setName] = useState('');
   const [version, setVersion] = useState('');
@@ -40,8 +42,8 @@ export default function CreateBuildDialog({
 
   async function submit() {
     setFormError(null);
-    if (!projectId) return setFormError('请选择所属项目。');
-    if (!name.trim()) return setFormError('请输入构建名称。');
+    if (!projectId) return setFormError(t('features.delivery.createBuildDialog.projectRequired'));
+    if (!name.trim()) return setFormError(t('features.delivery.createBuildDialog.nameRequired'));
     setSubmitting(true);
     try {
       await createBuild({
@@ -56,7 +58,7 @@ export default function CreateBuildDialog({
       });
       onCreated();
     } catch (err: unknown) {
-      setFormError(err instanceof ApiError ? err.message : '创建失败');
+      setFormError(err instanceof ApiError ? err.message : t('features.delivery.createBuildDialog.createFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -64,22 +66,22 @@ export default function CreateBuildDialog({
 
   return (
     <Overlay onClose={onClose} maxWidth={720}>
-      <Panel title="新建构建" subtitle="记录代码构建、版本号、提交标识和关联需求/缺陷。">
+      <Panel title={t('features.delivery.createBuildDialog.createTitle')} subtitle={t('features.delivery.createBuildDialog.subtitle')}>
         <DeliveryFormError message={formError} />
         <form className="delivery-form" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
           <div className="form-row">
-            <FormSelect label="所属项目" value={projectId} onChange={setProjectId} options={projects.map((item) => ({ value: item.id, label: item.name }))} />
-            <FormInput label="构建名称" value={name} onChange={setName} placeholder="例如：研发平台一期开发构建 #24" />
+            <FormSelect label={t('features.delivery.createBuildDialog.projectLabel')} value={projectId} onChange={setProjectId} options={projects.map((item) => ({ value: item.id, label: item.name }))} />
+            <FormInput label={t('features.delivery.createBuildDialog.nameLabel')} value={name} onChange={setName} placeholder={t('features.delivery.createBuildDialog.namePlaceholder')} />
           </div>
           <div className="form-row">
-            <FormInput label="版本号" value={version} onChange={setVersion} placeholder="1.2.0" />
-            <FormInput label="构建日期" type="date" value={buildDate} onChange={setBuildDate} />
+            <FormInput label={t('features.delivery.createBuildDialog.versionLabel')} value={version} onChange={setVersion} placeholder="1.2.0" />
+            <FormInput label={t('features.delivery.createBuildDialog.buildDateLabel')} type="date" value={buildDate} onChange={setBuildDate} />
           </div>
-          <FormInput label="提交标识" value={scmHash} onChange={setScmHash} placeholder="例如：a1b2c3d" />
-          <QuickIdInput label="关联需求" value={linkedStories} onChange={setLinkedStories} items={requirements.map((item) => item.id)} />
-          <QuickIdInput label="关联缺陷" value={linkedBugs} onChange={setLinkedBugs} items={defects.map((item) => item.id)} />
-          <FormTextarea label="构建说明" value={notes} onChange={setNotes} placeholder="补充本次构建范围、测试目标或风险说明" />
-          <FormActions submitting={submitting} submitText="创建构建" onClose={onClose} />
+          <FormInput label={t('features.delivery.createBuildDialog.scmLabel')} value={scmHash} onChange={setScmHash} placeholder={t('features.delivery.createBuildDialog.scmPlaceholder')} />
+          <QuickIdInput label={t('features.delivery.createBuildDialog.linkedStoriesLabel')} value={linkedStories} onChange={setLinkedStories} items={requirements.map((item) => item.id)} />
+          <QuickIdInput label={t('features.delivery.createBuildDialog.linkedBugsLabel')} value={linkedBugs} onChange={setLinkedBugs} items={defects.map((item) => item.id)} />
+          <FormTextarea label={t('features.delivery.createBuildDialog.notesLabel')} value={notes} onChange={setNotes} placeholder={t('features.delivery.createBuildDialog.notesPlaceholder')} />
+          <FormActions submitting={submitting} submitText={t('features.delivery.createBuildDialog.createBuild')} onClose={onClose} />
         </form>
       </Panel>
     </Overlay>

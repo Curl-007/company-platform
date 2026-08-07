@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { addProjectMember, deleteProjectMember, fetchProjectMembers } from '../api';
 import { ApiError } from '../../../services/api';
 import DataTable from '../../../components/common/DataTable';
@@ -17,6 +18,7 @@ interface ProjectMembersFormProps {
 }
 
 export default function ProjectMembersForm({ projectId, projectName, onClose, canManageMembers }: ProjectMembersFormProps) {
+  const { t } = useTranslation();
   const toast = useToast();
   const confirm = useConfirm();
   const [members, setMembers] = useState<ProjectMember[]>([]);
@@ -33,7 +35,7 @@ export default function ProjectMembersForm({ projectId, projectName, onClose, ca
       const data = await fetchProjectMembers(projectId);
       setMembers(data);
     } catch (err: unknown) {
-      setFormError(err instanceof ApiError ? err.message : '加载项目成员失败');
+      setFormError(err instanceof ApiError ? err.message : t('features.projects.projectMembersForm.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -45,11 +47,11 @@ export default function ProjectMembersForm({ projectId, projectName, onClose, ca
 
   async function handleAddMember() {
     if (!canManageMembers) {
-      setFormError('当前账号无权维护项目成员。');
+      setFormError(t('features.projects.projectMembersForm.noPermission'));
       return;
     }
     if (!userName.trim()) {
-      setFormError('请输入成员名称');
+      setFormError(t('features.projects.projectMembersForm.nameRequired'));
       return;
     }
 
@@ -59,9 +61,9 @@ export default function ProjectMembersForm({ projectId, projectName, onClose, ca
       await addProjectMember(projectId, { userName: userName.trim(), role });
       setUserName('');
       await loadMembers();
-      toast.success(`已添加项目成员：${userName.trim()}`);
+      toast.success(t('features.projects.projectMembersForm.added', { name: userName.trim() }));
     } catch (err: unknown) {
-      setFormError(err instanceof ApiError ? err.message : '添加项目成员失败');
+      setFormError(err instanceof ApiError ? err.message : t('features.projects.projectMembersForm.addFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -69,13 +71,13 @@ export default function ProjectMembersForm({ projectId, projectName, onClose, ca
 
   async function handleDeleteMember(member: ProjectMember) {
     if (!canManageMembers) {
-      toast.error('当前账号无权移出项目成员。');
+      toast.error(t('features.projects.projectMembersForm.noRemovePermission'));
       return;
     }
     const confirmed = await confirm({
-      title: `移出项目成员“${member.userName}”？`,
-      description: '移出后该成员不会再计入项目成员统计和日报缺报统计。',
-      confirmText: '移出成员',
+      title: t('features.projects.projectMembersForm.removeConfirm', { name: member.userName }),
+      description: t('features.projects.projectMembersForm.removeDesc'),
+      confirmText: t('features.projects.projectMembersForm.removeConfirmText'),
       tone: 'warning',
     });
     if (!confirmed) return;
@@ -83,17 +85,17 @@ export default function ProjectMembersForm({ projectId, projectName, onClose, ca
     try {
       await deleteProjectMember(projectId, member.id);
       setMembers((current) => current.filter((item) => item.id !== member.id));
-      toast.success(`已移除项目成员：${member.userName}`);
+      toast.success(t('features.projects.projectMembersForm.removed', { name: member.userName }));
     } catch (err: unknown) {
-      toast.error(err instanceof ApiError ? err.message : '移除项目成员失败');
+      toast.error(err instanceof ApiError ? err.message : t('features.projects.projectMembersForm.removeFailed'));
     }
   }
 
   return (
     <Overlay onClose={onClose}>
       <Panel
-        title="项目成员管理"
-        subtitle={`${projectName} · 维护项目归属成员，用于日报缺报统计与协作分派`}
+        title={t('features.projects.projectMembersForm.title')}
+        subtitle={t('features.projects.projectMembersForm.subtitle', { name: projectName })}
         style={{ maxWidth: 760 }}
       >
         {formError ? <div className="form-error" style={{ marginBottom: 12 }}>{formError}</div> : null}
@@ -101,39 +103,39 @@ export default function ProjectMembersForm({ projectId, projectName, onClose, ca
         {canManageMembers ? <div className="card" style={{ padding: 16, marginBottom: 12 }}>
           <div className="form-row" style={{ alignItems: 'flex-end' }}>
             <div className="form-group" style={{ flex: 2 }}>
-              <label className="form-label" htmlFor="project-member-name">成员名称</label>
+              <label className="form-label" htmlFor="project-member-name">{t('features.projects.projectMembersForm.memberNameLabel')}</label>
               <input
                 id="project-member-name"
                 className="form-input"
                 value={userName}
                 onChange={(event) => setUserName(event.target.value)}
-                placeholder="输入项目成员姓名"
+                placeholder={t('features.projects.projectMembersForm.memberNamePlaceholder')}
               />
             </div>
             <div className="form-group" style={{ flex: 1 }}>
-              <label className="form-label" htmlFor="project-member-role">角色</label>
+              <label className="form-label" htmlFor="project-member-role">{t('features.projects.projectMembersForm.roleLabel')}</label>
               <select
                 id="project-member-role"
                 className="form-select"
                 value={role}
                 onChange={(event) => setRole(event.target.value)}
               >
-                <option value="pdm">产品经理</option>
-                <option value="dev">开发</option>
-                <option value="qa">测试</option>
+                <option value="pdm">{t('features.projects.projectMembersForm.rolePdm')}</option>
+                <option value="dev">{t('features.projects.projectMembersForm.roleDev')}</option>
+                <option value="qa">{t('features.projects.projectMembersForm.roleQa')}</option>
               </select>
             </div>
             <button className="btn btn-primary btn-sm" onClick={handleAddMember} disabled={submitting}>
-              {submitting ? '添加中...' : '添加成员'}
+              {submitting ? t('features.projects.projectMembersForm.adding') : t('features.projects.projectMembersForm.addMember')}
             </button>
           </div>
-        </div> : <div className="form-help-text" style={{ marginBottom: 12 }}>当前账号为只读模式，不能添加或移出项目成员。</div>}
+        </div> : <div className="form-help-text" style={{ marginBottom: 12 }}>{t('features.projects.projectMembersForm.readonlyNote')}</div>}
 
-        <Panel title="当前成员" subtitle={`共 ${members.length} 人`} noPadding>
+        <Panel title={t('features.projects.projectMembersForm.currentMembers')} subtitle={t('features.projects.projectMembersForm.memberCount', { count: members.length })} noPadding>
           {loading ? (
-            <div style={{ padding: 16 }} className="text-secondary">加载中...</div>
+            <div style={{ padding: 16 }} className="text-secondary">{t('common.loading')}</div>
           ) : members.length === 0 ? (
-            <div style={{ padding: 16 }} className="text-secondary">当前项目还没有手工维护成员。</div>
+            <div style={{ padding: 16 }} className="text-secondary">{t('features.projects.projectMembersForm.noMembers')}</div>
           ) : (
             <DataTable
               rowKey="id"
@@ -141,33 +143,33 @@ export default function ProjectMembersForm({ projectId, projectName, onClose, ca
               columns={[
                 {
                   key: 'userName',
-                  title: '成员',
+                  title: t('features.projects.projectMembersForm.colMember'),
                   render: (item) => <span className="font-medium">{item.userName}</span>,
                 },
                 {
                   key: 'role',
-                  title: '角色',
+                  title: t('features.projects.projectMembersForm.roleLabel'),
                   render: (item) => (
                     <StatusBadge
                       status={item.role}
-                      label={item.role === 'pdm' ? '产品经理' : item.role === 'dev' ? '开发' : '测试'}
+                      label={item.role === 'pdm' ? t('features.projects.projectMembersForm.rolePdm') : item.role === 'dev' ? t('features.projects.projectMembersForm.roleDev') : t('features.projects.projectMembersForm.roleQa')}
                       showDot={false}
                     />
                   ),
                 },
                 {
                   key: 'source',
-                  title: '来源',
+                  title: t('features.projects.projectMembersForm.colSource'),
                   render: (item) => item.source || 'manual',
                 },
                 {
                   key: 'createdAt',
-                  title: '加入时间',
+                  title: t('features.projects.projectMembersForm.colJoined'),
                   render: (item) => item.createdAt?.slice(0, 19).replace('T', ' ') || '-',
                 },
                 {
                   key: 'actions',
-                  title: '操作',
+                  title: t('common.actions'),
                   align: 'right',
                   render: (item) => canManageMembers ? (
                     <button
@@ -175,18 +177,18 @@ export default function ProjectMembersForm({ projectId, projectName, onClose, ca
                       style={{ color: 'var(--color-red, #dc2626)' }}
                       onClick={() => void handleDeleteMember(item)}
                     >
-                      移除
+                      {t('features.projects.projectMembersForm.remove')}
                     </button>
-                  ) : <span className="text-secondary">只读</span>,
+                  ) : <span className="text-secondary">{t('features.projects.projectMembersForm.readonly')}</span>,
                 },
               ]}
-              emptyText="暂无项目成员"
+              emptyText={t('features.projects.projectMembersForm.emptyMembers')}
             />
           )}
         </Panel>
 
         <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>关闭</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>{t('common.close')}</button>
         </div>
       </Panel>
     </Overlay>

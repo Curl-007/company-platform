@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Check, Circle, Clock, RefreshCw, X } from 'lucide-react';
 import { fetchProjectFlow } from '../api';
 import {
@@ -16,11 +17,11 @@ const FIXED_ID = 'fixed-project-delivery-v1';
 const LIGHT_ID = 'lightweight-delivery-v1';
 
 const STATE_META: Record<GateState, { label: string; tone: string }> = {
-  done: { label: '已完成', tone: 'success' },
-  passed: { label: '已通过', tone: 'success' },
-  in_progress: { label: '进行中', tone: 'info' },
-  blocked: { label: '阻塞', tone: 'risk' },
-  pending: { label: '未开始', tone: 'muted' },
+  done: { label: 'features.projects.flowTab.stateDone', tone: 'success' },
+  passed: { label: 'features.projects.flowTab.statePassed', tone: 'success' },
+  in_progress: { label: 'features.projects.flowTab.stateInProgress', tone: 'info' },
+  blocked: { label: 'features.projects.flowTab.stateBlocked', tone: 'risk' },
+  pending: { label: 'features.projects.flowTab.statePending', tone: 'muted' },
 };
 
 function stateIcon(state: GateState) {
@@ -38,6 +39,7 @@ function stateIcon(state: GateState) {
 }
 
 export default function FlowTab({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
   const sessionUser = getSessionUser();
   const canManage = canOperate(sessionUser, 'projects:update')
     || canOperate(sessionUser, 'admin:*')
@@ -91,10 +93,10 @@ export default function FlowTab({ projectId }: { projectId: string }) {
     setSaveOk(null);
     try {
       await bindProjectWorkflowTemplate(projectId, effectiveSelected);
-      setSaveOk('模板已切换');
+      setSaveOk(t('features.projects.flowTab.templateSwitched'));
       await Promise.all([reload(), reloadBinding(), reloadCatalog()]);
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : '切换失败');
+      setSaveError(err instanceof Error ? err.message : t('features.projects.flowTab.switchFailed'));
     } finally {
       setSaving(false);
     }
@@ -121,14 +123,14 @@ export default function FlowTab({ projectId }: { projectId: string }) {
     <div className="pd-flow-workbench">
       <div className="pd-flow-workbench-head">
         <div className="pd-flow-workbench-title">
-          <strong>{data.workflow?.templateName || '固定交付'}</strong>
+          <strong>{data.workflow?.templateName || t('features.projects.flowTab.fixedDelivery')}</strong>
           <span>
-            {passedGates}/{gates.length} 阶段通过
-            {blockedGates > 0 ? ` · ${blockedGates} 个阻塞` : ' · 无阻塞'}
+            {t('features.projects.flowTab.stagesPassed', { passed: passedGates, total: gates.length })}
+            {blockedGates > 0 ? t('features.projects.flowTab.blockedGates', { count: blockedGates }) : t('features.projects.flowTab.noBlocked')}
           </span>
         </div>
         <div className="pd-flow-workbench-actions">
-          <div className="pd-flow-template-switch" role="group" aria-label="流程模板">
+          <div className="pd-flow-template-switch" role="group" aria-label={t('features.projects.flowTab.templateAria')}>
             {templates.map((template: WorkflowTemplate) => {
               const active = effectiveSelected === template.id;
               return (
@@ -156,12 +158,12 @@ export default function FlowTab({ projectId }: { projectId: string }) {
               disabled={saving || !dirty}
               onClick={() => void handleBind()}
             >
-              {saving ? '切换中…' : dirty ? '应用模板' : '已应用'}
+              {saving ? t('features.projects.flowTab.switching') : dirty ? t('features.projects.flowTab.applyTemplate') : t('features.projects.flowTab.applied')}
             </button>
           ) : null}
           <button className="btn btn-secondary btn-sm btn-with-icon" onClick={handleRefresh}>
             <RefreshCw size={14} aria-hidden="true" />
-            刷新
+            {t('features.projects.flowTab.refresh')}
           </button>
         </div>
       </div>
@@ -172,12 +174,12 @@ export default function FlowTab({ projectId }: { projectId: string }) {
           {saveError ? <span className="is-risk">{saveError}</span> : null}
           {saveOk ? <span className="is-success">{saveOk}</span> : null}
           {selectedTemplate && dirty ? (
-            <span>将切换为「{selectedTemplate.name}」：{selectedTemplate.description || '无描述'}</span>
+            <span>{t('features.projects.flowTab.willSwitch', { name: selectedTemplate.name, desc: selectedTemplate.description || t('features.projects.flowTab.noDescription') })}</span>
           ) : null}
         </div>
       ) : null}
 
-      <div className="pd-flow-stage-rail" role="tablist" aria-label="流程阶段">
+      <div className="pd-flow-stage-rail" role="tablist" aria-label={t('features.projects.flowTab.stagesAria')}>
         {gates.map((gate, index) => {
           const meta = STATE_META[gate.state];
           const active = gate.stage === resolvedActive;
@@ -194,7 +196,7 @@ export default function FlowTab({ projectId }: { projectId: string }) {
               <span className="pd-flow-stage-icon">{stateIcon(gate.state)}</span>
               <span className="pd-flow-stage-copy">
                 <strong>{gate.label}</strong>
-                <em>{meta.label}</em>
+                <em>{t(meta.label)}</em>
               </span>
             </button>
           );
@@ -207,18 +209,21 @@ export default function FlowTab({ projectId }: { projectId: string }) {
             <>
               <div className="pd-flow-checks-head">
                 <div>
-                  <strong>{activeGate.label}阶段检查</strong>
+                  <strong>{t('features.projects.flowTab.stageChecks', { stage: activeGate.label })}</strong>
                   <span className={`pd-flow-checks-state tone-${STATE_META[activeGate.state].tone}`}>
-                    {STATE_META[activeGate.state].label}
+                    {t(STATE_META[activeGate.state].label)}
                   </span>
                 </div>
                 <span>
-                  {activeGate.checks.filter((item) => item.passed).length}/{activeGate.checks.length} 通过
+                  {t('features.projects.flowTab.checksPassed', {
+                    passed: activeGate.checks.filter((item) => item.passed).length,
+                    total: activeGate.checks.length,
+                  })}
                 </span>
               </div>
 
               {activeGate.checks.length === 0 ? (
-                <div className="pd-flow-empty">该阶段暂无检查项。</div>
+                <div className="pd-flow-empty">{t('features.projects.flowTab.noChecks')}</div>
               ) : (
                 <div className="pd-flow-check-list">
                   {activeGate.checks.map((check) => (
@@ -241,34 +246,34 @@ export default function FlowTab({ projectId }: { projectId: string }) {
               {failedChecks.length > 0 ? (
                 <div className="pd-flow-block-hint">
                   <AlertTriangle size={14} aria-hidden="true" />
-                  当前阶段有 {failedChecks.length} 项未通过，需先处理后再推进。
+                  {t('features.projects.flowTab.failedChecksHint', { count: failedChecks.length })}
                 </div>
               ) : (
                 <div className="pd-flow-pass-hint">
                   <Check size={14} aria-hidden="true" />
-                  当前阶段检查已通过，可继续后续节点。
+                  {t('features.projects.flowTab.passedHint')}
                 </div>
               )}
             </>
           ) : (
-            <div className="pd-flow-empty">暂无流程阶段数据。</div>
+            <div className="pd-flow-empty">{t('features.projects.flowTab.noStages')}</div>
           )}
         </section>
 
         <aside className="pd-flow-side">
           <div className="pd-flow-side-card">
-            <div className="pd-flow-side-title">工时</div>
+            <div className="pd-flow-side-title">{t('features.projects.flowTab.hoursTitle')}</div>
             <div className="pd-flow-hours">
               <div>
-                <span>预估</span>
+                <span>{t('features.projects.flowTab.estimated')}</span>
                 <strong>{data.hours.estimated}<small>h</small></strong>
               </div>
               <div>
-                <span>已消耗</span>
+                <span>{t('features.projects.flowTab.consumed')}</span>
                 <strong>{data.hours.consumed}<small>h</small></strong>
               </div>
               <div>
-                <span>剩余</span>
+                <span>{t('features.projects.flowTab.remaining')}</span>
                 <strong>{data.hours.remaining}<small>h</small></strong>
               </div>
             </div>
@@ -276,21 +281,21 @@ export default function FlowTab({ projectId }: { projectId: string }) {
 
           <div className="pd-flow-side-card">
             <div className="pd-flow-side-title">
-              缺陷闭环
+              {t('features.projects.flowTab.defectFunnel')}
               <span>{defectRate}%</span>
             </div>
             <div className="pd-flow-defect-bar" aria-hidden="true">
               <i style={{ width: `${Math.max(defectRate, defectTotal ? 4 : 0)}%` }} />
             </div>
             <div className="pd-flow-defect-meta">
-              <span>共 {defectTotal}</span>
-              <span>关闭 {defectClosed}</span>
-              <span>开放 {Math.max(defectTotal - defectClosed, 0)}</span>
+              <span>{t('features.projects.flowTab.defectTotal', { count: defectTotal })}</span>
+              <span>{t('features.projects.flowTab.defectClosed', { count: defectClosed })}</span>
+              <span>{t('features.projects.flowTab.defectOpen', { count: Math.max(defectTotal - defectClosed, 0) })}</span>
             </div>
           </div>
 
           <div className="pd-flow-side-card">
-            <div className="pd-flow-side-title">阶段速览</div>
+            <div className="pd-flow-side-title">{t('features.projects.flowTab.stageOverview')}</div>
             <div className="pd-flow-mini-list">
               {gates.map((gate) => (
                 <button
@@ -301,7 +306,7 @@ export default function FlowTab({ projectId }: { projectId: string }) {
                 >
                   <span className={`pd-flow-mini-dot tone-${STATE_META[gate.state].tone}`} />
                   <strong>{gate.label}</strong>
-                  <em>{STATE_META[gate.state].label}</em>
+                  <em>{t(STATE_META[gate.state].label)}</em>
                 </button>
               ))}
             </div>
