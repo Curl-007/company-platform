@@ -8,6 +8,16 @@ const http = require("http");
 const crypto = require("crypto");
 const multer = require("multer");
 const { WebSocketServer } = require("ws");
+
+// Load api/.env if present (deployment config per DELIVERY.md).
+// Existing environment variables always take precedence; dotenv never overrides them.
+try {
+  require("dotenv").config({ path: path.join(__dirname, ".env") });
+} catch (error) {
+  // Missing dotenv should not crash startup; env vars can be injected directly.
+  console.warn("[env] .env load skipped:", error && error.message ? error.message : error);
+}
+
 const {
   audit: writeAuditLog,
   initDb,

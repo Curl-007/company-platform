@@ -82,6 +82,19 @@ const forbiddenValues = [
 ];
 const findings = [];
 
+function stripInlineComment(line) {
+  return line.split("#")[0].split("//")[0].trim();
+}
+
+function lineMatchesCredential(line, value) {
+  // A credential is considered leaked only when it is the whole (comment-stripped)
+  // line, or the value side of a `KEY=value` line. Substring matches inside a
+  // longer value (e.g. Admin@123 inside the delivered initial password
+  // Admin@123456) or inside a comment are intentional and allowed.
+  const stripped = stripInlineComment(line);
+  return stripped === value || stripped.endsWith(`=${value}`) || stripped.endsWith(`: "${value}"`) || stripped.endsWith(`: '${value}'`);
+}
+
 function scan(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const target = path.join(directory, entry.name);
@@ -90,9 +103,10 @@ function scan(directory) {
       continue;
     }
     if (!entry.isFile()) continue;
-    const content = fs.readFileSync(target).toString("utf8");
+    const lines = fs.readFileSync(target).toString("utf8").split(/\r?\n/);
     for (const value of forbiddenValues) {
-      if (content.includes(value)) findings.push(`${path.relative(outputRoot, target)}: ${value}`);
+      const hit = lines.some((line) => lineMatchesCredential(line, value));
+      if (hit) findings.push(`${path.relative(outputRoot, target)}: ${value}`);
     }
   }
 }

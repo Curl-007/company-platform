@@ -29,13 +29,15 @@ NODE_ENV=production
 SEED_DEMO_DATA=0
 JWT_SECRET=<独立的高熵随机值>
 AI_CONFIG_ENCRYPTION_KEY=<与 JWT_SECRET 不同的高熵随机值>
-SEED_ADMIN_EMAIL=<首位管理员工作邮箱>
-SEED_ADMIN_PASSWORD=<首位管理员一次性强密码，至少 12 位>
+SEED_ADMIN_EMAIL=admin@company.com
+SEED_ADMIN_PASSWORD=Admin@123456
 ```
+
+`SEED_ADMIN_EMAIL` 和 `SEED_ADMIN_PASSWORD` 已内置固定初始管理员账号（见第 3 节），`api/.env.example` 中已预填，复制后无需修改即可首次登录。
 
 建议将 `JWT_SECRET` 和 `AI_CONFIG_ENCRYPTION_KEY` 存放在部署平台的密钥管理服务中，而不是提交到源代码或镜像。生产环境禁止开启演示数据。
 
-## 3. 首次启动与管理员账号
+## 3. 首次启动与初始管理员账号
 
 启动命令：
 
@@ -45,12 +47,19 @@ npm run start:prod
 
 浏览器访问 `http://<主机>:4010/`，健康检查为 `GET /api/health`。
 
-首次启动时，系统只会创建由 `SEED_ADMIN_EMAIL` 指定的首位管理员，不会创建固定账号或演示账号。首位管理员应完成以下操作：
+交付包内置**固定初始管理员账号**（仅首次启动创建，之后重启不会覆盖或重置）：
 
-1. 使用配置的邮箱和一次性密码登录。
-2. 立即修改初始密码。
+| 项 | 值 |
+| --- | --- |
+| 登录邮箱 | `admin@company.com` |
+| 初始密码 | `Admin@123456`（12 位） |
+
+首次登录后，初始管理员应完成以下操作：
+
+1. 使用上述固定账号登录。
+2. **立即修改初始密码**（12 至 128 个字符）。初始密码随交付包分发，属于公开凭据，修改前请勿开启对外访问。
 3. 通过团队管理创建其余用户并分配角色。
-4. 删除 `SEED_ADMIN_EMAIL` 和 `SEED_ADMIN_PASSWORD`，然后重启服务，避免后续启动持续保留引导凭据。
+4. 删除 `api/.env` 中的 `SEED_ADMIN_EMAIL` 和 `SEED_ADMIN_PASSWORD`，然后重启服务，避免后续启动持续保留引导凭据。
 
 管理员创建或重置的密码必须为 12 至 128 个字符。重置密码会立即撤销该用户既有登录令牌和协作 WebSocket 连接。
 
@@ -110,7 +119,9 @@ npm run drill:sqlite-backup
 
 **无法启动或健康检查失败**：检查 `NODE_ENV`、密钥变量、数据库路径写权限和迁移日志；不要在生产环境使用演示数据变量。
 
-**无法创建首位管理员**：确认 `SEED_ADMIN_EMAIL` 与 `SEED_ADMIN_PASSWORD` 同时配置，密码长度符合要求，且数据库是首次初始化或不存在同邮箱用户。
+**无法创建初始管理员**：确认 `SEED_ADMIN_EMAIL` 与 `SEED_ADMIN_PASSWORD` 同时配置（交付包 `.env.example` 已预填 `admin@company.com` / `Admin@123456`），且数据库是首次初始化或不存在同邮箱用户。已存在用户不会被覆盖，即使修改了这两个变量也不会重置密码。
+
+**忘记初始密码**：初始密码为交付文档公开的 `Admin@123456`；若已修改后忘记，请通过团队管理界面由其他管理员重置，或使用备份数据库恢复。
 
 **交接时找不到目标人员**：确认该人员已加入当前项目，并具有与交接类型匹配的项目内 `dev` 或 `qa` 角色。
 
