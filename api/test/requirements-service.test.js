@@ -82,12 +82,17 @@ test("requirement update schema enforces title, assignmentStatus, completion, an
     assignmentStatus: "assigned",
     completion: 40,
     acceptanceCriteria: ["one"],
+    productId: " PROD-1 ",
+    portfolioId: null,
   });
   assert.equal(ok.ok, true);
   assert.equal(ok.data.title, "Renamed");
   assert.equal(ok.data.assignmentStatus, "assigned");
   assert.equal(ok.data.completion, 40);
   assert.deepEqual(ok.data.acceptanceCriteria, ["one"]);
+  assert.equal(ok.data.productId, "PROD-1");
+  assert.equal(ok.data.portfolioId, null);
+  assert.equal(validateRequirementUpdate({ version: 1, productId: {} }).ok, false);
 
   const versionOnly = validateRequirementUpdate({ version: 2 });
   assert.equal(versionOnly.ok, true);
@@ -106,6 +111,8 @@ test("buildRequirementUpdate keeps validated completion without coercing invalid
     description: "",
     priority: "medium",
     acceptance_criteria: "[]",
+    product_id: "PROD-1",
+    portfolio_id: "PORT-1",
     parent_id: null,
     assignee: null,
     assignee_role: null,
@@ -119,4 +126,6 @@ test("buildRequirementUpdate keeps validated completion without coercing invalid
   );
   assert.equal(next.completion, 0);
   assert.equal(next.assignmentStatus, "assigned");
+  assert.equal(next.productId, "PROD-1");
+  assert.equal(next.portfolioId, "PORT-1");
 });

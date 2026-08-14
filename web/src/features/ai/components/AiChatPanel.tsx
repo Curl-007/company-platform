@@ -1,4 +1,4 @@
-import { useRef, type Dispatch, type SetStateAction } from 'react';
+import { useRef, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bot, FileText, Image as ImageIcon, Paperclip, Send, X } from 'lucide-react';
 import type { AiChatAttachment, AiChatMessage, Project } from '../../../types';
@@ -27,6 +27,7 @@ export default function AiChatPanel({
   onSend,
   projects = [],
   onActionDone,
+  capabilityTray,
 }: {
   providerStatus: string;
   providerConfigured?: boolean;
@@ -41,6 +42,7 @@ export default function AiChatPanel({
   onSend: () => void;
   projects?: Project[];
   onActionDone?: (result: { type: string; id: string; label: string }) => void;
+  capabilityTray?: ReactNode;
 }) {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -112,6 +114,7 @@ export default function AiChatPanel({
       </div>
 
       <div className="ai-chat-composer">
+        {capabilityTray}
         {attachments.length > 0 && (
           <div className="ai-chat-pending-files">
             {attachments.map((item) => (

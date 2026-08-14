@@ -37,7 +37,14 @@ test("SQLite export writes deterministic table files and a validation manifest",
     assert.equal(verification.rowCount, 1);
 
     const targetReportFile = path.join(directory, "target-report.json");
-    fs.writeFileSync(targetReportFile, JSON.stringify({ tableCounts: { projects: 1 }, appliedMigrations: [] }, null, 2));
+    fs.writeFileSync(targetReportFile, JSON.stringify({
+      tableCounts: { projects: 1 },
+      appliedMigrations: [],
+      foreignKeyViolations: [],
+      referenceViolations: [],
+      constraintViolations: [],
+      jsonViolations: [],
+    }, null, 2));
     const reconciliation = reconcileImport({ manifestFile: result.manifestFile, targetReportFile });
     assert.equal(reconciliation.ok, true);
     assert.equal(reconciliation.matchedTableCount, 1);
@@ -45,10 +52,23 @@ test("SQLite export writes deterministic table files and a validation manifest",
     assert.equal(reconciliation.targetRowCount, 1);
 
     const mismatchReportFile = path.join(directory, "target-report-mismatch.json");
-    fs.writeFileSync(mismatchReportFile, JSON.stringify({ tableCounts: { projects: 0 }, appliedMigrations: [] }, null, 2));
+    fs.writeFileSync(mismatchReportFile, JSON.stringify({
+      tableCounts: { projects: 0 },
+      appliedMigrations: [],
+      foreignKeyViolations: [],
+      referenceViolations: [],
+      constraintViolations: [],
+      jsonViolations: [],
+    }, null, 2));
     const mismatch = reconcileImport({ manifestFile: result.manifestFile, targetReportFile: mismatchReportFile });
     assert.equal(mismatch.ok, false);
     assert.ok(mismatch.errors.some((item) => item.includes("Row count mismatch")));
+
+    const incompleteReportFile = path.join(directory, "target-report-incomplete.json");
+    fs.writeFileSync(incompleteReportFile, JSON.stringify({ tableCounts: { projects: 1 }, appliedMigrations: [] }, null, 2));
+    const incomplete = reconcileImport({ manifestFile: result.manifestFile, targetReportFile: incompleteReportFile });
+    assert.equal(incomplete.ok, false);
+    assert.ok(incomplete.errors.some((item) => item.includes("referenceViolations validation data")));
 
     fs.appendFileSync(path.join(outputDirectory, "projects.ndjson"), '{"id":"PRJ-002","name":"Tampered"}\n');
     const tampered = verifyExport({ exportDirectory: outputDirectory });
@@ -64,11 +84,13 @@ test("SQLite export writes deterministic table files and a validation manifest",
 
 test("PostgreSQL target report generator quotes manifest tables and fails closed without a connection", () => {
   assert.equal(quoteIdentifier('odd"name'), '"odd""name"');
-  const sql = buildTargetReportSql(["projects", 'odd"name']);
+  const sql = buildTargetReportSql(["users", "org_units", "projects", "programs", 'odd"name']);
   assert.match(sql, /FROM "projects"/);
   assert.match(sql, /FROM "odd""name"/);
   assert.match(sql, /FROM schema_migrations/);
   assert.match(sql, /convalidated = false/);
+  assert.match(sql, /reference_violations/);
+  assert.match(sql, /FROM "projects" child/);
 
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "pm-target-report-"));
   const manifestFile = path.join(directory, "manifest.json");

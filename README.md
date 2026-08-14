@@ -94,7 +94,7 @@ npm run dev
 
 ## 内部试用 / 单机生产（同源）
 
-单进程托管 **API + `web/dist` 静态前端**（`/api`、`/ws` 同源）：
+单机 API 服务实例托管 **API + `web/dist` 静态前端**（`/api`、`/ws` 同源），并按需受管启动 DeepSeek Harness JSON-RPC 推理子进程：
 
 ```bash
 npm run build -w web
@@ -105,13 +105,16 @@ export NODE_ENV=production
 export SEED_DEMO_DATA=0
 export SEED_ADMIN_EMAIL='owner@company.com'
 export SEED_ADMIN_PASSWORD='replace-with-one-time-strong-password'
+export HARNESS_HOME='/var/lib/pm/harness'  # API 服务账户独占、持久且不在 Web 根目录
+# AI_ENABLED=true 时，Provider 配置和真实 Key 仅由 API 控制面持有；
+# Harness 子进程只能访问 API 的随机 token loopback proxy。
 npm run start:prod
 ```
 
 浏览器打开：http://localhost:4010/  
-健康检查（含 DB / 迁移 readiness）：`GET /api/health`
+健康检查（含 DB / 迁移 readiness）：`GET /api/health`。它只表示 API/数据库控制面 readiness，不代表 Provider 或 Harness 推理可用。
 
-部署、备份与回滚见 [docs/16-sqlite-trial-deploy.md](./docs/16-sqlite-trial-deploy.md)。
+部署、Harness 运行边界、备份与回滚见 [docs/16-sqlite-trial-deploy.md](./docs/16-sqlite-trial-deploy.md)。
 
 ## 构建与门禁
 
@@ -134,4 +137,4 @@ npm run check:rc       # check + disposable SQLite E2E
 - 开发：`dev@example.com` / `Dev@12345`
 - 测试：`qa@example.com` / `Qa@12345`
 
-生产环境禁止 `SEED_DEMO_DATA=1` 和其他角色的 `SEED_*_PASSWORD`。若需在管理端持久化 AI 供应商 API Key，还必须单独配置 `AI_CONFIG_ENCRYPTION_KEY`（≥16 字符，且不得与 `JWT_SECRET` 相同）。
+生产环境禁止 `SEED_DEMO_DATA=1` 和其他角色的 `SEED_*_PASSWORD`。若需在管理端持久化 AI 供应商 API Key，还必须单独配置 `AI_CONFIG_ENCRYPTION_KEY`（≥16 字符，且不得与 `JWT_SECRET` 相同）。真实 Provider Key 只在 API 控制面可见；Harness 是唯一 LLM 推理内核，子进程只获得短生命周期 loopback token，不得配置或公开 `DSH_*` 凭据。

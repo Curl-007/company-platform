@@ -46,6 +46,7 @@ function createAiProviderStore({
     return {
       id: String(value.id || fallback.id || providerConfigId()),
       name: String(value.name || fallback.name || value.provider || fallback.provider || "默认模型").trim(),
+      preset: String(value.preset !== undefined ? value.preset : fallback.preset || "custom").trim() || "custom",
       provider: String(value.provider || fallback.provider || defaults.provider).trim() || defaults.provider,
       baseUrl: normalizeAiBaseUrl(value.baseUrl !== undefined ? value.baseUrl : fallback.baseUrl || defaults.baseUrl),
       model: String(value.model !== undefined ? value.model : fallback.model || defaults.model).trim(),
@@ -172,6 +173,7 @@ function createAiProviderStore({
       return {
         id: null,
         name: "",
+        preset: "custom",
         provider: "",
         baseUrl: "",
         model: "",
@@ -188,6 +190,7 @@ function createAiProviderStore({
     return {
       id: active.id || null,
       name: active.name || active.provider || defaults.provider,
+      preset: active.preset || "custom",
       provider: active.provider || defaults.provider,
       baseUrl: normalizeAiBaseUrl(active.baseUrl || defaults.baseUrl),
       model: active.model || defaults.model,
@@ -215,6 +218,7 @@ function createAiProviderStore({
     return {
       id: item.id,
       name: item.name,
+      preset: item.preset || "custom",
       provider: item.provider,
       baseUrl: item.baseUrl,
       baseUrlHost,
@@ -222,7 +226,8 @@ function createAiProviderStore({
       wireApi: item.wireApi,
       disableResponseStorage: item.disableResponseStorage,
       enabled: Boolean(item.enabled),
-      configured: Boolean(item.enabled && item.apiKey && item.baseUrl && item.model),
+      // OpenAI-compatible local runtimes can deliberately run without a key.
+      configured: Boolean(item.enabled && item.baseUrl && item.model),
       apiKeyMasked: maskSecret(item.apiKey),
       apiKeySource: item.apiKey ? "database" : "none",
       createdAt: item.createdAt || null,
@@ -261,13 +266,17 @@ function createAiProviderStore({
 
     const lastFailureMs = health.lastFailureAt ? Date.parse(health.lastFailureAt) : 0;
     const lastSuccessMs = health.lastSuccessAt ? Date.parse(health.lastSuccessAt) : 0;
-    const hasRecentFailure = lastFailureMs > 0 && Date.now() - lastFailureMs < AI_HEALTH_RECENT_FAILURE_WINDOW_MS;
-    // Treat equal timestamps as unrecovered when failures are still open, so fixed
-    // clocks (tests) and sub-second success→failure sequences stay degraded.
+    // A later successful call recovers the displayed health immediately. Keep a
+    // recent error degraded only when there is no newer success (or legacy data
+    // lacks the matching consecutive-failure count).
+    const hasRecentFailureWithoutRecovery = lastFailureMs > lastSuccessMs
+      && Date.now() - lastFailureMs < AI_HEALTH_RECENT_FAILURE_WINDOW_MS;
+    // Treat equal timestamps as unrecovered only while failures are still open,
+    // so fixed clocks and sub-second success→failure sequences stay degraded.
     const hasUnrecoveredFailure = health.consecutiveFailures > 0 && lastFailureMs >= lastSuccessMs;
     const status = hasUnrecoveredFailure && health.consecutiveFailures >= 2
       ? "unavailable"
-      : hasUnrecoveredFailure || hasRecentFailure
+      : hasUnrecoveredFailure || hasRecentFailureWithoutRecovery
         ? "degraded"
         : health.lastSuccessAt
           ? "healthy"
@@ -281,12 +290,15 @@ function createAiProviderStore({
     const resolved = config || await resolveConfig();
     let baseUrlHost = "";
     try { baseUrlHost = new URL(resolved.baseUrl).host; } catch { baseUrlHost = ""; }
-    const configured = Boolean(resolved.enabled && resolved.apiKey && resolved.baseUrl && resolved.model);
+    // A key is optional for local OpenAI-compatible providers. Whether one is
+    // present is still surfaced separately through apiKeySource/masked value.
+    const configured = Boolean(resolved.enabled && resolved.baseUrl && resolved.model);
     const storedList = await readList();
     config = resolved;
     return {
       id: config.id,
       name: config.name,
+      preset: config.preset || "custom",
       provider: config.provider,
       baseUrl: config.baseUrl,
       baseUrlHost,
@@ -296,7 +308,7 @@ function createAiProviderStore({
       enabled: Boolean(config.enabled),
       configured,
       apiKeyMasked: maskSecret(config.apiKey),
-      apiKeySource: config.apiKeySource,
+      apiKeySource: config.apiKeySource || (config.apiKey ? "database" : "none"),
       updatedAt: config.updatedAt,
       health: await publicHealth(configured, Boolean(config.enabled)),
       activeId: storedList.activeId,

@@ -88,23 +88,23 @@ export function createTestCase(input: CreateTestCaseInput): Promise<TestCase> {
     description: (input as UpdateTestCaseInput).description,
     steps: (input as UpdateTestCaseInput).steps,
     expectedResult: (input as UpdateTestCaseInput).expectedResult,
-  }).then(normalizeTestCase);
+  }, { invalidation: 'testing' }).then(normalizeTestCase);
 }
 
 export function updateTestCase(id: string, input: UpdateTestCaseInput): Promise<TestCase> {
-  return unwrapPatch<RawTestCase>(`/api/test-cases/${id}`, input).then(normalizeTestCase);
+  return unwrapPatch<RawTestCase>(`/api/test-cases/${id}`, input, { invalidation: 'testing' }).then(normalizeTestCase);
 }
 
 export function updateTestCaseStatus(id: string, status: string): Promise<TestCase> {
-  return unwrapPatch<RawTestCase>(`/api/test-cases/${id}/status`, { status }).then(normalizeTestCase);
+  return unwrapPatch<RawTestCase>(`/api/test-cases/${id}/status`, { status }, { invalidation: 'testing' }).then(normalizeTestCase);
 }
 
 export function deleteTestCase(id: string, cascade?: boolean): Promise<{ deleted: boolean }> {
-  return unwrapDel<{ deleted: boolean }>(`/api/test-cases/${id}${cascade ? '?cascade=true' : ''}`);
+  return unwrapDel<{ deleted: boolean }>(`/api/test-cases/${id}${cascade ? '?cascade=true' : ''}`, { invalidation: 'testing' });
 }
 
 export function createTestRun(input: TestRunInput): Promise<unknown> {
-  return unwrapPost<unknown>('/api/test-runs', input);
+  return unwrapPost<unknown>('/api/test-runs', input, { invalidation: 'testing' });
 }
 
 export interface DefectFilters {
@@ -130,11 +130,11 @@ export interface CreateDefectInput {
 }
 
 export function createDefect(input: CreateDefectInput): Promise<Defect> {
-  return unwrapPost<Defect>('/api/defects', input);
+  return unwrapPost<Defect>('/api/defects', input, { invalidation: 'testing' });
 }
 
 export function updateDefectStatus(id: string, status: string, version: number): Promise<Defect> {
-  return unwrapPatch<Defect>(`/api/defects/${id}/status`, { status, version });
+  return unwrapPatch<Defect>(`/api/defects/${id}/status`, { status, version }, { invalidation: 'testing' });
 }
 
 export interface UpdateDefectInput {
@@ -149,7 +149,7 @@ export interface UpdateDefectInput {
 }
 
 export function updateDefect(id: string, input: UpdateDefectInput): Promise<Defect> {
-  return unwrapPatch<Defect>(`/api/defects/${id}`, input);
+  return unwrapPatch<Defect>(`/api/defects/${id}`, input, { invalidation: 'testing' });
 }
 
 export type DefectHandoffAction = 'assign_to_dev' | 'assign_to_qa';
@@ -158,9 +158,9 @@ export function handoffDefect(
   id: string,
   input: { action: DefectHandoffAction; assignee?: string; assigneeId?: string; version: number },
 ): Promise<Defect> {
-  return unwrapPost<Defect>(`/api/defects/${encodeURIComponent(id)}/handoff`, input);
+  return unwrapPost<Defect>(`/api/defects/${encodeURIComponent(id)}/handoff`, input, { invalidation: 'testing' });
 }
 
 export function deleteDefect(id: string): Promise<{ deleted: boolean }> {
-  return unwrapDel<{ deleted: boolean }>(`/api/defects/${id}`);
+  return unwrapDel<{ deleted: boolean }>(`/api/defects/${id}`, { invalidation: 'testing' });
 }

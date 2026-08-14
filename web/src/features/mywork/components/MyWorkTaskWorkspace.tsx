@@ -19,6 +19,7 @@ import { fetchProjectMembers } from '../../projects/api';
 import { handoffTask, type TaskHandoffAction } from '../../tasks/api';
 import type { ProjectMember, StatusHistoryEntry, Task } from '../../../types';
 import MyWorkEmptyPanel from './MyWorkEmptyPanel';
+import { isMyWorkActionEligible } from '../myWorkEligibility';
 
 export type TaskFilter = 'all' | 'requirement' | 'test_case' | 'defect' | 'general';
 
@@ -98,24 +99,28 @@ export default function MyWorkTaskWorkspace({
   const canSubmitForTesting = Boolean(
     selectedTask
     && ['in_progress', 'code_review'].includes(selectedTask.status)
-    && (
+    && isMyWorkActionEligible(
+      sessionUser,
+      'taskHandoff',
       role === 'dev'
-      || role === 'pm'
-      || role === 'admin'
-      || selectedTask.owner === sessionUser?.name
-      || selectedTask.assigneeId === sessionUser?.id
+        || role === 'pm'
+        || role === 'admin'
+        || selectedTask.owner === sessionUser?.name
+        || selectedTask.assigneeId === sessionUser?.id,
     ),
   );
 
   const canReturnForFix = Boolean(
     selectedTask
     && ['testing', 'acceptance'].includes(selectedTask.status)
-    && (
+    && isMyWorkActionEligible(
+      sessionUser,
+      'taskHandoff',
       role === 'qa'
-      || role === 'pm'
-      || role === 'admin'
-      || selectedTask.owner === sessionUser?.name
-      || selectedTask.assigneeId === sessionUser?.id
+        || role === 'pm'
+        || role === 'admin'
+        || selectedTask.owner === sessionUser?.name
+        || selectedTask.assigneeId === sessionUser?.id,
     ),
   );
 

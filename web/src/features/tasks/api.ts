@@ -13,7 +13,7 @@ export function updateTaskStatus(
   id: string,
   input: { status: string; version: number; progress?: number; statusReason?: string },
 ): Promise<Task> {
-  return unwrapPatch<Task>(`/api/tasks/${encodeURIComponent(id)}/status`, input);
+  return unwrapPatch<Task>(`/api/tasks/${encodeURIComponent(id)}/status`, input, { invalidation: 'tasks' });
 }
 
 export type TaskHandoffAction = 'submit_for_testing' | 'return_for_fix';
@@ -30,7 +30,7 @@ export interface TaskHandoffInput {
 
 /** Cross-role handoff: DEV → QA (submit testing) or QA → DEV (return for fix). */
 export function handoffTask(id: string, input: TaskHandoffInput): Promise<Task> {
-  return unwrapPost<Task>(`/api/tasks/${encodeURIComponent(id)}/handoff`, input);
+  return unwrapPost<Task>(`/api/tasks/${encodeURIComponent(id)}/handoff`, input, { invalidation: 'tasks' });
 }
 
 export interface CreateWbsTaskInput {
@@ -49,6 +49,7 @@ export interface CreateWbsTaskInput {
 export function createWbsTask(projectId: string, input: CreateWbsTaskInput, idempotencyKey?: string): Promise<Task> {
   return unwrapPost<Task>(`/api/projects/${projectId}/wbs/tasks`, input, {
     headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+    invalidation: 'projectTasks',
   });
 }
 
@@ -60,7 +61,7 @@ export function updateTaskKanban(
   taskId: string,
   payload: { version: number; kanbanColumn: string; sortOrder?: number; comment?: string },
 ): Promise<Task> {
-  return unwrapPatch<Task>(`/api/tasks/${taskId}/kanban-position`, payload);
+  return unwrapPatch<Task>(`/api/tasks/${taskId}/kanban-position`, payload, { invalidation: 'projectTasks' });
 }
 
 export interface UpdateTaskInput {
@@ -81,11 +82,11 @@ export interface UpdateTaskInput {
 }
 
 export function updateTask(id: string, input: UpdateTaskInput): Promise<Task> {
-  return unwrapPatch<Task>(`/api/tasks/${id}`, input);
+  return unwrapPatch<Task>(`/api/tasks/${id}`, input, { invalidation: 'tasks' });
 }
 
 export function deleteTask(id: string): Promise<{ deleted: boolean }> {
-  return unwrapDel<{ deleted: boolean }>(`/api/tasks/${id}`);
+  return unwrapDel<{ deleted: boolean }>(`/api/tasks/${id}`, { invalidation: 'tasks' });
 }
 
 export function fetchProjectSprints(id: string): Promise<Sprint[]> {
@@ -103,6 +104,7 @@ export interface CreateSprintInput {
 export function createSprint(projectId: string, input: CreateSprintInput, idempotencyKey?: string): Promise<Sprint> {
   return unwrapPost<Sprint>(`/api/projects/${projectId}/sprints`, input, {
     headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+    invalidation: 'projectTasks',
   });
 }
 
@@ -127,9 +129,9 @@ export interface UpdateSprintInput {
 }
 
 export function updateSprint(id: string, input: UpdateSprintInput): Promise<Sprint> {
-  return unwrapPatch<Sprint>(`/api/sprints/${id}`, input);
+  return unwrapPatch<Sprint>(`/api/sprints/${id}`, input, { invalidation: 'tasks' });
 }
 
 export function deleteSprint(id: string): Promise<{ deleted: boolean }> {
-  return unwrapDel<{ deleted: boolean }>(`/api/sprints/${id}`);
+  return unwrapDel<{ deleted: boolean }>(`/api/sprints/${id}`, { invalidation: 'tasks' });
 }

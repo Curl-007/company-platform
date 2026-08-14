@@ -1,9 +1,10 @@
-function createTestCaseTaskSync({ row, run, insert, nextId }) {
+const { createTestingRepository } = require("./repository");
+
+function createTestCaseTaskSync({ insert, nextId, repository: suppliedRepository, row, run }) {
+  const repository = suppliedRepository || createTestingRepository({ insert, row, run });
+
   async function syncTestCaseTask(testCaseRow) {
-    const existing = await row(
-      "SELECT * FROM tasks WHERE source_type = 'test_case' AND source_id = @sourceId",
-      { sourceId: testCaseRow.id },
-    );
+    const existing = await repository.findTestCaseTask(testCaseRow.id);
     const passed = Number(testCaseRow.passed_cases) || 0;
     const failed = Number(testCaseRow.failed_cases) || 0;
     const blocked = Number(testCaseRow.blocked_cases) || 0;
@@ -35,43 +36,12 @@ function createTestCaseTaskSync({ row, run, insert, nextId }) {
     };
 
     if (existing) {
-      await run(
-        `UPDATE tasks SET
-          title = @title,
-          status = @status,
-          status_text = @status_text,
-          project_id = @project_id,
-          owner = @owner,
-          description = @description,
-          requirement_id = @requirement_id,
-          progress = @progress,
-          blocker = @blocker,
-          remaining_hours = @remaining_hours,
-          kanban_column = @kanban_column,
-          assignee_role = @assignee_role,
-          version = version + 1
-        WHERE id = @id`,
-        {
-          id: existing.id,
-          title: taskPayload.title,
-          status: taskPayload.status,
-          status_text: taskPayload.status_text,
-          project_id: taskPayload.project_id,
-          owner: taskPayload.owner,
-          description: taskPayload.description,
-          requirement_id: taskPayload.requirement_id,
-          progress: taskPayload.progress,
-          blocker: taskPayload.blocker,
-          remaining_hours: taskPayload.remaining_hours,
-          kanban_column: taskPayload.kanban_column,
-          assignee_role: taskPayload.assignee_role,
-        },
-      );
+      await repository.updateTestCaseTask(existing.id, taskPayload);
       return existing.id;
     }
 
     const taskId = await nextId("TASK", "tasks");
-    await insert("tasks", { id: taskId, ...taskPayload });
+    await repository.createTestCaseTask({ id: taskId, ...taskPayload });
     return taskId;
   }
 

@@ -13,6 +13,21 @@ jobs:
     name: Test and build
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: project_management_ci
+          POSTGRES_USER: postgres
+          # Disposable runner-local service: no reusable credentials in git.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U postgres -d project_management_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,6 +55,14 @@ jobs:
 
       - name: Backend integration and unit tests
         run: npm run test -w api
+
+      - name: PostgreSQL schema and transaction integration
+        working-directory: api
+        run: node --test test/postgres-real-connection.test.js
+        env:
+          RUN_PG_INTEGRATION: "1"
+          # Used only by this disposable service test; application tests stay SQLite-default.
+          POSTGRES_TARGET_URL: postgresql://postgres@127.0.0.1:5432/project_management_ci
 
       - name: SQLite backup and restore drill
         run: npm run drill:sqlite-backup

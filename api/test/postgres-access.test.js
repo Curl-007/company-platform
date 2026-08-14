@@ -256,6 +256,32 @@ test("postgres transaction commits and rolls back on the same client", async () 
   assert.equal(await access.row("SELECT id FROM items WHERE id = @id", { id: "T2" }), undefined);
 });
 
+test("postgres nested transaction makes the shared outer unit rollback-only after a caught failure", async () => {
+  const runtime = createFakePostgresRuntime();
+  const access = createPostgresAccess(runtime);
+
+  await assert.rejects(
+    () => access.transaction(async () => {
+      await access.insert("items", { id: "N1", name: "outer", qty: 1 });
+      try {
+        await access.transaction(async () => {
+          await access.insert("items", { id: "N2", name: "inner", qty: 2 });
+          throw new Error("caught nested failure");
+        });
+      } catch {
+        // The outer transaction must still roll back before it can commit.
+      }
+    }),
+    /caught nested failure/,
+  );
+
+  assert.equal(runtime.pool.clients.length, 1);
+  const commands = runtime._log.map((entry) => entry.sql);
+  assert.ok(commands.some((sql) => /^BEGIN$/i.test(sql)));
+  assert.ok(commands.some((sql) => /^ROLLBACK$/i.test(sql)));
+  assert.equal(commands.some((sql) => /^COMMIT$/i.test(sql)), false);
+});
+
 test("run().changes uses result.rowCount", async () => {
   const runtime = createFakePostgresRuntime();
   const access = createPostgresAccess(runtime);

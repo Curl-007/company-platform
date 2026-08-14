@@ -1,7 +1,7 @@
 const CORE_TABLES = Object.freeze([
   "users", "org_units", "strategic_goals", "programs", "portfolios", "projects", "products", "requirements", "tasks", "test_cases", "test_runs",
   "documents", "document_chunk", "rag_citation", "objects", "product_images", "work_logs", "project_members", "capacity_plans", "leave_records", "project_allocations", "time_entries",
-  "project_risks", "project_decisions", "ai_jobs", "sprints", "sprint_commitments", "sprint_scope_changes",
+  "project_risks", "project_decisions", "ai_jobs", "ai_capability_invocations", "sprints", "sprint_commitments", "sprint_scope_changes",
   "defects", "audit_logs", "status_histories", "burndown_snapshots", "app_settings", "builds", "releases",
   "release_approvals", "rollback_records", "schema_migrations", "work_calendars", "work_calendar_exceptions", "idempotency_keys",
   "workflow_templates", "project_workflow_bindings",
@@ -62,6 +62,8 @@ const REFERENCE_RULES = Object.freeze([
   ["defects", "requirement_id", "requirements", "id"],
   ["defects", "found_in_build", "builds", "id"],
   ["ai_jobs", "written_requirement_id", "requirements", "id"],
+  ["ai_capability_invocations", "actor_id", "users", "id"],
+  ["ai_capability_invocations", "project_id", "projects", "id"],
   // ai_jobs.source_id is polymorphic by source_type (document/etc.) and is not checked here.
   ["objects", "created_by", "users", "id"],
   ["product_images", "product_id", "products", "id"],
@@ -92,6 +94,10 @@ const JSON_COLUMNS = Object.freeze([
   ["requirements", "linked_tasks"], ["requirements", "acceptance_criteria"], ["tasks", "dependency_ids"],
   ["documents", "linked_requirements"], ["documents", "risks"], ["work_logs", "analysis"], ["ai_jobs", "goals"],
   ["ai_jobs", "result"], ["ai_jobs", "evidence"], ["sprint_commitments", "baseline_task_ids"],
+  ["ai_capability_invocations", "assistant_snapshot"], ["ai_capability_invocations", "provider_snapshot"],
+  ["ai_capability_invocations", "manifest_snapshot"], ["ai_capability_invocations", "policy_snapshot"],
+  ["ai_capability_invocations", "input_snapshot"], ["ai_capability_invocations", "execution_snapshot"],
+  ["ai_capability_invocations", "result_snapshot"], ["ai_capability_invocations", "harness_events"],
   ["builds", "linked_stories"], ["builds", "linked_bugs"], ["releases", "linked_stories"], ["releases", "linked_bugs"],
 ]);
 

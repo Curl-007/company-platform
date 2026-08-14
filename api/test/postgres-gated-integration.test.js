@@ -1,9 +1,8 @@
 /**
  * Wave 6 gated PostgreSQL integration.
  *
- * Active path runs only when POSTGRES_TARGET_URL or DATABASE_URL is set and reachable.
- * Default CI/local (no URL) still executes a small skip-path assertion so the suite
- * loads cleanly without requiring a live PostgreSQL.
+ * Active path requires an explicit RUN_PG_INTEGRATION=1 opt-in plus a target URL.
+ * This keeps an incidental local DATABASE_URL from creating test schemas.
  */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -12,7 +11,13 @@ const test = require("node:test");
 const { createPgPool, createPostgresRuntime, resolveDatabaseUrl } = require("../src/db/postgres");
 
 const connectionString = resolveDatabaseUrl(process.env);
-const gatedEnabled = Boolean(connectionString) && process.env.RUN_PG_INTEGRATION !== "0";
+const integrationRequested = /^(1|true)$/i.test(String(process.env.RUN_PG_INTEGRATION || "").trim());
+const gatedEnabled = integrationRequested && Boolean(connectionString);
+const gatedSkipReason = !integrationRequested
+  ? "set RUN_PG_INTEGRATION=1 to enable live PostgreSQL tests"
+  : !connectionString
+    ? "set POSTGRES_TARGET_URL or DATABASE_URL for live PostgreSQL tests"
+    : false;
 
 async function canReachPostgres(url) {
   let handle;
@@ -33,11 +38,10 @@ async function canReachPostgres(url) {
   }
 }
 
-test("gated postgres: apply baseline into isolated schema and CRUD app_settings", { skip: !gatedEnabled }, async (t) => {
+test("gated postgres: apply baseline into isolated schema and CRUD app_settings", { skip: gatedSkipReason }, async () => {
   const reachable = await canReachPostgres(connectionString);
   if (!reachable) {
-    t.skip("POSTGRES_TARGET_URL/DATABASE_URL set but PostgreSQL is not reachable");
-    return;
+    throw new Error("Configured PostgreSQL integration target is not reachable.");
   }
 
   const schemaName = `w6_${Date.now().toString(36)}`;
@@ -86,10 +90,6 @@ test("gated postgres: apply baseline into isolated schema and CRUD app_settings"
   }
 });
 
-test("gated postgres: skip path when URL unset (default CI)", () => {
-  if (gatedEnabled) {
-    assert.ok(connectionString);
-    return;
-  }
-  assert.equal(connectionString, null);
+test("gated postgres: requires explicit opt-in and a URL", () => {
+  assert.equal(gatedEnabled, integrationRequested && Boolean(connectionString));
 });

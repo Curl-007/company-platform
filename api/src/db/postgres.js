@@ -11,16 +11,35 @@ function resolveDatabaseUrl(env = process.env) {
 }
 
 function maskDatabaseUrl(url) {
-  const raw = String(url || "");
+  const raw = String(url || "").trim();
   if (!raw) return "";
   try {
     const parsed = new URL(raw);
     if (parsed.password) parsed.password = "***";
     if (parsed.username) parsed.username = parsed.username ? "***" : "";
+    // Connection URL query parameters can contain passwords, tokens, or TLS
+    // material. They are not needed in operational output, so omit them all.
+    parsed.search = "";
+    parsed.hash = "";
     return parsed.toString();
   } catch {
-    return raw.replace(/:\/\/([^:/@]+):([^@]+)@/g, "://***:***@");
+    // Keep malformed URLs from leaking an authority or query-string secret in
+    // an error path. A valid URL takes the branch above.
+    return raw
+      .replace(/:\/\/[^@/?#]*@/g, "://***:***@")
+      .replace(/([?&][^=&#]+)(?:=[^&#]*)?/g, "$1=***")
+      .replace(/#.*/, "");
   }
+}
+
+function positiveInteger(value, fallback) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function nonNegativeInteger(value, fallback) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 function createPgPool({ connectionString, env = process.env, Pool } = {}) {
@@ -43,12 +62,11 @@ function createPgPool({ connectionString, env = process.env, Pool } = {}) {
     }
   }
 
-  const max = Number(env.PG_POOL_MAX || 10);
   const pool = new PgPool({
     connectionString: url,
-    max: Number.isFinite(max) && max > 0 ? max : 10,
-    idleTimeoutMillis: Number(env.PG_IDLE_TIMEOUT_MS || 30_000),
-    connectionTimeoutMillis: Number(env.PG_CONNECTION_TIMEOUT_MS || 10_000),
+    max: positiveInteger(env.PG_POOL_MAX, 10),
+    idleTimeoutMillis: nonNegativeInteger(env.PG_IDLE_TIMEOUT_MS, 30_000),
+    connectionTimeoutMillis: nonNegativeInteger(env.PG_CONNECTION_TIMEOUT_MS, 10_000),
   });
 
   return {

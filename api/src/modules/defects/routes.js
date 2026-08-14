@@ -76,6 +76,17 @@ function createDefectsRouter({
     res.json(ok(data));
   });
 
+  // Keep a single-resource read beside the list route so clients can refresh
+  // the optimistic-lock version before a status change or cross-role handoff.
+  router.get("/defects/:id", async (req, res) => {
+    const defect = await repository.findDefect(req.params.id);
+    if (!defect) return fail(res, 404, "RESOURCE_NOT_FOUND", "Defect not found.");
+    if (!(await canAccessProject(req.user, defect.project_id))) {
+      return fail(res, 403, "PERMISSION_DENIED", "无权访问该缺陷。");
+    }
+    res.json(ok(mapDefect(defect)));
+  });
+
   router.post("/defects", requireAnyPermission(["project:*", "defect:*"]), async (req, res) => {
     const { title, severity, status, projectId, requirementId, assignee, assigneeRole, foundInBuild, affectedVersion } = req.body || {};
     if (!title || !String(title).trim()) {

@@ -72,9 +72,20 @@ const {
   visibleDocumentsForUser,
 } = require("./src/security/accessControl");
 const { createAuthMiddleware } = require("./src/middleware/auth");
+const { createRateLimitPolicy } = require("./src/middleware/rateLimitPolicy");
 const { createProjectAccess } = require("./src/security/projectAccess");
+const { createAccessScopeResolver } = require("./src/security/accessScope");
 const { createSecretCodec } = require("./src/security/secretCodec");
+const {
+  createDefaultAiProvider,
+  resolveAiCapabilityTokenSecret,
+  resolveAiConfigEncryptionKey,
+  resolveAllowedOrigins,
+  resolveJwtSecret,
+} = require("./src/bootstrap/runtimeConfig");
 const { wrapRouterAsync } = require("./src/lib/asyncHandler");
+const { createHttpErrorHandler } = require("./src/http/errorHandler");
+const { createResponseHelpers } = require("./src/http/responses");
 const { createAuditRouter } = require("./src/modules/audit/routes");
 const { createAuditRepository } = require("./src/modules/audit/repository");
 const { createAuthRouter } = require("./src/modules/auth/routes");
@@ -84,6 +95,15 @@ const { createCapacityRouter } = require("./src/modules/capacity/routes");
 const { createCapacityRepository } = require("./src/modules/capacity/repository");
 const { createAiJobsRouter } = require("./src/modules/ai/routes");
 const { createAiJobRepository, createBusinessAdviceRepository } = require("./src/modules/ai/repository");
+const { createAiCapabilityRepository } = require("./src/modules/ai/capabilityRepository");
+const { createAiCapabilitiesRouter } = require("./src/modules/ai/capabilityRoutes");
+const { createAiCapabilityService } = require("./src/modules/ai/capabilityService");
+const { createAiCapabilityControlStore } = require("./src/modules/ai/capabilityControls");
+const { createCapabilityRegistry } = require("./src/modules/ai/capabilityRegistry");
+const { createExecutionGateway } = require("./src/modules/ai/executionGateway");
+const { createScopedExecutionTokenService } = require("./src/modules/ai/executionToken");
+const { createHarnessCapabilityAdapter } = require("./src/modules/ai/capabilityAdapter");
+const { createAiModelComposition } = require("./src/modules/ai/modelComposition");
 const { createDocumentAnalysisService } = require("./src/modules/ai/documentAnalysis");
 const { createAiModelClient, normalizeAiWireApi } = require("./src/modules/ai/modelClient");
 const { createAiJobDispatcher } = require("./src/modules/ai/jobDispatcher");
@@ -92,9 +112,13 @@ const { failTimedOutAiJobs, startAiJobTimeoutMonitor } = require("./src/modules/
 const { buildDocumentChunks } = require("./src/modules/ai/ragIndex");
 const { createAiInteractionsRouter } = require("./src/modules/ai/interactionsRoutes");
 const { createBusinessAdviceContextService, createBusinessAdviceHelpers } = require("./src/modules/ai/interactionsService");
-const { createAiChatService, dataUrlForAttachment, normalizeAiChatMessages } = require("./src/modules/ai/chatService");
+const { createAiChatService, normalizeAiChatMessages } = require("./src/modules/ai/chatService");
 const { compactText, createAiSummaryService } = require("./src/modules/ai/summaryService");
+const { createSummaryInvalidatingAudit } = require("./src/modules/ai/auditCache");
 const { createAiAdviceService } = require("./src/modules/ai/adviceService");
+const { createAiAssistantAdminRouter } = require("./src/modules/ai/assistantAdminRoutes");
+const { createAiAssistantAdminService } = require("./src/modules/ai/assistantAdminService");
+const { createAiAssistantStore } = require("./src/modules/ai/assistantStore");
 const { createAiProviderAdminRouter } = require("./src/modules/ai/providerAdminRoutes");
 const { createAiProviderAdminService } = require("./src/modules/ai/providerAdminService");
 const { createAiProviderStore } = require("./src/modules/ai/providerStore");
@@ -111,11 +135,15 @@ const { createDeliveryRepository } = require("./src/modules/delivery/repository"
 const { CLOSED_DEFECT_STATUSES, createDeliveryService } = require("./src/modules/delivery/service");
 const { mapDeliveryAudit, mapReleaseApproval, mapRollbackRecord } = require("./src/modules/delivery/mappers");
 const { createDocumentsRouter } = require("./src/modules/documents/routes");
-const { canManageDocument, canViewDocument: canViewDocumentByPolicy } = require("./src/modules/documents/policy");
+const { createDocumentsRepository } = require("./src/modules/documents/repository");
+const { createDocumentAccessPolicy } = require("./src/modules/documents/policy");
 const { createDocumentCollaborationServer } = require("./src/modules/documents/collaboration");
 const { extractTextFromUpload } = require("./src/modules/documents/textExtraction");
 const { createProductsRouter } = require("./src/modules/products/routes");
+const { createProductsRepository } = require("./src/modules/products/repository");
+const { createProductImageUpload } = require("./src/modules/products/upload");
 const { createStrategyRouter } = require("./src/modules/strategy/routes");
+const { createStrategyRepository } = require("./src/modules/strategy/repository");
 const { createProjectsRouter } = require("./src/modules/projects/routes");
 const { createProjectsRepository } = require("./src/modules/projects/repository");
 const { projectActivationReadiness: evaluateProjectActivationReadiness } = require("./src/modules/projects/service");
@@ -124,11 +152,13 @@ const { createOrganizationRepository } = require("./src/modules/organization/rep
 const { createProjectSourceBrowser } = require("./src/modules/projects/sourceBrowser");
 const { createRequirementsRouter } = require("./src/modules/requirements/routes");
 const { createRequirementsRepository } = require("./src/modules/requirements/repository");
+const { createRequirementPolicy } = require("./src/modules/requirements/policy");
 const { createRequirementScoreService } = require("./src/modules/requirements/scoreService");
 const { createRequirementTaskSync } = require("./src/modules/requirements/taskSync");
 const { createTasksRouter } = require("./src/modules/tasks/routes");
 const { createTasksRepository } = require("./src/modules/tasks/repository");
 const { createTestingRouter } = require("./src/modules/testing/routes");
+const { createTestingRepository } = require("./src/modules/testing/repository");
 const { createTestCaseTaskSync } = require("./src/modules/testing/taskSync");
 const { createDefectTaskSync } = require("./src/modules/defects/taskSync");
 const { createAiTargetAccess } = require("./src/modules/ai/targetAccess");
@@ -136,10 +166,12 @@ const { createRagMaintenance } = require("./src/modules/ai/ragMaintenance");
 const { createAiJobRecovery } = require("./src/modules/ai/jobRecovery");
 const { createNextId } = require("./src/lib/nextId");
 const { createDateHelpers } = require("./src/lib/dates");
+const { extractJsonPayload } = require("./src/lib/jsonPayload");
 const { createIdempotency } = require("./src/lib/idempotency");
 const { createProjectVersionGuard } = require("./src/lib/projectVersion");
 const { isUniqueConstraintError } = require("./src/lib/databaseErrors");
 const { createTeamRouter } = require("./src/modules/team/routes");
+const { createTeamRepository } = require("./src/modules/team/repository");
 const { createTeamService } = require("./src/modules/team/service");
 const { createTimeEntriesRouter } = require("./src/modules/timeEntries/routes");
 const { createTimeEntriesRepository } = require("./src/modules/timeEntries/repository");
@@ -148,6 +180,7 @@ const { createWorkLogsRepository } = require("./src/modules/workLogs/repository"
 const { createWorkLogHelpers } = require("./src/modules/workLogs/service");
 const { createWorkLogAnalysisService } = require("./src/modules/workLogs/analysisService");
 const { createWorkflowRouter } = require("./src/modules/workflow/routes");
+const { createWorkflowRepository } = require("./src/modules/workflow/repository");
 const { createProjectFlowService } = require("./src/modules/workflow/service");
 const { createMetaRouter } = require("./src/modules/meta/routes");
 const { canTransition } = require("./src/workflow/stateMachine");
@@ -155,6 +188,7 @@ const { createStatusHistory } = require("./src/workflow/statusHistory");
 const { createSprintCommitment } = require("./src/workflow/sprintCommitment");
 const { publicWorkflowTemplates } = require("./src/workflow/templates");
 const { createWorkflowTemplateStore } = require("./src/workflow/templateStore");
+const { createServerLifecycle } = require("./src/ops/serverLifecycle");
 const {
   BUILD_STATUSES,
   DEFECT_SEVERITIES,
@@ -177,6 +211,11 @@ const server = http.createServer(app);
 const PORT = Number(process.env.PORT) || 4010;
 const NODE_ENV = process.env.NODE_ENV || "development";
 const IS_PROD = NODE_ENV === "production";
+const { isTrustedSessionRequest, rateLimitHandler } = createRateLimitPolicy({
+  env: process.env,
+  isProd: IS_PROD,
+  randomUUID: crypto.randomUUID,
+});
 
 // Fail closed in production before opening sockets or loading secrets deeply.
 // Also validates SQLite parent-dir writability (DATABASE_FILE or default api/app.db).
@@ -196,63 +235,21 @@ const IS_PROD = NODE_ENV === "production";
   }
 }
 
-const DEFAULT_AI_PROVIDER = {
-  provider: process.env.AI_PROVIDER || "openai-compatible",
-  baseUrl: process.env.AI_BASE_URL || "https://api.openai.com/v1",
-  model: process.env.AI_MODEL || "gpt-4o-mini",
-  wireApi: process.env.AI_WIRE_API || "chat_completions",
-  disableResponseStorage: process.env.AI_DISABLE_RESPONSE_STORAGE !== "false",
-  enabled: process.env.AI_ENABLED !== "false",
-};
+const DEFAULT_AI_PROVIDER = createDefaultAiProvider(process.env);
 const AI_JOB_TIMEOUT_MS = Number(process.env.AI_JOB_TIMEOUT_MS || 300000);
 const AI_JOB_TIMEOUT_SWEEP_MS = Number(process.env.AI_JOB_TIMEOUT_SWEEP_MS || 60000);
 
 // JWT secret: never fall back to a hardcoded value in production.
-function resolveJwtSecret() {
-  const secret = process.env.JWT_SECRET;
-  if (secret && secret.length >= 16) return secret;
-  if (IS_PROD) {
-    console.error("FATAL: JWT_SECRET environment variable must be set (>= 16 chars) in production.");
-    process.exit(1);
-  }
-  // Dev-only deterministic secret so local startup still works without env vars.
-  console.warn("WARNING: JWT_SECRET not set — using insecure dev default. Set JWT_SECRET before deploying.");
-  return "dev-secret-change-me";
-}
-function resolveAiConfigEncryptionKey(jwtSecret) {
-  const key = String(process.env.AI_CONFIG_ENCRYPTION_KEY || "").trim();
-  if (IS_PROD) {
-    if (!key || key.length < 16) {
-      console.error("FATAL: AI_CONFIG_ENCRYPTION_KEY must be set (>= 16 chars) in production and must be independent from JWT_SECRET.");
-      process.exit(1);
-    }
-    if (key === jwtSecret) {
-      console.error("FATAL: AI_CONFIG_ENCRYPTION_KEY must not equal JWT_SECRET in production.");
-      process.exit(1);
-    }
-    return key;
-  }
-  if (!key) {
-    console.warn("WARNING: AI_CONFIG_ENCRYPTION_KEY not set — falling back to JWT_SECRET for local development only.");
-    return jwtSecret;
-  }
-  if (key === jwtSecret) {
-    console.warn("WARNING: AI_CONFIG_ENCRYPTION_KEY equals JWT_SECRET — use a dedicated encryption key before production.");
-  }
-  return key;
-}
-const JWT_SECRET = resolveJwtSecret();
-const secretCodec = createSecretCodec(resolveAiConfigEncryptionKey(JWT_SECRET));
+const JWT_SECRET = resolveJwtSecret({ env: process.env, isProd: IS_PROD });
+const secretCodec = createSecretCodec(resolveAiConfigEncryptionKey(JWT_SECRET, { env: process.env, isProd: IS_PROD }));
+const AI_CAPABILITY_TOKEN_SECRET = resolveAiCapabilityTokenSecret(JWT_SECRET, { env: process.env });
 
 const RELEASE_READY_REQUIREMENT_STATUSES = new Set(["accepted", "closed"]);
 const CLOSED_TASK_STATUSES = new Set(["done", "cancelled"]);
 
 // Allowed browser origins for the web app. Comma-separated via CORS_ORIGIN, or
 // defaults to the Vite dev server.
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGIN || "http://localhost:5173")
-  .split(",")
-  .map((o) => o.trim())
-  .filter(Boolean);
+const ALLOWED_ORIGINS = resolveAllowedOrigins(process.env);
 
 // initDb is sync for sqlite and async for postgres — always await via Promise.resolve.
 const _dbInitPromise = Promise.resolve(initDb());
@@ -266,6 +263,26 @@ const aiProviderStore = createAiProviderStore({
   secretCodec,
   normalizeWireApi: normalizeAiWireApi,
 });
+const aiAssistantStore = createAiAssistantStore({
+  json,
+  now,
+  parse,
+  readProviderList: aiProviderStore.readList,
+  resolveActiveProvider: aiProviderStore.resolveConfig,
+  row,
+  run,
+});
+const aiCapabilityRegistry = createCapabilityRegistry();
+const aiCapabilityControlStore = createAiCapabilityControlStore({
+  json,
+  now,
+  parse,
+  registry: aiCapabilityRegistry,
+  row,
+  run,
+});
+const aiCapabilityRepository = createAiCapabilityRepository({ insert, row, run });
+const aiExecutionTokenService = createScopedExecutionTokenService({ secret: AI_CAPABILITY_TOKEN_SECRET });
 // Convert legacy plaintext API keys on startup before any configuration write
 // can copy them forward. New writes always use apiKeyEncrypted.
 // Fire-and-forget is intentional for module bootstrap; failures are logged.
@@ -273,19 +290,35 @@ aiProviderStore.migrateSecrets().catch((error) => {
   console.warn("AI provider secret migration failed:", error.message);
 });
 const projectAccess = createProjectAccess({ row });
-async function resolveAccessScope(user) {
-  if (user?.role === "admin" || (Array.isArray(user?.permissions) && user.permissions.includes("*"))) {
-    return { all: true };
-  }
-  if (!user) return { projectIds: [] };
-  const projects = await rows("SELECT id FROM projects WHERE deleted_at IS NULL ORDER BY id");
-  const projectIds = [];
-  for (const project of projects) {
-    if (await projectAccess.canAccessProject(user, project.id)) projectIds.push(project.id);
-  }
-  return { projectIds };
-}
+const {
+  canManageDocument: canManageDocumentCollaboration,
+  canViewDocument,
+} = createDocumentAccessPolicy({
+  canAccessProject: projectAccess.canAccessProject,
+  canWriteProject: projectAccess.canWriteProject,
+  mapDocument,
+});
+const aiExecutionGateway = createExecutionGateway({
+  canAccessProject: projectAccess.canAccessProject,
+  controlStore: aiCapabilityControlStore,
+  hasPermission,
+  publicUser,
+  registry: aiCapabilityRegistry,
+  row,
+  rows,
+  tokenService: aiExecutionTokenService,
+});
+const { resolveAccessScope } = createAccessScopeResolver({
+  rows,
+  canAccessProject: projectAccess.canAccessProject,
+});
 const projectRepository = createProjectsRepository({ insert, row, rows, run });
+const documentsRepository = createDocumentsRepository({ insert, row, rows, run });
+const productsRepository = createProductsRepository({ insert, json, parse, row, rows, run });
+const strategyRepository = createStrategyRepository({ insert, row, rows, run });
+const teamRepository = createTeamRepository({ insert, row, rows, run });
+const testingRepository = createTestingRepository({ insert, row, rows, run });
+const workflowRepository = createWorkflowRepository({ row, rows });
 const deliveryRepository = createDeliveryRepository({ insert, row, rows, run });
 const projectActivationReadiness = (project) =>
   evaluateProjectActivationReadiness(project, projectRepository, parse);
@@ -317,10 +350,30 @@ const aiChatService = createAiChatService({
 const aiModelClient = createAiModelClient({
   getConfig: aiProviderStore.resolveConfig,
   normalizeAttachments: aiChatService.normalizeAttachments,
-  dataUrlForAttachment,
   recordSuccess: aiProviderStore.recordSuccess,
   recordFailure: aiProviderStore.recordFailure,
   getTimeoutMs: () => Number(process.env.AI_TIMEOUT_MS || 30000),
+});
+const aiProviderAdminService = createAiProviderAdminService({
+  defaults: DEFAULT_AI_PROVIDER,
+  normalizeEntry: aiProviderStore.normalizeEntry,
+  now,
+  providerConfigId: aiProviderStore.providerConfigId,
+  publicConfig: aiProviderStore.publicConfig,
+  readActive: aiProviderStore.resolveConfig,
+  readList: aiProviderStore.readList,
+  resetHealth: aiProviderStore.resetHealth,
+  validateBaseUrl: assertAiProviderUrlAllowed,
+  writeActive: aiProviderStore.writeActiveConfig,
+  writeList: aiProviderStore.writeList,
+});
+const aiAssistantAdminService = createAiAssistantAdminService({
+  assistantStore: aiAssistantStore,
+  readProviderList: aiProviderStore.readList,
+});
+const { callChatAssistantModel, callRealModel } = createAiModelComposition({
+  aiAssistantAdminService,
+  aiModelClient,
 });
 const documentAnalysisService = createDocumentAnalysisService({
   callModel: callRealModel,
@@ -336,7 +389,6 @@ const aiJobDispatcher = createAiJobDispatcher({
   runJob: documentAnalysisRunner.run,
   onFailure: (error, context) => console.warn(`AI job ${context.jobId} failed:`, error.message),
 });
-let aiJobTimeoutTimer = null;
 const authService = createAuthService({
   comparePassword: (password, passwordHash) => require("bcryptjs").compareSync(password, passwordHash),
   issueToken: (user) => require("jsonwebtoken").sign({
@@ -347,19 +399,6 @@ const authService = createAuthService({
   publicUser,
   repository: createAuthRepository({ row, run }),
 });
-const aiProviderAdminService = createAiProviderAdminService({
-  defaults: DEFAULT_AI_PROVIDER,
-  normalizeEntry: aiProviderStore.normalizeEntry,
-  now,
-  providerConfigId: aiProviderStore.providerConfigId,
-  publicConfig: aiProviderStore.publicConfig,
-  readActive: aiProviderStore.resolveConfig,
-  readList: aiProviderStore.readList,
-  resetHealth: aiProviderStore.resetHealth,
-  validateBaseUrl: assertAiProviderUrlAllowed,
-  writeActive: aiProviderStore.writeActiveConfig,
-  writeList: aiProviderStore.writeList,
-});
 const aiSummaryService = createAiSummaryService({
   callModel: callRealModel,
   extractJsonPayload,
@@ -367,19 +406,10 @@ const aiSummaryService = createAiSummaryService({
   rows,
 });
 
-// Keep process-local AI summary cache coherent after mutating business data.
-// Scope is process-wide clear (cheap) so dashboards/summary don't serve stale TTL.
-async function audit(actor, action, resourceType, resourceId, beforeValue, afterValue, ip, explicitScope) {
-  const result = await writeAuditLog(actor, action, resourceType, resourceId, beforeValue, afterValue, ip, explicitScope);
-  try {
-    if (typeof action === "string" && !action.startsWith("ai.") && !action.startsWith("auth.") && action !== "page.view") {
-      aiSummaryService.clearCache();
-    }
-  } catch {
-    // never fail writes because of cache maintenance
-  }
-  return result;
-}
+const { audit } = createSummaryInvalidatingAudit({
+  writeAuditLog,
+  clearSummaryCache: aiSummaryService.clearCache,
+});
 const dashboardService = createDashboardService({
   createAiSummary: aiSummaryService.createSummary,
   mapBuild,
@@ -461,8 +491,7 @@ const workflowTemplateStore = createWorkflowTemplateStore({
   upsert,
 });
 const projectFlowService = createProjectFlowService({
-  row,
-  rows,
+  repository: workflowRepository,
   getProjectBinding: workflowTemplateStore.getProjectBinding,
   getTemplate: workflowTemplateStore.getTemplate,
 });
@@ -480,7 +509,7 @@ const teamService = createTeamService({
   mapTask,
   mapUser,
   normalizeRole,
-  rows,
+  repository: teamRepository,
 });
 let revokeUserSessions = () => 0;
 
@@ -539,63 +568,14 @@ app.use("/api/", apiLimiter);
 // Ensure request/response JSON is interpreted as UTF-8 (Windows clients/tools may omit charset).
 app.use(express.json({ limit: "32mb", type: ["application/json", "application/*+json"] }));
 
-const { createMulterFileFilter, MAX_UPLOAD_BYTES } = require("./src/security/uploadPolicy");
-const upload = multer({
-  dest: STORAGE_DIR,
-  limits: { fileSize: MAX_UPLOAD_BYTES },
-  fileFilter: createMulterFileFilter(),
-});
-const PRODUCT_IMAGE_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
-const PRODUCT_IMAGE_TYPES = new Map([
-  [".png", "image/png"],
-  [".jpg", "image/jpeg"],
-  [".jpeg", "image/jpeg"],
-  [".webp", "image/webp"],
-  [".gif", "image/gif"],
-]);
-const productImageUpload = multer({
-  dest: STORAGE_DIR,
-  limits: { fileSize: PRODUCT_IMAGE_MAX_UPLOAD_BYTES },
-  fileFilter: (_req, file, callback) => {
-    const extension = path.extname(String(file.originalname || "")).toLowerCase();
-    const mimeType = String(file.mimetype || "").toLowerCase();
-    if (PRODUCT_IMAGE_TYPES.get(extension) !== mimeType) {
-      const error = new Error("Product images support PNG, JPEG, WebP, and GIF only.");
-      error.code = "UPLOAD_TYPE_NOT_ALLOWED";
-      error.status = 400;
-      return callback(error);
-    }
-    return callback(null, true);
-  },
-});
+const { createDocumentUpload, MAX_UPLOAD_BYTES } = require("./src/security/uploadPolicy");
+const upload = createDocumentUpload({ multer, storageDir: STORAGE_DIR });
+const productImageUpload = createProductImageUpload({ multer, storageDir: STORAGE_DIR });
 
-function ok(data, meta = {}) {
-  return { data, meta: { generatedAt: now(), ...meta } };
-}
-
-function fail(res, status, errorCode, message, details) {
-  return res.status(status).json({
-    errorCode,
-    message,
-    traceId: crypto.randomUUID(),
-    ...(details === undefined ? {} : { details }),
-  });
-}
+const { fail, ok, paginatedResponse } = createResponseHelpers({ now, randomUUID: crypto.randomUUID });
 
 const { beginIdempotentRequest } = createIdempotency({ row, run, parse, now, fail });
 const { expectedProjectVersion } = createProjectVersionGuard({ fail });
-
-function paginatedResponse(allItems, query) {
-  const page = query.page != null ? Math.max(1, parseInt(query.page, 10) || 1) : null;
-  const pageSize = query.pageSize != null ? Math.max(1, Math.min(200, parseInt(query.pageSize, 10) || 20)) : null;
-  if (page != null && pageSize != null) {
-    const total = allItems.length;
-    const start = (page - 1) * pageSize;
-    const items = allItems.slice(start, start + pageSize);
-    return { items, page, pageSize, total };
-  }
-  return allItems;
-}
 
 const { syncRequirementTask, mergeRequirementLinkedTask } = createRequirementTaskSync({
   row,
@@ -605,7 +585,7 @@ const { syncRequirementTask, mergeRequirementLinkedTask } = createRequirementTas
   json,
   parse,
 });
-const { syncTestCaseTask } = createTestCaseTaskSync({ row, run, insert, nextId });
+const { syncTestCaseTask } = createTestCaseTaskSync({ nextId, repository: testingRepository });
 const { syncDefectTask } = createDefectTaskSync({
   row,
   run,
@@ -614,57 +594,11 @@ const { syncDefectTask } = createDefectTaskSync({
   closedDefectStatuses: CLOSED_DEFECT_STATUSES,
 });
 
-function ensureRoleAllowed(targetRole, allowedRoles, fieldName = "role") {
-  if (!targetRole || !allowedRoles.includes(targetRole)) {
-    return `${fieldName} must be one of: ${allowedRoles.join(", ")}`;
-  }
-  return null;
-}
-
-async function canOperateRequirement(user, requirementRow) {
-  if (!user || !requirementRow) return false;
-  if (!(await projectAccess.canWriteProject(user, requirementRow.project_id))) return false;
-  if (hasPermission(user, "requirement:*")) return true;
-  const role = normalizeRole(user.role);
-  if (!["dev", "qa"].includes(role)) return false;
-  return requirementRow.assignee === user.name && requirementRow.assignee_role === role;
-}
-
-function canViewDocument(user, documentRow) {
-  return canViewDocumentByPolicy(user, documentRow, { canAccessProject: projectAccess.canAccessProject, mapDocument });
-}
-
-function canManageDocumentCollaboration(user, documentRow) {
-  return canManageDocument(user, documentRow, { canWriteProject: projectAccess.canWriteProject });
-}
-
-// Global API rate limit (per IP). Windows reset on first request.
-function isTrustedSessionRequest(req) {
-  // Dev-only rate-limit skip: require an explicit opt-in so automated clients with
-  // Mozilla UAs cannot accidentally bypass limits.
-  if (IS_PROD) return false;
-  if (process.env.RATE_LIMIT_TRUST_LOCAL !== "1") return false;
-  const authHeader = req.headers.authorization || "";
-  const hasBearerToken = typeof authHeader === "string" && authHeader.startsWith("Bearer ");
-  const forwardedFor = req.headers["x-forwarded-for"];
-  const forwardedProto = req.headers["x-forwarded-proto"];
-  const localRequest =
-    req.ip === "::1" ||
-    req.ip === "127.0.0.1" ||
-    req.ip === "::ffff:127.0.0.1" ||
-    req.hostname === "localhost" ||
-    req.hostname === "127.0.0.1";
-
-  return localRequest && hasBearerToken && !forwardedFor && !forwardedProto;
-}
-
-function rateLimitHandler(message) {
-  return (_req, res, _next, options) => res.status(options.statusCode).json({
-    errorCode: "RATE_LIMITED",
-    message,
-    traceId: crypto.randomUUID(),
-  });
-}
+const { canOperateRequirement } = createRequirementPolicy({
+  canWriteProject: projectAccess.canWriteProject,
+  hasPermission,
+  normalizeRole,
+});
 
 // Stricter limit for auth (brute-force protection).
 const authLimiter = rateLimit({
@@ -689,26 +623,30 @@ app.use("/api", wrapRouterAsync(createMetaRouter({
   publicEnums,
 })));
 
-function extractJsonPayload(text) {
-  const raw = String(text || "").trim();
-  if (!raw) return null;
-  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidate = fenced ? fenced[1].trim() : raw;
-  try {
-    return JSON.parse(candidate);
-  } catch {
-    const start = candidate.indexOf("{");
-    const end = candidate.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      try { return JSON.parse(candidate.slice(start, end + 1)); } catch { return null; }
-    }
-  }
-  return null;
-}
-
-function callRealModel(prompt, options = {}) {
-  return aiModelClient.callModel(prompt, options);
-}
+const aiCapabilityAdapter = createHarnessCapabilityAdapter({
+  callModel: callChatAssistantModel,
+  executionGateway: aiExecutionGateway,
+  now,
+});
+const aiCapabilityService = createAiCapabilityService({
+  adapter: aiCapabilityAdapter,
+  audit,
+  canAccessProject: projectAccess.canAccessProject,
+  controlStore: aiCapabilityControlStore,
+  findProject: (projectId) => row("SELECT id FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectId }),
+  getAssistantSnapshot: async () => {
+    const resolved = await aiAssistantAdminService.resolve();
+    return aiAssistantStore.publicConfig(resolved, { resolved });
+  },
+  getProviderSnapshot: () => aiProviderStore.publicConfig(),
+  hasPermission,
+  json,
+  now,
+  parse,
+  registry: aiCapabilityRegistry,
+  repository: aiCapabilityRepository,
+  tokenService: aiExecutionTokenService,
+});
 
 app.get("/api/health", async (req, res) => {
   const readiness = await checkReadiness({
@@ -725,6 +663,7 @@ app.get("/api/health", async (req, res) => {
     uptime: Math.round(process.uptime()),
     serveWeb: SERVE_WEB,
     checks: readiness.checks,
+    aiRuntime: aiModelClient.status(),
   };
   // liveness-style clients that only look at HTTP status get 503 when not ready
   if (!readiness.ok) return res.status(503).json(ok(payload));
@@ -788,7 +727,7 @@ app.use("/api", wrapRouterAsync(createWorkflowRouter({
   evaluateProjectFlow: projectFlowService.evaluateProjectFlow,
   fail,
   ok,
-  repository: projectRepository,
+  repository: workflowRepository,
   requirePermission,
   templateStore: workflowTemplateStore,
   workflowTemplates: publicWorkflowTemplates,
@@ -800,20 +739,16 @@ app.use("/api", wrapRouterAsync(createStrategyRouter({
   canManageProject: projectAccess.canManageProject,
   fail,
   hasPermission,
-  insert,
   json,
   mapProduct,
   mapProject,
-  mapRequirement,
   nextId,
   now,
   ok,
   parse,
+  repository: strategyRepository,
   requireAnyPermission,
   requirePermission,
-  row,
-  rows,
-  run,
   transaction,
 })));
 
@@ -822,7 +757,6 @@ app.use("/api", wrapRouterAsync(createProductsRouter({
   canAccessProject: projectAccess.canAccessProject,
   fail,
   hasPermission,
-  insert,
   json,
   mapProduct,
   mapProject,
@@ -830,13 +764,10 @@ app.use("/api", wrapRouterAsync(createProductsRouter({
   nextId,
   now,
   ok,
-  parse,
   productImageUpload,
+  repository: productsRepository,
   requireAnyPermission,
   requirePermission,
-  row,
-  rows,
-  run,
   storageDir: STORAGE_DIR,
   transaction,
 })));
@@ -928,19 +859,15 @@ app.use("/api", wrapRouterAsync(createTestingRouter({
   audit,
   canAccessProject: projectAccess.canAccessProject,
   canWriteProject: projectAccess.canWriteProject,
-  ensureRoleAllowed,
   fail,
-  insert,
   mapTestCase,
   mapTestRun,
   nextId,
   now,
   ok,
   paginatedResponse,
+  repository: testingRepository,
   requireAnyPermission,
-  row,
-  rows,
-  run,
   syncTestCaseTask,
   testCaseStatuses: TEST_CASE_STATUSES,
   transaction,
@@ -954,7 +881,6 @@ app.use("/api", wrapRouterAsync(createDocumentsRouter({
   documentCategories: DOCUMENT_CATEGORIES,
   extractTextFromUpload,
   fail,
-  insert,
   json,
   mapDocument,
   nextId,
@@ -962,10 +888,8 @@ app.use("/api", wrapRouterAsync(createDocumentsRouter({
   ok,
   paginatedResponse,
   reindexDocument: reindexDocumentForRag,
+  repository: documentsRepository,
   requirePermission,
-  row,
-  rows,
-  run,
   storageDir: STORAGE_DIR,
   transaction,
   upload,
@@ -1082,7 +1006,6 @@ app.use("/api", wrapRouterAsync(createTeamRouter({
   canViewTeamLogs: workLogHelpers.canViewTeamLogs,
   defaultPermissionsForRole,
   fail,
-  insert,
   isSystemRole,
   json,
   mapUser,
@@ -1090,10 +1013,8 @@ app.use("/api", wrapRouterAsync(createTeamRouter({
   now,
   ok,
   paginatedResponse,
+  repository: teamRepository,
   requirePermission,
-  row,
-  rows,
-  run,
   revokeUserSessions: (userId) => revokeUserSessions(userId),
   systemRoles: SYSTEM_ROLES,
   organizationRepository,
@@ -1113,6 +1034,7 @@ app.use("/api", wrapRouterAsync(createCapacityRouter({
 
 app.use("/api", wrapRouterAsync(createAiProviderAdminRouter({
   audit,
+  callModelWithConfig: aiModelClient.callWithConfig,
   callRealModel,
   fail,
   ok,
@@ -1121,11 +1043,25 @@ app.use("/api", wrapRouterAsync(createAiProviderAdminRouter({
   service: aiProviderAdminService,
 })));
 
+app.use("/api", wrapRouterAsync(createAiAssistantAdminRouter({
+  audit,
+  fail,
+  ok,
+  requirePermission,
+  service: aiAssistantAdminService,
+})));
+
+app.use("/api", wrapRouterAsync(createAiCapabilitiesRouter({
+  ok,
+  requirePermission,
+  service: aiCapabilityService,
+})));
+
 app.use("/api", wrapRouterAsync(createAiInteractionsRouter({
   audit,
   buildAiChatPrompt: aiChatService.buildPrompt,
   buildAiChatContext: aiChatService.buildContext,
-  callRealModel,
+  callRealModel: callChatAssistantModel,
   createAiRequirementRecommendation: aiAdviceService.createRequirementRecommendation,
   createAiSummary: aiSummaryService.createSummary,
   createBusinessAdvice: aiAdviceService.createBusinessAdvice,
@@ -1136,6 +1072,7 @@ app.use("/api", wrapRouterAsync(createAiInteractionsRouter({
   normalizeMessages: normalizeAiChatMessages,
   now,
   ok,
+  publicAiAssistantConfig: aiAssistantAdminService.getPublic,
   publicAiProviderConfig: aiProviderStore.publicConfig,
   requirementScore,
   requirePermission,
@@ -1145,9 +1082,11 @@ app.use("/api", wrapRouterAsync(createAiInteractionsRouter({
   rows,
 })));
 
+let serverLifecycle;
+
 // Windows child_process.kill('SIGTERM') terminates without running handlers.
 // Non-production opt-in lets ops drills invoke the same shutdown() path over HTTP.
-// Registered before the 404 catch-all; handler body references shutdown() defined later.
+// Registered before the 404 catch-all; lifecycle initialization completes before listening.
 if (!IS_PROD && String(process.env.ENABLE_HTTP_SHUTDOWN || "") === "1") {
   app.post("/api/ops/shutdown", (req, res) => {
     const expected = String(process.env.HTTP_SHUTDOWN_TOKEN || process.env.JWT_SECRET || "").trim();
@@ -1157,7 +1096,7 @@ if (!IS_PROD && String(process.env.ENABLE_HTTP_SHUTDOWN || "") === "1") {
     }
     res.status(202).json(ok({ shuttingDown: true, via: "http" }));
     setImmediate(() => {
-      void shutdown("HTTP_SHUTDOWN");
+      void serverLifecycle.shutdown("HTTP_SHUTDOWN");
     });
   });
 }
@@ -1173,35 +1112,14 @@ if (SERVE_WEB) {
   }
 }
 
-app.use((err, req, res, _next) => {
-  if (isUniqueConstraintError(err)) {
-    return fail(res, 409, "CONFLICT", "The value is already in use.");
-  }
-  const isProductImageUpload = req.method === "POST"
-    && /^\/api\/products\/[^/]+\/images\/?(?:\?|$)/.test(req.originalUrl || "");
-  if (err?.code === "LIMIT_FILE_SIZE" && isProductImageUpload) {
-    return fail(res, 413, "UPLOAD_TOO_LARGE", "Product image exceeds the 5 MiB limit.");
-  }
-  if (err && (err.code === "LIMIT_FILE_SIZE" || err.code === "UPLOAD_TOO_LARGE" || err.code === "UPLOAD_TYPE_NOT_ALLOWED" || err.status === 400)) {
-    const errorCode = err.code === "LIMIT_FILE_SIZE" ? "UPLOAD_TOO_LARGE" : (err.code || "VALIDATION_FAILED");
-    const message = err.code === "LIMIT_FILE_SIZE"
-      ? `File exceeds the ${MAX_UPLOAD_BYTES} byte limit.`
-      : (err.message || "Upload rejected.");
-    return fail(res, 400, errorCode, message);
-  }
-  // Structured domain errors (status + code) from route handlers / policy layers.
-  if (err && err.status && Number(err.status) >= 400 && Number(err.status) < 500) {
-    return fail(res, err.status, err.code || "VALIDATION_FAILED", err.message || "Request failed.");
-  }
-  if (err && (err.code === "PERIOD_TOO_LARGE" || err.code === "SOURCE_PATH_ALLOWLIST_REQUIRED")) {
-    const status = err.status || (err.code === "PERIOD_TOO_LARGE" ? 400 : 503);
-    return fail(res, status, err.code, err.message || "Request failed.");
-  }
-  console.error(err);
-  // Never leak internal error details to the client in production.
-  const message = IS_PROD ? "服务器内部错误，请稍后再试。" : err.message || "Unexpected server error.";
-  res.status(500).json({ errorCode: "INTERNAL_SERVER_ERROR", message, traceId: crypto.randomUUID() });
-});
+app.use(createHttpErrorHandler({
+  fail,
+  isProd: IS_PROD,
+  isUniqueConstraintError,
+  maxUploadBytes: MAX_UPLOAD_BYTES,
+  productionMessage: "服务器内部错误，请稍后再试。",
+  randomUUID: crypto.randomUUID,
+}));
 app.use((req, res) => fail(res, 404, "RESOURCE_NOT_FOUND", "请求的资源不存在。"));
 
 const collaborationServer = createDocumentCollaborationServer({
@@ -1210,8 +1128,7 @@ const collaborationServer = createDocumentCollaborationServer({
   authenticateSocket,
   hasPermission,
   canManageDocument: canManageDocumentCollaboration,
-  row,
-  run,
+  repository: documentsRepository,
   now,
   audit,
   publicUser,
@@ -1233,86 +1150,22 @@ const { recoverPendingAiJobs } = createAiJobRecovery({
   mapDocument,
 });
 
-function startServer(port) {
-  const onError = (err) => {
-    if (err.code === "EADDRINUSE") {
-      console.error(`FATAL: Port ${port} is already in use. Stop the other process or set PORT to a free port.`);
-      process.exit(1);
-    }
-    throw err;
-  };
-  server.on("error", onError);
-  wss.on("error", onError);
-  server.listen(port, () => {
-    recoverPendingAiJobs();
-    if (!aiJobTimeoutTimer) {
-      aiJobTimeoutTimer = startAiJobTimeoutMonitor({
-        repository: aiJobsRepository,
-        audit,
-        now,
-        timeoutMs: AI_JOB_TIMEOUT_MS,
-        sweepMs: AI_JOB_TIMEOUT_SWEEP_MS,
-        actor: { id: "system", name: "AI Worker Monitor" },
-      });
-    }
-    console.log(`Company project management API listening on http://localhost:${port}`);
-    if (SERVE_WEB) {
-      console.log(`Same-origin web UI: http://localhost:${port}/ (HashRouter SPA)`);
-    }
-  });
-}
-
-let shuttingDown = false;
-async function shutdown(signal) {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  console.log(`Received ${signal}, shutting down gracefully...`);
-
-  if (aiJobTimeoutTimer) {
-    clearInterval(aiJobTimeoutTimer);
-    aiJobTimeoutTimer = null;
-  }
-
-  try {
-    for (const client of wss.clients || []) {
-      try {
-        client.close(1001, "Server shutting down");
-      } catch {
-        /* ignore */
-      }
-    }
-    await new Promise((resolve) => {
-      try {
-        wss.close(() => resolve());
-      } catch {
-        resolve();
-      }
-    });
-  } catch (error) {
-    console.warn("WebSocket shutdown warning:", error && error.message ? error.message : error);
-  }
-
-  await new Promise((resolve) => {
-    server.close(() => resolve());
-    // Force-complete if keep-alive sockets hang.
-    setTimeout(resolve, 8_000).unref?.();
-  });
-
-  try {
-    await closeDatabase();
-  } catch (error) {
-    console.error("Database close failed:", error && error.message ? error.message : error);
-  }
-
-  process.exit(0);
-}
-
-process.on("SIGTERM", () => {
-  void shutdown("SIGTERM");
+serverLifecycle = createServerLifecycle({
+  aiExecutionGateway,
+  aiJobTimeoutMs: AI_JOB_TIMEOUT_MS,
+  aiJobTimeoutSweepMs: AI_JOB_TIMEOUT_SWEEP_MS,
+  aiJobsRepository,
+  aiModelClient,
+  audit,
+  closeDatabase,
+  now,
+  recoverPendingAiJobs,
+  server,
+  serveWeb: SERVE_WEB,
+  startAiJobTimeoutMonitor,
+  wss,
 });
-process.on("SIGINT", () => {
-  void shutdown("SIGINT");
-});
+serverLifecycle.installSignalHandlers();
 
 // Wait for dialect-specific init (sync sqlite / async postgres ping+schema check),
 // then verify migration ledger matches on-disk migration files (sqlite).
@@ -1340,7 +1193,7 @@ _dbInitPromise
         );
       }
     }
-    startServer(PORT);
+    serverLifecycle.start(PORT);
   })
   .catch((error) => {
     console.error("FATAL: database initialization failed:", error && error.message ? error.message : error);

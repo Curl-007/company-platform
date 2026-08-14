@@ -8,6 +8,7 @@ const {
 } = require("../../security/accessControl");
 const { validateUploadMeta } = require("../../security/uploadPolicy");
 const { canManageDocument, canViewDocument } = require("./policy");
+const { createDocumentsRepository } = require("./repository");
 
 function createDocumentsRouter({
   audit,
@@ -24,6 +25,7 @@ function createDocumentsRouter({
   now,
   ok,
   paginatedResponse,
+  repository: suppliedRepository,
   requirePermission,
   reindexDocument,
   row,
@@ -34,34 +36,12 @@ function createDocumentsRouter({
   upload,
 }) {
   const router = express.Router();
+  const repository = suppliedRepository || createDocumentsRepository({ insert, row, rows, run });
   const canRead = async (user, document) => canViewDocument(user, document, { canAccessProject, mapDocument });
   const canManage = async (user, document) => canManageDocument(user, document, { canWriteProject });
 
   router.get("/documents", async (req, res) => {
-    let sql = "SELECT * FROM documents WHERE 1=1";
-    const params = {};
-    if (req.query.keyword) {
-      sql += " AND title LIKE @keyword";
-      params.keyword = `%${req.query.keyword}%`;
-    }
-    if (req.query.type) {
-      sql += " AND type = @type";
-      params.type = req.query.type;
-    }
-    if (req.query.category) {
-      sql += " AND category = @category";
-      params.category = req.query.category;
-    }
-    if (req.query.projectId) {
-      sql += " AND project_id = @projectId";
-      params.projectId = req.query.projectId;
-    }
-    if (req.query.ownerRole) {
-      sql += " AND owner_role = @ownerRole";
-      params.ownerRole = req.query.ownerRole;
-    }
-    sql += " ORDER BY updated_at DESC";
-    let allItems = (await rows(sql, params)).map(mapDocument);
+    let allItems = (await repository.listDocuments(req.query)).map(mapDocument);
     if (req.user?.role !== "admin") {
       allItems = allItems.filter((item) => item.ownerRole ? canManageDocumentRole(req.user, item.ownerRole) : true);
     }
@@ -84,7 +64,7 @@ function createDocumentsRouter({
   async function deleteObjectRow(storageKey, { ignoreErrors = false } = {}) {
     if (!storageKey) return;
     try {
-      await run("DELETE FROM objects WHERE storage_key = @key", { key: storageKey });
+      await repository.deleteObjectByStorageKey(storageKey);
     } catch (error) {
       if (!ignoreErrors) throw error;
     }
@@ -150,12 +130,12 @@ function createDocumentsRouter({
       };
       const created = await transaction(async () => {
         if (buffer) {
-          await insert("objects", { id: `OBJ-${id}`, bucket: "documents", storage_key: storageKey, original_name: fileName, mime_type: fileType || "application/octet-stream", size: buffer.length, created_by: req.user.id, created_at: now() });
+          await repository.createObject({ id: `OBJ-${id}`, bucket: "documents", storage_key: storageKey, original_name: fileName, mime_type: fileType || "application/octet-stream", size: buffer.length, created_by: req.user.id, created_at: now() });
         }
-        await insert("documents", document);
+        await repository.createDocument(document);
         if (reindexDocument) await reindexDocument(document);
         await audit(req.user, "document.upload", "document", id, null, document, req.ip);
-        return await row("SELECT * FROM documents WHERE id = @id", { id });
+        return await repository.findDocument(id);
       });
       res.status(201).json(ok(mapDocument(created)));
     } catch (error) {
@@ -168,7 +148,7 @@ function createDocumentsRouter({
   });
 
   router.get("/documents/:id", async (req, res) => {
-    const document = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
+    const document = await repository.findDocument(req.params.id);
     if (!document) return fail(res, 404, "RESOURCE_NOT_FOUND", "Document not found.");
     if (!(await canRead(req.user, document))) {
       return fail(res, 403, "PERMISSION_DENIED", "You cannot access this document.");
@@ -179,7 +159,7 @@ function createDocumentsRouter({
   // As-built transitional contract for object-storage style clients.
   // Returns the existing multipart upload endpoint instead of a cloud presigned URL.
   router.post("/documents/:id/upload-url", requirePermission("document:*"), async (req, res) => {
-    const document = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
+    const document = await repository.findDocument(req.params.id);
     if (!document) return fail(res, 404, "RESOURCE_NOT_FOUND", "Document not found.");
     if (!(await canManage(req.user, document))) {
       return fail(res, 403, "PERMISSION_DENIED", "You can only manage documents for allowed roles.");
@@ -205,7 +185,7 @@ function createDocumentsRouter({
   });
 
   async function authorizeObjectUpload(req, res, next) {
-    const document = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
+    const document = await repository.findDocument(req.params.id);
     if (!document) return fail(res, 404, "RESOURCE_NOT_FOUND", "Document not found.");
     if (!(await canManage(req.user, document))) {
       return fail(res, 403, "PERMISSION_DENIED", "You can only manage documents for allowed roles.");
@@ -224,9 +204,17 @@ function createDocumentsRouter({
       const buffer = fs.readFileSync(req.file.path);
       const content = extractTextFromUpload(req.file.originalname, req.file.mimetype, buffer);
       after = await transaction(async () => {
-        await insert("objects", { id: `OBJ-${Date.now()}`, bucket: "documents", storage_key: newKey, original_name: req.file.originalname, mime_type: req.file.mimetype, size: req.file.size, created_by: req.user.id, created_at: now() });
-        await run("UPDATE documents SET storage_key = @key, file_name = @name, file_size = @size, file_type = @type, content = @content, updated_at = @updated WHERE id = @id", { id: req.params.id, key: newKey, name: req.file.originalname, size: req.file.size, type: req.file.mimetype, content, updated: now() });
-        const updated = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
+        await repository.createObject({ id: `OBJ-${Date.now()}`, bucket: "documents", storage_key: newKey, original_name: req.file.originalname, mime_type: req.file.mimetype, size: req.file.size, created_by: req.user.id, created_at: now() });
+        await repository.updateDocumentObject({
+          id: req.params.id,
+          storageKey: newKey,
+          fileName: req.file.originalname,
+          fileSize: req.file.size,
+          fileType: req.file.mimetype,
+          content,
+          updatedAt: now(),
+        });
+        const updated = await repository.findDocument(req.params.id);
         if (deleteDocumentRagIndex) await deleteDocumentRagIndex(req.params.id);
         if (reindexDocument) await reindexDocument(updated);
         await audit(req.user, "object.upload", "document", req.params.id, document, updated, req.ip);
@@ -243,7 +231,7 @@ function createDocumentsRouter({
   });
 
   router.patch("/documents/:id", requirePermission("document:*"), async (req, res) => {
-    const before = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
+    const before = await repository.findDocument(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Document not found.");
     if (!(await canManage(req.user, before))) {
       return fail(res, 403, "PERMISSION_DENIED", "You can only manage documents for allowed roles.");
@@ -261,28 +249,31 @@ function createDocumentsRouter({
     if (projectId !== undefined && projectId && !(await canAccessProject(req.user, projectId))) {
       return fail(res, 403, "PERMISSION_DENIED", "You cannot move a document to this project.");
     }
-    if (title !== undefined) await run("UPDATE documents SET title = @title WHERE id = @id", { id: req.params.id, title: String(title).trim() });
-    if (type !== undefined) await run("UPDATE documents SET type = @type WHERE id = @id", { id: req.params.id, type });
-    if (category !== undefined) await run("UPDATE documents SET category = @category WHERE id = @id", { id: req.params.id, category });
-    if (owner !== undefined) await run("UPDATE documents SET owner = @owner WHERE id = @id", { id: req.params.id, owner: String(owner).trim() });
-    if (ownerRole !== undefined) await run("UPDATE documents SET owner_role = @ownerRole WHERE id = @id", { id: req.params.id, ownerRole });
-    if (projectId !== undefined) await run("UPDATE documents SET project_id = @projectId WHERE id = @id", { id: req.params.id, projectId: projectId || null });
-    await run("UPDATE documents SET updated_at = @updated WHERE id = @id", { id: req.params.id, updated: now() });
-    const after = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
+    await repository.updateDocumentMetadata({
+      id: req.params.id,
+      title: title === undefined ? undefined : String(title).trim(),
+      type,
+      category,
+      owner: owner === undefined ? undefined : String(owner).trim(),
+      ownerRole,
+      projectId: projectId === undefined ? undefined : projectId || null,
+      updatedAt: now(),
+    });
+    const after = await repository.findDocument(req.params.id);
     if (reindexDocument) await reindexDocument(after);
     await audit(req.user, "document.update", "document", req.params.id, before, after, req.ip);
     res.json(ok(mapDocument(after)));
   });
 
   router.delete("/documents/:id", requirePermission("document:*"), async (req, res) => {
-    const before = await row("SELECT * FROM documents WHERE id = @id", { id: req.params.id });
+    const before = await repository.findDocument(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Document not found.");
     if (!(await canManage(req.user, before))) {
       return fail(res, 403, "PERMISSION_DENIED", "You can only manage documents for allowed roles.");
     }
     await transaction(async () => {
       if (deleteDocumentRagIndex) await deleteDocumentRagIndex(req.params.id);
-      await run("DELETE FROM documents WHERE id = @id", { id: req.params.id });
+      await repository.deleteDocument(req.params.id);
       if (before.storage_key) await deleteObjectRow(before.storage_key);
       await audit(req.user, "document.delete", "document", req.params.id, before, null, req.ip);
     });
@@ -291,10 +282,10 @@ function createDocumentsRouter({
   });
 
   router.get("/objects/:key", async (req, res) => {
-    const object = await row("SELECT * FROM objects WHERE storage_key = @key", { key: req.params.key });
+    const object = await repository.findObjectByStorageKey(req.params.key);
     if (!object) return fail(res, 404, "RESOURCE_NOT_FOUND", "Object not found.");
     if (object.bucket === "documents") {
-      const document = await row("SELECT * FROM documents WHERE storage_key = @key", { key: req.params.key });
+      const document = await repository.findDocumentByStorageKey(req.params.key);
       if (!document) return fail(res, 404, "RESOURCE_NOT_FOUND", "Document object not found.");
       if (!(await canRead(req.user, document))) {
         return fail(res, 403, "PERMISSION_DENIED", "You cannot access this document object.");

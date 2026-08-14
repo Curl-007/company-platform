@@ -25,11 +25,11 @@ export function fetchProjectMembers(projectId: string): Promise<ProjectMember[]>
 }
 
 export function addProjectMember(projectId: string, input: { userName: string; role: string }): Promise<ProjectMember> {
-  return unwrapPost<ProjectMember>(`/api/projects/${projectId}/members`, input);
+  return unwrapPost<ProjectMember>(`/api/projects/${projectId}/members`, input, { invalidation: 'projects' });
 }
 
 export function deleteProjectMember(projectId: string, memberId: string): Promise<void> {
-  return unwrapDel(`/api/projects/${projectId}/members/${memberId}`);
+  return unwrapDel(`/api/projects/${projectId}/members/${memberId}`, { invalidation: 'projects' });
 }
 
 export function fetchProjectFlow(id: string): Promise<ProjectFlow> {
@@ -41,7 +41,7 @@ export function fetchFlowOverview(): Promise<FlowOverviewItem[]> {
 }
 
 export function updateProjectStatus(id: string, status: string, version: number): Promise<Project> {
-  return unwrapPatch<Project>(`/api/projects/${id}/status`, { status, version });
+  return unwrapPatch<Project>(`/api/projects/${id}/status`, { status, version }, { invalidation: 'projects' });
 }
 
 export interface CreateProjectInput {
@@ -58,6 +58,7 @@ export interface CreateProjectInput {
 export function createProject(input: CreateProjectInput, idempotencyKey?: string): Promise<Project> {
   return unwrapPost<Project>('/api/projects', input, {
     headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+    invalidation: 'projects',
   });
 }
 
@@ -80,7 +81,7 @@ export interface UpdateProjectInput {
 }
 
 export function updateProject(id: string, input: UpdateProjectInput): Promise<Project> {
-  return unwrapPatch<Project>(`/api/projects/${id}`, input);
+  return unwrapPatch<Project>(`/api/projects/${id}`, input, { invalidation: 'projects' });
 }
 
 export function fetchProjectSources(id: string, path?: string): Promise<SourceItem[]> {
@@ -93,7 +94,7 @@ export function fetchSourceFile(id: string, path: string): Promise<SourceFile> {
 }
 
 export function deleteProject(id: string): Promise<{ deleted: boolean }> {
-  return unwrapDel<{ deleted: boolean }>(`/api/projects/${id}`);
+  return unwrapDel<{ deleted: boolean }>(`/api/projects/${id}`, { invalidation: 'projects' });
 }
 
 export interface MilestoneInput {
@@ -103,11 +104,11 @@ export interface MilestoneInput {
 }
 
 export function addMilestone(projectId: string, input: MilestoneInput): Promise<{ milestones: Milestone[] }> {
-  return unwrapPost<{ milestones: Milestone[] }>(`/api/projects/${projectId}/milestones`, input);
+  return unwrapPost<{ milestones: Milestone[] }>(`/api/projects/${projectId}/milestones`, input, { invalidation: 'projects' });
 }
 
 export function deleteMilestone(projectId: string, index: number): Promise<{ milestones: Milestone[] }> {
-  return unwrapDel<{ milestones: Milestone[] }>(`/api/projects/${projectId}/milestones/${index}`);
+  return unwrapDel<{ milestones: Milestone[] }>(`/api/projects/${projectId}/milestones/${index}`, { invalidation: 'projects' });
 }
 
 export function fetchProjectRisks(projectId: string): Promise<ProjectRisk[]> {
@@ -133,11 +134,11 @@ export type UpdateProjectRiskInput = Partial<CreateProjectRiskInput> & {
 };
 
 export function createProjectRisk(projectId: string, input: CreateProjectRiskInput): Promise<ProjectRisk> {
-  return unwrapPost<ProjectRisk>(`/api/projects/${projectId}/risks`, input);
+  return unwrapPost<ProjectRisk>(`/api/projects/${projectId}/risks`, input, { invalidation: 'projects' });
 }
 
 export function updateProjectRisk(projectId: string, riskId: string, input: UpdateProjectRiskInput): Promise<ProjectRisk> {
-  return unwrapPatch<ProjectRisk>(`/api/projects/${projectId}/risks/${riskId}`, input);
+  return unwrapPatch<ProjectRisk>(`/api/projects/${projectId}/risks/${riskId}`, input, { invalidation: 'projects' });
 }
 
 export interface CreateProjectDecisionInput {
@@ -148,5 +149,5 @@ export interface CreateProjectDecisionInput {
 }
 
 export function createProjectDecision(projectId: string, input: CreateProjectDecisionInput): Promise<ProjectDecision> {
-  return unwrapPost<ProjectDecision>(`/api/projects/${projectId}/decisions`, input);
+  return unwrapPost<ProjectDecision>(`/api/projects/${projectId}/decisions`, input, { invalidation: 'projects' });
 }

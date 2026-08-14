@@ -29,6 +29,15 @@ test("maskDatabaseUrl redacts credentials", () => {
   assert.doesNotMatch(masked, /alice/);
 });
 
+test("maskDatabaseUrl omits query-string secrets and URL fragments", () => {
+  const masked = maskDatabaseUrl(
+    "postgres://alice:s3cret@db.example:5432/pm?password=query-secret&sslkey=private-key#fragment-secret",
+  );
+  assert.doesNotMatch(masked, /s3cret|alice|query-secret|private-key|fragment-secret/);
+  assert.doesNotMatch(masked, /\?/);
+  assert.doesNotMatch(masked, /#/);
+});
+
 test("createPgPool requires a connection string", () => {
   assert.throws(() => createPgPool({ env: {}, Pool: class {} }), /DATABASE_URL/);
 });
@@ -53,12 +62,18 @@ test("createPgPool builds a pool with injected Pool constructor", async () => {
 
   const handle = createPgPool({
     connectionString: "postgres://user:pass@localhost:5432/pm",
-    env: { PG_POOL_MAX: "3" },
+    env: {
+      PG_POOL_MAX: "3",
+      PG_IDLE_TIMEOUT_MS: "0",
+      PG_CONNECTION_TIMEOUT_MS: "-1",
+    },
     Pool: FakePool,
   });
 
   assert.equal(handle.dialect, "postgres");
   assert.equal(handle.pool.options.max, 3);
+  assert.equal(handle.pool.options.idleTimeoutMillis, 0);
+  assert.equal(handle.pool.options.connectionTimeoutMillis, 10_000);
   assert.match(handle.connectionStringMasked, /\*\*\*/);
   assert.equal(await handle.ping(), true);
   await handle.close();

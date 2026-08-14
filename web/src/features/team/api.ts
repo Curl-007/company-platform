@@ -23,7 +23,7 @@ export interface CreateUserInput {
 }
 
 export function createUser(input: CreateUserInput): Promise<User> {
-  return unwrapPost<User>('/api/users', input);
+  return unwrapPost<User>('/api/users', input, { invalidation: 'team' });
 }
 
 export interface UpdateUserInput {
@@ -40,11 +40,11 @@ export interface UpdateUserInput {
 }
 
 export function updateUser(id: string, input: UpdateUserInput): Promise<User> {
-  return unwrapPatch<User>(`/api/users/${id}`, input);
+  return unwrapPatch<User>(`/api/users/${id}`, input, { invalidation: 'team' });
 }
 
 export function deleteUser(id: string): Promise<{ deleted?: boolean; disabled?: boolean; id: string }> {
-  return unwrapDel<{ deleted?: boolean; disabled?: boolean; id: string }>(`/api/users/${id}`);
+  return unwrapDel<{ deleted?: boolean; disabled?: boolean; id: string }>(`/api/users/${id}`, { invalidation: 'team' });
 }
 
 export interface DepartmentInput {
@@ -60,13 +60,13 @@ export function fetchDepartments(): Promise<OrganizationUnit[]> {
 }
 
 export function createDepartment(input: DepartmentInput): Promise<OrganizationUnit> {
-  return unwrapPost<OrganizationUnit>('/api/org/departments', input);
+  return unwrapPost<OrganizationUnit>('/api/org/departments', input, { invalidation: 'team' });
 }
 
 export function updateDepartment(id: string, input: Partial<DepartmentInput>): Promise<OrganizationUnit> {
-  return unwrapPatch<OrganizationUnit>(`/api/org/departments/${id}`, input);
+  return unwrapPatch<OrganizationUnit>(`/api/org/departments/${id}`, input, { invalidation: 'team' });
 }
 
 export function deleteDepartment(id: string): Promise<{ deleted: boolean; id: string }> {
-  return unwrapDel<{ deleted: boolean; id: string }>(`/api/org/departments/${id}`);
+  return unwrapDel<{ deleted: boolean; id: string }>(`/api/org/departments/${id}`, { invalidation: 'team' });
 }

@@ -3,7 +3,7 @@ const test = require("node:test");
 const { createAiProviderStore } = require("../src/modules/ai/providerStore");
 const { normalizeAiWireApi } = require("../src/modules/ai/modelClient");
 
-function createMemoryStore(initial = {}) {
+function createMemoryStore(initial = {}, env = { AI_API_KEY: "env-secret" }) {
   const settings = new Map(Object.entries(initial));
   const writes = [];
   const row = (_sql, params) => {
@@ -39,7 +39,7 @@ function createMemoryStore(initial = {}) {
     now: () => "2026-07-15T10:00:00.000Z",
     secretCodec,
     normalizeWireApi: normalizeAiWireApi,
-    env: { AI_API_KEY: "env-secret" },
+    env,
   });
   return { settings, store, writes };
 }
@@ -78,6 +78,32 @@ test("AI provider store serializes API keys encrypted and migrates legacy plaint
   assert.equal((await store.resolveConfig()).apiKey, "plain-secret");
 });
 
+test("AI provider store treats a no-key local-compatible Provider as configured", async () => {
+  const { store } = createMemoryStore({
+    ai_providers: JSON.stringify({
+      activeId: "AIP-LOCAL",
+      providers: [{
+        id: "AIP-LOCAL",
+        name: "Local model",
+        preset: "local-openai-compatible",
+        provider: "openai-compatible",
+        baseUrl: "http://192.168.3.18:8000/v1",
+        model: "grok-4.6",
+        wireApi: "chat_completions",
+        enabled: true,
+      }],
+    }),
+  }, {});
+
+  const config = await store.resolveConfig();
+  const publicConfig = await store.publicConfig(config);
+  assert.equal(config.apiKey, "");
+  assert.equal(config.preset, "local-openai-compatible");
+  assert.equal(publicConfig.configured, true);
+  assert.equal(publicConfig.providers[0].preset, "local-openai-compatible");
+  assert.equal(publicConfig.providers[0].configured, true);
+});
+
 test("AI provider store records health success and degraded failure evidence", async () => {
   const { store } = createMemoryStore();
   const before = await store.publicConfig();
@@ -95,4 +121,10 @@ test("AI provider store records health success and degraded failure evidence", a
   assert.equal(degraded.health.lastWireApi, "responses");
   assert.equal(degraded.health.lastErrorCode, "502");
   assert.match(degraded.health.lastErrorMessage, /Bearer \[redacted\]/);
+
+  await store.recordSuccess({ wireApi: "chat_completions", latencyMs: 61 });
+  const recovered = await store.publicConfig();
+  assert.equal(recovered.health.status, "healthy");
+  assert.equal(recovered.health.consecutiveFailures, 0);
+  assert.equal(recovered.health.lastErrorCode, "502");
 });

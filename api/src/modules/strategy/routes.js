@@ -47,7 +47,6 @@ function createStrategyRouter({
   canManageProject,
   fail,
   hasPermission,
-  insert,
   json,
   mapProduct,
   mapProject,
@@ -55,11 +54,9 @@ function createStrategyRouter({
   now,
   ok,
   parse,
+  repository,
   requireAnyPermission,
   requirePermission,
-  row,
-  rows,
-  run,
   transaction = async (work) => work(),
 }) {
   const router = express.Router();
@@ -69,9 +66,9 @@ function createStrategyRouter({
   }
 
   async function visibleProducts(user) {
-    const allProducts = (await rows("SELECT * FROM products")).map(mapProduct);
+    const allProducts = (await repository.listProducts()).map(mapProduct);
     if (canReadAllProducts(user)) return allProducts;
-    const projects = await rows("SELECT id, product_id FROM projects WHERE deleted_at IS NULL");
+    const projects = await repository.listLiveProjectIdsWithProduct();
     const visible = await filterAsync(projects, async (project) => await canAccessProject(user, project.id));
     const visibleIds = new Set(visible.map((project) => project.product_id).filter(Boolean));
     return allProducts.filter((product) => visibleIds.has(product.id));
@@ -79,23 +76,17 @@ function createStrategyRouter({
 
   // Single source of truth: projects.program_id. programs.project_ids is a denormalized cache.
   async function allProgramProjectIds(program) {
-    return (await rows(
-      "SELECT id FROM projects WHERE program_id = @programId AND deleted_at IS NULL ORDER BY id",
-      { programId: program.id },
-    )).map((project) => project.id);
+    return repository.listProgramProjectIds(program.id);
   }
 
   async function syncProgramProjectIdsCache(programId, projectIds, updatedAt) {
-    await run(
-      "UPDATE programs SET project_ids = @projectIds, updated_at = @updatedAt WHERE id = @id",
-      { id: programId, projectIds: json(projectIds), updatedAt },
-    );
+    await repository.updateProgramProjectIdsCache({ id: programId, projectIds: json(projectIds), updatedAt });
   }
 
   async function projectProgramAssignments(projectIds) {
     const assignments = new Map();
     for (const projectId of projectIds) {
-      const project = await row("SELECT id, program_id FROM projects WHERE id = @id", { id: projectId });
+      const project = await repository.findProjectProgramAssignment(projectId);
       if (project) assignments.set(projectId, project.program_id || null);
     }
     return assignments;
@@ -104,7 +95,7 @@ function createStrategyRouter({
   async function refreshProgramCaches(programIds, updatedAt) {
     for (const programId of programIds) {
       if (!programId) continue;
-      const program = await row("SELECT id FROM programs WHERE id = @id", { id: programId });
+      const program = await repository.findProgramId(programId);
       if (!program) continue;
       const linkedIds = await allProgramProjectIds(program);
       await syncProgramProjectIdsCache(program.id, linkedIds, updatedAt);
@@ -112,13 +103,13 @@ function createStrategyRouter({
   }
 
   async function mapProgram(program, user) {
-    const allProjects = await rows("SELECT id FROM projects WHERE deleted_at IS NULL");
+    const allProjects = await repository.listLiveProjectIds();
     const allowed = await filterAsync(allProjects, async (project) => await canAccessProject(user, project.id));
     const allowedIds = new Set(allowed.map((project) => project.id));
     const projectIds = (await allProgramProjectIds(program)).filter((id) => allowedIds.has(id));
     const linkedProjects = [];
     for (const id of projectIds) {
-      const project = await row("SELECT * FROM projects WHERE id = @id AND deleted_at IS NULL", { id });
+      const project = await repository.findLiveProject(id);
       if (project) linkedProjects.push(mapProject(project));
     }
     const derivedRisks = linkedProjects
@@ -165,7 +156,7 @@ function createStrategyRouter({
   }
 
   async function assertProjectLinks(projectIds, user) {
-    const missing = await filterAsync(projectIds, async (id) => !(await row("SELECT id FROM projects WHERE id = @id AND deleted_at IS NULL", { id })));
+    const missing = await filterAsync(projectIds, async (id) => !(await repository.findLiveProjectId(id)));
     if (missing.length) return { error: `Projects do not exist: ${missing.join(", ")}` };
     const inaccessible = await filterAsync(projectIds, async (id) => !(await canManageProject(user, id)));
     if (inaccessible.length) return { error: `Projects cannot be managed: ${inaccessible.join(", ")}`, status: 403 };
@@ -173,13 +164,13 @@ function createStrategyRouter({
   }
 
   async function assertProductLinks(productIds) {
-    const missing = await filterAsync(productIds, async (id) => !(await row("SELECT id FROM products WHERE id = @id", { id })));
+    const missing = await filterAsync(productIds, async (id) => !(await repository.findProductId(id)));
     return missing.length ? `Products do not exist: ${missing.join(", ")}` : null;
   }
 
   async function assertGoalLinks(programIds, portfolioIds) {
-    const missingPrograms = await filterAsync(programIds, async (id) => !(await row("SELECT id FROM programs WHERE id = @id", { id })));
-    const missingPortfolios = await filterAsync(portfolioIds, async (id) => !(await row("SELECT id FROM portfolios WHERE id = @id", { id })));
+    const missingPrograms = await filterAsync(programIds, async (id) => !(await repository.findProgramId(id)));
+    const missingPortfolios = await filterAsync(portfolioIds, async (id) => !(await repository.findPortfolioId(id)));
     if (missingPrograms.length || missingPortfolios.length) {
       return `Strategic links do not exist: ${[...missingPrograms, ...missingPortfolios].join(", ")}`;
     }
@@ -189,7 +180,7 @@ function createStrategyRouter({
   async function mapGoal(goal, user) {
     const programIds = ids(parse(goal.program_ids, []));
     const portfolioIds = ids(parse(goal.portfolio_ids, []));
-    const programs = await rows("SELECT * FROM programs");
+    const programs = await repository.listProgramsUnsorted();
     const visibleProgramIds = new Set();
     for (const program of programs) {
       const mapped = await mapProgram(program, user);
@@ -197,7 +188,7 @@ function createStrategyRouter({
         visibleProgramIds.add(mapped.id);
       }
     }
-    const portfolios = await rows("SELECT * FROM portfolios");
+    const portfolios = await repository.listPortfoliosUnsorted();
     const visiblePortfolioIds = new Set();
     for (const portfolio of portfolios) {
       const mapped = await mapPortfolio(portfolio, user);
@@ -223,7 +214,7 @@ function createStrategyRouter({
 
   router.get("/strategic-goals", requireAnyPermission(["product:*", "project:*", "project:read"]), async (req, res) => {
     const canReadAll = hasPermission(req.user, "project:*") || hasPermission(req.user, "product:*");
-    const goalRows = await rows("SELECT * FROM strategic_goals ORDER BY updated_at DESC");
+    const goalRows = await repository.listStrategicGoals();
     const goals = await mapAsync(goalRows, async (goal) => await mapGoal(goal, req.user));
     res.json(ok(canReadAll ? goals : goals.filter((goal) => goal.programIds.length || goal.portfolioIds.length)));
   });
@@ -248,13 +239,13 @@ function createStrategyRouter({
       success_metrics: json(metricItems(req.body?.successMetrics)),
       program_ids: json(programIds), portfolio_ids: json(portfolioIds), created_at: createdAt, updated_at: createdAt,
     };
-    await insert("strategic_goals", goal);
+    await repository.createStrategicGoal(goal);
     await audit(req.user, "strategic_goal.create", "strategic_goal", goal.id, null, goal, req.ip);
     res.status(201).json(ok(await mapGoal(goal, req.user)));
   });
 
   router.patch("/strategic-goals/:id", requirePermission("admin:*"), async (req, res) => {
-    const before = await row("SELECT * FROM strategic_goals WHERE id = @id", { id: req.params.id });
+    const before = await repository.findStrategicGoal(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Strategic goal not found.");
     const name = req.body?.name === undefined ? before.name : asTrimmed(req.body.name, 300);
     const owner = req.body?.owner === undefined ? before.owner : asTrimmed(req.body.owner, 200);
@@ -267,37 +258,35 @@ function createStrategyRouter({
     if (status !== before.status && !GOAL_TRANSITIONS[before.status]?.has(status)) return fail(res, 409, "STATE_TRANSITION_NOT_ALLOWED", `Goal cannot transition from ${before.status} to ${status}.`);
     const linkError = await assertGoalLinks(programIds, portfolioIds);
     if (linkError) return fail(res, 400, "VALIDATION_FAILED", linkError);
-    await run(`UPDATE strategic_goals SET name = @name, owner = @owner, objective = @objective, status = @status,
-      period_start = @periodStart, period_end = @periodEnd, success_metrics = @successMetrics,
-      program_ids = @programIds, portfolio_ids = @portfolioIds, updated_at = @updatedAt WHERE id = @id`, {
+    await repository.updateStrategicGoal({
       id: before.id, name, owner, objective, status,
       periodStart: req.body?.periodStart === undefined ? before.period_start : asTrimmed(req.body.periodStart, 32) || null,
       periodEnd: req.body?.periodEnd === undefined ? before.period_end : asTrimmed(req.body.periodEnd, 32) || null,
       successMetrics: json(req.body?.successMetrics === undefined ? metricItems(parse(before.success_metrics, [])) : metricItems(req.body.successMetrics)),
       programIds: json(programIds), portfolioIds: json(portfolioIds), updatedAt: now(),
     });
-    const after = await row("SELECT * FROM strategic_goals WHERE id = @id", { id: before.id });
+    const after = await repository.findStrategicGoal(before.id);
     await audit(req.user, "strategic_goal.update", "strategic_goal", before.id, before, after, req.ip);
     res.json(ok(await mapGoal(after, req.user)));
   });
 
   router.delete("/strategic-goals/:id", requirePermission("admin:*"), async (req, res) => {
-    const before = await row("SELECT * FROM strategic_goals WHERE id = @id", { id: req.params.id });
+    const before = await repository.findStrategicGoal(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Strategic goal not found.");
-    await run("DELETE FROM strategic_goals WHERE id = @id", { id: before.id });
+    await repository.deleteStrategicGoal(before.id);
     await audit(req.user, "strategic_goal.delete", "strategic_goal", before.id, before, null, req.ip);
     res.json(ok({ deleted: true, id: before.id }));
   });
 
   router.get("/programs", requireAnyPermission(["product:*", "project:*", "project:read"]), async (req, res) => {
-    const programRows = await rows("SELECT * FROM programs ORDER BY updated_at DESC");
+    const programRows = await repository.listPrograms();
     const programs = await mapAsync(programRows, async (program) => await mapProgram(program, req.user));
     const canReadCatalog = hasPermission(req.user, "project:*") || hasPermission(req.user, "product:*");
     res.json(ok(canReadCatalog ? programs : programs.filter((program) => program.projectIds.length)));
   });
 
   router.get("/programs/:id", requireAnyPermission(["product:*", "project:*", "project:read"]), async (req, res) => {
-    const program = await row("SELECT * FROM programs WHERE id = @id", { id: req.params.id });
+    const program = await repository.findProgram(req.params.id);
     if (!program) return fail(res, 404, "RESOURCE_NOT_FOUND", "Program not found.");
     const mapped = await mapProgram(program, req.user);
     if (!await canReadProgram(program, req.user, mapped)) return fail(res, 403, "PERMISSION_DENIED", "You do not have access to this program.");
@@ -305,13 +294,13 @@ function createStrategyRouter({
   });
 
   router.get("/programs/:id/projects", requireAnyPermission(["product:*", "project:*", "project:read"]), async (req, res) => {
-    const program = await row("SELECT * FROM programs WHERE id = @id", { id: req.params.id });
+    const program = await repository.findProgram(req.params.id);
     if (!program) return fail(res, 404, "RESOURCE_NOT_FOUND", "Program not found.");
     const mapped = await mapProgram(program, req.user);
     if (!await canReadProgram(program, req.user, mapped)) return fail(res, 403, "PERMISSION_DENIED", "You do not have access to this program.");
     const projects = [];
     for (const id of mapped.projectIds) {
-      const project = await row("SELECT * FROM projects WHERE id = @id AND deleted_at IS NULL", { id });
+      const project = await repository.findLiveProject(id);
       if (project) projects.push(mapProject(project));
     }
     res.json(ok(projects));
@@ -334,13 +323,10 @@ function createStrategyRouter({
         id: await nextId("PROG", "programs"), name, owner, objective, status,
         health_score: 0, progress: 0, project_ids: json(projectIds), risks: json(riskItems(req.body?.risks)), updated_at: stamp,
       };
-      await insert("programs", record);
+      await repository.createProgram(record);
       for (const id of projectIds) {
         if (previousAssignments.get(id) === record.id) continue;
-        await run(
-          "UPDATE projects SET program_id = @programId, updated_at = @updatedAt, version = COALESCE(version, 1) + 1 WHERE id = @id",
-          { id, programId: record.id, updatedAt: stamp },
-        );
+        await repository.assignProjectToProgram({ id, programId: record.id, updatedAt: stamp });
       }
       const affectedPrograms = new Set([...previousAssignments.values(), record.id]);
       await refreshProgramCaches(affectedPrograms, stamp);
@@ -353,7 +339,7 @@ function createStrategyRouter({
   });
 
   router.patch("/programs/:id", requirePermission("project:*"), async (req, res) => {
-    const before = await row("SELECT * FROM programs WHERE id = @id", { id: req.params.id });
+    const before = await repository.findProgram(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Program not found.");
     const nextProjectIds = req.body?.projectIds === undefined ? await allProgramProjectIds(before) : ids(req.body.projectIds);
     const links = await assertProjectLinks(nextProjectIds, req.user);
@@ -369,28 +355,21 @@ function createStrategyRouter({
       const affectedProjectIds = [...new Set([...previousProjectIds, ...nextProjectIds])];
       const previousAssignments = await projectProgramAssignments(affectedProjectIds);
       const updatedAt = now();
-      await run(`UPDATE programs SET name = @name, owner = @owner, objective = @objective, status = @status,
-        risks = @risks, updated_at = @updatedAt WHERE id = @id`, {
+      await repository.updateProgram({
         id: before.id, name, owner, objective, status,
         risks: json(req.body?.risks === undefined ? riskItems(parse(before.risks, [])) : riskItems(req.body.risks)), updatedAt,
       });
       for (const id of previousProjectIds.filter((item) => !nextProjectIds.includes(item))) {
-        await run(
-          "UPDATE projects SET program_id = NULL, updated_at = @updatedAt, version = COALESCE(version, 1) + 1 WHERE id = @id AND program_id = @programId",
-          { id, programId: before.id, updatedAt },
-        );
+        await repository.detachProjectFromProgram({ id, programId: before.id, updatedAt });
       }
       for (const id of nextProjectIds) {
         if (previousAssignments.get(id) === before.id) continue;
-        await run(
-          "UPDATE projects SET program_id = @programId, updated_at = @updatedAt, version = COALESCE(version, 1) + 1 WHERE id = @id",
-          { id, programId: before.id, updatedAt },
-        );
+        await repository.assignProjectToProgram({ id, programId: before.id, updatedAt });
       }
       const affectedPrograms = new Set([...previousAssignments.values(), before.id]);
       await refreshProgramCaches(affectedPrograms, updatedAt);
       const linkedIds = await allProgramProjectIds(before);
-      const record = await row("SELECT * FROM programs WHERE id = @id", { id: before.id });
+      const record = await repository.findProgram(before.id);
       record.project_ids = json(linkedIds);
       await audit(req.user, "program.update", "program", before.id, before, record, req.ip);
       return record;
@@ -399,23 +378,23 @@ function createStrategyRouter({
   });
 
   router.delete("/programs/:id", requirePermission("project:*"), async (req, res) => {
-    const before = await row("SELECT * FROM programs WHERE id = @id", { id: req.params.id });
+    const before = await repository.findProgram(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Program not found.");
-    const linked = await rows("SELECT id FROM projects WHERE program_id = @programId ORDER BY id", { programId: before.id });
+    const linked = await repository.listProgramProjectsIncludingArchived(before.id);
     if (linked.length) {
       return fail(res, 409, "PROGRAM_HAS_PROJECTS", "Detach linked projects, including archived records, before deleting this program.", {
         dependencies: { projects: { count: linked.length, sampleIds: linked.slice(0, 10).map((item) => item.id) } },
       });
     }
     await transaction(async () => {
-      await run("DELETE FROM programs WHERE id = @id", { id: before.id });
+      await repository.deleteProgram(before.id);
       await audit(req.user, "program.delete", "program", before.id, before, null, req.ip);
     });
     res.json(ok({ deleted: true, id: before.id }));
   });
 
   router.get("/portfolios", requireAnyPermission(["product:*", "project:*", "project:read"]), async (req, res) => {
-    const portfolioRows = await rows("SELECT * FROM portfolios ORDER BY name");
+    const portfolioRows = await repository.listPortfolios();
     const portfolios = await mapAsync(portfolioRows, async (portfolio) => await mapPortfolio(portfolio, req.user));
     const canReadCatalog = canReadAllProducts(req.user);
     res.json(ok(canReadCatalog ? portfolios : portfolios.filter((portfolio) => portfolio.productIds.length)));
@@ -432,13 +411,13 @@ function createStrategyRouter({
     const linkError = await assertProductLinks(productIds);
     if (linkError) return fail(res, 400, "VALIDATION_FAILED", linkError);
     const portfolio = { id: await nextId("PORT", "portfolios"), name, owner, objective, status, product_ids: json(productIds), roadmap: json(roadmapItems(req.body?.roadmap)) };
-    await insert("portfolios", portfolio);
+    await repository.createPortfolio(portfolio);
     await audit(req.user, "portfolio.create", "portfolio", portfolio.id, null, portfolio, req.ip);
     res.status(201).json(ok(await mapPortfolio(portfolio, req.user)));
   });
 
   router.patch("/portfolios/:id", requirePermission("product:*"), async (req, res) => {
-    const before = await row("SELECT * FROM portfolios WHERE id = @id", { id: req.params.id });
+    const before = await repository.findPortfolio(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Portfolio not found.");
     const productIds = req.body?.productIds === undefined ? ids(parse(before.product_ids, [])) : ids(req.body.productIds);
     const linkError = await assertProductLinks(productIds);
@@ -450,19 +429,18 @@ function createStrategyRouter({
     if (!name || !owner || !objective) return fail(res, 400, "VALIDATION_FAILED", "Portfolio name, owner, and objective are required.");
     if (!PORTFOLIO_STATUSES.has(status)) return fail(res, 400, "VALIDATION_FAILED", "Invalid portfolio status.");
     const roadmap = req.body?.roadmap === undefined ? roadmapItems(parse(before.roadmap, [])) : roadmapItems(req.body.roadmap);
-    await run(`UPDATE portfolios SET name = @name, owner = @owner, objective = @objective, status = @status,
-      product_ids = @productIds, roadmap = @roadmap WHERE id = @id`, { id: before.id, name, owner, objective, status, productIds: json(productIds), roadmap: json(roadmap) });
-    const after = await row("SELECT * FROM portfolios WHERE id = @id", { id: before.id });
+    await repository.updatePortfolio({ id: before.id, name, owner, objective, status, productIds: json(productIds), roadmap: json(roadmap) });
+    const after = await repository.findPortfolio(before.id);
     await audit(req.user, "portfolio.update", "portfolio", before.id, before, after, req.ip);
     res.json(ok(await mapPortfolio(after, req.user)));
   });
 
   router.delete("/portfolios/:id", requirePermission("product:*"), async (req, res) => {
-    const before = await row("SELECT * FROM portfolios WHERE id = @id", { id: req.params.id });
+    const before = await repository.findPortfolio(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Portfolio not found.");
-    const requirements = await rows("SELECT id FROM requirements WHERE portfolio_id = @id AND deleted_at IS NULL", { id: before.id });
+    const requirements = await repository.listPortfolioRequirementIds(before.id);
     if (requirements.length) return fail(res, 409, "PORTFOLIO_HAS_REQUIREMENTS", "Detach linked requirements before deleting this portfolio.", { requirementIds: requirements.map((item) => item.id) });
-    await run("DELETE FROM portfolios WHERE id = @id", { id: before.id });
+    await repository.deletePortfolio(before.id);
     await audit(req.user, "portfolio.delete", "portfolio", before.id, before, null, req.ip);
     res.json(ok({ deleted: true, id: before.id }));
   });

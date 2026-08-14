@@ -1,5 +1,6 @@
 const express = require("express");
 const { filterAsync } = require("../../lib/asyncIter");
+const { hasPermission } = require("../../security/accessControl");
 const { canTransition } = require("../../workflow/stateMachine");
 const {
   buildRequirementCreate,
@@ -50,6 +51,67 @@ function createRequirementsRouter({
   transaction,
 }) {
   const router = express.Router();
+
+  function hasCatalogAccess(user) {
+    return hasPermission(user, "product:*") || hasPermission(user, "project:*");
+  }
+
+  function portfolioProductIds(portfolio) {
+    const source = portfolio?.product_ids;
+    if (Array.isArray(source)) return source.map((id) => String(id).trim()).filter(Boolean);
+    if (typeof source !== "string") return [];
+    try {
+      const parsed = JSON.parse(source);
+      return Array.isArray(parsed) ? parsed.map((id) => String(id).trim()).filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async function canAccessProduct(user, productId) {
+    if (hasCatalogAccess(user)) return true;
+    const projects = await repository.listActiveProjectIdsByProduct(productId);
+    return (await filterAsync(projects, async (project) => await canAccessProject(user, project.id))).length > 0;
+  }
+
+  async function canAccessPortfolio(user, portfolio) {
+    if (hasCatalogAccess(user)) return true;
+    for (const productId of portfolioProductIds(portfolio)) {
+      if (await canAccessProduct(user, productId)) return true;
+    }
+    return false;
+  }
+
+  async function validateRequirementReferences(user, { productId, portfolioId }) {
+    const product = productId ? await repository.findProduct(productId) : null;
+    if (productId && !product) {
+      return { ok: false, status: 404, code: "RESOURCE_NOT_FOUND", message: "Product not found." };
+    }
+    if (product && !(await canAccessProduct(user, product.id))) {
+      return { ok: false, status: 403, code: "PERMISSION_DENIED", message: "Cannot access this product." };
+    }
+
+    const portfolio = portfolioId ? await repository.findPortfolio(portfolioId) : null;
+    if (portfolioId && !portfolio) {
+      return { ok: false, status: 404, code: "RESOURCE_NOT_FOUND", message: "Portfolio not found." };
+    }
+    if (portfolio && !(await canAccessPortfolio(user, portfolio))) {
+      return { ok: false, status: 403, code: "PERMISSION_DENIED", message: "Cannot access this portfolio." };
+    }
+    if (product && portfolio && !portfolioProductIds(portfolio).includes(product.id)) {
+      return {
+        ok: false,
+        status: 409,
+        code: "PRODUCT_PORTFOLIO_MISMATCH",
+        message: "Product must belong to the selected portfolio.",
+      };
+    }
+    return { ok: true };
+  }
+
+  function failReferenceValidation(res, validation) {
+    return fail(res, validation.status, validation.code, validation.message);
+  }
 
   async function validateParentRequirement(res, { requirementId, parentId, projectId }) {
     if (!parentId) return true;
@@ -102,11 +164,15 @@ function createRequirementsRouter({
     } = parsed.data;
     if (!(await canWriteProject(req.user, projectId))) return fail(res, 403, "PROJECT_ARCHIVED_OR_ACCESS_DENIED", "Cannot create a requirement in an archived or inaccessible project.");
     if (!(await canAccessProject(req.user, projectId))) return fail(res, 403, "PERMISSION_DENIED", "无权在该项目中创建需求。");
+    const referenceValidation = await validateRequirementReferences(req.user, { productId, portfolioId });
+    if (!referenceValidation.ok) return failReferenceValidation(res, referenceValidation);
     if (!(await validateParentRequirement(res, { parentId, projectId }))) return;
     const idempotency = await beginIdempotentRequest(req, res, "requirement.create");
     if (!idempotency) return;
     try {
       const response = await transaction(async () => {
+        const currentReferenceValidation = await validateRequirementReferences(req.user, { productId, portfolioId });
+        if (!currentReferenceValidation.ok) return { referenceValidation: currentReferenceValidation };
         const requirement = buildRequirementCreate(
           { title, projectId, owner, priority, description, acceptanceCriteria, productId, portfolioId, parentId, assignee, assigneeRole },
           { id: await nextId("REQ", "requirements"), json },
@@ -127,6 +193,10 @@ function createRequirementsRouter({
         await idempotency.commit(201, created);
         return created;
       });
+      if (response.referenceValidation) {
+        await idempotency.abort();
+        return failReferenceValidation(res, response.referenceValidation);
+      }
       res.status(201).json(response);
     } catch (error) {
       await idempotency.abort();
@@ -181,6 +251,8 @@ function createRequirementsRouter({
       assigneeRole,
       assignmentStatus,
       completion,
+      productId,
+      portfolioId,
     } = parsed.data;
     if (parentId !== undefined && parentId === req.params.id) {
       return fail(res, 400, "VALIDATION_FAILED", "A requirement cannot be its own parent.");
@@ -190,12 +262,22 @@ function createRequirementsRouter({
       parentId,
       projectId: before.project_id,
     }))) return;
+    const referenceValidation = await validateRequirementReferences(req.user, {
+      productId: productId === undefined ? before.product_id || null : productId,
+      portfolioId: portfolioId === undefined ? before.portfolio_id || null : portfolioId,
+    });
+    if (!referenceValidation.ok) return failReferenceValidation(res, referenceValidation);
     const next = buildRequirementUpdate(
       before,
-      { title, description, priority, acceptanceCriteria, parentId, assignee, assigneeRole, assignmentStatus, completion },
+      { title, description, priority, acceptanceCriteria, productId, portfolioId, parentId, assignee, assigneeRole, assignmentStatus, completion },
       { expectedVersion, json },
     );
     const outcome = await transaction(async () => {
+      const currentReferenceValidation = await validateRequirementReferences(req.user, {
+        productId: next.productId,
+        portfolioId: next.portfolioId,
+      });
+      if (!currentReferenceValidation.ok) return { referenceValidation: currentReferenceValidation };
       const updateResult = await repository.updateRequirement(next);
       if (updateResult.changes === 0) return { conflict: true };
       const after = await repository.findRequirement(req.params.id);
@@ -205,6 +287,7 @@ function createRequirementsRouter({
       await audit(req.user, "requirement.update", "requirement", req.params.id, before, result, req.ip);
       return { data: mapRequirement(result) };
     });
+    if (outcome.referenceValidation) return failReferenceValidation(res, outcome.referenceValidation);
     if (outcome.conflict) return await versionConflict(res, before, expectedVersion, repository, fail);
     res.json(ok(outcome.data));
   });

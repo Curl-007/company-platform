@@ -139,9 +139,19 @@ function createMulterFileFilter() {
   };
 }
 
+function createDocumentUpload({ multer, storageDir, maxUploadBytes = MAX_UPLOAD_BYTES }) {
+  if (typeof multer !== "function") throw new Error("multer is required to create document upload middleware.");
+  return multer({
+    dest: storageDir,
+    limits: { fileSize: maxUploadBytes },
+    fileFilter: createMulterFileFilter(),
+  });
+}
+
 module.exports = {
   MAX_UPLOAD_BYTES,
   ALLOWED_EXTENSIONS,
+  createDocumentUpload,
   validateUploadMeta,
   createMulterFileFilter,
   isAllowedExtension,

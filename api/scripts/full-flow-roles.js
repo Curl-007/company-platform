@@ -1734,7 +1734,8 @@ async function main() {
       );
       assignBugDevId = idOf(bugDev.json);
       if (assignBugDevId) {
-        // Defects have no GET /defects/:id; verify via create payload + list filter.
+        // Verify the create envelope and the scoped list; detail reads are also
+        // available for optimistic-lock refreshes below.
         const created = dataOf(bugDev.json);
         const list = await req("GET", `/api/defects?assignee=${encodeURIComponent(devName)}`, { token: qaToken });
         const found = itemsOf(list.json).find((d) => d.id === assignBugDevId);
@@ -1872,7 +1873,7 @@ async function main() {
       );
     }
     if (sessions.dev?.token && assignBugDevId) {
-      // No GET /defects/:id — assert via filtered list + personal dashboard.
+      // Keep the filtered-list assertion as a scope check for the DEV session.
       const list = await req("GET", `/api/defects?assignee=${encodeURIComponent(devName)}`, {
         token: sessions.dev.token,
       });

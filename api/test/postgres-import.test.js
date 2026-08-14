@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -22,6 +23,21 @@ const {
   resolveReplaceConflictTarget,
 } = require("../src/db/sql");
 const { reconcileImport } = require("../scripts/reconcile-postgres-import");
+const { CORE_TABLES, REFERENCE_RULES } = require("../src/db/migrationPreflight");
+
+function postgresBaselineColumns(sql, tableName) {
+  const escapedTableName = tableName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const tableMatch = sql.match(new RegExp(`CREATE TABLE IF NOT EXISTS ${escapedTableName} \\(([\\s\\S]*?)\\n\\);`));
+  if (!tableMatch) return null;
+  return new Set(
+    tableMatch[1]
+      .split("\n")
+      .map((line) => line.trim().replace(/,$/, ""))
+      .filter(Boolean)
+      .filter((line) => !/^(PRIMARY|UNIQUE|CHECK|CONSTRAINT)\b/i.test(line))
+      .map((line) => line.split(/\s+/)[0]),
+  );
+}
 
 test("resolveConflictTarget prefers key for app_settings and job_id for ai_jobs", () => {
   assert.equal(resolveConflictTarget("app_settings", ["key", "value", "updated_at"]), "key");
@@ -91,9 +107,9 @@ test("splitSqlStatements keeps defaults with semicolons inside strings out of sp
 
 test("listMigrationFiles discovers current migrations with stable checksums", () => {
   const migrations = listMigrationFiles(path.resolve(__dirname, "..", "migrations"));
-  assert.equal(migrations.length, 23);
+  assert.equal(migrations.length, 24);
   assert.equal(migrations[0].id, "20260713_01_work_calendar");
-  assert.equal(migrations[migrations.length - 1].id, "20260723_23_user_token_version");
+  assert.equal(migrations[migrations.length - 1].id, "20260814_24_ai_capability_invocations");
   assert.match(migrations[0].checksum, /^[a-f0-9]{64}$/);
 });
 
@@ -118,6 +134,22 @@ test("baseline schema file exists without SQL FK or jsonb", () => {
   assert.doesNotMatch(sql, /\bVECTOR\b/i);
 });
 
+test("PostgreSQL baseline covers every migration-preflight table and logical reference endpoint", () => {
+  const sql = fs.readFileSync(DEFAULT_BASELINE, "utf8");
+  const missingTables = CORE_TABLES.filter((tableName) => !postgresBaselineColumns(sql, tableName));
+  assert.deepEqual(missingTables, []);
+
+  const missingReferenceColumns = REFERENCE_RULES.flatMap(([childTable, childColumn, parentTable, parentColumn]) => {
+    const childColumns = postgresBaselineColumns(sql, childTable);
+    const parentColumns = postgresBaselineColumns(sql, parentTable);
+    return [
+      !childColumns?.has(childColumn) && `${childTable}.${childColumn}`,
+      !parentColumns?.has(parentColumn) && `${parentTable}.${parentColumn}`,
+    ].filter(Boolean);
+  });
+  assert.deepEqual([...new Set(missingReferenceColumns)], []);
+});
+
 test("import fails closed without connection string", async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "pm-import-noconnect-"));
   try {
@@ -133,6 +165,40 @@ test("import fails closed without connection string", async () => {
       () => importNdjsonToPostgres({ exportDirectory: directory, env: {}, connectionString: null }),
       /connection string is required/,
     );
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("import validates the export manifest before connecting to PostgreSQL", async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "pm-import-invalid-export-"));
+  try {
+    fs.writeFileSync(
+      path.join(directory, "manifest.json"),
+      JSON.stringify({
+        format: "company-project-management/sqlite-ndjson-export/v1",
+        tables: [{ name: "projects", file: "projects.ndjson", rowCount: 1, sha256: "0".repeat(64) }],
+        postgresImport: { tableOrder: ["projects"], deferredReferenceRules: [] },
+        sourceValidation: { integrity: ["ok"], referenceViolations: [], jsonViolations: [] },
+      }),
+    );
+    fs.writeFileSync(path.join(directory, "projects.ndjson"), '{"id":"P1"}\n');
+    let connected = false;
+    class UnexpectedPool {
+      async connect() {
+        connected = true;
+        throw new Error("must not connect");
+      }
+    }
+    await assert.rejects(
+      () => importNdjsonToPostgres({
+        exportDirectory: directory,
+        connectionString: "postgres://user:secret@localhost:5432/pm",
+        Pool: UnexpectedPool,
+      }),
+      /PostgreSQL export verification failed: SHA-256 mismatch/,
+    );
+    assert.equal(connected, false);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
@@ -217,27 +283,25 @@ test("import tableOrder and SQL generation are compatible with reconcile fixture
 test("fake-pool import streams rows by tableOrder and rolls back on mid-table failure", async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "pm-import-fake-"));
   try {
+    const projectsContent = `${JSON.stringify({ id: "P1", name: "One" })}\n${JSON.stringify({ id: "P2", name: "Two" })}\n`;
+    const settingsContent = `${JSON.stringify({ key: "theme", value: "dark", updated_at: "t" })}\n`;
+    fs.writeFileSync(path.join(directory, "projects.ndjson"), projectsContent);
+    fs.writeFileSync(path.join(directory, "app_settings.ndjson"), settingsContent);
+    const sha256 = (content) => crypto.createHash("sha256").update(content).digest("hex");
     const manifest = {
       format: "company-project-management/sqlite-ndjson-export/v1",
       tables: [
-        { name: "projects", file: "projects.ndjson", rowCount: 2 },
-        { name: "app_settings", file: "app_settings.ndjson", rowCount: 1 },
+        { name: "projects", file: "projects.ndjson", rowCount: 2, sha256: sha256(projectsContent), sqliteSchema: "CREATE TABLE projects (id TEXT PRIMARY KEY, name TEXT)" },
+        { name: "app_settings", file: "app_settings.ndjson", rowCount: 1, sha256: sha256(settingsContent), sqliteSchema: "CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)" },
       ],
       postgresImport: {
         tableOrder: ["projects", "app_settings"],
         deferredReferenceRules: [],
         appliedMigrations: [],
       },
+      sourceValidation: { integrity: ["ok"], referenceViolations: [], jsonViolations: [] },
     };
     fs.writeFileSync(path.join(directory, "manifest.json"), JSON.stringify(manifest));
-    fs.writeFileSync(
-      path.join(directory, "projects.ndjson"),
-      `${JSON.stringify({ id: "P1", name: "One" })}\n${JSON.stringify({ id: "P2", name: "Two" })}\n`,
-    );
-    fs.writeFileSync(
-      path.join(directory, "app_settings.ndjson"),
-      `${JSON.stringify({ key: "theme", value: "dark", updated_at: "t" })}\n`,
-    );
 
     const queries = [];
     let failOnThirdInsert = false;

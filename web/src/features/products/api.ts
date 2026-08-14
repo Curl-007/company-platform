@@ -26,15 +26,15 @@ export interface CreateProductInput {
 }
 
 export function createProduct(input: CreateProductInput): Promise<Product> {
-  return unwrapPost<Product>('/api/products', input);
+  return unwrapPost<Product>('/api/products', input, { invalidation: 'products' });
 }
 
 export function updateProduct(id: string, input: Partial<CreateProductInput>): Promise<Product> {
-  return unwrapPatch<Product>(`/api/products/${id}`, input);
+  return unwrapPatch<Product>(`/api/products/${id}`, input, { invalidation: 'products' });
 }
 
 export function deleteProduct(id: string, cascade?: boolean): Promise<void> {
-  return unwrapDel(`/api/products/${id}${cascade ? '?cascade=true' : ''}`);
+  return unwrapDel(`/api/products/${id}${cascade ? '?cascade=true' : ''}`, { invalidation: 'products' });
 }
 
 export interface ProductImageUploadResult {
@@ -70,12 +70,14 @@ export function uploadProductImage(productId: string, file: File): Promise<Produ
   body.append('file', file, file.name);
   return unwrapPost<ProductImageUploadResult>(`/api/products/${encodeURIComponent(productId)}/images`, body, {
     timeoutMs: 30_000,
+    invalidation: 'products',
   });
 }
 
 export function deleteProductImage(productId: string, imageId: string): Promise<ProductImageDeletionResult> {
   return unwrapDel<ProductImageDeletionResult>(
     `/api/products/${encodeURIComponent(productId)}/images/${encodeURIComponent(imageId)}`,
+    { invalidation: 'products' },
   );
 }
 
@@ -128,15 +130,15 @@ export function fetchPrograms(): Promise<Program[]> {
 }
 
 export function createProgram(input: StrategyInput): Promise<Program> {
-  return unwrapPost<Program>('/api/programs', input);
+  return unwrapPost<Program>('/api/programs', input, { invalidation: 'products' });
 }
 
 export function updateProgram(id: string, input: Partial<StrategyInput>): Promise<Program> {
-  return unwrapPatch<Program>(`/api/programs/${id}`, input);
+  return unwrapPatch<Program>(`/api/programs/${id}`, input, { invalidation: 'products' });
 }
 
 export function deleteProgram(id: string): Promise<void> {
-  return unwrapDel(`/api/programs/${id}`);
+  return unwrapDel(`/api/programs/${id}`, { invalidation: 'products' });
 }
 
 export function fetchPortfolios(): Promise<Portfolio[]> {
@@ -144,15 +146,15 @@ export function fetchPortfolios(): Promise<Portfolio[]> {
 }
 
 export function createPortfolio(input: StrategyInput): Promise<Portfolio> {
-  return unwrapPost<Portfolio>('/api/portfolios', input);
+  return unwrapPost<Portfolio>('/api/portfolios', input, { invalidation: 'products' });
 }
 
 export function updatePortfolio(id: string, input: Partial<StrategyInput>): Promise<Portfolio> {
-  return unwrapPatch<Portfolio>(`/api/portfolios/${id}`, input);
+  return unwrapPatch<Portfolio>(`/api/portfolios/${id}`, input, { invalidation: 'products' });
 }
 
 export function deletePortfolio(id: string): Promise<void> {
-  return unwrapDel(`/api/portfolios/${id}`);
+  return unwrapDel(`/api/portfolios/${id}`, { invalidation: 'products' });
 }
 
 export interface StrategicGoalInput {
@@ -172,13 +174,13 @@ export function fetchStrategicGoals(): Promise<StrategicGoal[]> {
 }
 
 export function createStrategicGoal(input: StrategicGoalInput): Promise<StrategicGoal> {
-  return unwrapPost<StrategicGoal>('/api/strategic-goals', input);
+  return unwrapPost<StrategicGoal>('/api/strategic-goals', input, { invalidation: 'products' });
 }
 
 export function updateStrategicGoal(id: string, input: Partial<StrategicGoalInput>): Promise<StrategicGoal> {
-  return unwrapPatch<StrategicGoal>(`/api/strategic-goals/${id}`, input);
+  return unwrapPatch<StrategicGoal>(`/api/strategic-goals/${id}`, input, { invalidation: 'products' });
 }
 
 export function deleteStrategicGoal(id: string): Promise<void> {
-  return unwrapDel(`/api/strategic-goals/${id}`);
+  return unwrapDel(`/api/strategic-goals/${id}`, { invalidation: 'products' });
 }

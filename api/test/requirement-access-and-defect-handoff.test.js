@@ -252,6 +252,14 @@ test("PDM cannot edit requirements outside project membership; archived project 
   let defectVersion = defect.body.data.version;
   assert.equal(defectVersion, 1);
 
+  const defectDetail = await request(api.port, `/api/defects/${defectId}`, {
+    method: "GET",
+    headers: admin.headers,
+  });
+  assert.equal(defectDetail.response.status, 200);
+  assert.equal(defectDetail.body.data.id, defectId);
+  assert.equal(defectDetail.body.data.version, defectVersion);
+
   const patchWithoutVersion = await request(api.port, `/api/defects/${defectId}`, {
     method: "PATCH",
     headers: { ...admin.headers, "Content-Type": "application/json" },

@@ -852,6 +852,12 @@ test("seed accounts remain disabled after restart, work logs keep authenticated 
   const developerDefects = await request(api.port, "/api/defects", { headers: developer.headers });
   assert.equal(developerDefects.response.status, 200);
   assert.deepEqual(developerDefects.body.data.map((item) => item.id), [defect.body.data.id]);
+  const visibleDefectDetail = await request(api.port, `/api/defects/${defect.body.data.id}`, { headers: developer.headers });
+  assert.equal(visibleDefectDetail.response.status, 200);
+  assert.equal(visibleDefectDetail.body.data.id, defect.body.data.id);
+  const hiddenDefectDetail = await request(api.port, `/api/defects/${restrictedDefect.body.data.id}`, { headers: developer.headers });
+  assert.equal(hiddenDefectDetail.response.status, 403);
+  assert.equal(hiddenDefectDetail.body.errorCode, "PERMISSION_DENIED");
   const hiddenDefectUpdate = await request(api.port, `/api/defects/${restrictedDefect.body.data.id}/status`, {
     method: "PATCH",
     headers: { ...developer.headers, "Content-Type": "application/json" },
@@ -1636,7 +1642,10 @@ test("seed accounts remain disabled after restart, work logs keep authenticated 
     body: JSON.stringify({
       name: "Encrypted integration provider",
       provider: "openai-compatible",
-      baseUrl: "https://api.openai.com/v1",
+      // This assertion exercises encrypted config persistence only. A public
+      // IP literal keeps SSRF validation deterministic when CI DNS is
+      // intercepted or resolves public hostnames into reserved ranges.
+      baseUrl: "https://1.1.1.1/v1",
       model: "test-model",
       apiKey: "sk-integration-secret-key",
     }),

@@ -61,7 +61,7 @@ function reconcileImport({ manifestFile, targetReportFile }) {
   }
 
   const extraTables = [...targetTableNames].filter((tableName) => !Object.prototype.hasOwnProperty.call(expectedCounts, tableName));
-  if (extraTables.length) warnings.push(`Target report contains tables not present in manifest: ${extraTables.join(", ")}`);
+  if (extraTables.length) errors.push(`Target report contains tables not present in manifest: ${extraTables.join(", ")}`);
 
   const expectedMigrations = manifest.postgresImport?.appliedMigrations || [];
   const targetMigrations = normalizeMigrations(targetReport);
@@ -74,7 +74,9 @@ function reconcileImport({ manifestFile, targetReportFile }) {
 
   const violationFields = ["foreignKeyViolations", "referenceViolations", "constraintViolations", "jsonViolations"];
   for (const field of violationFields) {
-    if (Array.isArray(targetReport[field]) && targetReport[field].length) {
+    if (!Array.isArray(targetReport[field])) {
+      errors.push(`Target report is missing ${field} validation data.`);
+    } else if (targetReport[field].length) {
       errors.push(`Target report includes ${field}: ${targetReport[field].length}`);
     }
   }

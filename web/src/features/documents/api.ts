@@ -26,7 +26,7 @@ export interface UploadDocumentInput {
 }
 
 export function uploadDocument(input: UploadDocumentInput): Promise<Document> {
-  return unwrapPost<Document>('/api/documents', input);
+  return unwrapPost<Document>('/api/documents', input, { invalidation: 'documents' });
 }
 
 export interface AnalyzeDocumentInput {
@@ -38,7 +38,7 @@ export interface AnalyzeDocumentInput {
 }
 
 export function analyzeDocument(input: AnalyzeDocumentInput): Promise<AiJob> {
-  return unwrapPost<AiJob>('/api/ai/documents/analyze', input);
+  return unwrapPost<AiJob>('/api/ai/documents/analyze', input, { invalidation: 'aiJobs' });
 }
 
 export interface UpdateDocumentInput {
@@ -51,9 +51,9 @@ export interface UpdateDocumentInput {
 }
 
 export function updateDocument(id: string, input: UpdateDocumentInput): Promise<Document> {
-  return unwrapPatch<Document>(`/api/documents/${id}`, input);
+  return unwrapPatch<Document>(`/api/documents/${id}`, input, { invalidation: 'documents' });
 }
 
 export function deleteDocument(id: string): Promise<{ deleted: boolean }> {
-  return unwrapDel<{ deleted: boolean }>(`/api/documents/${id}`);
+  return unwrapDel<{ deleted: boolean }>(`/api/documents/${id}`, { invalidation: 'documents' });
 }

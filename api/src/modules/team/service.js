@@ -1,3 +1,5 @@
+const { createTeamRepository } = require("./repository");
+
 function createTeamService({
   mapDefect,
   mapProject,
@@ -5,8 +7,12 @@ function createTeamService({
   mapTask,
   mapUser,
   normalizeRole,
+  repository,
   rows,
 }) {
+  // Accept the old rows-only dependency during the server wiring transition.
+  const teamRepository = repository || createTeamRepository({ rows });
+
   function roleSkills(role) {
     const normalized = normalizeRole(role);
     if (normalized === "admin") return ["权限治理", "平台配置", "流程审计"];
@@ -31,15 +37,15 @@ function createTeamService({
   }
 
   async function buildTeamMembers() {
-    const users = await rows("SELECT * FROM users ORDER BY created_at DESC");
-    const projects = (await rows("SELECT * FROM projects WHERE deleted_at IS NULL")).map(mapProject);
+    const users = await teamRepository.listTeamUsers();
+    const projects = (await teamRepository.listActiveProjects()).map(mapProject);
     const activeProjectIds = new Set(projects.map((project) => project.id));
-    const tasks = (await rows("SELECT * FROM tasks")).map(mapTask).filter((task) => activeProjectIds.has(task.projectId));
-    const projectMembers = await rows("SELECT * FROM project_members");
-    const requirements = (await rows("SELECT * FROM requirements WHERE deleted_at IS NULL")).map(mapRequirement).filter((requirement) => activeProjectIds.has(requirement.projectId));
-    const defects = (await rows("SELECT * FROM defects")).map(mapDefect);
-    const workLogs = await rows("SELECT * FROM work_logs ORDER BY log_date DESC, created_at DESC");
-    const auditRows = await rows("SELECT actor_id, actor_name, created_at FROM audit_logs ORDER BY created_at DESC LIMIT 500");
+    const tasks = (await teamRepository.listTasks()).map(mapTask).filter((task) => activeProjectIds.has(task.projectId));
+    const projectMembers = await teamRepository.listProjectMembers();
+    const requirements = (await teamRepository.listActiveRequirements()).map(mapRequirement).filter((requirement) => activeProjectIds.has(requirement.projectId));
+    const defects = (await teamRepository.listDefects()).map(mapDefect);
+    const workLogs = await teamRepository.listWorkLogs();
+    const auditRows = await teamRepository.listRecentAuditRows();
     const activeTaskStatuses = new Set(["todo", "in_progress", "blocked", "code_review", "testing", "acceptance"]);
     const closedDefectStatuses = new Set(["closed", "rejected"]);
 

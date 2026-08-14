@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { RefreshCw } from 'lucide-react';
 import {
   confirmAiJob,
+  fetchAiCapabilityAvailability,
   fetchAiJob,
-  fetchAiModels,
   fetchAiSummary,
+  invokeAiCapability,
   rejectAiJob,
   retryAiJob,
   sendAiChat,
@@ -18,7 +19,15 @@ import { ApiError } from '../../../services/api';
 import PageState from '../../../components/common/PageState';
 import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
-import type { AiChatAttachment, AiChatMessage, AiJob, AiModelOption, Project } from '../../../types';
+import type {
+  AiCapabilityInvocation,
+  AiCapabilityManifest,
+  AiChatAttachment,
+  AiChatMessage,
+  AiJob,
+  Project,
+} from '../../../types';
+import type { AiCapabilityAvailability } from '../api';
 import {
   MAX_ATTACHMENTS,
   validateAttachmentFiles,
@@ -30,12 +39,18 @@ import {
   type JobReviewDraft,
 } from '../aiChatModel';
 import AiChatPanel from './AiChatPanel';
+import AiCapabilityTray from './AiCapabilityTray';
 import AiSidePanel from './AiSidePanel';
 
 export default function AiView() {
   const { t } = useTranslation();
   const { data, loading, error, reload } = useAsync<AiSummaryExtended>(fetchAiSummary, [], { cacheKey: 'ai:summary' });
   const projectsAsync = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
+  const capabilitiesAsync = useAsync<AiCapabilityAvailability>(
+    fetchAiCapabilityAvailability,
+    [],
+    { cacheKey: 'ai:capabilities' },
+  );
   const toast = useToast();
   const confirm = useConfirm();
   const [messages, setMessages] = useState<AiChatMessage[]>([
@@ -49,14 +64,12 @@ export default function AiView() {
   const [reviewDraft, setReviewDraft] = useState<JobReviewDraft | null>(null);
   const [jobLoading, setJobLoading] = useState(false);
   const [jobAction, setJobAction] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState('');
-  const [models, setModels] = useState<AiModelOption[]>([]);
-  const [modelsLoading, setModelsLoading] = useState(false);
-  const [modelsError, setModelsError] = useState<string | null>(null);
   const [connectionTesting, setConnectionTesting] = useState(false);
   const [connectionOnline, setConnectionOnline] = useState<boolean | null>(null);
   const [connectionLatencyMs, setConnectionLatencyMs] = useState<number | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [invokingCapabilityId, setInvokingCapabilityId] = useState<string | null>(null);
+  const [latestCapabilityInvocation, setLatestCapabilityInvocation] = useState<AiCapabilityInvocation | null>(null);
 
   const jobPolling = useAiJobPolling({
     job: selectedJob,
@@ -70,71 +83,29 @@ export default function AiView() {
     },
   });
 
-  useEffect(() => {
-    const configuredModel = data?.aiProvider?.model || '';
-    if (!selectedModel && configuredModel) setSelectedModel(configuredModel);
-  }, [data?.aiProvider?.model, selectedModel]);
-
   const providerStatus = useMemo(() => {
     const provider = data?.aiProvider;
     if (!provider) return t('features.ai.aiView.providerReading');
-    if (!provider.configured) return t('features.ai.aiView.providerNotConfigured');
-    const model = selectedModel || provider.model;
+    if (!provider.configured || !data?.aiAssistant?.available) return t('features.ai.aiView.providerNotConfigured');
+    const model = data.aiAssistant.resolvedModel || provider.model;
     return `${model} · ${provider.wireApi === 'responses' ? 'Responses' : 'Chat Completions'}`;
-  }, [data, selectedModel, t]);
-
-  async function refreshModels(preferredModel?: string) {
-    setModelsLoading(true);
-    setModelsError(null);
-    try {
-      const result = await fetchAiModels();
-      const nextModels = result.models || [];
-      setModels(nextModels);
-      const nextModel = preferredModel
-        || selectedModel
-        || result.currentModel
-        || nextModels[0]?.id
-        || data?.aiProvider?.model
-        || '';
-      if (nextModel) setSelectedModel(nextModel);
-      return result;
-    } catch (err) {
-      setModels([]);
-      setModelsError(err instanceof ApiError ? err.message : t('features.ai.aiView.fetchModelsFailed'));
-      throw err;
-    } finally {
-      setModelsLoading(false);
-    }
-  }
+  }, [data, t]);
 
   async function refreshConnection() {
     setConnectionTesting(true);
     setConnectionError(null);
     try {
-      // 1) Always resolve models via /api/ai/models (ai:*). This is the source of the selector.
-      const modelResult = await refreshModels();
-      // 2) Optional live chat probe for latency (admin only). Non-admin keeps model-list connectivity.
-      try {
-        const probe = await testAiProviderConfig();
-        setConnectionOnline(Boolean(probe.ok) && Boolean(modelResult.ok));
-        setConnectionLatencyMs(probe.latencyMs ?? null);
-        if (!probe.ok) setConnectionError(t('features.ai.aiView.probeFailed'));
-      } catch (err) {
-        // 403 / no admin permission: treat successful model list as online.
-        if (err instanceof ApiError && (err.status === 403 || err.status === 401)) {
-          setConnectionOnline(Boolean(modelResult.ok));
-          setConnectionLatencyMs(null);
-        } else {
-          // Admin probe failed for real connectivity reasons → red.
-          setConnectionOnline(false);
-          setConnectionLatencyMs(null);
-          setConnectionError(err instanceof ApiError ? err.message : t('features.ai.aiView.connectionTestFailed'));
-        }
-      }
+      const probe = await testAiProviderConfig({ id: data?.aiAssistant?.resolvedProviderId || undefined });
+      setConnectionOnline(Boolean(probe.ok));
+      setConnectionLatencyMs(probe.latencyMs ?? null);
+      if (!probe.ok) setConnectionError(t('features.ai.aiView.probeFailed'));
     } catch (err) {
-      setConnectionOnline(false);
+      const noAdminProbePermission = err instanceof ApiError && (err.status === 403 || err.status === 401);
+      // A permission denial only tells us this user cannot run the admin probe.
+      // Leave the connection unverified instead of treating configuration as reachability.
+      setConnectionOnline(noAdminProbePermission ? null : false);
       setConnectionLatencyMs(null);
-      setConnectionError(err instanceof ApiError ? err.message : t('features.ai.aiView.connectionTestFailed'));
+      if (!noAdminProbePermission) setConnectionError(err instanceof ApiError ? err.message : t('features.ai.aiView.connectionTestFailed'));
     } finally {
       setConnectionTesting(false);
     }
@@ -144,7 +115,7 @@ export default function AiView() {
     if (!data?.aiProvider) return;
     // Auto probe once summary is ready so the light is not stuck grey.
     void refreshConnection();
-  }, [data?.aiProvider?.configured, data?.aiProvider?.model, data?.aiProvider?.baseUrlHost]);
+  }, [data?.aiProvider?.configured, data?.aiAssistant?.available, data?.aiAssistant?.resolvedModel, data?.aiAssistant?.resolvedProviderId]);
 
   async function handleFiles(files: FileList | null) {
     setFileError(null);
@@ -192,7 +163,6 @@ export default function AiView() {
         attachments: userMessage.attachments,
         scope: 'project-management',
         currentPage: window.location.hash || '/ai',
-        model: selectedModel || undefined,
       });
       setMessages((prev) => [...prev, reply]);
     } catch (err) {
@@ -219,6 +189,7 @@ export default function AiView() {
     setAttachments([]);
     setDraft('');
     setFileError(null);
+    setLatestCapabilityInvocation(null);
   }
 
   function handleActionDone(result: { type: string; id: string; label: string }) {
@@ -233,6 +204,25 @@ export default function AiView() {
         generatedBy: 'system',
       },
     ]);
+  }
+
+  async function handleInvokeCapability(
+    capability: AiCapabilityManifest,
+    input: Record<string, string>,
+  ): Promise<void> {
+    setInvokingCapabilityId(capability.id);
+    try {
+      const invocation = await invokeAiCapability(capability.id, input);
+      setLatestCapabilityInvocation(invocation);
+      toast.success(t('features.ai.aiView.capabilityQueued'));
+      if (invocation.jobId) await openJob(invocation.jobId);
+      reload();
+    } catch {
+      // Capability runtime failures stay inside the BFF boundary.
+      toast.error(t('features.ai.aiView.capabilityInvokeFailed'));
+    } finally {
+      setInvokingCapabilityId(null);
+    }
   }
 
   async function openJob(jobId: string) {
@@ -344,7 +334,7 @@ export default function AiView() {
       <div className="ai-chat-layout">
         <AiChatPanel
           providerStatus={providerStatus}
-          providerConfigured={data.aiProvider?.configured}
+          providerConfigured={Boolean(data.aiProvider?.configured && data.aiAssistant?.available)}
           messages={messages}
           draft={draft}
           setDraft={setDraft}
@@ -356,15 +346,19 @@ export default function AiView() {
           onSend={() => { void handleSend(); }}
           projects={projectsAsync.data ?? []}
           onActionDone={handleActionDone}
+          capabilityTray={
+            <AiCapabilityTray
+              availability={capabilitiesAsync.data}
+              projects={projectsAsync.data ?? []}
+              latestInvocation={latestCapabilityInvocation}
+              invokingCapabilityId={invokingCapabilityId}
+              onInvoke={handleInvokeCapability}
+            />
+          }
         />
 
         <AiSidePanel
           data={data}
-          selectedModel={selectedModel}
-          onModelChange={setSelectedModel}
-          models={models}
-          modelsLoading={modelsLoading}
-          modelsError={modelsError}
           connectionTesting={connectionTesting}
           connectionOnline={connectionOnline}
           connectionLatencyMs={connectionLatencyMs}

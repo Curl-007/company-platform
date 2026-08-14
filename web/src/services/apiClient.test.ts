@@ -28,7 +28,7 @@ afterEach(() => {
 });
 
 describe('mutation cache invalidation', () => {
-  it('invalidates explicit project namespaces while retaining unrelated data', async () => {
+  it('uses the named project invalidation group while retaining unrelated data', async () => {
     const projectList = buildAsyncCacheKey('projects:list');
     const projectDetail = buildAsyncCacheKey('projects:detail', ['PRJ-1']);
     const dashboard = buildAsyncCacheKey('dashboard:overview');
@@ -38,11 +38,23 @@ describe('mutation cache invalidation', () => {
     setAsyncCacheEntry(dashboard, { projectCount: 1 });
     setAsyncCacheEntry(products, [{ id: 'PRODUCT-1' }]);
 
-    await unwrapPost('/api/projects', { name: 'New project' });
+    await unwrapPost('/api/opaque-write', { name: 'New project' }, { invalidation: 'projects' });
 
     expect(getAsyncCacheEntry(projectList)).toBeUndefined();
     expect(getAsyncCacheEntry(projectDetail)).toBeUndefined();
     expect(getAsyncCacheEntry(dashboard)).toBeUndefined();
     expect(getAsyncCacheEntry(products)?.data).toEqual([{ id: 'PRODUCT-1' }]);
+  });
+
+  it('clears conservatively when a mutation has no registered invalidation group', async () => {
+    const projectList = buildAsyncCacheKey('projects:list');
+    const products = buildAsyncCacheKey('products:list');
+    setAsyncCacheEntry(projectList, [{ id: 'old-project' }]);
+    setAsyncCacheEntry(products, [{ id: 'PRODUCT-1' }]);
+
+    await unwrapPost('/api/opaque-write', { name: 'Unknown write' });
+
+    expect(getAsyncCacheEntry(projectList)).toBeUndefined();
+    expect(getAsyncCacheEntry(products)).toBeUndefined();
   });
 });

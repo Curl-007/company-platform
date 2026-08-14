@@ -1,8 +1,45 @@
 const {
   REQUIREMENT_ASSIGNMENT_STATUSES,
-  validateRequirementCreate,
-  validateRequirementUpdate,
+  validateRequirementCreate: validateRequirementCreateSchema,
+  validateRequirementUpdate: validateRequirementUpdateSchema,
 } = require("./schema");
+
+const REFERENCE_FIELDS = Object.freeze(["productId", "portfolioId"]);
+
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function validateReferenceId(value, field) {
+  if (value === null) return { ok: true, value: null };
+  if (typeof value !== "string" && typeof value !== "number") {
+    return { ok: false, message: `${field} must be a string.`, field };
+  }
+  const normalized = String(value).trim();
+  if (!normalized) return { ok: false, message: `${field} must not be empty.`, field };
+  return { ok: true, value: normalized };
+}
+
+function validateRequirementCreate(body = {}, options = {}) {
+  return validateRequirementCreateSchema(body, options);
+}
+
+function validateRequirementUpdate(body = {}, options = {}) {
+  if (!isPlainObject(body)) return validateRequirementUpdateSchema(body, options);
+
+  const schemaBody = { ...body };
+  for (const field of REFERENCE_FIELDS) delete schemaBody[field];
+  const parsed = validateRequirementUpdateSchema(schemaBody, options);
+  if (!parsed.ok) return parsed;
+
+  for (const field of REFERENCE_FIELDS) {
+    if (body[field] === undefined) continue;
+    const reference = validateReferenceId(body[field], field);
+    if (!reference.ok) return reference;
+    parsed.data[field] = reference.value;
+  }
+  return parsed;
+}
 
 function buildRequirementCreate(input = {}, { id, json }) {
   return {
@@ -52,6 +89,8 @@ function buildRequirementUpdate(before, input = {}, { expectedVersion, json }) {
     acceptanceCriteria: input.acceptanceCriteria === undefined
       ? before.acceptance_criteria
       : json(input.acceptanceCriteria),
+    productId: input.productId === undefined ? before.product_id || null : input.productId || null,
+    portfolioId: input.portfolioId === undefined ? before.portfolio_id || null : input.portfolioId || null,
     parentId: input.parentId === undefined ? before.parent_id : input.parentId || null,
     assignee: input.assignee === undefined ? before.assignee : input.assignee || null,
     assigneeRole: input.assigneeRole === undefined ? before.assignee_role : input.assigneeRole || null,

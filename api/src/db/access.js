@@ -170,7 +170,9 @@ function createSqliteAccess(databaseRuntime) {
 /**
  * PostgreSQL access using the shared SQL dialect helpers.
  * Transactions bind a single client via AsyncLocalStorage so nested
- * row/rows/run/insert calls reuse the same connection.
+ * row/rows/run/insert calls reuse the same connection. Nested work shares
+ * the outer atomic unit and marks it rollback-only when it fails, matching
+ * the SQLite access contract.
  */
 function createPostgresAccess(databaseRuntime) {
   if (!databaseRuntime || databaseRuntime.dialect !== "postgres") {
@@ -187,9 +189,9 @@ function createPostgresAccess(databaseRuntime) {
 
   async function execute(sql, params = {}) {
     const { text, values } = toPostgresQuery(sql, params);
-    const client = txStorage.getStore();
-    if (client) {
-      return client.query(text, values);
+    const context = txStorage.getStore();
+    if (context?.client) {
+      return context.client.query(text, values);
     }
     return databaseRuntime.query(text, values);
   }
@@ -216,9 +218,9 @@ function createPostgresAccess(databaseRuntime) {
     }
     const built = buildInsertSql(table, keys, { dialect: "postgres" });
     const values = keys.map((key) => data[key]);
-    const client = txStorage.getStore();
-    if (client) {
-      await client.query(built.sql, values);
+    const context = txStorage.getStore();
+    if (context?.client) {
+      await context.client.query(built.sql, values);
       return;
     }
     await databaseRuntime.query(built.sql, values);
@@ -231,9 +233,9 @@ function createPostgresAccess(databaseRuntime) {
     }
     const built = buildUpsertSql(table, keys, { ...options, dialect: "postgres" });
     const values = keys.map((key) => data[key]);
-    const client = txStorage.getStore();
-    if (client) {
-      await client.query(built.sql, values);
+    const context = txStorage.getStore();
+    if (context?.client) {
+      await context.client.query(built.sql, values);
       return;
     }
     await databaseRuntime.query(built.sql, values);
@@ -247,15 +249,24 @@ function createPostgresAccess(databaseRuntime) {
   async function transaction(work) {
     const existing = txStorage.getStore();
     if (existing) {
-      // Nested transactions reuse the outer client (no savepoints for now).
-      return work();
+      // Do not allow a caller to catch an inner failure and then commit a
+      // partially recovered outer transaction. This is deliberately the same
+      // rollback-only contract used by the SQLite adapter.
+      try {
+        return await work();
+      } catch (error) {
+        existing.rollbackError ||= error;
+        throw error;
+      }
     }
 
     const client = await databaseRuntime.pool.connect();
+    const context = { client, rollbackError: null };
     try {
       await client.query("BEGIN");
       try {
-        const result = await txStorage.run(client, async () => work());
+        const result = await txStorage.run(context, async () => work());
+        if (context.rollbackError) throw context.rollbackError;
         await client.query("COMMIT");
         return result;
       } catch (error) {

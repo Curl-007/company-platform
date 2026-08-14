@@ -17,6 +17,7 @@ import { fetchProjectMembers } from '../../projects/api';
 import { handoffDefect } from '../../testing/api';
 import type { DashboardData, ProjectMember } from '../../../types';
 import MyWorkEmptyPanel from './MyWorkEmptyPanel';
+import { isMyWorkActionEligible } from '../myWorkEligibility';
 
 type DefectItem = NonNullable<DashboardData['myDefects']>[number];
 
@@ -32,7 +33,11 @@ export default function MyWorkDefectsPanel({
   const sessionUser = getSessionUser();
   const role = String(sessionUser?.role || '').toLowerCase();
   const canOpenTesting = canAccessPageForUser(sessionUser, 'testing');
-  const canManageDefect = canOperate(sessionUser, 'testing:manage') || role === 'dev' || role === 'qa' || role === 'pm' || role === 'admin';
+  const canManageDefect = isMyWorkActionEligible(
+    sessionUser,
+    'defectHandoff',
+    canOperate(sessionUser, 'testing:manage') || role === 'dev' || role === 'qa' || role === 'pm' || role === 'admin',
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = defects.find((item) => item.id === selectedId) ?? defects[0] ?? null;
   const [members, setMembers] = useState<ProjectMember[]>([]);

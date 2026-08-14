@@ -4,13 +4,15 @@ import { getSessionUser } from '../../../services/auth';
 import {
   activateAiProviderConfig,
   deleteAiProviderConfig,
+  fetchAiAssistantConfig,
   fetchAiProviderConfig,
   updateAiProviderStatus,
+  updateAiAssistantConfig,
   updateAiProviderConfig,
   testAiProviderConfig,
 } from '../../ai/api';
 import { ApiError } from '../../../services/api';
-import type { AiProviderConfig, UpdateAiProviderInput } from '../../../types';
+import type { AiAssistantConfig, AiProviderConfig, UpdateAiAssistantInput, UpdateAiProviderInput } from '../../../types';
 import { useAsync } from '../../../hooks/useAsync';
 import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
@@ -27,6 +29,7 @@ import {
 import AccountPanel from './AccountPanel';
 import ApiConfigPanel from './ApiConfigPanel';
 import AiProviderPanel from './AiProviderPanel';
+import AiAssistantPanel from './AiAssistantPanel';
 import AiPrefsPanel from './AiPrefsPanel';
 import NotificationsPanel from './NotificationsPanel';
 import LanguagePanel from './LanguagePanel';
@@ -82,6 +85,12 @@ export default function SettingsTabs() {
     error: aiProviderError,
     reload: reloadAiProvider,
   } = useAsync<AiProviderConfig>(fetchAiProviderConfig, [], { cacheKey: 'settings:ai-provider' });
+  const {
+    data: aiAssistant,
+    loading: aiAssistantLoading,
+    error: aiAssistantError,
+    reload: reloadAiAssistant,
+  } = useAsync<AiAssistantConfig>(fetchAiAssistantConfig, [], { cacheKey: 'settings:ai-assistant' });
 
   const [apiConfig, setApiConfig] = useState(() =>
     loadConfig(SETTINGS_STORAGE_KEYS.api, DEFAULT_API_CONFIG),
@@ -113,6 +122,23 @@ export default function SettingsTabs() {
     status: 'idle',
     message: t('features.settings.actions.testHintIdle'),
   });
+  const [aiAssistantDraft, setAiAssistantDraft] = useState<UpdateAiAssistantInput & {
+    enabled: boolean;
+    model: string;
+    name: string;
+    systemPrompt: string;
+    temperature: number;
+    maxTokens: number;
+  }>({
+    name: t('features.settings.actions.platformAiAssistant'),
+    enabled: true,
+    providerId: null,
+    model: '',
+    systemPrompt: '',
+    temperature: 0.25,
+    maxTokens: 1800,
+  });
+  const [savingAiAssistant, setSavingAiAssistant] = useState(false);
 
   useEffect(() => {
     if (!aiProvider) return;
@@ -123,6 +149,7 @@ export default function SettingsTabs() {
       ...prev,
       id: selected.id || undefined,
       name: selected.name || selected.provider || t('features.settings.actions.defaultModel'),
+      preset: selected.preset || 'custom',
       provider: selected.provider || 'openai-compatible',
       baseUrl: selected.baseUrl || 'https://api.openai.com/v1',
       model: selected.model || 'gpt-4o-mini',
@@ -135,6 +162,19 @@ export default function SettingsTabs() {
       clearApiKey: false,
     }));
   }, [aiProvider, selectedAiProviderId]);
+
+  useEffect(() => {
+    if (!aiAssistant) return;
+    setAiAssistantDraft({
+      name: aiAssistant.name || t('features.settings.actions.platformAiAssistant'),
+      enabled: aiAssistant.enabled !== false,
+      providerId: aiAssistant.providerId || null,
+      model: aiAssistant.model || '',
+      systemPrompt: aiAssistant.systemPrompt || '',
+      temperature: Number.isFinite(aiAssistant.temperature) ? aiAssistant.temperature : 0.25,
+      maxTokens: Number.isFinite(aiAssistant.maxTokens) ? aiAssistant.maxTokens : 1800,
+    });
+  }, [aiAssistant, t]);
 
   function saveApiConfig() {
     setApiConfig(apiDraft);
@@ -154,6 +194,24 @@ export default function SettingsTabs() {
     toast.success(t('features.settings.actions.notifPrefsSaved'));
   }
 
+  function aiProviderPayload(): UpdateAiProviderInput {
+    return {
+      ...(aiDraft.id && !aiDraft.createNew ? { id: aiDraft.id } : {}),
+      name: aiDraft.name?.trim() || aiDraft.provider.trim() || aiDraft.model.trim(),
+      preset: aiDraft.preset || 'custom',
+      provider: aiDraft.provider.trim() || 'openai-compatible',
+      baseUrl: aiDraft.baseUrl.trim(),
+      model: aiDraft.model.trim(),
+      wireApi: aiDraft.wireApi,
+      disableResponseStorage: aiDraft.disableResponseStorage,
+      enabled: aiDraft.enabled,
+      clearApiKey: Boolean(aiDraft.clearApiKey),
+      createNew: Boolean(aiDraft.createNew),
+      activate: Boolean(aiDraft.activate),
+      ...(aiDraft.apiKey.trim() ? { apiKey: aiDraft.apiKey.trim() } : {}),
+    };
+  }
+
   async function saveAiProvider() {
     if (!canManageAiProvider) return toast.error(t('features.settings.actions.noPermissionManageAi'));
     if (!aiDraft.baseUrl.trim()) return toast.error(t('features.settings.actions.baseUrlRequired'));
@@ -161,20 +219,7 @@ export default function SettingsTabs() {
     setSavingAiProvider(true);
     setAiTestResult({ status: 'idle', message: t('features.settings.actions.changedNeedRetest') });
     try {
-      const payload: UpdateAiProviderInput = {
-        ...(aiDraft.id && !aiDraft.createNew ? { id: aiDraft.id } : {}),
-        name: aiDraft.name?.trim() || aiDraft.provider.trim() || aiDraft.model.trim(),
-        provider: aiDraft.provider.trim() || 'openai-compatible',
-        baseUrl: aiDraft.baseUrl.trim(),
-        model: aiDraft.model.trim(),
-        wireApi: aiDraft.wireApi,
-        disableResponseStorage: aiDraft.disableResponseStorage,
-        enabled: aiDraft.enabled,
-        clearApiKey: Boolean(aiDraft.clearApiKey),
-        createNew: Boolean(aiDraft.createNew),
-        activate: Boolean(aiDraft.activate),
-        ...(aiDraft.apiKey.trim() ? { apiKey: aiDraft.apiKey.trim() } : {}),
-      };
+      const payload = aiProviderPayload();
       const next = await updateAiProviderConfig(payload);
       const selected = payload.createNew ? next.activeId : payload.id;
       if (selected) setSelectedAiProviderId(selected);
@@ -191,6 +236,7 @@ export default function SettingsTabs() {
     setSelectedAiProviderId('__new__');
     setAiDraft({
       name: t('features.settings.actions.newModelConfig'),
+      preset: 'custom',
       provider: 'openai-compatible',
       baseUrl: 'https://api.openai.com/v1',
       model: 'gpt-4o-mini',
@@ -211,6 +257,7 @@ export default function SettingsTabs() {
     setAiDraft({
       id: item.id,
       name: item.name,
+      preset: item.preset || 'custom',
       provider: item.provider,
       baseUrl: item.baseUrl,
       model: item.model,
@@ -272,7 +319,7 @@ export default function SettingsTabs() {
     setTestingAiProvider(true);
     setAiTestResult({ status: 'idle', message: t('features.settings.actions.testingConnection') });
     try {
-      const result = await testAiProviderConfig();
+      const result = await testAiProviderConfig({ ...aiProviderPayload(), enabled: true });
       setAiTestResult({
         status: 'success',
         message: t('features.settings.actions.connectionSuccess'),
@@ -289,6 +336,35 @@ export default function SettingsTabs() {
       await reloadAiProvider();
     } finally {
       setTestingAiProvider(false);
+    }
+  }
+
+  async function saveAiAssistant() {
+    if (!canManageAiProvider) return toast.error(t('features.settings.actions.noPermissionManageAi'));
+    if (!aiAssistantDraft.name.trim()) return toast.error(t('features.settings.actions.assistantNameRequired'));
+    if (!Number.isFinite(aiAssistantDraft.temperature) || aiAssistantDraft.temperature < 0 || aiAssistantDraft.temperature > 2) {
+      return toast.error(t('features.settings.actions.assistantTemperatureInvalid'));
+    }
+    if (!Number.isInteger(aiAssistantDraft.maxTokens) || aiAssistantDraft.maxTokens < 128) {
+      return toast.error(t('features.settings.actions.assistantMaxTokensInvalid'));
+    }
+    setSavingAiAssistant(true);
+    try {
+      await updateAiAssistantConfig({
+        name: aiAssistantDraft.name.trim(),
+        enabled: aiAssistantDraft.enabled,
+        providerId: aiAssistantDraft.providerId || null,
+        model: aiAssistantDraft.model.trim(),
+        systemPrompt: aiAssistantDraft.systemPrompt.trim(),
+        temperature: aiAssistantDraft.temperature,
+        maxTokens: aiAssistantDraft.maxTokens,
+      });
+      toast.success(t('features.settings.actions.aiAssistantSaved'));
+      await reloadAiAssistant();
+    } catch (err: unknown) {
+      toast.error(err instanceof ApiError ? err.message : t('features.settings.actions.aiAssistantSaveFailed'));
+    } finally {
+      setSavingAiAssistant(false);
     }
   }
 
@@ -333,7 +409,7 @@ export default function SettingsTabs() {
           </div>
         )}
         {activeTab === 'ai' && (
-          <div id="settings-panel-ai" role="tabpanel" aria-labelledby="settings-tab-ai">
+          <div id="settings-panel-ai" role="tabpanel" aria-labelledby="settings-tab-ai" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <AiProviderPanel
               canManageAiProvider={canManageAiProvider}
               aiProvider={aiProvider}
@@ -353,6 +429,18 @@ export default function SettingsTabs() {
               handleDeleteAiProvider={handleDeleteAiProvider}
               handleTestAiProvider={handleTestAiProvider}
               saveAiProvider={saveAiProvider}
+            />
+            <AiAssistantPanel
+              canManageAiProvider={canManageAiProvider}
+              aiAssistant={aiAssistant}
+              aiAssistantLoading={aiAssistantLoading}
+              aiAssistantError={aiAssistantError}
+              reloadAiAssistant={reloadAiAssistant}
+              aiProvider={aiProvider}
+              aiDraft={aiAssistantDraft}
+              setAiDraft={setAiAssistantDraft}
+              savingAiAssistant={savingAiAssistant}
+              saveAiAssistant={saveAiAssistant}
             />
           </div>
         )}

@@ -53,7 +53,7 @@ export function fetchWorkloadThresholds(): Promise<WorkloadThresholds> {
 }
 
 export function updateWorkloadThresholds(input: WorkloadThresholds): Promise<WorkloadThresholds> {
-  return unwrapPut<WorkloadThresholds>('/api/capacity/settings/workload-thresholds', input);
+  return unwrapPut<WorkloadThresholds>('/api/capacity/settings/workload-thresholds', input, { invalidation: 'capacity' });
 }
 
 export function fetchMyCapacity(period: CapacityPeriod = {}): Promise<CapacityMemberOverview | null> {
@@ -61,19 +61,19 @@ export function fetchMyCapacity(period: CapacityPeriod = {}): Promise<CapacityMe
 }
 
 export function upsertCapacityPlan(userId: string, input: UpsertCapacityPlanInput): Promise<CapacityPlan> {
-  return unwrapPut<CapacityPlan>(`/api/capacity/plans/${userId}`, input);
+  return unwrapPut<CapacityPlan>(`/api/capacity/plans/${userId}`, input, { invalidation: 'capacity' });
 }
 
 export function upsertProjectAllocation(input: UpsertProjectAllocationInput): Promise<ProjectAllocation> {
-  return unwrapPut<ProjectAllocation>('/api/capacity/allocations', input);
+  return unwrapPut<ProjectAllocation>('/api/capacity/allocations', input, { invalidation: 'capacity' });
 }
 
 export function deleteProjectAllocation(id: string): Promise<{ deleted: boolean; id: string }> {
-  return unwrapDel<{ deleted: boolean; id: string }>(`/api/capacity/allocations/${id}`);
+  return unwrapDel<{ deleted: boolean; id: string }>(`/api/capacity/allocations/${id}`, { invalidation: 'capacity' });
 }
 
 export function approveProjectAllocation(id: string): Promise<ProjectAllocation> {
-  return unwrapPatch<ProjectAllocation>(`/api/capacity/allocations/${id}/approval`, {});
+  return unwrapPatch<ProjectAllocation>(`/api/capacity/allocations/${id}/approval`, {}, { invalidation: 'capacity' });
 }
 
 export function fetchWorkCalendar(period: CapacityPeriod = {}): Promise<WorkCalendar & { period: Required<CapacityPeriod> }> {
@@ -81,13 +81,13 @@ export function fetchWorkCalendar(period: CapacityPeriod = {}): Promise<WorkCale
 }
 
 export function updateWorkCalendar(input: UpdateWorkCalendarInput): Promise<WorkCalendar & { period: Required<CapacityPeriod> }> {
-  return unwrapPut<WorkCalendar & { period: Required<CapacityPeriod> }>('/api/capacity/calendar', input);
+  return unwrapPut<WorkCalendar & { period: Required<CapacityPeriod> }>('/api/capacity/calendar', input, { invalidation: 'capacity' });
 }
 
 export function upsertWorkCalendarException(input: UpsertWorkCalendarExceptionInput): Promise<WorkCalendarException> {
-  return unwrapPost<WorkCalendarException>('/api/capacity/calendar/exceptions', input);
+  return unwrapPost<WorkCalendarException>('/api/capacity/calendar/exceptions', input, { invalidation: 'capacity' });
 }
 
 export function deleteWorkCalendarException(id: string): Promise<{ deleted: boolean; id: string }> {
-  return unwrapDel<{ deleted: boolean; id: string }>(`/api/capacity/calendar/exceptions/${id}`);
+  return unwrapDel<{ deleted: boolean; id: string }>(`/api/capacity/calendar/exceptions/${id}`, { invalidation: 'capacity' });
 }

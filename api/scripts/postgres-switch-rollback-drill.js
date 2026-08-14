@@ -20,7 +20,7 @@
  */
 const { spawn } = require("child_process");
 const path = require("path");
-const { resolveDatabaseUrl } = require("../src/db/postgres");
+const { maskDatabaseUrl, resolveDatabaseUrl } = require("../src/db/postgres");
 
 const API_ROOT = path.resolve(__dirname, "..");
 const SERVER_JS = path.join(API_ROOT, "server.js");
@@ -159,7 +159,7 @@ async function main() {
 
   console.log("W7 drill: SQLite → PostgreSQL → rollback-to-SQLite (read smoke)");
   console.log(`  sqlite file: ${SQLITE_FILE}`);
-  console.log(`  postgres url: ${pgUrl.replace(/:\/\/([^:/@]+):([^@]+)@/, "://***:***@")}`);
+  console.log(`  postgres url: ${maskDatabaseUrl(pgUrl)}`);
 
   const sqliteProc = startServer({
     port: SQLITE_PORT,

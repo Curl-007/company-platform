@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const express = require("express");
 const { validatePassword } = require("../../lib/accountSecurity");
+const { createTeamRepository } = require("./repository");
 
 const USER_STATUSES = new Set(["active", "disabled"]);
 
@@ -18,6 +19,7 @@ function createTeamRouter({
   now,
   ok,
   paginatedResponse,
+  repository,
   requirePermission,
   row,
   rows,
@@ -27,6 +29,9 @@ function createTeamRouter({
   organizationRepository,
 }) {
   const router = express.Router();
+  // Legacy adapter arguments keep direct module consumers compatible while
+  // production wiring supplies one shared repository instance.
+  const teamRepository = repository || createTeamRepository({ insert, row, rows, run });
 
   router.get("/team/members", async (req, res) => {
     if (!canViewTeamLogs(req.user)) return fail(res, 403, "PERMISSION_DENIED", "只有项目经理和管理员可以查看团队成员。");
@@ -35,7 +40,7 @@ function createTeamRouter({
 
   router.get("/users", requirePermission("admin:*"), async (req, res) => {
     const { keyword, role, status } = req.query;
-    let list = (await rows("SELECT * FROM users")).map(mapUser);
+    let list = (await teamRepository.listUsers()).map(mapUser);
     if (role) list = list.filter((u) => u.role === role);
     if (status) list = list.filter((u) => u.status === status);
     if (keyword) {
@@ -46,7 +51,7 @@ function createTeamRouter({
   });
 
   router.get("/users/:id", requirePermission("admin:*"), async (req, res) => {
-    const user = await row("SELECT * FROM users WHERE id = @id", { id: req.params.id });
+    const user = await teamRepository.findUserById(req.params.id);
     if (!user) return fail(res, 404, "RESOURCE_NOT_FOUND", "用户不存在。");
     res.json(ok(mapUser(user)));
   });
@@ -65,7 +70,7 @@ function createTeamRouter({
       return fail(res, 400, "VALIDATION_FAILED", "status must be active or disabled.");
     }
     const nextEmail = String(email).trim();
-    const existing = await row("SELECT id FROM users WHERE email = @email", { email: nextEmail });
+    const existing = await teamRepository.findUserByEmail(nextEmail);
     if (existing) return fail(res, 409, "CONFLICT", "该邮箱已被使用。");
     const requestedDepartmentId = String(departmentId || "").trim() || null;
     const requestedDepartmentName = department === undefined ? "" : String(department).trim();
@@ -89,13 +94,13 @@ function createTeamRouter({
       bio: bio !== undefined ? String(bio).trim() : "",
       created_at: now(),
     };
-    await insert("users", user);
+    await teamRepository.createUser(user);
     await audit(req.user, "user.create", "user", user.id, null, mapUser(user), req.ip);
     res.status(201).json(ok(mapUser(user)));
   });
 
   router.patch("/users/:id", requirePermission("admin:*"), async (req, res) => {
-    const before = await row("SELECT * FROM users WHERE id = @id", { id: req.params.id });
+    const before = await teamRepository.findUserById(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "用户不存在。");
     const { name, email, role, status, password, phone, position, department, departmentId, bio } = req.body || {};
     if (
@@ -115,7 +120,7 @@ function createTeamRouter({
     if (email !== undefined) {
       const nextEmail = String(email).trim();
       if (!nextEmail) return fail(res, 400, "VALIDATION_FAILED", "email must not be empty");
-      const duplicate = await row("SELECT id FROM users WHERE email = @email AND id != @id", { email: nextEmail, id: req.params.id });
+      const duplicate = await teamRepository.findOtherUserByEmail({ email: nextEmail, id: req.params.id });
       if (duplicate) return fail(res, 409, "CONFLICT", "该邮箱已被其他用户使用。");
     }
     const requestedDepartmentId = departmentId === undefined && department === undefined
@@ -155,39 +160,36 @@ function createTeamRouter({
     if (sameName && sameEmail && sameRole && sameStatus && samePassword && samePhone && samePosition && sameDepartment && sameBio) {
       return res.json(ok(mapUser(before)));
     }
-    if (name !== undefined) await run("UPDATE users SET name = @val WHERE id = @id", { id: req.params.id, val: String(name).trim() });
-    if (email !== undefined) await run("UPDATE users SET email = @val WHERE id = @id", { id: req.params.id, val: String(email).trim() });
+    if (name !== undefined) await teamRepository.updateUserName({ id: req.params.id, value: String(name).trim() });
+    if (email !== undefined) await teamRepository.updateUserEmail({ id: req.params.id, value: String(email).trim() });
     if (role !== undefined) {
-      await run("UPDATE users SET role = @val WHERE id = @id", { id: req.params.id, val: role });
-      await run("UPDATE users SET permissions = @permissions WHERE id = @id", {
+      await teamRepository.updateUserRole({ id: req.params.id, value: role });
+      await teamRepository.updateUserPermissions({
         id: req.params.id,
         permissions: json(defaultPermissionsForRole(role)),
       });
     }
-    if (status !== undefined) await run("UPDATE users SET status = @val WHERE id = @id", { id: req.params.id, val: status });
+    if (status !== undefined) await teamRepository.updateUserStatus({ id: req.params.id, value: status });
     if (password !== undefined) {
-      await run(
-        "UPDATE users SET password_hash = @val, token_version = token_version + 1 WHERE id = @id",
-        { id: req.params.id, val: bcrypt.hashSync(String(password), 10) },
-      );
+      await teamRepository.updateUserPassword({ id: req.params.id, value: bcrypt.hashSync(String(password), 10) });
       revokeUserSessions?.(req.params.id);
     }
-    if (phone !== undefined) await run("UPDATE users SET phone = @val WHERE id = @id", { id: req.params.id, val: String(phone).trim() });
-    if (position !== undefined) await run("UPDATE users SET position = @val WHERE id = @id", { id: req.params.id, val: String(position).trim() });
-    if (department !== undefined || departmentId !== undefined) await run("UPDATE users SET department = @department, department_id = @departmentId WHERE id = @id", { id: req.params.id, department: nextDepartmentName, departmentId: requestedDepartmentId });
-    if (bio !== undefined) await run("UPDATE users SET bio = @val WHERE id = @id", { id: req.params.id, val: String(bio).trim() });
-    const after = await row("SELECT * FROM users WHERE id = @id", { id: req.params.id });
+    if (phone !== undefined) await teamRepository.updateUserPhone({ id: req.params.id, value: String(phone).trim() });
+    if (position !== undefined) await teamRepository.updateUserPosition({ id: req.params.id, value: String(position).trim() });
+    if (department !== undefined || departmentId !== undefined) await teamRepository.updateUserDepartment({ id: req.params.id, department: nextDepartmentName, departmentId: requestedDepartmentId });
+    if (bio !== undefined) await teamRepository.updateUserBio({ id: req.params.id, value: String(bio).trim() });
+    const after = await teamRepository.findUserById(req.params.id);
     await audit(req.user, "user.update", "user", req.params.id, mapUser(before), mapUser(after), req.ip);
     res.json(ok(mapUser(after)));
   });
 
   router.delete("/users/:id", requirePermission("admin:*"), async (req, res) => {
-    const before = await row("SELECT * FROM users WHERE id = @id", { id: req.params.id });
+    const before = await teamRepository.findUserById(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "用户不存在。");
     if (before.id === req.user.id) return fail(res, 400, "VALIDATION_FAILED", "不能禁用当前登录用户。");
     if (before.status === "disabled") return res.json(ok({ disabled: true, id: req.params.id }));
-    await run("UPDATE users SET status = @status WHERE id = @id", { id: req.params.id, status: "disabled" });
-    const after = await row("SELECT * FROM users WHERE id = @id", { id: req.params.id });
+    await teamRepository.disableUser(req.params.id);
+    const after = await teamRepository.findUserById(req.params.id);
     await audit(req.user, "user.disable", "user", req.params.id, mapUser(before), mapUser(after), req.ip);
     res.json(ok({ disabled: true, id: req.params.id }));
   });

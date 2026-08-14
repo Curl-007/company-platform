@@ -18,13 +18,14 @@ export function fetchTimeEntries(filters: { periodStart?: string; periodEnd?: st
 export function createTimeEntry(input: TimeEntryInput, idempotencyKey?: string): Promise<TimeEntry> {
   return unwrapPost<TimeEntry>('/api/time-entries', input, {
     headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+    invalidation: 'timeEntries',
   });
 }
 
 export function updateTimeEntry(id: string, input: Partial<TimeEntryInput>): Promise<TimeEntry> {
-  return unwrapPatch<TimeEntry>(`/api/time-entries/${id}`, input);
+  return unwrapPatch<TimeEntry>(`/api/time-entries/${id}`, input, { invalidation: 'timeEntries' });
 }
 
 export function deleteTimeEntry(id: string): Promise<{ deleted: boolean; id: string }> {
-  return unwrapDel<{ deleted: boolean; id: string }>(`/api/time-entries/${id}`);
+  return unwrapDel<{ deleted: boolean; id: string }>(`/api/time-entries/${id}`, { invalidation: 'timeEntries' });
 }

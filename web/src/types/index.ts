@@ -749,6 +749,7 @@ export interface AiSummary {
   recommendations: string[];
   scope?: string;
   aiProvider?: AiProviderConfig;
+  aiAssistant?: AiAssistantConfig;
   generatedBy?: string;
   modelUsed?: string;
   modelRoutes?: AiSummaryModelRoute[];
@@ -774,6 +775,7 @@ export interface AiSummaryModelRoute {
 export interface AiProviderConfig {
   id?: string | null;
   name?: string;
+  preset?: string;
   provider: string;
   baseUrl: string;
   baseUrlHost: string;
@@ -805,6 +807,7 @@ export interface AiProviderHealth {
 export interface UpdateAiProviderInput {
   id?: string;
   name?: string;
+  preset?: string;
   provider: string;
   baseUrl: string;
   model: string;
@@ -820,6 +823,7 @@ export interface UpdateAiProviderInput {
 export interface AiProviderListItem {
   id: string;
   name: string;
+  preset?: string;
   provider: string;
   baseUrl: string;
   baseUrlHost: string;
@@ -839,6 +843,34 @@ export interface AiProviderTestResult {
   latencyMs: number;
   sample: string;
   provider: AiProviderConfig;
+}
+
+export interface AiAssistantConfig {
+  id?: string;
+  name: string;
+  enabled: boolean;
+  providerId?: string | null;
+  resolvedProviderId?: string | null;
+  resolvedProviderName?: string | null;
+  model: string;
+  resolvedModel?: string;
+  systemPrompt?: string;
+  systemPromptConfigured?: boolean;
+  temperature: number;
+  maxTokens: number;
+  available?: boolean;
+  providerFallback?: boolean;
+  updatedAt?: string | null;
+}
+
+export interface UpdateAiAssistantInput {
+  name?: string;
+  enabled?: boolean;
+  providerId?: string | null;
+  model?: string;
+  systemPrompt?: string;
+  temperature?: number;
+  maxTokens?: number;
 }
 
 export interface AiChatAttachment {
@@ -914,6 +946,52 @@ export interface AiModelListResult {
   currentModel?: string | null;
   models: AiModelOption[];
   provider?: AiProviderConfig;
+}
+
+/** Declarative, BFF-owned AI capability manifest. Never contains runtime code or provider credentials. */
+export interface AiCapabilityStringField {
+  type: 'string';
+  minLength?: number;
+  maxLength?: number;
+}
+
+export interface AiCapabilityInputSchema {
+  type: 'object';
+  additionalProperties: false;
+  required?: string[];
+  properties: Record<string, AiCapabilityStringField>;
+}
+
+export interface AiCapabilityOutputSchema {
+  type: 'object';
+  additionalProperties: false;
+  properties: Record<string, { type: string }>;
+}
+
+export interface AiCapabilityManifest {
+  id: string;
+  version: string;
+  status: 'approved' | 'disabled';
+  risk: 'read_only';
+  scopes: string[];
+  inputSchema: AiCapabilityInputSchema;
+  outputSchema: AiCapabilityOutputSchema;
+  requiresConfirmation: boolean;
+}
+
+export interface AiCapabilityListResponse {
+  capabilities: AiCapabilityManifest[];
+}
+
+export interface AiCapabilityInvocation {
+  invocationId?: string;
+  /** Present when the BFF creates an existing AI Job for the invocation. */
+  jobId?: string;
+  status: string;
+  capabilityId?: string;
+  createdAt?: string | null;
+  /** BFF-owned structured output for completed read-only capabilities. */
+  result?: Record<string, unknown> | null;
 }
 
 export interface AiJobRequirementDraft {

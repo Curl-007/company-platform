@@ -26,11 +26,13 @@ function createAiProviderAdminService({
   writeList,
 }) {
   async function validate(entry) {
-    if (!entry.baseUrl || !entry.model) throw providerError("VALIDATION_FAILED", "baseUrl 和 model 为必填项。", 400);
+    if (!entry.baseUrl || !entry.model) {
+      throw providerError("VALIDATION_FAILED", "baseUrl and model are required.", 400);
+    }
     try {
       await validateBaseUrl(entry.baseUrl);
     } catch (error) {
-      throw providerError("VALIDATION_FAILED", error?.message || "baseUrl 必须是合法、安全的 http/https 地址。", 400);
+      throw providerError("VALIDATION_FAILED", error?.message || "AI Provider baseUrl must be a valid, allowed http/https URL.", 400);
     }
   }
 
@@ -41,37 +43,61 @@ function createAiProviderAdminService({
     return { activeId, providers };
   }
 
+  // Keeps save and test semantics identical, including an unsaved API key that
+  // must never be written merely because an administrator ran a connection test.
+  async function draftEntry(body = {}) {
+    const stored = await readList();
+    const requestedId = body.id === undefined || body.id === null ? "" : String(body.id).trim();
+    const existing = requestedId ? stored.providers.find((item) => item.id === requestedId) : null;
+    if (requestedId && !existing && !body.createNew) {
+      throw providerError("RESOURCE_NOT_FOUND", "AI Provider config not found.", 404);
+    }
+    const active = stored.providers.find((item) => item.id === stored.activeId) || stored.providers[0] || null;
+    const base = body.createNew ? {} : existing || active || {};
+    const next = normalizeEntry({
+      id: body.createNew ? providerConfigId() : requestedId || base.id || providerConfigId(),
+      name: body.name !== undefined ? body.name : base.name || body.provider || defaults.provider,
+      preset: body.preset !== undefined ? body.preset : base.preset || "custom",
+      provider: body.provider !== undefined ? body.provider : base.provider || defaults.provider,
+      baseUrl: body.baseUrl !== undefined ? body.baseUrl : base.baseUrl || defaults.baseUrl,
+      model: body.model !== undefined ? body.model : base.model || defaults.model,
+      wireApi: body.wireApi !== undefined ? body.wireApi : base.wireApi || defaults.wireApi,
+      disableResponseStorage: body.disableResponseStorage !== undefined ? body.disableResponseStorage : base.disableResponseStorage,
+      enabled: body.enabled !== undefined ? body.enabled : base.enabled !== undefined ? base.enabled : true,
+      apiKey: base.apiKey || "",
+      apiKeyEncrypted: base.apiKeyEncrypted || "",
+      createdAt: base.createdAt || now(),
+      updatedAt: now(),
+    });
+    if (body.clearApiKey) {
+      next.apiKey = "";
+      next.apiKeyEncrypted = "";
+    } else if (typeof body.apiKey === "string" && body.apiKey.trim()) {
+      next.apiKey = body.apiKey.trim();
+      next.apiKeyEncrypted = "";
+    }
+    return { next, stored };
+  }
+
+  async function selectedProvider(id) {
+    const requestedId = String(id || "").trim();
+    if (!requestedId) return readActive();
+    const stored = await readList();
+    const selected = stored.providers.find((item) => item.id === requestedId);
+    if (!selected) throw providerError("RESOURCE_NOT_FOUND", "AI Provider config not found.", 404);
+    return {
+      ...selected,
+      apiKeySource: selected.apiKey ? "database" : "none",
+    };
+  }
+
   return {
     async get() {
       return publicConfig();
     },
     async update(body = {}) {
       const before = await readActive();
-      const stored = await readList();
-      const existing = body.id ? stored.providers.find((item) => item.id === String(body.id)) : null;
-      if (body.id && !existing) throw providerError("RESOURCE_NOT_FOUND", "AI Provider config not found.", 404);
-      const active = stored.providers.find((item) => item.id === stored.activeId) || stored.providers[0] || null;
-      const base = body.createNew ? {} : existing || active || {};
-      const next = normalizeEntry({
-        id: body.createNew ? providerConfigId() : body.id || base.id || providerConfigId(),
-        name: body.name !== undefined ? body.name : base.name || body.provider || defaults.provider,
-        provider: body.provider !== undefined ? body.provider : base.provider || defaults.provider,
-        baseUrl: body.baseUrl !== undefined ? body.baseUrl : base.baseUrl || defaults.baseUrl,
-        model: body.model !== undefined ? body.model : base.model || defaults.model,
-        wireApi: body.wireApi !== undefined ? body.wireApi : base.wireApi || defaults.wireApi,
-        disableResponseStorage: body.disableResponseStorage !== undefined ? body.disableResponseStorage : base.disableResponseStorage,
-        enabled: body.enabled !== undefined ? body.enabled : base.enabled !== undefined ? base.enabled : true,
-        apiKey: base.apiKey || "",
-        apiKeyEncrypted: base.apiKeyEncrypted || "",
-        createdAt: base.createdAt || now(),
-        updatedAt: now(),
-      });
-      if (body.clearApiKey) {
-        next.apiKey = "";
-        next.apiKeyEncrypted = "";
-      } else if (typeof body.apiKey === "string" && body.apiKey.trim()) {
-        next.apiKey = body.apiKey.trim();
-      }
+      const { next, stored } = await draftEntry(body);
       await validate(next);
       const providers = body.createNew
         ? [...stored.providers, next]
@@ -81,6 +107,13 @@ function createAiProviderAdminService({
       const activeId = body.activate || body.createNew || !stored.activeId ? next.id : stored.activeId;
       await persist({ activeId, providers, legacyActive: next });
       return { before: await publicConfig(before), after: await publicConfig(await readActive()), resourceId: next.id };
+    },
+    async prepareTest(body = {}) {
+      const { next } = await draftEntry(body);
+      await validate(next);
+      // Connection testing is an admin-only diagnostic, so a draft need not be
+      // the active profile or enabled before it can be checked.
+      return { ...next, enabled: true };
     },
     async activate(id) {
       const before = await readActive();
@@ -114,23 +147,25 @@ function createAiProviderAdminService({
       await persist({ activeId, providers, legacyActive: active });
       return { before: await publicConfig(before), after: await publicConfig(await readActive()), resourceId: target.id };
     },
-    async listModels() {
-      const active = await readActive();
-      const config = await publicConfig(active);
-      if (!config.enabled) throw providerError("AI_PROVIDER_DISABLED", "Current AI Provider is disabled.", 400);
-      if (!config.configured || !active?.apiKey || !active?.baseUrl) {
-        throw providerError("AI_PROVIDER_NOT_CONFIGURED", "请先配置 API Key、Base URL 和模型。", 400);
+    async listModels(id) {
+      const provider = await selectedProvider(id);
+      if (!provider?.baseUrl) {
+        throw providerError("AI_PROVIDER_NOT_CONFIGURED", "Please configure a Base URL before loading models.", 400);
+      }
+      try {
+        await validateBaseUrl(provider.baseUrl);
+      } catch (error) {
+        throw providerError("VALIDATION_FAILED", error?.message || "AI Provider baseUrl must be valid and allowed.", 400);
       }
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 20000);
       try {
-        const response = await requestImpl(active.baseUrl, "models", {
+        const headers = { Accept: "application/json" };
+        if (provider.apiKey) headers.Authorization = `Bearer ${provider.apiKey}`;
+        const response = await requestImpl(provider.baseUrl, "models", {
           method: "GET",
-          headers: {
-            Authorization: `Bearer ${active.apiKey}`,
-            Accept: "application/json",
-          },
+          headers,
           signal: controller.signal,
           redirect: "error",
         });
@@ -138,7 +173,7 @@ function createAiProviderAdminService({
           const detail = await response.text().catch(() => "");
           throw providerError(
             "AI_PROVIDER_MODELS_FAILED",
-            `拉取模型列表失败：${response.status}${detail ? ` ${detail.slice(0, 180)}` : ""}`,
+            `Loading models failed: ${response.status}${detail ? ` ${detail.slice(0, 180)}` : ""}`,
             502,
           );
         }
@@ -153,30 +188,30 @@ function createAiProviderAdminService({
         const models = [];
         const seen = new Set();
         for (const item of rawItems) {
-          const id = normalizeModelId(item?.id || item?.name || item?.model);
-          if (!id || seen.has(id)) continue;
-          seen.add(id);
+          const modelId = normalizeModelId(item?.id || item?.name || item?.model);
+          if (!modelId || seen.has(modelId)) continue;
+          seen.add(modelId);
           models.push({
-            id,
-            name: normalizeModelId(item?.name || item?.id || id),
+            id: modelId,
+            name: normalizeModelId(item?.name || item?.id || modelId),
             ownedBy: normalizeModelId(item?.owned_by || item?.ownedBy || item?.publisher || "") || null,
           });
         }
-        const currentModel = normalizeModelId(config.model);
+        const currentModel = normalizeModelId(provider.model);
         if (currentModel && !seen.has(currentModel)) {
           models.unshift({ id: currentModel, name: currentModel, ownedBy: null });
         }
-        models.sort((a, b) => a.id.localeCompare(b.id, "en"));
+        models.sort((left, right) => left.id.localeCompare(right.id, "en"));
         return {
           ok: true,
           count: models.length,
           currentModel: currentModel || null,
           models,
-          provider: config,
+          provider: await publicConfig(provider),
         };
       } catch (error) {
         if (error?.code && String(error.code).startsWith("AI_PROVIDER_")) throw error;
-        throw providerError("AI_PROVIDER_MODELS_FAILED", error?.message || "拉取模型列表失败。", 502);
+        throw providerError("AI_PROVIDER_MODELS_FAILED", error?.message || "Loading models failed.", 502);
       } finally {
         clearTimeout(timeout);
       }

@@ -81,6 +81,7 @@ test("OpenAPI core contract validates and describes versioned project writes", a
   assert.ok(document.paths["/api/ai/logs/analyze"]?.post);
   assert.ok(document.paths["/api/work-logs/weekly-summary"]?.get);
   assert.ok(document.paths["/api/defects"]?.post);
+  assert.ok(document.paths["/api/defects/{id}"]?.get);
   assert.ok(document.paths["/api/defects/{id}"]?.patch);
   assert.ok(document.paths["/api/defects/{id}/status"]?.patch);
   assert.ok(document.paths["/api/products"]?.get);
@@ -108,6 +109,10 @@ test("OpenAPI core contract validates and describes versioned project writes", a
   assert.ok(document.paths["/api/ai/jobs/{id}/confirm"]?.post);
   assert.ok(document.paths["/api/ai/jobs/{id}/reject"]?.post);
   assert.ok(document.paths["/api/ai/jobs/{id}/retry"]?.post);
+  assert.ok(document.paths["/api/ai/capabilities"]?.get);
+  assert.ok(document.paths["/api/ai/capabilities/{id}/invocations"]?.post);
+  assert.ok(document.paths["/api/admin/ai-capabilities/{id}"]?.get);
+  assert.ok(document.paths["/api/admin/ai-capabilities/{id}"]?.patch);
   assert.ok(document.paths["/api/tasks/{id}/work-logs"]?.get);
   assert.equal(document.components.schemas.AiSummary.properties.modelRoutes.type, "array");
   assert.deepEqual(document.components.schemas.AiSummaryModelRoute.properties.status.enum, ["active", "degraded", "unavailable", "disabled", "unconfigured"]);
@@ -141,6 +146,9 @@ test("OpenAPI core contract validates and describes versioned project writes", a
   assert.ok(document.paths["/api/admin/ai-provider"]?.patch);
   assert.ok(document.paths["/api/admin/ai-provider/{id}"]?.delete);
   assert.ok(document.paths["/api/admin/ai-provider/test"]?.post);
+  assert.ok(document.paths["/api/admin/ai-assistant"]?.get);
+  assert.ok(document.paths["/api/admin/ai-assistant"]?.patch);
+  assert.equal(document.paths["/api/admin/ai-provider/models"].get.parameters[0].name, "id");
   assert.deepEqual(document.components.schemas.UpdateProjectInput.required, ["version"]);
   assert.ok(document.components.schemas.Project.properties.objective);
   assert.ok(document.components.schemas.CreateProjectInput.properties.objective);
@@ -204,4 +212,15 @@ test("OpenAPI core contract validates and describes versioned project writes", a
   assert.ok(document.components.schemas.EnvelopeAiRagSearch);
   assert.deepEqual(document.components.schemas.AiJob.properties.status.enum, ["queued", "running", "awaiting_review", "confirmed", "rejected", "failed", "retried"]);
   assert.equal(document.components.schemas.AiProviderUpdateInput.properties.apiKey.writeOnly, true);
+  assert.equal(document.components.schemas.AiProviderUpdateInput.properties.preset.type, "string");
+  assert.equal(document.components.schemas.AiProviderConfig.properties.preset.type, "string");
+  assert.equal(document.components.schemas.AiAssistantUpdateInput.properties.systemPrompt.maxLength, 12000);
+  assert.ok(document.components.schemas.AiSummary.properties.aiAssistant);
+  assert.deepEqual(document.components.schemas.AiCapabilityInvocationInput.required, ["projectId"]);
+  assert.equal(document.components.schemas.AiCapabilityInvocationInput.additionalProperties, false);
+  assert.deepEqual(document.components.schemas.AiCapability.properties.risk.enum, ["read_only"]);
+  assert.deepEqual(document.components.schemas.AiCapabilityInvocation.properties.status.enum, ["accepted", "running", "completed", "failed", "denied"]);
+  assert.ok(document.components.schemas.EnvelopeAiCapabilityList);
+  assert.ok(document.components.schemas.EnvelopeAiCapabilityInvocation);
+  assert.ok(document.components.schemas.EnvelopeAiCapabilityAdmin);
 });

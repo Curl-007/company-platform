@@ -12,4 +12,14 @@ async function canManageDocument(user, document, { canWriteProject }) {
   return user.role === "admin" || canManageDocumentRole(user, document.owner_role);
 }
 
-module.exports = { canManageDocument, canViewDocument };
+function createDocumentAccessPolicy({ canAccessProject, canWriteProject, mapDocument }) {
+  if (typeof canAccessProject !== "function" || typeof canWriteProject !== "function" || typeof mapDocument !== "function") {
+    throw new Error("Document access policy dependencies are required.");
+  }
+  return {
+    canManageDocument: (user, document) => canManageDocument(user, document, { canWriteProject }),
+    canViewDocument: (user, document) => canViewDocument(user, document, { canAccessProject, mapDocument }),
+  };
+}
+
+module.exports = { canManageDocument, canViewDocument, createDocumentAccessPolicy };

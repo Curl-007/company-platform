@@ -29,7 +29,7 @@ export interface CreateBuildInput {
 }
 
 export function createBuild(input: CreateBuildInput): Promise<Build> {
-  return unwrapPost<Build>('/api/builds', input);
+  return unwrapPost<Build>('/api/builds', input, { invalidation: 'delivery' });
 }
 
 export interface UpdateBuildInput {
@@ -43,15 +43,15 @@ export interface UpdateBuildInput {
 }
 
 export function updateBuild(id: string, input: UpdateBuildInput): Promise<Build> {
-  return unwrapPatch<Build>(`/api/builds/${id}`, input);
+  return unwrapPatch<Build>(`/api/builds/${id}`, input, { invalidation: 'delivery' });
 }
 
 export function updateBuildStatus(id: string, status: string): Promise<Build> {
-  return unwrapPatch<Build>(`/api/builds/${id}/status`, { status });
+  return unwrapPatch<Build>(`/api/builds/${id}/status`, { status }, { invalidation: 'delivery' });
 }
 
 export function deleteBuild(id: string): Promise<void> {
-  return unwrapDel(`/api/builds/${id}`);
+  return unwrapDel(`/api/builds/${id}`, { invalidation: 'delivery' });
 }
 
 export function fetchReleases(productId?: string): Promise<Release[]> {
@@ -72,7 +72,7 @@ export interface CreateReleaseInput {
 }
 
 export function createRelease(input: CreateReleaseInput): Promise<Release> {
-  return unwrapPost<Release>('/api/releases', input);
+  return unwrapPost<Release>('/api/releases', input, { invalidation: 'delivery' });
 }
 
 export function fetchReleaseApprovals(releaseId: string): Promise<ReleaseApproval[]> {
@@ -83,7 +83,7 @@ export function createReleaseApproval(
   releaseId: string,
   input: { decision: 'approve' | 'reject'; comment?: string },
 ): Promise<{ approval: ReleaseApproval; release: Release }> {
-  return unwrapPost<{ approval: ReleaseApproval; release: Release }>(`/api/releases/${releaseId}/approvals`, input);
+  return unwrapPost<{ approval: ReleaseApproval; release: Release }>(`/api/releases/${releaseId}/approvals`, input, { invalidation: 'delivery' });
 }
 
 export function fetchRollbackRecords(releaseId: string): Promise<RollbackRecord[]> {
@@ -98,13 +98,13 @@ export function createRollbackRecord(
   releaseId: string,
   input: { reason: string; impact?: string; plan?: string },
 ): Promise<{ rollback: RollbackRecord; release: Release }> {
-  return unwrapPost<{ rollback: RollbackRecord; release: Release }>(`/api/releases/${releaseId}/rollbacks`, input);
+  return unwrapPost<{ rollback: RollbackRecord; release: Release }>(`/api/releases/${releaseId}/rollbacks`, input, { invalidation: 'delivery' });
 }
 
 export function updateReleaseStatus(id: string, status: string): Promise<Release> {
-  return unwrapPatch<Release>(`/api/releases/${id}/status`, { status });
+  return unwrapPatch<Release>(`/api/releases/${id}/status`, { status }, { invalidation: 'delivery' });
 }
 
 export function deleteRelease(id: string): Promise<void> {
-  return unwrapDel(`/api/releases/${id}`);
+  return unwrapDel(`/api/releases/${id}`, { invalidation: 'delivery' });
 }

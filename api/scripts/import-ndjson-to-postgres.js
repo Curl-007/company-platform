@@ -11,6 +11,7 @@ const path = require("path");
 const readline = require("readline");
 const { createPgPool, maskDatabaseUrl, resolveDatabaseUrl } = require("../src/db/postgres");
 const { applyPostgresSchema } = require("./apply-postgres-schema");
+const { verifyExport } = require("./verify-postgres-export");
 
 const EXPORT_FORMAT = "company-project-management/sqlite-ndjson-export/v1";
 const DEFAULT_BATCH_SIZE = 200;
@@ -196,6 +197,10 @@ async function importNdjsonToPostgres(options = {}) {
   const manifestFile = path.join(exportDirectory, "manifest.json");
   if (!fs.existsSync(manifestFile)) {
     throw new Error(`Missing manifest.json in export directory: ${exportDirectory}`);
+  }
+  const verification = verifyExport({ exportDirectory });
+  if (!verification.ok) {
+    throw new Error(`PostgreSQL export verification failed: ${verification.errors.join("; ")}`);
   }
   const manifest = options.manifest || readJson(manifestFile);
   if (manifest.format !== EXPORT_FORMAT) {

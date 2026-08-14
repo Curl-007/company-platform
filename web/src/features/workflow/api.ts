@@ -31,8 +31,6 @@ export function bindProjectWorkflowTemplate(projectId: string, templateId: strin
   return unwrapPut<ProjectWorkflowBinding>(
     `/api/projects/${encodeURIComponent(projectId)}/workflow-binding`,
     { templateId },
-    {
-      invalidateKeys: ['workflow:templates', 'project:flow', 'flow:overview', 'project:workflow-binding'],
-    },
+    { invalidation: 'workflow' },
   );
 }

@@ -111,6 +111,41 @@ test("document collaboration update writes audit evidence and broadcasts to peer
   assert.equal(transactionCount, 1);
 });
 
+test("document collaboration update accepts the injected repository boundary", async () => {
+  const socket = createSocket();
+  const calls = [];
+  const repository = {
+    findUser: async () => ({ id: "USR-001", name: "Alice", status: "active" }),
+    findDocument: async () => ({ id: "DOC-001", content: "before", collab_revision: 4 }),
+    updateDocumentCollaboration: async (input) => {
+      calls.push(["update", input]);
+      return { changes: 1 };
+    },
+    findDocumentRevision: async () => ({ id: "DOC-001", collab_revision: 5 }),
+  };
+  const result = await handleCollaborationUpdate({
+    socket,
+    rooms: new Map([["DOC-001", new Set([socket])]]),
+    documentId: "DOC-001",
+    user: { id: "USR-001" },
+    message: { type: "update", content: "after", baseRevision: 4 },
+    repository,
+    now: () => "2026-08-14T00:00:00.000Z",
+    audit: async () => {},
+    publicUser: (user) => user,
+    canManageDocument: () => true,
+  });
+
+  assert.equal(result, "updated");
+  assert.deepEqual(calls, [["update", {
+    id: "DOC-001",
+    content: "after",
+    updatedAt: "2026-08-14T00:00:00.000Z",
+    baseRevision: 4,
+  }]]);
+  assert.equal(socket.sent[0].revision, 5);
+});
+
 test("document collaboration presence lists unique online peers", () => {
   const { listRoomPresence } = require("../src/modules/documents/collaboration");
   const a = { readyState: 1, collabUser: { id: "USR-1", name: "甲" } };

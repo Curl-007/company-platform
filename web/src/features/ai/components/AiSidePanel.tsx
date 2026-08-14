@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LoaderCircle, RefreshCw } from 'lucide-react';
-import type { AiJob, AiModelOption, AiProviderConfig } from '../../../types';
+import type { AiJob, AiProviderConfig } from '../../../types';
 import Panel from '../../../components/common/Panel';
 import StatusBadge from '../../../components/common/StatusBadge';
 import type { AiSummaryExtended, JobReviewDraft } from '../aiChatModel';
@@ -24,17 +24,12 @@ function connectionMeta(t: (key: string) => string, provider?: AiProviderConfig 
   if (health === 'degraded') return { tone: 'red', label: t('features.ai.aiSidePanel.degraded'), host };
   if (health === 'unavailable' || health === 'disabled') return { tone: 'red', label: t('features.ai.aiSidePanel.unavailable'), host };
   if (health === 'unconfigured') return { tone: 'red', label: t('features.ai.aiSidePanel.notConfigured'), host };
-  // configured but never verified / unknown → still show green as “可连配置就绪”，测试结果再覆盖
-  return { tone: 'green', label: t('features.ai.aiSidePanel.configured'), host };
+  // A saved URL is not evidence that the remote service is reachable.
+  return { tone: 'unknown', label: t('features.ai.aiSidePanel.configured'), host };
 }
 
 export default function AiSidePanel({
   data,
-  selectedModel,
-  onModelChange,
-  models,
-  modelsLoading,
-  modelsError,
   connectionTesting,
   connectionOnline,
   connectionLatencyMs,
@@ -52,11 +47,6 @@ export default function AiSidePanel({
   onRetry,
 }: {
   data: AiSummaryExtended;
-  selectedModel: string;
-  onModelChange: (model: string) => void;
-  models: AiModelOption[];
-  modelsLoading: boolean;
-  modelsError: string | null;
   connectionTesting: boolean;
   connectionOnline: boolean | null;
   connectionLatencyMs: number | null;
@@ -90,13 +80,7 @@ export default function AiSidePanel({
         ? t('features.ai.aiSidePanel.notConnected')
         : base.label;
 
-  const modelOptions = models.length
-    ? models
-    : selectedModel
-      ? [{ id: selectedModel, name: selectedModel, ownedBy: null }]
-      : data.aiProvider?.model
-        ? [{ id: data.aiProvider.model, name: data.aiProvider.model, ownedBy: null }]
-        : [];
+  const assistantModel = data.aiAssistant?.resolvedModel || data.aiProvider?.model || '';
 
   return (
     <div className="ai-chat-side">
@@ -109,10 +93,10 @@ export default function AiSidePanel({
             type="button"
             className="btn btn-text btn-xs btn-with-icon"
             onClick={onRefreshConnection}
-            disabled={connectionTesting || modelsLoading}
+            disabled={connectionTesting}
             title={t('features.ai.aiSidePanel.refreshConnectionTitle')}
           >
-            {connectionTesting || modelsLoading
+            {connectionTesting
               ? <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />
               : <RefreshCw size={13} aria-hidden="true" />}
             {t('features.ai.aiSidePanel.testButton')}
@@ -139,29 +123,11 @@ export default function AiSidePanel({
 
         <div className="ai-model-picker">
           <label className="form-label" htmlFor="ai-model-select">{t('features.ai.aiSidePanel.chatModel')}</label>
-          <select
-            id="ai-model-select"
-            className="form-select"
-            value={selectedModel || modelOptions[0]?.id || ''}
-            onChange={(event) => onModelChange(event.target.value)}
-            disabled={modelsLoading || (!modelOptions.length && !selectedModel)}
-            aria-label={t('features.ai.aiSidePanel.selectChatModel')}
-          >
-            {!modelOptions.length ? <option value="">{t('features.ai.aiSidePanel.noModels')}</option> : null}
-            {modelOptions.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name || item.id}
-              </option>
-            ))}
-          </select>
+          <div id="ai-model-select" className="ai-model-picker-static text-mono">
+            {assistantModel || t('features.ai.aiSidePanel.noModels')}
+          </div>
           <div className="ai-model-picker-meta">
-            {modelsLoading
-              ? t('features.ai.aiSidePanel.fetchingModels')
-              : modelsError
-                ? modelsError
-                : models.length
-                  ? t('features.ai.aiSidePanel.modelsLoaded', { count: models.length })
-                  : t('features.ai.aiSidePanel.useCurrentModel')}
+            {data.aiAssistant?.name || t('common.aiAssistant')}
           </div>
         </div>
       </Panel>

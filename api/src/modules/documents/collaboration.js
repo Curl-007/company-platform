@@ -1,3 +1,5 @@
+const { createDocumentsRepository } = require("./repository");
+
 function sendJson(socket, payload) {
   socket.send(JSON.stringify(payload));
 }
@@ -56,6 +58,7 @@ async function handleCollaborationUpdate({
   user,
   message,
   remoteAddress,
+  repository: suppliedRepository,
   row,
   run,
   now,
@@ -65,6 +68,7 @@ async function handleCollaborationUpdate({
   reindexDocument,
   transaction,
 }) {
+  const repository = suppliedRepository || createDocumentsRepository({ row, run });
   const clientMutationId = typeof message.clientMutationId === "string"
     ? message.clientMutationId.trim().slice(0, 100)
     : "";
@@ -78,8 +82,8 @@ async function handleCollaborationUpdate({
     });
     return "revision_required";
   }
-  const currentUser = await row("SELECT * FROM users WHERE id = @id", { id: user.id });
-  const before = await row("SELECT * FROM documents WHERE id = @id", { id: documentId });
+  const currentUser = await repository.findUser(user.id);
+  const before = await repository.findDocument(documentId);
   if (!currentUser || currentUser.status !== "active" || !before || !(await canManageDocument(publicUser(currentUser), before))) {
     socket.close(1008, "Unauthorized");
     return "unauthorized";
@@ -87,17 +91,17 @@ async function handleCollaborationUpdate({
   const content = String(message.content || "").slice(0, 100000);
   const updatedAt = now();
   const persistUpdate = async () => {
-    const update = await run(
-      `UPDATE documents
-       SET content = @content, updated_at = @updated, collab_revision = collab_revision + 1
-       WHERE id = @id AND collab_revision = @baseRevision`,
-      { id: documentId, content, updated: updatedAt, baseRevision },
-    );
+    const update = await repository.updateDocumentCollaboration({
+      id: documentId,
+      content,
+      updatedAt,
+      baseRevision,
+    });
     if (update.changes !== 1) {
-      const latest = await row("SELECT content, collab_revision FROM documents WHERE id = @id", { id: documentId });
+      const latest = await repository.findDocumentCollaborationState(documentId);
       return { conflict: true, latest };
     }
-    const after = await row("SELECT id, collab_revision FROM documents WHERE id = @id", { id: documentId });
+    const after = await repository.findDocumentRevision(documentId);
     if (reindexDocument) {
       await reindexDocument({ ...before, content, updated_at: updatedAt, collab_revision: after?.collab_revision });
     }
@@ -157,6 +161,7 @@ function createDocumentCollaborationServer({
   authenticateSocket,
   hasPermission,
   canManageDocument,
+  repository: suppliedRepository,
   row,
   run,
   now,
@@ -166,6 +171,7 @@ function createDocumentCollaborationServer({
   transaction,
 }) {
   const wss = new WebSocketServer({ server, path });
+  const repository = suppliedRepository || createDocumentsRepository({ row, run });
   const rooms = new Map();
   wss.on("connection", (socket, req) => {
     void (async () => {
@@ -173,7 +179,7 @@ function createDocumentCollaborationServer({
       const documentId = url.searchParams.get("documentId");
       const user = await authenticateSocket(req);
       if (!documentId || !user || !hasPermission(user, "document:*")) return socket.close(1008, "Unauthorized");
-      const document = await row("SELECT * FROM documents WHERE id = @id", { id: documentId });
+      const document = await repository.findDocument(documentId);
       if (!document || !(await canManageDocument(user, document))) return socket.close(1008, "Unauthorized");
       socket.collabUser = peerUserSummary(user);
       socket.collabDocumentId = documentId;
@@ -209,8 +215,7 @@ function createDocumentCollaborationServer({
               user,
               message,
               remoteAddress: req.socket.remoteAddress,
-              row,
-              run,
+              repository,
               now,
               audit,
               publicUser,

@@ -3622,6 +3622,27 @@
           }
         }
       ],
+      "get": {
+        "summary": "Read a defect in the caller's project scope",
+        "responses": {
+          "200": {
+            "description": "Defect",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeDefect"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
       "patch": {
         "summary": "Update a defect without crossing project boundaries",
         "requestBody": {
@@ -5499,6 +5520,206 @@
         }
       }
     },
+    "/api/ai/capabilities": {
+      "get": {
+        "summary": "List caller-authorized, approved read-only AI capabilities",
+        "responses": {
+          "200": {
+            "description": "Available AI capabilities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeAiCapabilityList"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/ai/capabilities/{id}/invocations": {
+      "post": {
+        "summary": "Invoke an approved, read-only AI capability through the scoped Harness gateway",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiCapabilityInvocationInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Completed read-only AI capability invocation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeAiCapabilityInvocation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "description": "Capability is disabled or unavailable"
+          }
+        }
+      }
+    },
+    "/api/admin/ai-capabilities/{id}": {
+      "get": {
+        "summary": "Read approved capability diagnostics and kill-switch state",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AI capability control state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeAiCapabilityAdmin"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update the kill switch for an already-approved AI capability",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiCapabilityControlInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated AI capability control state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeAiCapabilityAdmin"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/admin/ai-assistant": {
+      "get": {
+        "summary": "Get the administrator-only platform AI assistant configuration",
+        "responses": {
+          "200": {
+            "description": "AI assistant configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeAiAssistantConfig"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update the platform AI assistant configuration",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiAssistantUpdateInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "AI assistant configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeAiAssistantConfig"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
     "/api/admin/ai-provider": {
       "get": {
         "summary": "Get the administrator-only, secret-masked AI provider configuration",
@@ -5664,7 +5885,16 @@
     },
     "/api/admin/ai-provider/test": {
       "post": {
-        "summary": "Test only the active AI provider and return a secret-masked result",
+        "summary": "Test an active, saved, or unsaved AI provider draft through Harness",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiProviderUpdateInput"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "AI provider test result",
@@ -6008,7 +6238,17 @@
     },
     "/api/admin/ai-provider/models": {
       "get": {
-        "summary": "List model identifiers available from the active AI provider",
+        "summary": "List model identifiers available from the active or selected saved AI provider",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "description": "Saved AI provider configuration id. Omit for the active provider.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Available model list from the active provider",
@@ -11693,6 +11933,9 @@
           },
           "provider": {
             "$ref": "#/components/schemas/AiProviderConfig"
+          },
+          "aiAssistant": {
+            "$ref": "#/components/schemas/AiAssistantConfig"
           }
         },
         "additionalProperties": false
@@ -11707,6 +11950,7 @@
           "recommendations",
           "metrics",
           "aiProvider",
+          "aiAssistant",
           "modelRoutes",
           "recentJobs"
         ],
@@ -11744,6 +11988,9 @@
           },
           "aiProvider": {
             "$ref": "#/components/schemas/AiProviderConfig"
+          },
+          "aiAssistant": {
+            "$ref": "#/components/schemas/AiAssistantConfig"
           },
           "modelRoutes": {
             "type": "array",
@@ -12149,6 +12396,331 @@
         },
         "additionalProperties": false
       },
+      "AiCapabilityInvocationInput": {
+        "type": "object",
+        "required": [
+          "projectId"
+        ],
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "additionalProperties": false
+      },
+      "AiCapabilityControlInput": {
+        "type": "object",
+        "minProperties": 1,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 240
+          }
+        },
+        "additionalProperties": false
+      },
+      "AiCapability": {
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "status",
+          "risk",
+          "scopes",
+          "inputSchema",
+          "outputSchema",
+          "requiresConfirmation",
+          "enabled",
+          "availability"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "disabled"
+            ]
+          },
+          "risk": {
+            "type": "string",
+            "enum": [
+              "read_only"
+            ]
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "requiresConfirmation": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "available",
+              "fallback_available"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "AiCapabilityControl": {
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "manifestStatus",
+          "enabled",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "manifestStatus": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "disabled"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "AiCapabilityAdmin": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AiCapability"
+          },
+          {
+            "type": "object",
+            "required": [
+              "control"
+            ],
+            "properties": {
+              "control": {
+                "$ref": "#/components/schemas/AiCapabilityControl"
+              }
+            }
+          }
+        ]
+      },
+      "AiCapabilityInvocation": {
+        "type": "object",
+        "required": [
+          "invocationId",
+          "capability",
+          "status",
+          "projectId",
+          "assistant",
+          "provider",
+          "createdAt"
+        ],
+        "properties": {
+          "invocationId": {
+            "type": "string"
+          },
+          "capability": {
+            "type": "object",
+            "required": [
+              "id",
+              "version"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "running",
+              "completed",
+              "failed",
+              "denied"
+            ]
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "assistant": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "provider": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "result": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "errorCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "AiAssistantUpdateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "providerId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 128
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "systemPrompt": {
+            "type": "string",
+            "maxLength": 12000
+          },
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "maxTokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32768
+          }
+        },
+        "additionalProperties": false
+      },
+      "AiAssistantConfig": {
+        "type": "object",
+        "required": [
+          "name",
+          "enabled",
+          "providerId",
+          "model",
+          "temperature",
+          "maxTokens",
+          "systemPromptConfigured"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "providerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "model": {
+            "type": "string"
+          },
+          "systemPrompt": {
+            "type": "string"
+          },
+          "systemPromptConfigured": {
+            "type": "boolean"
+          },
+          "temperature": {
+            "type": "number"
+          },
+          "maxTokens": {
+            "type": "integer"
+          },
+          "resolvedProviderId": {
+            "type": "string",
+            "nullable": true
+          },
+          "resolvedProviderName": {
+            "type": "string",
+            "nullable": true
+          },
+          "resolvedModel": {
+            "type": "string",
+            "nullable": true
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "providerFallback": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "AiProviderUpdateInput": {
         "type": "object",
         "properties": {
@@ -12162,6 +12734,9 @@
             "type": "boolean"
           },
           "name": {
+            "type": "string"
+          },
+          "preset": {
             "type": "string"
           },
           "provider": {
@@ -12224,6 +12799,9 @@
             "nullable": true
           },
           "name": {
+            "type": "string"
+          },
+          "preset": {
             "type": "string"
           },
           "provider": {
@@ -14120,6 +14698,54 @@
           }
         ]
       },
+      "EnvelopeAiCapabilityList": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AiCapability"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "EnvelopeAiCapabilityInvocation": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/AiCapabilityInvocation"
+              }
+            }
+          }
+        ]
+      },
+      "EnvelopeAiCapabilityAdmin": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/AiCapabilityAdmin"
+              }
+            }
+          }
+        ]
+      },
       "EnvelopeAiProviderConfig": {
         "allOf": [
           {
@@ -14130,6 +14756,21 @@
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/AiProviderConfig"
+              }
+            }
+          }
+        ]
+      },
+      "EnvelopeAiAssistantConfig": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/AiAssistantConfig"
               }
             }
           }

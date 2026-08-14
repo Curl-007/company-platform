@@ -22,6 +22,7 @@ function createAiInteractionsRouter({
   normalizeMessages,
   now,
   ok,
+  publicAiAssistantConfig = async () => null,
   publicAiProviderConfig,
   requirementScore,
   requirePermission,
@@ -84,7 +85,9 @@ function createAiInteractionsRouter({
       const attachments = normalizeAttachments(req.body?.attachments);
       const scope = String(req.body?.scope || "project-management").slice(0, 80);
       const currentPage = String(req.body?.currentPage || "").slice(0, 120);
-      const requestedModel = String(req.body?.model || "").trim().slice(0, 120);
+      // Chat model selection is a control-plane concern. Client payloads must
+      // not select arbitrary models or bypass the platform assistant profile.
+      const requestedModel = "";
       const accessScope = await accessScopeFor(req.user);
       if (!messages.length && !attachments.length) return fail(res, 400, "VALIDATION_FAILED", "请输入问题或上传附件。");
       const prompt = await buildAiChatPrompt({ messages, attachments, scope, currentPage, accessScope });
@@ -117,6 +120,7 @@ function createAiInteractionsRouter({
       }
 
       const providerConfig = await publicAiProviderConfig();
+      const aiAssistant = await publicAiAssistantConfig();
       const payload = buildChatPayload({
         attachments,
         config: providerConfig,
@@ -124,8 +128,9 @@ function createAiInteractionsRouter({
         fallback,
         now,
         proposedActions,
-        modelUsed: requestedModel || providerConfig.model,
+        modelUsed: aiAssistant?.resolvedModel || providerConfig.model,
       });
+      payload.aiAssistant = aiAssistant;
       await audit(req.user, "ai.chat", "ai_chat", payload.id, null, {
         scope,
         currentPage,
@@ -139,6 +144,7 @@ function createAiInteractionsRouter({
   router.get("/ai/summary", requirePermission("ai:*"), async (req, res, next) => {
     try {
       const aiProvider = await publicAiProviderConfig();
+      const aiAssistant = await publicAiAssistantConfig();
       const accessScope = await accessScopeFor(req.user);
       const isAdmin = accessScope.all === true;
       const projectIds = isAdmin ? [] : accessScope.projectIds;
@@ -190,6 +196,7 @@ function createAiInteractionsRouter({
         modelUsed: aiSummary.modelUsed,
         metrics: summary.metrics,
         aiProvider,
+        aiAssistant,
         modelRoutes: summary.modelRoutes,
         recentJobs: summary.recentJobs,
       }));

@@ -1,8 +1,8 @@
 const express = require("express");
 
-function createAiProviderAdminRouter({ audit, callRealModel, fail, ok, publicConfig, requirePermission, service }) {
+function createAiProviderAdminRouter({ audit, callModelWithConfig, callRealModel, fail, ok, publicConfig, requirePermission, service }) {
   const router = express.Router();
-  const handle = (res, error) => fail(res, error.status || 500, error.code || "AI_PROVIDER_UPDATE_FAILED", error.message || "AI Provider 更新失败。");
+  const handle = (res, error) => fail(res, error.status || 500, error.code || "AI_PROVIDER_UPDATE_FAILED", error.message || "AI Provider update failed.");
 
   router.get("/admin/ai-provider", requirePermission("admin:*"), async (req, res) => {
     try {
@@ -11,7 +11,7 @@ function createAiProviderAdminRouter({ audit, callRealModel, fail, ok, publicCon
   });
   router.get("/admin/ai-provider/models", requirePermission("admin:*"), async (req, res) => {
     try {
-      res.json(ok(await service.listModels()));
+      res.json(ok(await service.listModels(req.query?.id)));
     } catch (error) { return handle(res, error); }
   });
   // AI analysis page also needs model discovery without full admin surface.
@@ -51,13 +51,19 @@ function createAiProviderAdminRouter({ audit, callRealModel, fail, ok, publicCon
   router.post("/admin/ai-provider/test", requirePermission("admin:*"), async (req, res) => {
     const started = Date.now();
     try {
-      const config = await service.get();
-      if (!config.enabled) return fail(res, 400, "AI_PROVIDER_DISABLED", "Current AI Provider is disabled.");
-      if (!config.configured) return fail(res, 400, "AI_PROVIDER_NOT_CONFIGURED", "请先配置 API Key、Base URL 和模型。");
-      const text = await callRealModel("请只回复：连接成功", { temperature: 0 });
-      res.json(ok({ ok: Boolean(text), latencyMs: Date.now() - started, sample: String(text || "").slice(0, 120), provider: await publicConfig() }));
+      const config = await service.prepareTest(req.body || {});
+      const prompt = "Please reply only: connection successful";
+      const text = typeof callModelWithConfig === "function"
+        ? await callModelWithConfig(config, prompt, { temperature: 0 })
+        : await callRealModel(prompt, { temperature: 0 });
+      res.json(ok({
+        ok: Boolean(text),
+        latencyMs: Date.now() - started,
+        sample: String(text || "").slice(0, 120),
+        provider: await publicConfig(config),
+      }));
     } catch (error) {
-      return fail(res, 502, "AI_PROVIDER_TEST_FAILED", error.message || "AI provider 测试失败。");
+      return fail(res, error.status || 502, error.code || "AI_PROVIDER_TEST_FAILED", error.message || "AI provider test failed.");
     }
   });
   return router;

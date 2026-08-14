@@ -1,8 +1,12 @@
 const { evaluateStageGate } = require("../../workflow/gateRules");
+const { createWorkflowRepository } = require("./repository");
 
-function createProjectFlowService({ row, rows, getProjectBinding, getTemplate }) {
+function createProjectFlowService({ repository, row, rows, getProjectBinding, getTemplate }) {
+  // Retain the legacy adapter injection while callers move to the repository contract.
+  const workflowRepository = repository || createWorkflowRepository({ row, rows });
+
   async function evaluateProjectFlow(projectId) {
-    const project = await row("SELECT * FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectId });
+    const project = await workflowRepository.findProject(projectId);
     if (!project) return null;
 
     const binding = typeof getProjectBinding === "function"
@@ -12,14 +16,11 @@ function createProjectFlowService({ row, rows, getProjectBinding, getTemplate })
       ? await getTemplate(binding.templateId)
       : null;
 
-    const reqs = await rows("SELECT status FROM requirements WHERE project_id = @pid AND deleted_at IS NULL", { pid: projectId });
-    const tasks = await rows("SELECT status, estimated_hours, actual_hours, remaining_hours FROM tasks WHERE project_id = @pid", { pid: projectId });
-    const defects = await rows("SELECT status, severity FROM defects WHERE project_id = @pid", { pid: projectId });
-    const tests = await rows("SELECT total_cases, passed_cases, failed_cases, blocked_cases FROM test_cases WHERE project_id = @pid", { pid: projectId });
-    const docs = await rows(
-      "SELECT type, ai_status, project_id FROM documents WHERE project_id = @pid",
-      { pid: projectId },
-    );
+    const reqs = await workflowRepository.listRequirementStatuses(projectId);
+    const tasks = await workflowRepository.listTaskMetrics(projectId);
+    const defects = await workflowRepository.listDefectMetrics(projectId);
+    const tests = await workflowRepository.listTestCaseMetrics(projectId);
+    const docs = await workflowRepository.listProjectDocuments(projectId);
     const designDocs = docs.filter((d) => d.type === "design");
     const testDocs = docs.filter((d) => d.type === "test");
 
@@ -47,15 +48,10 @@ function createProjectFlowService({ row, rows, getProjectBinding, getTemplate })
     const tcPassed = tests.reduce((sum, testCase) => sum + (Number(testCase.passed_cases) || 0), 0);
     const testPassRate = tcTotal > 0 ? tcPassed / tcTotal : 0;
 
-    const releasedRelease = await row(
-      `SELECT r.id FROM releases r
-       INNER JOIN builds b ON b.id = r.build_id
-       WHERE r.status = 'released'
-         AND b.project_id = @projectId
-         AND (r.product_id = @productId OR (r.product_id IS NULL AND @productId IS NULL))
-       LIMIT 1`,
-      { projectId, productId: project.product_id || null },
-    );
+    const releasedRelease = await workflowRepository.findReleasedRelease({
+      projectId,
+      productId: project.product_id || null,
+    });
     const hasRelease = Boolean(releasedRelease);
 
     const metrics = {

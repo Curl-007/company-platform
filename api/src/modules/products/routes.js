@@ -3,23 +3,15 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { filterAsync } = require("../../lib/asyncIter");
+const { PRODUCT_IMAGE_MAX_BYTES, isValidProductImage } = require("./upload");
 
 const PRODUCT_IMAGE_MAX_COUNT = 6;
-const PRODUCT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
-const PRODUCT_IMAGE_TYPES = new Map([
-  [".png", "image/png"],
-  [".jpg", "image/jpeg"],
-  [".jpeg", "image/jpeg"],
-  [".webp", "image/webp"],
-  [".gif", "image/gif"],
-]);
 
 function createProductsRouter({
   audit,
   canAccessProject,
   fail,
   hasPermission,
-  insert,
   json,
   mapProduct,
   mapProject,
@@ -27,15 +19,10 @@ function createProductsRouter({
   nextId,
   now,
   ok,
-  parse = (value, fallback = null) => {
-    try { return JSON.parse(value); } catch { return fallback; }
-  },
   productImageUpload,
+  repository,
   requireAnyPermission,
   requirePermission,
-  row,
-  rows,
-  run,
   storageDir,
   transaction = async (work) => work(),
 }) {
@@ -64,15 +51,7 @@ function createProductsRouter({
   }
 
   async function listProductImages(productId) {
-    return rows(
-      `SELECT image.id, image.product_id, image.sort_order,
-              object.original_name, object.mime_type, object.size, object.storage_key
-         FROM product_images image
-         INNER JOIN objects object ON object.id = image.object_id
-        WHERE image.product_id = @productId
-        ORDER BY image.sort_order, image.created_at, image.id`,
-      { productId },
-    );
+    return repository.listProductImages(productId);
   }
 
   async function mapProductWithImages(product) {
@@ -94,9 +73,7 @@ function createProductsRouter({
   }
 
   function validProductImage(file) {
-    const mimeType = String(file?.mimetype || "").toLowerCase();
-    const extension = path.extname(String(file?.originalname || "")).toLowerCase();
-    return PRODUCT_IMAGE_TYPES.get(extension) === mimeType;
+    return isValidProductImage(file);
   }
 
   function canReadEntireProductCatalog(user) {
@@ -104,9 +81,9 @@ function createProductsRouter({
   }
 
   async function visibleProductsForUser(user) {
-    let products = await rows("SELECT * FROM products");
+    let products = await repository.listProducts();
     if (canReadEntireProductCatalog(user)) return Promise.all(products.map(mapProductWithImages));
-    const __src_visibleProductIds = await rows("SELECT id, product_id FROM projects WHERE deleted_at IS NULL");
+    const __src_visibleProductIds = await repository.listLiveProjects();
     const __mid_visibleProductIds = await filterAsync(__src_visibleProductIds, async (project) => await canAccessProject(user, project.id));
     const visibleProductIds = new Set(__mid_visibleProductIds.map((project) => project.product_id).filter(Boolean));
     products = products.filter((product) => visibleProductIds.has(product.id));
@@ -115,10 +92,7 @@ function createProductsRouter({
 
   async function canReadProduct(user, productId) {
     if (canReadEntireProductCatalog(user)) return true;
-    const projects = await rows(
-      "SELECT id FROM projects WHERE product_id = @productId AND deleted_at IS NULL",
-      { productId },
-    );
+    const projects = await repository.listLiveProductProjects(productId);
     for (const project of projects) {
       if (await canAccessProject(user, project.id)) return true;
     }
@@ -126,7 +100,7 @@ function createProductsRouter({
   }
 
   async function authorizeProductRead(req, res, next) {
-    const product = await row("SELECT * FROM products WHERE id = @id", { id: req.params.id });
+    const product = await repository.findProduct(req.params.id);
     if (!product) return fail(res, 404, "RESOURCE_NOT_FOUND", "Product not found.");
     if (!(await canReadProduct(req.user, product.id))) {
       return fail(res, 403, "PERMISSION_DENIED", "You cannot access this product image.");
@@ -136,126 +110,22 @@ function createProductsRouter({
   }
 
   async function authorizeProductWrite(req, res, next) {
-    const product = await row("SELECT * FROM products WHERE id = @id", { id: req.params.id });
+    const product = await repository.findProduct(req.params.id);
     if (!product) return fail(res, 404, "RESOURCE_NOT_FOUND", "Product not found.");
     req.authorizedProduct = product;
     return next();
   }
 
-  async function sqlDependency(sqlFrom, params) {
-    const count = Number((await row(`SELECT COUNT(*) AS count ${sqlFrom}`, params))?.count || 0);
-    const sample = count > 0 ? await rows(`SELECT id ${sqlFrom} ORDER BY id LIMIT 10`, params) : [];
-    return { count, sampleIds: sample.map((item) => item.id) };
-  }
-
   async function productDependencies(productId) {
-    const params = { id: productId };
-    const [projects, requirements, releases, portfolioRows] = await Promise.all([
-      sqlDependency("FROM projects WHERE product_id = @id", params),
-      sqlDependency("FROM requirements WHERE product_id = @id", params),
-      sqlDependency("FROM releases WHERE product_id = @id", params),
-      rows("SELECT id, product_ids FROM portfolios ORDER BY id"),
-    ]);
-    const productImages = await sqlDependency("FROM product_images WHERE product_id = @id", params);
-    const linkedPortfolios = portfolioRows
-      .filter((portfolio) => {
-        const productIds = parse(portfolio.product_ids, []);
-        return Array.isArray(productIds) && productIds.includes(productId);
-      })
-      .map((portfolio) => portfolio.id);
-    return {
-      projects,
-      requirements,
-      releases,
-      productImages,
-      portfolios: { count: linkedPortfolios.length, sampleIds: linkedPortfolios.slice(0, 10) },
-    };
+    return repository.productDependencies(productId);
   }
 
-  // Cascade delete a product and its dependencies (mixed strategy).
-  //   - requirements: soft-delete each (+ hard-delete its tasks/defects/test
-  //     cases and their test runs/sync tasks), reusing the same SQL surface as
-  //     the requirements module. We loop per-id because the @name binder maps
-  //     each placeholder to a single positional value (no IN(@list) expansion).
-  //   - releases: hard-delete approvals + rollbacks + release rows.
-  //   - product images: capture storage keys, delete product_images + objects
-  //     rows in-transaction; the caller unlinks the physical files AFTER commit.
-  //   - projects: null out product_id (keep the project).
-  //   - portfolios: remove the productId from each portfolio.product_ids array.
-  //   - product itself: hard-delete.
-  // Returns { imageStorageKeys, snapshots } so the route can unlink files and
-  // write audit entries after the transaction commits.
-  async function cascadeDeleteProduct(productId, { now: deletedAt }) {
-    const params = { id: productId };
-
-    const requirementRows = await rows(
-      "SELECT id FROM requirements WHERE product_id = @id AND deleted_at IS NULL ORDER BY id",
-      params,
-    );
-    const releaseRows = await rows("SELECT id FROM releases WHERE product_id = @id ORDER BY id", params);
-    const imageRows = await rows(
-      `SELECT image.id AS image_id, image.object_id, object.storage_key
-         FROM product_images image
-         INNER JOIN objects object ON object.id = image.object_id
-        WHERE image.product_id = @id ORDER BY image.id`,
-      params,
-    );
-    const portfolioRows = await rows("SELECT id, product_ids FROM portfolios ORDER BY id");
-
-    // Requirement subtree: per-requirement cascade (leaf hard-deletes + soft-delete).
-    for (const requirement of requirementRows) {
-      const reqParams = { id: requirement.id };
-      const reqTestCases = await rows("SELECT id FROM test_cases WHERE requirement_id = @id ORDER BY id", reqParams);
-      for (const testCase of reqTestCases) {
-        const tcParams = { id: testCase.id };
-        await run("DELETE FROM test_runs WHERE test_case_id = @id", tcParams);
-        await run("DELETE FROM tasks WHERE source_type = 'test_case' AND source_id = @id", tcParams);
-      }
-      await run("DELETE FROM test_cases WHERE requirement_id = @id", reqParams);
-      await run("DELETE FROM tasks WHERE requirement_id = @id", reqParams);
-      await run("DELETE FROM defects WHERE requirement_id = @id", reqParams);
-      await run("UPDATE requirements SET deleted_at = @deletedAt WHERE parent_id = @id AND deleted_at IS NULL", { id: requirement.id, deletedAt });
-      await run("UPDATE requirements SET deleted_at = @deletedAt WHERE id = @id AND deleted_at IS NULL", reqParams);
-    }
-
-    // Releases (+ approvals + rollbacks).
-    for (const release of releaseRows) {
-      await run("DELETE FROM release_approvals WHERE release_id = @id", { id: release.id });
-      await run("DELETE FROM rollback_records WHERE release_id = @id", { id: release.id });
-    }
-    await run("DELETE FROM releases WHERE product_id = @id", params);
-
-    // Product images + object blobs (rows only; files unlinked after commit).
-    for (const image of imageRows) {
-      await run("DELETE FROM product_images WHERE id = @id", { id: image.image_id });
-      await run("DELETE FROM objects WHERE id = @id", { id: image.object_id });
-    }
-
-    // Projects: keep, just detach.
-    await run("UPDATE projects SET product_id = NULL WHERE product_id = @id", params);
-
-    // Portfolios: remove productId from the JSON array.
-    for (const portfolio of portfolioRows) {
-      const productIds = parse(portfolio.product_ids, []);
-      if (!Array.isArray(productIds) || !productIds.includes(productId)) continue;
-      const next = productIds.filter((value) => value !== productId);
-      await run("UPDATE portfolios SET product_ids = @productIds WHERE id = @id", { id: portfolio.id, productIds: JSON.stringify(next) });
-    }
-
-    await run("DELETE FROM products WHERE id = @id", params);
-
-    return {
-      imageStorageKeys: imageRows.map((image) => image.storage_key).filter(Boolean),
-      snapshots: {
-        requirements: requirementRows.map((item) => item.id),
-        releases: releaseRows.map((item) => item.id),
-        images: imageRows.map((image) => image.image_id),
-      },
-    };
+  async function cascadeDeleteProduct(productId, options) {
+    return repository.cascadeDeleteProduct(productId, options);
   }
 
   router.get("/programs", requireAnyPermission(["product:*", "project:*", "project:read"]), async (req, res) => {
-    const __src_projects = await rows("SELECT * FROM projects WHERE deleted_at IS NULL");
+    const __src_projects = await repository.listLiveProjects();
     const __mid_projects = await filterAsync(__src_projects, async (project) => await canAccessProject(req.user, project.id));
     const projects = __mid_projects.map(mapProject);
     const grouped = new Map();
@@ -335,16 +205,13 @@ function createProductsRouter({
   });
 
   router.get("/products/:id/requirements", requireAnyPermission(["product:*", "project:*", "project:read"]), async (req, res) => {
-    const product = await row("SELECT * FROM products WHERE id = @id", { id: req.params.id });
+    const product = await repository.findProduct(req.params.id);
     if (!product) return fail(res, 404, "RESOURCE_NOT_FOUND", "Product not found.");
     const visibleProducts = await visibleProductsForUser(req.user);
     if (!visibleProducts.some((item) => item.id === product.id)) {
       return fail(res, 403, "PERMISSION_DENIED", "You cannot access this product's requirements.");
     }
-    const __src_requirements = await rows(
-      "SELECT * FROM requirements WHERE product_id = @productId AND deleted_at IS NULL ORDER BY id DESC",
-      { productId: product.id },
-    );
+    const __src_requirements = await repository.listProductRequirements(product.id);
     const __mid_requirements = await filterAsync(__src_requirements, async (requirement) => await canAccessProject(req.user, requirement.project_id));
     const requirements = __mid_requirements.map(mapRequirement);
     res.json(ok(requirements));
@@ -377,13 +244,13 @@ function createProductsRouter({
       system_metrics: json(Array.isArray(systemMetrics) ? systemMetrics : []),
       app_metrics: json(Array.isArray(appMetrics) ? appMetrics : []),
     };
-    await insert("products", product);
+    await repository.createProduct(product);
     await audit(req.user, "product.create", "product", product.id, null, product, req.ip);
-    res.status(201).json(ok(await mapProductWithImages(await row("SELECT * FROM products WHERE id = @id", { id: product.id }))));
+    res.status(201).json(ok(await mapProductWithImages(await repository.findProduct(product.id))));
   });
 
   router.patch("/products/:id", requirePermission("product:*"), async (req, res) => {
-    const before = await row("SELECT * FROM products WHERE id = @id", { id: req.params.id });
+    const before = await repository.findProduct(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Product not found.");
     const fields = {
       name: req.body?.name,
@@ -403,10 +270,8 @@ function createProductsRouter({
       system_metrics: req.body?.systemMetrics ? json(req.body.systemMetrics) : undefined,
       app_metrics: req.body?.appMetrics ? json(req.body.appMetrics) : undefined,
     };
-    for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) await run(`UPDATE products SET ${key} = @value WHERE id = @id`, { id: req.params.id, value });
-    }
-    const after = await row("SELECT * FROM products WHERE id = @id", { id: req.params.id });
+    await repository.updateProductFields(req.params.id, fields);
+    const after = await repository.findProduct(req.params.id);
     await audit(req.user, "product.update", "product", req.params.id, before, after, req.ip);
     res.json(ok(await mapProductWithImages(after)));
   });
@@ -432,18 +297,9 @@ function createProductsRouter({
       const createdAt = now();
       try {
         const result = await transaction(async () => {
-          const count = Number((await row(
-            "SELECT COUNT(*) AS count FROM product_images WHERE product_id = @productId",
-            { productId: req.params.id },
-          ))?.count || 0);
+          const { count, sortOrder } = await repository.imageUploadPosition(req.params.id);
           if (count >= PRODUCT_IMAGE_MAX_COUNT) return { limitReached: true };
-          const maxSortOrderValue = (await row(
-            "SELECT MAX(sort_order) AS value FROM product_images WHERE product_id = @productId",
-            { productId: req.params.id },
-          ))?.value;
-          const maxSortOrder = maxSortOrderValue == null ? null : Number(maxSortOrderValue);
-          const sortOrder = Number.isFinite(maxSortOrder) ? maxSortOrder + 1 : 0;
-          await insert("objects", {
+          await repository.createObject({
             id: objectId,
             bucket: "product-images",
             storage_key: storageKey,
@@ -453,7 +309,7 @@ function createProductsRouter({
             created_by: req.user.id,
             created_at: createdAt,
           });
-          await insert("product_images", {
+          await repository.createProductImage({
             id: imageId,
             product_id: req.params.id,
             object_id: objectId,
@@ -480,13 +336,7 @@ function createProductsRouter({
   );
 
   router.get("/products/:id/images/:imageId/content", authorizeProductRead, async (req, res) => {
-    const image = await row(
-      `SELECT image.id, object.storage_key, object.original_name, object.mime_type
-         FROM product_images image
-         INNER JOIN objects object ON object.id = image.object_id
-        WHERE image.id = @imageId AND image.product_id = @productId`,
-      { imageId: req.params.imageId, productId: req.params.id },
-    );
+    const image = await repository.findProductImageContent({ imageId: req.params.imageId, productId: req.params.id });
     if (!image) return fail(res, 404, "RESOURCE_NOT_FOUND", "Product image not found.");
     res.type(image.mime_type);
     res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(image.original_name)}`);
@@ -494,18 +344,11 @@ function createProductsRouter({
   });
 
   router.delete("/products/:id/images/:imageId", requirePermission("product:*"), authorizeProductWrite, async (req, res) => {
-    const image = await row(
-      `SELECT image.id, image.object_id, image.product_id, image.sort_order,
-              object.storage_key, object.original_name, object.mime_type, object.size
-         FROM product_images image
-         INNER JOIN objects object ON object.id = image.object_id
-        WHERE image.id = @imageId AND image.product_id = @productId`,
-      { imageId: req.params.imageId, productId: req.params.id },
-    );
+    const image = await repository.findProductImage({ imageId: req.params.imageId, productId: req.params.id });
     if (!image) return fail(res, 404, "RESOURCE_NOT_FOUND", "Product image not found.");
     const product = await transaction(async () => {
-      await run("DELETE FROM product_images WHERE id = @imageId", { imageId: image.id });
-      await run("DELETE FROM objects WHERE id = @objectId", { objectId: image.object_id });
+      await repository.deleteProductImage(image.id);
+      await repository.deleteObject(image.object_id);
       await audit(req.user, "product.image_delete", "product_image", image.id, image, null, req.ip);
       return mapProductWithImages(req.authorizedProduct);
     });
@@ -514,7 +357,7 @@ function createProductsRouter({
   });
 
   router.delete("/products/:id", requirePermission("product:*"), async (req, res) => {
-    const before = await row("SELECT * FROM products WHERE id = @id", { id: req.params.id });
+    const before = await repository.findProduct(req.params.id);
     if (!before) return fail(res, 404, "RESOURCE_NOT_FOUND", "Product not found.");
     const wantsCascade = req.query.cascade === "true";
     if (wantsCascade) {
@@ -535,7 +378,7 @@ function createProductsRouter({
       if (Object.values(dependencies).some((dependency) => dependency.count > 0)) {
         return { dependencies };
       }
-      await run("DELETE FROM products WHERE id = @id", { id: req.params.id });
+      await repository.deleteProduct(req.params.id);
       await audit(req.user, "product.delete", "product", req.params.id, before, null, req.ip);
       return { deleted: true };
     });

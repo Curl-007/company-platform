@@ -33,6 +33,7 @@ export interface CreateRequirementInput {
 export function createRequirement(input: CreateRequirementInput, idempotencyKey?: string): Promise<Requirement> {
   return unwrapPost<Requirement>('/api/requirements', input, {
     headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+    invalidation: 'requirements',
   });
 }
 
@@ -54,7 +55,7 @@ export interface UpdateRequirementInput {
 }
 
 export function updateRequirement(id: string, input: UpdateRequirementInput): Promise<Requirement> {
-  return unwrapPatch<Requirement>(`/api/requirements/${id}`, input);
+  return unwrapPatch<Requirement>(`/api/requirements/${id}`, input, { invalidation: 'requirements' });
 }
 
 export function fetchRequirementChildren(id: string): Promise<Requirement[]> {
@@ -62,9 +63,9 @@ export function fetchRequirementChildren(id: string): Promise<Requirement[]> {
 }
 
 export function updateRequirementStatus(id: string, status: string, version: number): Promise<Requirement> {
-  return unwrapPatch<Requirement>(`/api/requirements/${id}/status`, { status, version });
+  return unwrapPatch<Requirement>(`/api/requirements/${id}/status`, { status, version }, { invalidation: 'requirements' });
 }
 
 export function deleteRequirement(id: string, cascade?: boolean): Promise<{ deleted: boolean }> {
-  return unwrapDel<{ deleted: boolean }>(`/api/requirements/${id}${cascade ? '?cascade=true' : ''}`);
+  return unwrapDel<{ deleted: boolean }>(`/api/requirements/${id}${cascade ? '?cascade=true' : ''}`, { invalidation: 'requirements' });
 }

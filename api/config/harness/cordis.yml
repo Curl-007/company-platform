@@ -1,0 +1,54 @@
+# Fixed company-owned, unattended inference composition. stdout belongs
+# exclusively to the SDK JSON-RPC transport; do not add a console logger,
+# terminal UI, dynamic config loader, or user profile patch path here.
+
+- id: sdk-jsonrpc-server
+  name: '@deepseek-ai/dsh-sdk-jsonrpc-server'
+  config:
+    maxTokensAsSuccess: false
+
+- id: attachments
+  name: '@deepseek-ai/dsh-attachment-local'
+  config:
+    dshHome: !!js process.env.DSH_HOME
+    maxImageBytes: 5242880
+    maxImagesPerMessage: 6
+    maxMessageImageBytes: 12582912
+    maxImagePixels: 40000000
+
+- id: llm-company
+  name: '@deepseek-ai/dsh-llm-pi-ai'
+  config:
+    providers:
+      company:
+        displayName: Company Platform Provider Proxy
+        apiKeyEnv: DSH_API_KEY
+        api: !!js "process.env.DSH_WIRE_API === 'responses' ? 'openai-responses' : 'openai-completions'"
+        baseURL: !!js process.env.DSH_BASE_URL
+        defaultInput: [text, image]
+        models:
+          - id: !!js process.env.DSH_MODEL
+            contextWindow: !!js Number(process.env.DSH_CONTEXT_WINDOW ?? 262144)
+            maxTokens: !!js Number(process.env.DSH_MODEL_MAX_TOKENS ?? 32768)
+            input: [text, image]
+
+- id: company-agent-spine
+  name: ./company-agent-spine.mjs
+  config:
+    includeHarnessIdentity: false
+    includeRuntimeContext: false
+    persona: !!js process.env.DSH_SYSTEM_PROMPT
+
+# Registers only the token-bound project_snapshot tool when a company
+# invocation supplies a complete loopback execution-gateway environment.
+- id: company-execution-tool
+  name: ./company-execution-tool.mjs
+
+- id: call-options
+  name: ./call-options.mjs
+
+- id: sessions
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js process.env.DSH_SESSION_ROOT
+    compression: none

@@ -92,7 +92,7 @@ Default addresses:
 
 ## Internal Trial / Single-Machine Production (Same Origin)
 
-A single process hosts **the API + the `web/dist` static frontend** (`/api` and `/ws` share the origin):
+A single-machine API service instance hosts **the API + the `web/dist` static frontend** (`/api` and `/ws` share the origin) and lazily owns a DeepSeek Harness JSON-RPC inference subprocess:
 
 ```bash
 npm run build -w web
@@ -103,13 +103,16 @@ export NODE_ENV=production
 export SEED_DEMO_DATA=0
 export SEED_ADMIN_EMAIL='owner@company.com'
 export SEED_ADMIN_PASSWORD='replace-with-one-time-strong-password'
+export HARNESS_HOME='/var/lib/pm/harness'  # persistent, service-account-only, outside the web root
+# When AI_ENABLED=true, the API control plane alone owns Provider configuration
+# and the real key; Harness receives only a random-token loopback proxy route.
 npm run start:prod
 ```
 
 Open http://localhost:4010/ in a browser.  
-Health check (includes DB / migration readiness): `GET /api/health`
+Health check (includes DB / migration readiness): `GET /api/health`. It represents API/database control-plane readiness, not Provider or Harness inference availability.
 
-See [docs/16-sqlite-trial-deploy.md](./docs/16-sqlite-trial-deploy.md) for deployment, backup, and rollback.
+See [docs/16-sqlite-trial-deploy.md](./docs/16-sqlite-trial-deploy.md) for deployment, Harness operating boundaries, backup, and rollback.
 
 ## Build & Quality Gates
 
@@ -131,4 +134,4 @@ The accounts below are for local development and automated testing only, not for
 - Developer: `dev@example.com` / `Dev@12345`
 - QA: `qa@example.com` / `Qa@12345`
 
-Production forbids `SEED_DEMO_DATA=1` and any role-specific `SEED_*_PASSWORD`. To persist an AI provider API key in the admin UI, you must also configure `AI_CONFIG_ENCRYPTION_KEY` separately (>=16 characters, and it must not equal `JWT_SECRET`).
+Production forbids `SEED_DEMO_DATA=1` and any role-specific `SEED_*_PASSWORD`. To persist an AI provider API key in the admin UI, you must also configure `AI_CONFIG_ENCRYPTION_KEY` separately (>=16 characters, and it must not equal `JWT_SECRET`). The real Provider key is visible only to the API control plane; Harness is the sole LLM inference kernel and receives only a short-lived loopback token, never public `DSH_*` credentials.

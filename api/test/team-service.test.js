@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const { createTeamRepository } = require("../src/modules/team/repository");
 const { createTeamService } = require("../src/modules/team/service");
 
 function normalizeRole(role) {
@@ -38,8 +39,7 @@ test("team service builds collaboration context without performance scoring fiel
     ],
   };
 
-  const service = createTeamService({
-    normalizeRole,
+  const repository = createTeamRepository({
     rows: (sql) => {
       if (sql.includes("FROM users")) return rowsByTable.users;
       if (sql.includes("FROM projects")) return rowsByTable.projects;
@@ -51,6 +51,11 @@ test("team service builds collaboration context without performance scoring fiel
       if (sql.includes("FROM audit_logs")) return rowsByTable.audit_logs;
       return [];
     },
+  });
+
+  const service = createTeamService({
+    normalizeRole,
+    repository,
     mapUser: (row) => ({ id: row.id, name: row.name, email: row.email, role: row.role, department: row.department }),
     mapProject: (row) => ({ id: row.id, name: row.name, owner: row.owner, status: row.status, progress: row.progress }),
     mapTask: (row) => ({

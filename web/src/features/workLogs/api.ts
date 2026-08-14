@@ -26,6 +26,7 @@ export function fetchWorkLogs(): Promise<WorkLog[]> {
 export function createWorkLog(input: WorkLogPayload, idempotencyKey?: string): Promise<{ id: string; analysis: WorkLogAnalysis }> {
   return unwrapPost<{ id: string; analysis: WorkLogAnalysis }>('/api/work-logs', input, {
     headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+    invalidation: 'workLogs',
   });
 }
 

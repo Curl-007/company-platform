@@ -5,7 +5,8 @@
  * PostgreSQL requires DATABASE_URL (or POSTGRES_TARGET_URL) and uses
  * createPostgresRuntime from ./postgres.js (injectable Pool for tests).
  *
- * Default remains sqlite for local/dev/CI. Real PG end-to-end validation is W6.
+ * Default remains sqlite for local/dev and normal test execution. Real
+ * PostgreSQL validation is explicit opt-in through the dedicated CI test.
  *
  * @see docs/w2-postgres-plan.md
  */

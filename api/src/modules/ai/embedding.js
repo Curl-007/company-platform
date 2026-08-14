@@ -1,14 +1,14 @@
 /**
  * Lightweight embedding helpers for hybrid RAG.
  *
- * Default: local hashed bag-of-tokens vectors (no external dependency).
- * Optional: OpenAI-compatible POST {baseUrl}/embeddings when AI is configured.
+ * Local hashed bag-of-tokens vectors only (no external dependency).
+ * Remote embedding calls are intentionally not supported: Harness is the
+ * platform's sole AI execution boundary.
  *
  * Vectors are stored as JSON text in document_chunk.embedding_vector (as-built schema).
  */
 
 const crypto = require("node:crypto");
-const { requestAiProviderUrl } = require("./outboundUrlPolicy");
 
 const LOCAL_PROVIDER = "local-hash";
 const LOCAL_MODEL = "hash-v1";
@@ -111,96 +111,14 @@ function parseEmbedding(value) {
   }
 }
 
-/**
- * Optional remote embeddings via OpenAI-compatible API.
- * Returns null when config missing or request fails (caller falls back to local).
- */
-async function embedRemote(text, {
-  getConfig,
-  requestImpl = requestAiProviderUrl,
-  timeoutMs = 15000,
-  logger = console,
-} = {}) {
-  if (typeof getConfig !== "function") return null;
-  let config;
-  try {
-    config = await getConfig();
-  } catch {
-    return null;
-  }
-  if (!config?.enabled || !config.apiKey || !config.baseUrl) return null;
-  // Prefer dedicated embedding model if provided; otherwise skip remote (chat models may not embed).
-  const model = config.embeddingModel || process.env.AI_EMBEDDING_MODEL || null;
-  if (!model) return null;
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await requestImpl(config.baseUrl, "embeddings", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify({ model, input: text }),
-      signal: controller.signal,
-      redirect: "error",
-    });
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      logger.warn?.(`embedding request failed: ${response.status} ${detail.slice(0, 160)}`);
-      return null;
-    }
-    const data = await response.json();
-    const vector = data?.data?.[0]?.embedding;
-    if (!Array.isArray(vector) || !vector.length) return null;
-    return {
-      provider: config.provider || "openai-compatible",
-      model,
-      dimensions: vector.length,
-      vector: l2Normalize(vector.map((item) => Number(item) || 0)),
-    };
-  } catch (error) {
-    logger.warn?.(`embedding request error: ${error.message}`);
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/**
- * Embed text: try remote when configured, else local hash vectors.
- */
-async function embedText(text, options = {}) {
-  const remote = await embedRemote(text, options);
-  if (remote) return remote;
-  return embedLocal(text, options);
-}
-
-function createEmbeddingService(deps = {}) {
-  return {
-    localProvider: LOCAL_PROVIDER,
-    localModel: LOCAL_MODEL,
-    localDimensions: LOCAL_DIMENSIONS,
-    embedLocal: (text, opts) => embedLocal(text, opts),
-    embedText: (text, opts) => embedText(text, { ...deps, ...opts }),
-    cosineSimilarity,
-    serializeEmbedding,
-    parseEmbedding,
-  };
-}
-
 module.exports = {
   LOCAL_PROVIDER,
   LOCAL_MODEL,
   LOCAL_DIMENSIONS,
   embedLocal,
-  embedRemote,
-  embedText,
   cosineSimilarity,
   serializeEmbedding,
   parseEmbedding,
   l2Normalize,
   tokenize,
-  createEmbeddingService,
 };

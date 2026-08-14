@@ -83,6 +83,20 @@
   width: 100%;
 }
 
+.ai-model-picker-static {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-input);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ai-model-picker-meta {
   color: var(--muted-foreground);
   font-size: 11px;
@@ -92,4 +106,140 @@
 /* Hide the old multi-row status details permanently on AI page. */
 .ai-connection-panel .ai-chat-status-list {
   display: none !important;
+}
+
+/* BFF-owned capability tray. It only renders local controls for a validated
+   declarative manifest; no remote HTML, code, or plugin configuration. */
+.ai-capability-tray {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+}
+
+.ai-capability-tray.is-pending,
+.ai-capability-tray.is-unavailable {
+  flex-direction: row;
+  align-items: center;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.ai-capability-header,
+.ai-capability-heading,
+.ai-capability-actions,
+.ai-capability-form-meta,
+.ai-capability-form-actions {
+  display: flex;
+  align-items: center;
+}
+
+.ai-capability-header {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ai-capability-heading {
+  flex: 0 0 auto;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ai-capability-actions {
+  min-width: 0;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ai-capability-actions .btn.active {
+  border-color: color-mix(in srgb, var(--primary) 58%, var(--border));
+  background: color-mix(in srgb, var(--primary) 14%, var(--card));
+  color: var(--foreground);
+}
+
+.ai-capability-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px 12px;
+  padding: 10px 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.ai-capability-form-meta {
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.ai-capability-form .form-group {
+  min-width: 0;
+  margin: 0;
+}
+
+.ai-capability-form .form-error {
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.ai-capability-form-actions {
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.ai-capability-result {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.ai-capability-result-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ai-capability-result-fields {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.ai-capability-result-fields > div {
+  display: grid;
+  grid-template-columns: minmax(84px, 0.3fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.ai-capability-result-fields dt {
+  color: var(--muted-foreground);
+}
+
+.ai-capability-result-fields dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 640px) {
+  .ai-capability-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .ai-capability-actions {
+    justify-content: flex-start;
+  }
 }

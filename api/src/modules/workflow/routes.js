@@ -14,6 +14,7 @@ function createWorkflowRouter({
   workflowTemplates,
 }) {
   const router = express.Router();
+  const workflowRepository = repository;
 
   router.get("/flow/gate-rules", (req, res) => {
     return res.json(ok({
@@ -24,7 +25,7 @@ function createWorkflowRouter({
   });
 
   router.get("/projects/:id/flow", async (req, res) => {
-    const project = await repository.findProjectId(req.params.id);
+    const project = await workflowRepository.findProjectId(req.params.id);
     if (!project) return fail(res, 404, "RESOURCE_NOT_FOUND", "Project not found.");
     if (!(await canAccessProject(req.user, project.id))) {
       return fail(res, 403, "PERMISSION_DENIED", "Cannot access this project flow.");
@@ -33,7 +34,7 @@ function createWorkflowRouter({
   });
 
   router.get("/flow/overview", async (req, res) => {
-    const source = await repository.listProjectFlowSummaries();
+    const source = await workflowRepository.listProjectFlowSummaries();
     const visible = await filterAsync(source, async (project) => await canAccessProject(req.user, project.id));
     const overview = (await mapAsync(visible, async (project) => {
       const flow = await evaluateProjectFlow(project.id);
@@ -73,7 +74,7 @@ function createWorkflowRouter({
   // As-built: only two builtins + project bind (see templateStore).
 
   router.get("/projects/:id/workflow-binding", async (req, res) => {
-    const project = await repository.findProjectId(req.params.id);
+    const project = await workflowRepository.findProjectId(req.params.id);
     if (!project) return fail(res, 404, "RESOURCE_NOT_FOUND", "Project not found.");
     if (!(await canAccessProject(req.user, project.id))) {
       return fail(res, 403, "PERMISSION_DENIED", "Cannot access this project workflow binding.");
@@ -84,7 +85,7 @@ function createWorkflowRouter({
   });
 
   router.put("/projects/:id/workflow-binding", async (req, res) => {
-    const project = await repository.findProjectId(req.params.id);
+    const project = await workflowRepository.findProjectId(req.params.id);
     if (!project) return fail(res, 404, "RESOURCE_NOT_FOUND", "Project not found.");
     const canManage = canManageProject
       ? await canManageProject(req.user, project.id)
