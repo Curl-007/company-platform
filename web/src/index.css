@@ -95,10 +95,10 @@
      system stack so Chinese text stays in PingFang/YaHei. */
   --font-heading: "Cal Sans Heading", var(--font-cn, var(--font-family-sans));
 
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 10px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
 
   --text-body: var(--font-size-body);
   --text-page-title: var(--font-size-page-title);
@@ -111,45 +111,61 @@
   /* Tag the root for View Transitions so the theme-swap radial reveal can
      target ::view-transition-old/new(theme-root). */
   view-transition-name: theme-root;
-  color-scheme: light;
+  color-scheme: dark;
 
-  /* Codex light palette: white surfaces, restrained ink, blue accent.
-     MUST stay in sync with KANEO_LIGHT in src/theme/workTheme.ts — this block
-     is the no-JS fallback (e.g. first paint), workTheme.ts is the runtime truth. */
-  --background: #ffffff;
-  --foreground: #1a1c1f;
-  --card: #ffffff;
-  --card-foreground: #1a1c1f;
-  --popover: #ffffff;
-  --popover-foreground: #1a1c1f;
-  --primary: #1f7fdf;
-  --primary-foreground: #ffffff;
-  --secondary: #f5f5f5;
-  --secondary-foreground: #1a1c1f;
-  --muted: #f5f5f5;
-  --muted-foreground: #656d76;
-  --accent: #e8f2ff;
-  --accent-foreground: #1a1c1f;
-  --border: #e5e5e5;
-  --input: #e5e5e5;
-  --ring: #339cff;
-  --destructive: #ba2623;
-  --destructive-foreground: #ffffff;
-  --success: #00a240;
-  --success-foreground: #ffffff;
-  --warning: #9a6700;
-  --warning-foreground: #ffffff;
-  --info: #1f7fdf;
-  --info-foreground: #ffffff;
+  /* Liquid-glass dark palette: layered near-black canvas, indigo iris accent
+     #7D8BF5, soft glass highlight #E7ECF3. MUST stay in sync with KANEO_DARK
+     in src/theme/workTheme.ts — this block is the no-JS fallback (e.g. first
+     paint), workTheme.ts is the runtime truth. */
+  --background: #0A0C11;
+  --foreground: #E7ECF3;
+  --card: #14171F;
+  --card-foreground: #E7ECF3;
+  --popover: #1C202B;
+  --popover-foreground: #E7ECF3;
+  --primary: #7D8BF5;
+  --primary-foreground: #0A0C16;
+  --secondary: #181C25;
+  --secondary-foreground: #DDE3F0;
+  --muted: #161A22;
+  --muted-foreground: #9BA4B3;
+  --accent: #7D8BF5;
+  --accent-foreground: #0A0C16;
+  --border: #2A303C;
+  --input: #353D4B;
+  --ring: #95A1F8;
+  --destructive: #F87171;
+  --destructive-foreground: #1A0B0C;
+  --success: #34D399;
+  --success-foreground: #04150E;
+  --warning: #FBBF24;
+  --warning-foreground: #1A1403;
+  --info: #60A5FA;
+  --info-foreground: #061424;
 
-  --sidebar: #fafafa;
-  --sidebar-foreground: #1a1c1f;
-  --sidebar-primary: #1f7fdf;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f0f0f0;
-  --sidebar-accent-foreground: #1a1c1f;
-  --sidebar-border: #e5e5e5;
-  --sidebar-ring: #339cff;
+  --sidebar: #0C0E14;
+  --sidebar-foreground: #E7ECF3;
+  --sidebar-primary: #95A1F8;
+  --sidebar-primary-foreground: #0A0C16;
+  --sidebar-accent: #1C2333;
+  --sidebar-accent-foreground: #E7ECF3;
+  --sidebar-border: #252C3A;
+  --sidebar-ring: #95A1F8;
+
+  /* Elevation tokens (dark). Kept in sync with applyWorkTheme in
+     src/theme/workTheme.ts; surfaces layer via real drop shadows + a faint
+     top highlight. */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.40);
+  --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.38);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+  --shadow-dropdown: 0 10px 28px rgba(0, 0, 0, 0.50), 0 2px 8px rgba(0, 0, 0, 0.40);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.60), 0 6px 18px rgba(0, 0, 0, 0.45);
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.40);
+  --shadow-btn-primary: 0 2px 10px color-mix(in srgb, var(--accent) 45%, transparent);
+  --surface-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
   /* Runtime settings retained for density, type, contrast, and motion controls. */
   --density-scale: 1;
@@ -172,48 +188,98 @@
 
 [data-work-mode='light'] {
   color-scheme: light;
+
+  /* Light-glass companion palette. MUST stay in sync with KANEO_LIGHT in
+     src/theme/workTheme.ts. */
+  --background: #EEF1F8;
+  --foreground: #1B2130;
+  --card: #FFFFFF;
+  --card-foreground: #1B2130;
+  --popover: #FFFFFF;
+  --popover-foreground: #1B2130;
+  --primary: #5560E0;
+  --primary-foreground: #FFFFFF;
+  --secondary: #E8EBF5;
+  --secondary-foreground: #1B2130;
+  --muted: #EAEDF5;
+  --muted-foreground: #5E6980;
+  --accent: #5560E0;
+  --accent-foreground: #FFFFFF;
+  --border: #D6DCE9;
+  --input: #C9D1E1;
+  --ring: #5560E0;
+  --destructive: #DC2626;
+  --destructive-foreground: #FFFFFF;
+  --success: #16A34A;
+  --success-foreground: #FFFFFF;
+  --warning: #D97706;
+  --warning-foreground: #FFFFFF;
+  --info: #3B82F6;
+  --info-foreground: #FFFFFF;
+
+  --sidebar: #F4F6FB;
+  --sidebar-foreground: #1B2130;
+  --sidebar-primary: #5560E0;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #E4E8F4;
+  --sidebar-accent-foreground: #1B2130;
+  --sidebar-border: #DDE2EF;
+  --sidebar-ring: #5560E0;
+
+  /* Elevation tokens (light). Kept in sync with applyWorkTheme. */
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.07);
+  --shadow-light: 0 2px 8px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 6px 18px rgba(16, 24, 40, 0.08);
+  --shadow-lg: 0 16px 40px rgba(16, 24, 40, 0.12);
+  --shadow-dropdown: 0 10px 28px rgba(16, 24, 40, 0.12), 0 2px 8px rgba(16, 24, 40, 0.06);
+  --shadow-modal: 0 24px 64px rgba(16, 24, 40, 0.18), 0 6px 18px rgba(16, 24, 40, 0.08);
+  --shadow-panel: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-card-hover: 0 4px 16px rgba(16, 24, 40, 0.10);
+  --shadow-btn-primary: 0 2px 10px color-mix(in srgb, var(--accent) 35%, transparent);
+  --surface-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.80);
 }
 
 .dark,
 [data-work-mode='dark'] {
   color-scheme: dark;
 
-  /* Codex dark palette (dark-first). MUST stay in sync with KANEO_DARK in
-     src/theme/workTheme.ts. */
-  --background: #181818;
-  --foreground: #ffffff;
-  --card: #1f1f1f;
-  --card-foreground: #ffffff;
-  --popover: #242424;
-  --popover-foreground: #ffffff;
-  --primary: #339cff;
-  --primary-foreground: #0a0a0a;
-  --secondary: #262626;
-  --secondary-foreground: #e5e5e5;
-  --muted: #262626;
-  --muted-foreground: #a0a0a0;
-  --accent: #339cff;
-  --accent-foreground: #0a0a0a;
-  --border: #2e2e2e;
-  --input: #2e2e2e;
-  --ring: #339cff;
-  --destructive: #fa423e;
-  --destructive-foreground: #0a0a0a;
-  --success: #40c977;
-  --success-foreground: #0a1a0e;
-  --warning: #fbbf24;
-  --warning-foreground: #1a1403;
-  --info: #339cff;
-  --info-foreground: #0a1a2a;
+  /* Liquid-glass dark palette (dark-first). MUST stay in sync with KANEO_DARK
+     in src/theme/workTheme.ts. */
+  --background: #0A0C11;
+  --foreground: #E7ECF3;
+  --card: #14171F;
+  --card-foreground: #E7ECF3;
+  --popover: #1C202B;
+  --popover-foreground: #E7ECF3;
+  --primary: #7D8BF5;
+  --primary-foreground: #0A0C16;
+  --secondary: #181C25;
+  --secondary-foreground: #DDE3F0;
+  --muted: #161A22;
+  --muted-foreground: #9BA4B3;
+  --accent: #7D8BF5;
+  --accent-foreground: #0A0C16;
+  --border: #2A303C;
+  --input: #353D4B;
+  --ring: #95A1F8;
+  --destructive: #F87171;
+  --destructive-foreground: #1A0B0C;
+  --success: #34D399;
+  --success-foreground: #04150E;
+  --warning: #FBBF24;
+  --warning-foreground: #1A1403;
+  --info: #60A5FA;
+  --info-foreground: #061424;
 
-  --sidebar: #141414;
-  --sidebar-foreground: #ffffff;
-  --sidebar-primary: #339cff;
-  --sidebar-primary-foreground: #0a0a0a;
-  --sidebar-accent: #1f1f1f;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #2e2e2e;
-  --sidebar-ring: #339cff;
+  --sidebar: #0C0E14;
+  --sidebar-foreground: #E7ECF3;
+  --sidebar-primary: #95A1F8;
+  --sidebar-primary-foreground: #0A0C16;
+  --sidebar-accent: #1C2333;
+  --sidebar-accent-foreground: #E7ECF3;
+  --sidebar-border: #252C3A;
+  --sidebar-ring: #95A1F8;
 }
 
 [data-work-density='compact'] {

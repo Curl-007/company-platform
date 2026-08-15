@@ -112,7 +112,7 @@ npm run start:prod
 Open http://localhost:4010/ in a browser.  
 Health check (includes DB / migration readiness): `GET /api/health`. It represents API/database control-plane readiness, not Provider or Harness inference availability.
 
-See [docs/16-sqlite-trial-deploy.md](./docs/16-sqlite-trial-deploy.md) for deployment, Harness operating boundaries, backup, and rollback.
+See [docs/deployment-and-ops.md](./docs/deployment-and-ops.md) for deployment, Harness operating boundaries, backup, and rollback.
 
 ## Build & Quality Gates
 

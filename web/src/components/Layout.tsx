@@ -4,7 +4,9 @@ import type { PageKey, SessionUser } from '../types';
 import { NAV_ITEMS } from '../app/pageRegistry';
 import { ApiError } from '../services/api';
 import { updateMyProfile, type UpdateProfileInput } from '../services/auth';
-import AiSidebar from './common/AiSidebar';
+import AgentSidebar from '../features/ai/components/agent/AgentSidebar';
+import { usePendingInteractions } from '../features/ai/hooks/usePendingInteractions';
+import { canOperate } from '../constants/roles';
 import Overlay from './common/Overlay';
 import Panel from './common/Panel';
 import { Button, FormField, TextArea, TextInput } from './ui';
@@ -12,6 +14,7 @@ import { SidebarInset, SidebarProvider } from './ui/Sidebar';
 import AppSidebar from './AppSidebar';
 import AppHeader from './AppHeader';
 import { useToast } from './common/Toast';
+import { subscribeToUiCommands } from '../features/ai/uiCommandBus';
 
 interface LayoutProps {
   currentPage: PageKey;
@@ -27,10 +30,22 @@ const Layout: React.FC<LayoutProps> = ({ currentPage, onNavigate, user, onUserUp
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const currentNavLabel = NAV_ITEMS.find((item) => item.key === currentPage)?.label ?? t('nav.item.dashboard');
+  // All AI endpoints require ai:* capabilities — the sidebar and its entry
+  // stay hidden for roles that would only see 403s.
+  const canUseAi = canOperate(user, 'ai:analyze');
+  const { pendingCount } = usePendingInteractions();
 
   const handleNavigate = useCallback((page: PageKey, focusId?: string) => {
     onNavigate(page, focusId);
   }, [onNavigate]);
+
+  // AI ui_control openAiSidebar directives arrive through the window event bus
+  // (dispatched by the socket executor mounted in App); Layout owns the state.
+  useEffect(() => subscribeToUiCommands(({ detail }) => {
+    if (detail.directive.kind === 'openAiSidebar' && canUseAi) {
+      setAiSidebarOpen(Boolean(detail.directive.open));
+    }
+  }), [canUseAi]);
 
   return (
     <div className={['kaneo-app-shell', aiSidebarOpen ? 'ai-sidebar-open' : ''].filter(Boolean).join(' ')}>
@@ -42,6 +57,8 @@ const Layout: React.FC<LayoutProps> = ({ currentPage, onNavigate, user, onUserUp
             currentPage={currentPage}
             user={user}
             aiSidebarOpen={aiSidebarOpen}
+            aiPendingCount={pendingCount}
+            canUseAi={canUseAi}
             onAiToggle={() => setAiSidebarOpen((value) => !value)}
             onProfileOpen={() => setProfileOpen(true)}
             onLogout={onLogout}
@@ -52,8 +69,8 @@ const Layout: React.FC<LayoutProps> = ({ currentPage, onNavigate, user, onUserUp
         </SidebarInset>
       </SidebarProvider>
 
-      {aiSidebarOpen ? (
-        <AiSidebar currentPage={currentPage} contextLabel={currentNavLabel} onClose={() => setAiSidebarOpen(false)} />
+      {aiSidebarOpen && canUseAi ? (
+        <AgentSidebar currentPage={currentPage} contextLabel={currentNavLabel} onClose={() => setAiSidebarOpen(false)} />
       ) : null}
 
       {profileOpen ? (

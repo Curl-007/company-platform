@@ -5,10 +5,6 @@
 
 export { default as CountUp } from './CountUp/CountUp';
 export { default as GradientText } from './GradientText/GradientText';
-export { default as DecryptedText } from './DecryptedText/DecryptedText';
-export { default as ShinyText } from './ShinyText/ShinyText';
-export { default as SpotlightCard } from './SpotlightCard/SpotlightCard';
-export { default as Counter } from './Counter/Counter';
 export { default as FadeContent } from './FadeContent/FadeContent';
 export { default as Aurora } from './Aurora/Aurora';
 export { MotionGuard } from './MotionGuard';

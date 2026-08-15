@@ -972,7 +972,9 @@ export interface AiCapabilityManifest {
   id: string;
   version: string;
   status: 'approved' | 'disabled';
-  risk: 'read_only';
+  /** read_only: project data reads; project_write: audited project records;
+      external_action: side effects outside the project realm (browser-control). */
+  risk: 'read_only' | 'project_write' | 'external_action';
   scopes: string[];
   inputSchema: AiCapabilityInputSchema;
   outputSchema: AiCapabilityOutputSchema;

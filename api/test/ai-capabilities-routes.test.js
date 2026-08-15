@@ -67,7 +67,7 @@ test("AI capability routes expose authorized discovery, scoped invocation, and a
     assert.equal(updated.status, 200);
     assert.equal((await updated.json()).data.enabled, false);
     assert.equal(calls[1].input.enabled, false);
-    assert.deepEqual(permissions, ["ai:*", "ai:*", "admin:*", "admin:*"]);
+    assert.deepEqual(permissions, ["ai:*", "ai:*", "ai:*", "ai:*", "ai:*", "ai:*", "ai:*", "ai:*", "admin:*", "admin:*"]);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

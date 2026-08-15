@@ -227,6 +227,7 @@ export const mutationInvalidationKeys = {
     queryKeys.projectFlow,
     queryKeys.projectWorkflowBinding,
     queryKeys.workflowTemplates,
+    queryKeys.auditLogs,
   ),
 } as const;
 

@@ -52,7 +52,7 @@ function createScopedExecutionTokenService({
     return crypto.createHmac("sha256", key).update(payload).digest("base64url");
   }
 
-  function issue({ actorId, capabilityId, capabilityVersion, invocationId, projectId } = {}) {
+  function issue({ actorId, capabilityId, capabilityVersion, invocationId, projectId, userId } = {}) {
     const issuedAt = Number(now());
     if (!Number.isFinite(issuedAt)) throw new Error("AI capability token clock is invalid.");
     const claims = {
@@ -67,6 +67,12 @@ function createScopedExecutionTokenService({
       projectId: assertClaimText(projectId, "projectId"),
       v: 1,
     };
+    // Optional push-target claim (ui-control directives): additive so tokens
+    // issued before this field existed keep verifying. userId mirrors actorId
+    // today; keeping it separate lets non-user actor tokens exist later.
+    if (userId !== undefined && userId !== null && String(userId).trim() !== "") {
+      claims.userId = assertClaimText(userId, "userId");
+    }
     const encoded = base64urlJson(claims);
     return { claims, token: `${TOKEN_PREFIX}.${encoded}.${sign(encoded)}` };
   }
@@ -108,6 +114,8 @@ function createScopedExecutionTokenService({
       invocationId: claims.invocationId,
       projectId: claims.projectId,
       tokenId: claims.jti,
+      // Omitted for legacy tokens that predate the push-target claim.
+      ...(claims.userId ? { userId: claims.userId } : {}),
     };
   }
 

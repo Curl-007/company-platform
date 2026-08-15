@@ -16,6 +16,7 @@ import './styles/doc-workbench.css';
 import './styles/reports-workbench.css';
 import './styles/flow-workbench.css';
 import './styles/ai-connection.css';
+import './styles/ai-runtime.css';
 
 applyWorkTheme(readWorkThemeSettings());
 

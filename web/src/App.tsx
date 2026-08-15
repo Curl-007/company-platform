@@ -11,6 +11,7 @@ import { trackPageView } from './features/audit/api';
 import { useToast } from './components/common/Toast';
 import type { PageKey, SessionUser } from './types';
 import { KNOWN_PAGES, PAGE_COMPONENTS } from './app/pageRegistry';
+import { useUiCommandExecutor } from './features/ai/hooks/useUiCommandExecutor';
 
 function getRoutePage(pathname: string): PageKey {
   const page = pathname.replace(/^\/+/, '').split('/')[0] ?? '';
@@ -142,6 +143,11 @@ function AppContent() {
     navigateToPage(page, focusId ? { focus: focusId } : {});
     setCurrentPage(page);
   }, [navigateToPage, user]);
+
+  // dsh ui_control consumer: mounted here (not in Layout) because navigation
+  // must flow through App's permission-checked handleNavigate; the AI sidebar
+  // toggle reaches Layout through the uiCommandBus window event.
+  useUiCommandExecutor({ onNavigate: handleNavigate, enabled: Boolean(user) });
 
   if (!user || !getToken()) {
     return <Login onLoginSuccess={handleLoginSuccess} />;

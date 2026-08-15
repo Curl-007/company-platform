@@ -24,7 +24,7 @@
   border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   border-radius: 10px;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--card) 92%, transparent), color-mix(in srgb, var(--muted) 35%, var(--card)));
+    color-mix(in srgb, var(--muted) 35%, var(--card));
 }
 
 .doc-signal-label {
@@ -51,9 +51,8 @@
 }
 
 .doc-signal.is-warn {
-  border-color: color-mix(in srgb, var(--color-warning, #fbbf24) 40%, var(--border));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-warning, #fbbf24) 10%, var(--card)), var(--card));
+  border-color: color-mix(in srgb, var(--color-warning, #D97706) 40%, var(--border));
+  background: color-mix(in srgb, var(--color-warning, #D97706) 10%, var(--card));
 }
 
 .doc-pool-toolbar {
@@ -207,7 +206,7 @@
   border: 1.5px dashed color-mix(in srgb, var(--primary) 35%, var(--border));
   border-radius: 12px;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--primary) 8%, var(--card)), color-mix(in srgb, var(--muted) 30%, var(--card)));
+    color-mix(in srgb, var(--muted) 30%, var(--card));
   text-align: center;
 }
 
@@ -335,7 +334,7 @@
 }
 
 .doc-queue-item.is-done {
-  border-color: color-mix(in srgb, var(--color-success, #40c977) 35%, var(--border));
+  border-color: color-mix(in srgb, var(--color-success, #16A34A) 35%, var(--border));
 }
 
 .doc-queue-item.is-error {
@@ -385,7 +384,7 @@
 }
 
 .doc-queue-item.is-done .doc-queue-status {
-  color: var(--color-success, #40c977);
+  color: var(--color-success, #16A34A);
 }
 
 .doc-queue-item.is-error .doc-queue-status {
@@ -424,8 +423,7 @@
   padding: 12px 14px;
   border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   border-radius: 10px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--muted) 42%, var(--card)), var(--card));
+  background: color-mix(in srgb, var(--muted) 42%, var(--card));
 }
 
 .doc-detail-badges {

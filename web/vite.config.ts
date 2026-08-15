@@ -51,6 +51,28 @@ export default defineConfig({
           if (id.includes('/gsap/')) return 'gsap';
           if (id.includes('/three/') || id.includes('/@react-three/')) return 'webgl-three';
           if (id.includes('/ogl/')) return 'webgl-ogl';
+          // Split the former catch-all `vendor` blob into stable, independently
+          // cacheable groups. React runtime and the rich-text editor rarely
+          // change; icons and i18n libs churn on their own cadence — separating
+          // them means a bump in one no longer busts the cache for the rest.
+          if (
+            id.includes('/react/') ||
+            id.includes('/react-dom/') ||
+            id.includes('/react-router/') ||
+            id.includes('/scheduler/')
+          ) {
+            return 'react-vendor';
+          }
+          if (id.includes('/@tanstack/')) return 'query';
+          if (
+            id.includes('/i18next/') ||
+            id.includes('/react-i18next/') ||
+            id.includes('/i18next-browser-languagedetector/')
+          ) {
+            return 'i18n-vendor';
+          }
+          if (id.includes('/lucide-react/')) return 'icons';
+          if (id.includes('/@tiptap/') || id.includes('/prosemirror')) return 'editor';
           return 'vendor';
         },
       },

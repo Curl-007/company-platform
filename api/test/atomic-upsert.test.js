@@ -247,7 +247,8 @@ test("startup allows pending migrations and daily burndown writes are atomic", (
     assert.equal(result.status, 0, result.stderr);
     const inspected = new DatabaseSync(databaseFile);
     try {
-      assert.equal(inspected.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get().count, 24);
+      // 26 = ai_interactions (Sprint 5.x), 27 = ai_reminders (Sprint 5.2), 28 = ai_masking_rules.
+      assert.equal(inspected.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get().count, 28);
       assert.equal(inspected.prepare("SELECT COUNT(*) AS count FROM burndown_snapshots WHERE sprint_id = 'SPR-ATOMIC'").get().count, 1);
       assert.equal(
         inspected.prepare("SELECT COUNT(*) AS count FROM pragma_index_list('burndown_snapshots') WHERE name = 'idx_burndown_snapshots_sprint_date' AND \"unique\" = 1").get().count,

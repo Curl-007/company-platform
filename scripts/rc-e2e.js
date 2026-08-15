@@ -92,6 +92,14 @@ async function main() {
   const env = {
     ...process.env,
     PORT: String(port),
+    // Force a non-production NODE_ENV for the disposable DB so the full demo
+    // account set (admin/pm/pdm/dev/qa) is seeded. An explicit non-production
+    // shell value is honored; anything else (incl. a production api/.env) is
+    // pinned to development. server.js's dotenv never overrides a present key.
+    NODE_ENV:
+      process.env.NODE_ENV && process.env.NODE_ENV !== "production"
+        ? process.env.NODE_ENV
+        : "development",
     DATABASE_FILE: databaseFile,
     STORAGE_DIR: storageDir,
     JWT_SECRET: process.env.JWT_SECRET || "rc-e2e-jwt-secret-16",
@@ -99,6 +107,17 @@ async function main() {
     SEED_DEMO_DATA: process.env.SEED_DEMO_DATA || "0",
     AI_ENABLED: process.env.AI_ENABLED || "false",
     RATE_LIMIT_TRUST_LOCAL: "0",
+    // Pin the disposable DB to the documented demo-seed credentials the e2e
+    // specs log in with. Empty string makes resolveDemoSeedAccounts fall back
+    // to its built-in defaults (Admin@123 etc.), and since the key is present,
+    // server.js's dotenv won't reintroduce a custom value from a local
+    // api/.env. Without this, a developer's .env seed overrides break login.
+    SEED_ADMIN_EMAIL: "",
+    SEED_ADMIN_PASSWORD: "",
+    SEED_PM_PASSWORD: "",
+    SEED_DEV_PASSWORD: "",
+    SEED_QA_PASSWORD: "",
+    SEED_PDM_PASSWORD: "",
   };
 
   console.log(`[rc-e2e] workDir=${workDir}`);

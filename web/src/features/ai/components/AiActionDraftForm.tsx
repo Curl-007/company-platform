@@ -15,7 +15,7 @@ import {
   aiActionStatusOptions,
   type AiActionDraft,
   type AiActionDraftField,
-} from '../aiActionDraftModel';
+} from '../models/aiActionDraftModel';
 
 export interface AiActionDraftFormProps {
   actionType: string;

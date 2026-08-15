@@ -2,14 +2,28 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { createHarnessProviderProxy } = require("./harnessProxy");
+const { findExecutionCapability } = require("./executionCapabilities");
 
 const DEFAULT_AI_SYSTEM_PROMPT = "You are an analysis assistant for a company project management platform. Return concise, auditable, actionable Chinese content.";
-const DEFAULT_MAX_RUNS_PER_RUNTIME = 20;
+// 0 means the runtime is resident (no call-count disposal); a positive integer
+// via HARNESS_MAX_RUNS_PER_RUNTIME restores the bounded-recycle semantics.
+const DEFAULT_MAX_RUNS_PER_RUNTIME = 0;
 const DEFAULT_MAX_TOKENS = 4096;
 const DEFAULT_MODEL_MAX_TOKENS = 32768;
 const DEFAULT_CONTEXT_WINDOW = 262144;
 const DEFAULT_TIMEOUT_MS = 30000;
 const COMPANY_RUNTIME_COMPOSITION = "company-runtime-v1";
+// Fixed composition registry: compositionKey -> composition file relative to
+// config/harness. The default key must keep resolving to cordis.yml (the
+// launcher's production guard pins that file); compositions/company-runtime-v1.yml
+// is the documented mirror of it, drift-checked by tests. No arbitrary path
+// override exists — only these keys, plus the legacy non-production
+// HARNESS_RUNTIME_CONFIG escape hatch.
+const HARNESS_COMPOSITIONS = Object.freeze({
+  [COMPANY_RUNTIME_COMPOSITION]: "cordis.yml",
+  "company-draft-v1": path.join("compositions", "company-draft-v1.yml"),
+  "company-review-v1": path.join("compositions", "company-review-v1.yml"),
+});
 const IMAGE_LIMITS = Object.freeze({
   maxImageBytes: 5 * 1024 * 1024,
   maxImagesPerMessage: 6,
@@ -20,6 +34,7 @@ const IMAGE_LIMITS = Object.freeze({
 
 const SAFE_CHILD_ENV_KEYS = Object.freeze([
   "ComSpec",
+  "HARNESS_ALLOW_COMPOSITION_VARIANTS",
   "LANG",
   "LC_ALL",
   "LC_CTYPE",
@@ -32,6 +47,13 @@ const SAFE_CHILD_ENV_KEYS = Object.freeze([
   "TZ",
   "WINDIR",
 ]);
+
+// Explicit operator opt-in for non-default compositions in production. The
+// value "1" is the only accepted truthy spelling; anything else keeps the
+// production pin on the fixed cordis.yml composition.
+function compositionVariantsEnabled(env = process.env) {
+  return String(env.HARNESS_ALLOW_COMPOSITION_VARIANTS || "").trim() === "1";
+}
 
 function harnessError(code, message, status) {
   const error = new Error(message);
@@ -49,12 +71,21 @@ function positiveInteger(value, fallback) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function nonNegativeInteger(value, fallback) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 function finiteTemperature(value, fallback = 0.2) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function resolveHarnessPaths({ apiRoot = path.resolve(__dirname, "../../.."), env = process.env } = {}) {
+function resolveHarnessPaths({
+  apiRoot = path.resolve(__dirname, "../../.."),
+  compositionKey = COMPANY_RUNTIME_COMPOSITION,
+  env = process.env,
+} = {}) {
   const resolvedApiRoot = path.resolve(apiRoot);
   const configDirectory = path.join(resolvedApiRoot, "config", "harness");
   const resolveFromApiRoot = (value, fallback) => {
@@ -63,17 +94,50 @@ function resolveHarnessPaths({ apiRoot = path.resolve(__dirname, "../../.."), en
   };
   const home = resolveFromApiRoot(env.HARNESS_HOME, path.join(resolvedApiRoot, "storage", "harness"));
   const fixedConfigPath = path.join(configDirectory, "cordis.yml");
-  const requestedConfigPath = resolveFromApiRoot(env.HARNESS_RUNTIME_CONFIG, fixedConfigPath);
-  if (String(env.NODE_ENV || "").toLowerCase() === "production" && requestedConfigPath !== fixedConfigPath) {
-    throw harnessError("AI_HARNESS_CONFIG_OVERRIDE_FORBIDDEN", "Production Harness composition override is forbidden.", 500);
+  const production = String(env.NODE_ENV || "").toLowerCase() === "production";
+  const compositionFile = HARNESS_COMPOSITIONS[compositionKey];
+  if (!compositionFile) {
+    throw harnessError("AI_HARNESS_COMPOSITION_UNKNOWN", `Unknown Harness composition key: ${compositionKey}`, 500);
+  }
+  let requestedConfigPath;
+  if (String(env.HARNESS_RUNTIME_CONFIG || "").trim()) {
+    // Legacy escape hatch: an explicit config path wins over the registry key,
+    // and production still pins it to the fixed cordis.yml entry.
+    requestedConfigPath = resolveFromApiRoot(env.HARNESS_RUNTIME_CONFIG, fixedConfigPath);
+    if (production && requestedConfigPath !== fixedConfigPath) {
+      throw harnessError("AI_HARNESS_CONFIG_OVERRIDE_FORBIDDEN", "Production Harness composition override is forbidden.", 500);
+    }
+  } else {
+    // Production pins the fixed cordis.yml composition: the lightweight draft
+    // and full review variants are non-production presets unless the operator
+    // explicitly opts in with HARNESS_ALLOW_COMPOSITION_VARIANTS=1 (the child
+    // launcher re-checks the same flag, so both sides must agree).
+    if (production && compositionKey !== COMPANY_RUNTIME_COMPOSITION && !compositionVariantsEnabled(env)) {
+      throw harnessError(
+        "AI_HARNESS_COMPOSITION_VARIANT_FORBIDDEN",
+        "Production composition variants require HARNESS_ALLOW_COMPOSITION_VARIANTS=1.",
+        500,
+      );
+    }
+    requestedConfigPath = path.join(configDirectory, compositionFile);
+  }
+  const fixedSkillRoot = path.join(configDirectory, "skills");
+  const skillRoot = resolveFromApiRoot(env.HARNESS_SKILL_ROOT, fixedSkillRoot);
+  if (production && skillRoot !== fixedSkillRoot) {
+    throw harnessError("AI_HARNESS_SKILL_ROOT_OVERRIDE_FORBIDDEN", "Production Harness skill root override is forbidden.", 500);
   }
   return {
     apiRoot: resolvedApiRoot,
+    compositionKey,
     configDirectory,
     configPath: requestedConfigPath,
     home,
     launcherPath: path.join(configDirectory, "company-runtime.mjs"),
+    // sessionRoot stays as the JSONL-compat location (kept for rollbacks);
+    // the resident composition persists sessions into sessions.db instead.
+    sessionDb: resolveFromApiRoot(env.HARNESS_SESSION_DB, path.join(home, "sessions.db")),
     sessionRoot: path.join(home, "sessions"),
+    skillRoot,
   };
 }
 
@@ -140,8 +204,10 @@ function buildHarnessChildEnv({
     DSH_HOME: paths.home,
     DSH_MODEL: descriptor.model,
     DSH_MODEL_MAX_TOKENS: String(Math.max(descriptor.maxTokens, DEFAULT_MODEL_MAX_TOKENS)),
-    DSH_RUNTIME_COMPOSITION: COMPANY_RUNTIME_COMPOSITION,
+    DSH_RUNTIME_COMPOSITION: descriptor.compositionKey || COMPANY_RUNTIME_COMPOSITION,
+    DSH_SESSION_DB: paths.sessionDb,
     DSH_SESSION_ROOT: paths.sessionRoot,
+    DSH_SKILL_ROOT: paths.skillRoot,
     DSH_SYSTEM_PROMPT: descriptor.system,
     DSH_TEMPERATURE: String(descriptor.temperature),
     DSH_WIRE_API: descriptor.wireApi,
@@ -177,7 +243,7 @@ function normalizeExecution(value) {
   if (gateway.protocol !== "http:" || gateway.hostname !== "127.0.0.1" || gateway.username || gateway.password) {
     throw harnessError("AI_HARNESS_EXECUTION_INVALID", "Harness execution gateway must use IPv4 loopback.", 500);
   }
-  if (normalized.capabilityId !== "project-snapshot" || !/^\d+\.\d+\.\d+$/.test(normalized.capabilityVersion)) {
+  if (!findExecutionCapability(normalized.capabilityId, normalized.capabilityVersion)) {
     throw harnessError("AI_HARNESS_EXECUTION_INVALID", "Harness execution capability is not approved.", 500);
   }
   return normalized;
@@ -194,7 +260,7 @@ async function resolveExecution(value) {
   return normalizeExecution({ ...scope, token });
 }
 
-function runtimeDescriptor({ config, execution, model, wireApi, maxTokens, system, temperature, defaultMaxTokens }) {
+function runtimeDescriptor({ compositionKey = COMPANY_RUNTIME_COMPOSITION, config, execution, model, wireApi, maxTokens, system, temperature, defaultMaxTokens }) {
   if (!config?.baseUrl) {
     throw harnessError("AI_HARNESS_CONFIG_INVALID", "AI provider configuration is incomplete.", 500);
   }
@@ -203,6 +269,9 @@ function runtimeDescriptor({ config, execution, model, wireApi, maxTokens, syste
   return {
     apiKey: String(config.apiKey || ""),
     baseUrl: String(config.baseUrl),
+    // The composition key rides on the descriptor so it joins the runtime
+    // fingerprint: different compositions never reuse a resident runtime.
+    compositionKey,
     disableResponseStorage: Boolean(config.disableResponseStorage),
     maxTokens: positiveInteger(maxTokens, defaultMaxTokens),
     model: resolvedModel,
@@ -250,12 +319,16 @@ function createHarnessRuntime({
   const paths = resolveHarnessPaths({ apiRoot, env });
   const proxy = createProxy();
   const maxRunsPerRuntime = positiveInteger(env.HARNESS_MAX_RUNS_PER_RUNTIME, DEFAULT_MAX_RUNS_PER_RUNTIME);
+  const idleTtlMs = nonNegativeInteger(env.HARNESS_RUNTIME_IDLE_TTL_MS, 0);
   const defaultMaxTokens = positiveInteger(env.HARNESS_DEFAULT_MAX_TOKENS, DEFAULT_MAX_TOKENS);
   let active;
   let closed = false;
   let closeTask;
+  let idleTimer;
   let queue = Promise.resolve();
   let queueDepth = 0;
+  let totalCalls = 0;
+  let totalRuns = 0;
 
   async function saveImage(attachment) {
     const saver = saveImageFile || (await importAttachments()).saveImageFile;
@@ -281,6 +354,7 @@ function createHarnessRuntime({
   async function disposeRuntime(runtime) {
     if (!runtime) return;
     runtime.disposeTask ||= (async () => {
+      if (idleTimer && active === runtime) clearIdleTimer();
       if (active === runtime) active = undefined;
       proxy.unregister(runtime.token);
       try {
@@ -292,12 +366,35 @@ function createHarnessRuntime({
     await runtime.disposeTask;
   }
 
-  async function ensureRuntime(descriptor) {
+  // Optional idle recycling: the timer is armed only after a run settles and is
+  // cleared synchronously at the start of the next queued run, so it can never
+  // fire while a run owns the runtime (the FIFO serializes both).
+  function clearIdleTimer() {
+    if (!idleTimer) return;
+    clearTimeout(idleTimer);
+    idleTimer = undefined;
+  }
+
+  function scheduleIdleRecycle(runtime) {
+    if (!(idleTtlMs > 0)) return;
+    clearIdleTimer();
+    idleTimer = setTimeout(() => {
+      idleTimer = undefined;
+      // If another run already took the runtime, its start cleared this timer;
+      // reaching here means the runtime has been idle for the full TTL.
+      void disposeRuntime(runtime).catch(() => {});
+    }, idleTtlMs);
+    idleTimer?.unref?.();
+  }
+
+  async function ensureRuntime(descriptor, configPath) {
     const fingerprint = fingerprintFor(descriptor);
     if (active && active.fingerprint === fingerprint && !active.disposeTask) return active;
+    // Disposal is safe here because the FIFO serializes runs: no other run can
+    // be in flight while this fingerprint change replaces the active runtime.
     if (active) await disposeRuntime(active);
-    if (!fsImpl.existsSync(paths.configPath)) {
-      throw harnessError("AI_HARNESS_CONFIG_MISSING", `Harness configuration was not found: ${paths.configPath}`, 500);
+    if (!fsImpl.existsSync(configPath)) {
+      throw harnessError("AI_HARNESS_CONFIG_MISSING", `Harness configuration was not found: ${configPath}`, 500);
     }
 
     const proxyBaseUrl = await proxy.start();
@@ -309,7 +406,7 @@ function createHarnessRuntime({
       if (typeof sdk?.DeepSeekHarness !== "function") {
         throw harnessError("AI_HARNESS_SDK_UNAVAILABLE", "DeepSeek Harness SDK did not expose DeepSeekHarness.", 500);
       }
-      const launch = resolveRuntimeLaunch({ env, configPath: paths.configPath, launcherPath: paths.launcherPath });
+      const launch = resolveRuntimeLaunch({ env, configPath, launcherPath: paths.launcherPath });
       const harness = new sdk.DeepSeekHarness({
         launch: {
           ...launch,
@@ -326,6 +423,7 @@ function createHarnessRuntime({
         provider: "company",
       });
       active = { calls: 0, descriptor, fingerprint, harness, token };
+      totalRuns += 1;
       return active;
     } catch (error) {
       proxy.unregister(token);
@@ -333,7 +431,24 @@ function createHarnessRuntime({
     }
   }
 
-  async function runBounded(runtime, input, timeoutMs) {
+  // The SDK high-level run() accepts an onNotification observer covering the
+  // whole session tree, so session.event payloads are forwarded from there —
+  // no low-level HarnessClient subscription is needed. Only the current run's
+  // observer is attached, and the FIFO guarantees one run per runtime at a
+  // time, so events cannot leak across invocations.
+  function notificationObserver(onEvent) {
+    return (notification) => {
+      if (notification?.method !== "session.event") return;
+      try {
+        onEvent(notification.params?.event);
+      } catch (error) {
+        logger?.warn?.("Harness event listener failed:", error?.message || error);
+      }
+    };
+  }
+
+  async function runBounded(runtime, input, timeoutMs, onEvent) {
+    const runOptions = typeof onEvent === "function" ? { onNotification: notificationObserver(onEvent) } : undefined;
     return new Promise((resolve, reject) => {
       let settled = false;
       let timedOut = false;
@@ -349,7 +464,7 @@ function createHarnessRuntime({
           settle(reject, buildOverallTimeoutError(timeoutMs));
         });
       }, timeoutMs);
-      Promise.resolve(runtime.harness.run(input)).then(
+      Promise.resolve(runtime.harness.run(input, runOptions)).then(
         (result) => {
           if (!timedOut) settle(resolve, result);
         },
@@ -369,13 +484,21 @@ function createHarnessRuntime({
     return operation;
   }
 
-  async function run({ attachments = [], config, execution, maxTokens, model, prompt, system, temperature, timeoutMs, wireApi } = {}) {
+  async function run({ attachments = [], compositionKey = COMPANY_RUNTIME_COMPOSITION, config, execution, maxTokens, model, onEvent, prompt, system, temperature, timeoutMs, wireApi } = {}) {
     return enqueue(async () => {
       if (closed) throw harnessError("AI_HARNESS_CLOSED", "Harness runtime is closed.", 503);
+      // Entering the FIFO slot retires any pending idle recycling; while this
+      // run executes no timer can dispose the runtime underneath it.
+      clearIdleTimer();
       // Capability tokens are minted only after this request owns the shared
       // FIFO slot, so unrelated queued inference cannot consume their TTL.
       const resolvedExecution = await resolveExecution(execution);
+      // The composition key resolves its registry file per run: an unknown key
+      // throws here (in every environment) and the resolved path feeds both
+      // the existence check and the child launch arguments.
+      const runPaths = resolveHarnessPaths({ apiRoot, compositionKey, env });
       const descriptor = runtimeDescriptor({
+        compositionKey,
         config,
         defaultMaxTokens,
         execution: resolvedExecution,
@@ -385,15 +508,22 @@ function createHarnessRuntime({
         temperature,
         wireApi,
       });
-      const runtime = await ensureRuntime(descriptor);
+      const runtime = await ensureRuntime(descriptor, runPaths.configPath);
       const boundedTimeoutMs = positiveInteger(timeoutMs, DEFAULT_TIMEOUT_MS);
       try {
-        const result = await runBounded(runtime, await buildInput(prompt, attachments), boundedTimeoutMs);
+        const result = await runBounded(runtime, await buildInput(prompt, attachments), boundedTimeoutMs, onEvent);
         const error = turnFailure(result);
         if (error) throw error;
         runtime.calls += 1;
+        totalCalls += 1;
         const text = typeof result?.finalResponse === "string" ? result.finalResponse.trim() : "";
-        if (runtime.calls >= maxRunsPerRuntime) await disposeRuntime(runtime);
+        // Resident by default: only an explicit positive HARNESS_MAX_RUNS_PER_RUNTIME
+        // restores bounded recycling after the configured number of calls.
+        if (maxRunsPerRuntime > 0 && runtime.calls >= maxRunsPerRuntime) {
+          await disposeRuntime(runtime);
+        } else {
+          scheduleIdleRecycle(runtime);
+        }
         return text || null;
       } catch (error) {
         await disposeRuntime(runtime);
@@ -406,6 +536,7 @@ function createHarnessRuntime({
     if (closeTask) return closeTask;
     closed = true;
     closeTask = (async () => {
+      clearIdleTimer();
       await disposeRuntime(active);
       await queue.catch(() => {});
       await proxy.close();
@@ -420,9 +551,12 @@ function createHarnessRuntime({
       active: Boolean(active),
       activeCalls: active?.calls || 0,
       closed,
+      idleTtlMs,
       maxRunsPerRuntime,
       proxy: proxy.status?.() || { started: false },
       queued: queueDepth,
+      totalCalls,
+      totalRuns,
     }),
   };
 }
@@ -432,9 +566,11 @@ module.exports = {
   DEFAULT_MAX_RUNS_PER_RUNTIME,
   DEFAULT_MAX_TOKENS,
   COMPANY_RUNTIME_COMPOSITION,
+  HARNESS_COMPOSITIONS,
   IMAGE_LIMITS,
   SAFE_CHILD_ENV_KEYS,
   buildHarnessChildEnv,
+  compositionVariantsEnabled,
   createHarnessRuntime,
   normalizeWireApi,
   normalizeExecution,

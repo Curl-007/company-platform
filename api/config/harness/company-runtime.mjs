@@ -8,9 +8,13 @@ const NAME = "company-harness-runtime";
 const fixedConfigPath = fileURLToPath(new URL("./cordis.yml", import.meta.url));
 const requestedConfigPath = process.argv[2] ? resolve(process.argv[2]) : fixedConfigPath;
 const production = process.env.NODE_ENV === "production";
+// Explicit operator opt-in (mirrors resolveHarnessPaths in the parent
+// process): production pins cordis.yml unless HARNESS_ALLOW_COMPOSITION_VARIANTS=1
+// opts into the composition variants (company-draft-v1 / company-review-v1).
+const allowCompositionVariants = String(process.env.HARNESS_ALLOW_COMPOSITION_VARIANTS || "").trim() === "1";
 
-if (production && requestedConfigPath !== fixedConfigPath) {
-  throw new Error("company-harness-runtime: production composition override is forbidden");
+if (production && requestedConfigPath !== fixedConfigPath && !allowCompositionVariants) {
+  throw new Error("company-harness-runtime: production composition override is forbidden (explicit opt-in: HARNESS_ALLOW_COMPOSITION_VARIANTS=1)");
 }
 if (!existsSync(requestedConfigPath)) {
   throw new Error(`company-harness-runtime: composition was not found: ${requestedConfigPath}`);

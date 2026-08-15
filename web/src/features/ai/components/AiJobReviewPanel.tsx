@@ -7,7 +7,7 @@ import {
   jobSummary,
   normalizePriority,
   type JobReviewDraft,
-} from '../aiChatModel';
+} from '../models/aiChatModel';
 
 export default function AiJobReviewPanel({
   selectedJob,

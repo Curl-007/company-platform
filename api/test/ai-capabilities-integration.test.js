@@ -33,6 +33,15 @@ async function startApi(databaseFile) {
       NODE_ENV: "test",
       PORT: String(port),
       SEED_DEMO_DATA: "1",
+      // Neutralize any api/.env seed credentials the dev dotenv loader would
+      // inject into the child; this suite authenticates with fixed demo
+      // passwords and must not depend on the host environment.
+      SEED_ADMIN_EMAIL: "",
+      SEED_ADMIN_PASSWORD: "",
+      SEED_PM_PASSWORD: "",
+      SEED_DEV_PASSWORD: "",
+      SEED_QA_PASSWORD: "",
+      SEED_PDM_PASSWORD: "",
     },
     stdio: "ignore",
   });

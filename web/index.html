@@ -7,10 +7,10 @@
     <title>公司项目管理平台</title>
     <script>
       // FOUC guard: apply the persisted theme mode to <html> before CSS paints.
-      // Without this, dark-mode users see a flash of light theme on first paint
+      // Without this, users see a flash of the wrong theme on first paint
       // because the theme is otherwise injected by main.tsx after the bundle loads.
       // Keys must stay in sync with src/theme/workTheme.ts (WORK_THEME_STORAGE_KEY
-      // + legacy fallbacks). Default to dark for first-time visitors (dark-first).
+      // + legacy fallbacks). Default to dark for first-time visitors (glass dark).
       (function () {
         try {
           var keys = ['work-theme-settings', 'work-glass-theme-settings'];

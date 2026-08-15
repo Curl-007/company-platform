@@ -117,6 +117,10 @@ async function runDrill(options = {}) {
     DATABASE_FILE: databaseFile,
     JWT_SECRET: process.env.JWT_SECRET || "grace-drill-jwt-16",
     AI_CONFIG_ENCRYPTION_KEY: process.env.AI_CONFIG_ENCRYPTION_KEY || "grace-drill-ai-16ch",
+    // Pin the drill to non-production: a host api/.env would otherwise inject
+    // NODE_ENV=production via the dotenv loader and fail ENABLE_HTTP_SHUTDOWN's
+    // production ban before the drill's own code runs.
+    NODE_ENV: "test",
     SEED_DEMO_DATA: "0",
     AI_ENABLED: "false",
     RATE_LIMIT_TRUST_LOCAL: "0",

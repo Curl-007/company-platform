@@ -2,11 +2,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Bot,
-  CheckCircle2,
-  ListTree,
   Save,
   Sparkles,
-  UserRound,
   X,
 } from 'lucide-react';
 import { fetchAiBusinessAdvice } from '../../ai/api';
@@ -175,44 +172,50 @@ export default function RequirementDetail({
           </div>
         )}
       >
-        <div className="req-detail-body">
-          <section className="req-detail-summary" aria-label={t('features.requirements.requirementDetail.summaryAriaLabel')}>
-            <div className="req-detail-badges">
-              <StatusBadge status={priority} label={labelOf(PRIORITY_LABELS, priority)} showDot={false} />
-              <StatusBadge status={status} label={labelOf(REQUIREMENT_STATUS_LABELS, status)} />
-              <span className="req-detail-chip">{t(assignmentLabel)}</span>
+        <div className="detail-sections req-detail-body">
+          <section className="detail-section" aria-label={t('features.requirements.requirementDetail.summaryAriaLabel')}>
+            <div className="detail-section-header">
+              <span>{t('features.requirements.requirementDetail.summaryTitle')}</span>
             </div>
+            <div className="detail-section-body">
+              <div className="req-detail-badges">
+                <StatusBadge status={priority} label={labelOf(PRIORITY_LABELS, priority)} showDot={false} />
+                <StatusBadge status={status} label={labelOf(REQUIREMENT_STATUS_LABELS, status)} />
+                <span className="req-detail-chip">{t(assignmentLabel)}</span>
+              </div>
 
-            <div className="req-detail-metrics">
-              <div className="req-detail-metric">
-                <span><UserRound size={13} aria-hidden="true" /> {t('features.requirements.requirementDetail.ownerLabel')}</span>
-                <strong>{requirement.owner || t('enums.unset')}</strong>
+              <div className="detail-strip" style={{ marginTop: 14 }}>
+                <div className="detail-strip-item">
+                  <span className="detail-strip-label">{t('features.requirements.requirementDetail.ownerLabel')}</span>
+                  <span className="detail-strip-value">{requirement.owner || t('enums.unset')}</span>
+                </div>
+                <div className="detail-strip-item">
+                  <span className="detail-strip-label">{t('features.requirements.requirementDetail.assigneeLabel')}</span>
+                  <span className="detail-strip-value">
+                    {requirement.assignee || t('features.requirements.requirementDetail.unassigned')}
+                    {requirement.assigneeRole
+                      ? ` · ${labelOf(USER_ROLE_LABELS, requirement.assigneeRole)}`
+                      : ''}
+                  </span>
+                </div>
+                <div className="detail-strip-item">
+                  <span className="detail-strip-label">{t('features.requirements.requirementDetail.childCountLabel')}</span>
+                  <span className="detail-strip-value">{childCount}</span>
+                </div>
+                <div className="detail-strip-item">
+                  <span className="detail-strip-label">{t('features.requirements.requirementDetail.linkedTasksLabel')}</span>
+                  <span className="detail-strip-value">{linkedTaskCount}</span>
+                </div>
+                <div className="detail-strip-item">
+                  <span className="detail-strip-label">{t('features.requirements.requirementDetail.completionLabel')}</span>
+                  <span className="detail-strip-value detail-strip-progress">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <ProgressBar percent={completionNum} height={7} showPercent={false} className="min-w-0 flex-1" />
+                      <strong className="text-mono">{completionNum}%</strong>
+                    </span>
+                  </span>
+                </div>
               </div>
-              <div className="req-detail-metric">
-                <span><UserRound size={13} aria-hidden="true" /> {t('features.requirements.requirementDetail.assigneeLabel')}</span>
-                <strong>
-                  {requirement.assignee || t('features.requirements.requirementDetail.unassigned')}
-                  {requirement.assigneeRole
-                    ? ` · ${labelOf(USER_ROLE_LABELS, requirement.assigneeRole)}`
-                    : ''}
-                </strong>
-              </div>
-              <div className="req-detail-metric">
-                <span><ListTree size={13} aria-hidden="true" /> {t('features.requirements.requirementDetail.childCountLabel')}</span>
-                <strong>{childCount}</strong>
-              </div>
-              <div className="req-detail-metric">
-                <span><CheckCircle2 size={13} aria-hidden="true" /> {t('features.requirements.requirementDetail.linkedTasksLabel')}</span>
-                <strong>{linkedTaskCount}</strong>
-              </div>
-            </div>
-
-            <div className="req-detail-progress">
-              <div className="req-detail-progress-head">
-                <span>{t('features.requirements.requirementDetail.completionLabel')}</span>
-                <strong className="text-mono">{completionNum}%</strong>
-              </div>
-              <ProgressBar percent={completionNum} height={7} showPercent={false} />
             </div>
           </section>
 
@@ -252,116 +255,123 @@ export default function RequirementDetail({
             </section>
           ) : null}
 
-          <section className="req-detail-form" aria-label={t('features.requirements.requirementDetail.editAriaLabel')}>
-            <div className="form-group">
-              <label className="form-label">{t('features.requirements.requirementDetail.titleLabel')}</label>
-              <input
-                className="form-input"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                disabled={!canManage}
-              />
+          <section className="detail-section" aria-label={t('features.requirements.requirementDetail.editAriaLabel')}>
+            <div className="detail-section-header">
+              <span>{t('features.requirements.requirementDetail.fieldsTitle')}</span>
             </div>
+            <div className="detail-section-body">
+              <div className="req-detail-form">
+                <div className="form-group">
+                  <label className="form-label">{t('features.requirements.requirementDetail.titleLabel')}</label>
+                  <input
+                    className="form-input"
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    disabled={!canManage}
+                  />
+                </div>
 
-            <div className="req-form-grid">
-              <div className="form-group">
-                <label className="form-label">{t('features.requirements.requirementDetail.statusLabel')}</label>
-                <select
-                  className="form-select"
-                  value={status}
-                  onChange={(event) => setStatus(event.target.value)}
-                  disabled={!canManage}
-                >
-                  {REQUIREMENT_STATUSES.map((item) => (
-                    <option key={item} value={item}>{labelOf(REQUIREMENT_STATUS_LABELS, item)}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">{t('features.requirements.requirementDetail.priorityLabel')}</label>
-                <select
-                  className="form-select"
-                  value={priority}
-                  onChange={(event) => setPriority(event.target.value)}
-                  disabled={!canManage}
-                >
-                  {REQUIREMENT_PRIORITIES.map((item) => (
-                    <option key={item} value={item}>{labelOf(PRIORITY_LABELS, item)}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">{t('features.requirements.requirementDetail.assigneeLabel')}</label>
-                <input
-                  className="form-input"
-                  value={assignee}
-                  onChange={(event) => setAssignee(event.target.value)}
-                  disabled={!canManage}
-                  placeholder={t('features.requirements.requirementDetail.assigneePlaceholder')}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">{t('features.requirements.requirementDetail.assigneeRoleLabel')}</label>
-                <select
-                  className="form-select"
-                  value={assigneeRole}
-                  onChange={(event) => setAssigneeRole(event.target.value)}
-                  disabled={!canManage}
-                >
-                  {EXEC_ROLE_OPTIONS.map((item) => (
-                    <option key={item.value} value={item.value}>{t(item.label)}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">{t('features.requirements.requirementDetail.assignmentStatusLabel')}</label>
-                <select
-                  className="form-select"
-                  value={assignmentStatus}
-                  onChange={(event) => setAssignmentStatus(event.target.value)}
-                  disabled={!canManage}
-                >
-                  {ASSIGNMENT_STATUS_OPTIONS.map((item) => (
-                    <option key={item.value} value={item.value}>{t(item.label)}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">{t('features.requirements.requirementDetail.completionLabel')}</label>
-                <input
-                  className="form-input"
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={completion}
-                  onChange={(event) => setCompletion(event.target.value)}
-                  disabled={!canManage}
-                />
-              </div>
-            </div>
+                <div className="req-form-grid">
+                  <div className="form-group">
+                    <label className="form-label">{t('features.requirements.requirementDetail.statusLabel')}</label>
+                    <select
+                      className="form-select"
+                      value={status}
+                      onChange={(event) => setStatus(event.target.value)}
+                      disabled={!canManage}
+                    >
+                      {REQUIREMENT_STATUSES.map((item) => (
+                        <option key={item} value={item}>{labelOf(REQUIREMENT_STATUS_LABELS, item)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">{t('features.requirements.requirementDetail.priorityLabel')}</label>
+                    <select
+                      className="form-select"
+                      value={priority}
+                      onChange={(event) => setPriority(event.target.value)}
+                      disabled={!canManage}
+                    >
+                      {REQUIREMENT_PRIORITIES.map((item) => (
+                        <option key={item} value={item}>{labelOf(PRIORITY_LABELS, item)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">{t('features.requirements.requirementDetail.assigneeLabel')}</label>
+                    <input
+                      className="form-input"
+                      value={assignee}
+                      onChange={(event) => setAssignee(event.target.value)}
+                      disabled={!canManage}
+                      placeholder={t('features.requirements.requirementDetail.assigneePlaceholder')}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">{t('features.requirements.requirementDetail.assigneeRoleLabel')}</label>
+                    <select
+                      className="form-select"
+                      value={assigneeRole}
+                      onChange={(event) => setAssigneeRole(event.target.value)}
+                      disabled={!canManage}
+                    >
+                      {EXEC_ROLE_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value}>{t(item.label)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">{t('features.requirements.requirementDetail.assignmentStatusLabel')}</label>
+                    <select
+                      className="form-select"
+                      value={assignmentStatus}
+                      onChange={(event) => setAssignmentStatus(event.target.value)}
+                      disabled={!canManage}
+                    >
+                      {ASSIGNMENT_STATUS_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value}>{t(item.label)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">{t('features.requirements.requirementDetail.completionLabel')}</label>
+                    <input
+                      className="form-input"
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={completion}
+                      onChange={(event) => setCompletion(event.target.value)}
+                      disabled={!canManage}
+                    />
+                  </div>
+                </div>
 
-            <div className="form-group">
-              <label className="form-label">{t('features.requirements.requirementDetail.descriptionLabel')}</label>
-              <textarea
-                className="form-textarea"
-                rows={4}
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                disabled={!canManage}
-                placeholder={t('features.requirements.requirementDetail.descriptionPlaceholder')}
-              />
-            </div>
+                <div className="form-group">
+                  <label className="form-label">{t('features.requirements.requirementDetail.descriptionLabel')}</label>
+                  <textarea
+                    className="form-textarea"
+                    rows={4}
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    disabled={!canManage}
+                    placeholder={t('features.requirements.requirementDetail.descriptionPlaceholder')}
+                  />
+                </div>
 
-            <div className="form-group">
-              <label className="form-label">{t('features.requirements.requirementDetail.criteriaLabel')}</label>
-              <textarea
-                className="form-textarea"
-                rows={4}
-                value={criteria}
-                onChange={(event) => setCriteria(event.target.value)}
-                disabled={!canManage}
-                placeholder={t('features.requirements.requirementDetail.criteriaPlaceholder')}
-              />
+                <div className="form-group">
+                  <label className="form-label">{t('features.requirements.requirementDetail.criteriaLabel')}</label>
+                  <textarea
+                    className="form-textarea"
+                    rows={4}
+                    value={criteria}
+                    onChange={(event) => setCriteria(event.target.value)}
+                    disabled={!canManage}
+                    placeholder={t('features.requirements.requirementDetail.criteriaPlaceholder')}
+                  />
+                </div>
+              </div>
             </div>
           </section>
 

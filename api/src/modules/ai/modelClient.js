@@ -80,6 +80,7 @@ function createAiModelClient({
           wireApi,
         };
         if (options.execution !== undefined) runtimeInput.execution = options.execution;
+        if (typeof options.onEvent === "function") runtimeInput.onEvent = options.onEvent;
         const text = await (await getRuntime()).run(runtimeInput);
         await recordSuccess({ wireApi, latencyMs: Date.now() - attemptStarted });
         return text;

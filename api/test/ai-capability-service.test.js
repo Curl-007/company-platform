@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { createAiCapabilityService } = require("../src/modules/ai/capabilityService");
 const { createCapabilityRegistry } = require("../src/modules/ai/capabilityRegistry");
+const { createAgentEventBus } = require("../src/modules/ai/agentEventBus");
 const { createScopedExecutionTokenService } = require("../src/modules/ai/executionToken");
 
 function snapshotResult(token, overrides = {}) {
@@ -22,6 +23,7 @@ function snapshotResult(token, overrides = {}) {
 }
 
 function createServiceFixture({
+  agentEventBus,
   audit: auditOverride,
   canAccessProject = async () => true,
   getProviderSnapshot = async () => ({ configured: true, model: "company-model", providers: [] }),
@@ -46,6 +48,7 @@ function createServiceFixture({
     adapter: {
       invoke: invokeAdapter || (async ({ beginExecution }) => snapshotResult(await beginExecution())),
     },
+    agentEventBus,
     audit: auditOverride || (async (...args) => audits.push(args)),
     canAccessProject,
     controlStore: { get: async () => ({ enabled: true }) },
@@ -169,6 +172,67 @@ test("AI capability invocation does not publish provider connection details", as
   assert.equal(Object.hasOwn(invocation.provider, "apiKeyMasked"), false);
   assert.equal(Object.hasOwn(invocation.provider, "baseUrl"), false);
   assert.equal(Object.hasOwn(invocation.provider, "providers"), false);
+});
+
+test("AI capability invocation streams harness session events through the injected bus", async () => {
+  const bus = createAgentEventBus();
+  const published = [];
+  bus.subscribe((message) => published.push(message));
+  const { service } = createServiceFixture({
+    agentEventBus: bus,
+    invokeAdapter: async ({ beginExecution, onEvent }) => {
+      await beginExecution();
+      assert.equal(typeof onEvent, "function", "the adapter receives the streaming observer");
+      onEvent({ seq: 1, type: "user/message" });
+      onEvent({ seq: 2, type: "assistant/message" });
+      return snapshotResult("streamed");
+    },
+  });
+
+  const invocation = await service.invoke({
+    actor: { id: "USR-1", permissions: ["ai:*"] },
+    capabilityId: "project-snapshot",
+    input: { projectId: "PRJ-1" },
+    ip: "127.0.0.1",
+  });
+
+  assert.equal(invocation.status, "completed");
+  assert.deepEqual(published.map((message) => ({
+    invocationId: message.invocationId,
+    projectId: message.projectId,
+    userId: message.userId,
+  })), [
+    { invocationId: invocation.invocationId, projectId: "PRJ-1", userId: "USR-1" },
+    { invocationId: invocation.invocationId, projectId: "PRJ-1", userId: "USR-1" },
+  ]);
+  assert.deepEqual(published.map((message) => message.event.type), ["user/message", "assistant/message"]);
+});
+
+test("AI capability invocation tolerates a bus listener that throws mid-stream", async () => {
+  const bus = createAgentEventBus();
+  bus.subscribe(() => {
+    throw new Error("bridge listener exploded");
+  });
+  const seen = [];
+  bus.subscribe((message) => seen.push(message));
+  const { service } = createServiceFixture({
+    agentEventBus: bus,
+    invokeAdapter: async ({ beginExecution, onEvent }) => {
+      await beginExecution();
+      onEvent({ seq: 1, type: "user/message" });
+      return snapshotResult("resilient");
+    },
+  });
+
+  const invocation = await service.invoke({
+    actor: { id: "USR-1", permissions: ["ai:*"] },
+    capabilityId: "project-snapshot",
+    input: { projectId: "PRJ-1" },
+    ip: "127.0.0.1",
+  });
+
+  assert.equal(invocation.status, "completed");
+  assert.equal(seen.length, 1);
 });
 
 test("AI capability invocation rejects an adapter that never enters the scoped execution path", async () => {

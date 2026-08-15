@@ -114,7 +114,7 @@ npm run start:prod
 浏览器打开：http://localhost:4010/  
 健康检查（含 DB / 迁移 readiness）：`GET /api/health`。它只表示 API/数据库控制面 readiness，不代表 Provider 或 Harness 推理可用。
 
-部署、Harness 运行边界、备份与回滚见 [docs/16-sqlite-trial-deploy.md](./docs/16-sqlite-trial-deploy.md)。
+部署、Harness 运行边界、备份与回滚见 [docs/deployment-and-ops.md](./docs/deployment-and-ops.md)。
 
 ## 构建与门禁
 

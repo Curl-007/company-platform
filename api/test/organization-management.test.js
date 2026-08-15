@@ -23,7 +23,7 @@ async function startApi(databaseFile) {
   const port = await freePort();
   const child = spawn(process.execPath, ["server.js"], {
     cwd: apiRoot,
-    env: { ...process.env, PORT: String(port), DATABASE_FILE: databaseFile, JWT_SECRET: "organization-management-test-secret", SEED_DEMO_DATA: "1" },
+    env: { ...process.env, NODE_ENV: "test", SEED_ADMIN_EMAIL: "", SEED_ADMIN_PASSWORD: "", SEED_PM_PASSWORD: "", SEED_DEV_PASSWORD: "", SEED_QA_PASSWORD: "", SEED_PDM_PASSWORD: "", PORT: String(port), DATABASE_FILE: databaseFile, JWT_SECRET: "organization-management-test-secret", SEED_DEMO_DATA: "1" },
     stdio: "ignore",
   });
   const deadline = Date.now() + 10_000;

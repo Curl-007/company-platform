@@ -91,6 +91,103 @@ function applyResponseStoragePolicy(body, route) {
   return Buffer.from(JSON.stringify({ ...payload, store: false }));
 }
 
+function maskingViolation(rules) {
+  const error = proxyError(
+    "AI_MASKING_POLICY_VIOLATION",
+    `Request rejected by the AI data masking policy: ${rules.join(", ")}.`,
+    403,
+  );
+  error.maskingRules = rules;
+  return error;
+}
+
+// Deep-walks every string value (objects, arrays, nested messages[].content
+// segments included) collecting block-rule hits before anything is forwarded.
+function collectStringViolations(value, policy, violations) {
+  if (typeof value === "string") {
+    for (const violation of policy.inspectText(value)) violations.push(violation);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectStringViolations(item, policy, violations);
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const item of Object.values(value)) collectStringViolations(item, policy, violations);
+  }
+}
+
+// Returns a structurally shared copy with replace rules applied to every
+// string; the original object is returned untouched when nothing matched.
+function maskPayloadStrings(value, policy) {
+  if (typeof value === "string") return policy.maskText(value);
+  if (Array.isArray(value)) {
+    let changed = false;
+    const next = value.map((item) => {
+      const masked = maskPayloadStrings(item, policy);
+      if (masked !== item) changed = true;
+      return masked;
+    });
+    return changed ? next : value;
+  }
+  if (value && typeof value === "object") {
+    let changed = false;
+    const next = {};
+    for (const [key, item] of Object.entries(value)) {
+      const masked = maskPayloadStrings(item, policy);
+      if (masked !== item) changed = true;
+      next[key] = masked;
+    }
+    return changed ? next : value;
+  }
+  return value;
+}
+
+function applyRequestMasking(body, policy) {
+  if (!policy) return body;
+  let payload;
+  try {
+    payload = JSON.parse(body.toString("utf8"));
+  } catch {
+    // The proxy only ever receives JSON from the harness child; anything else
+    // is passed through byte-for-byte for the upstream to reject.
+    return body;
+  }
+  const violations = [];
+  collectStringViolations(payload, policy, violations);
+  if (violations.length) {
+    throw maskingViolation(violations.map((violation) => violation.name));
+  }
+  const masked = maskPayloadStrings(payload, policy);
+  if (masked === payload) return body;
+  return Buffer.from(JSON.stringify(masked));
+}
+
+// Response direction: pure text replacement on the provider body (parse or
+// not), so a model echoing a masked keyword cannot leak it back.
+function maskResponseText(text, policy) {
+  if (!policy || typeof policy.maskText !== "function") return text;
+  try {
+    return policy.maskText(String(text ?? ""));
+  } catch {
+    return text;
+  }
+}
+
+// Default masking source: the shared rule service over the process database,
+// resolved lazily on first use. Injectable via the factory for tests.
+function createDefaultMaskingPolicyLoader() {
+  let engine;
+  return async () => {
+    try {
+      engine ||= require("./maskingRules").createDefaultAiMaskingEngine();
+      return await engine.loadPolicy();
+    } catch {
+      return null;
+    }
+  };
+}
+
 function writeJson(res, status, payload) {
   if (res.writableEnded) return;
   const body = JSON.stringify(payload);
@@ -119,12 +216,16 @@ function publicError(error) {
 }
 
 function createHarnessProviderProxy({
+  masking,
   maxBodyBytes = DEFAULT_MAX_PROXY_BODY_BYTES,
   requestResolvedTarget = requestResolvedAiProviderTarget,
   resolveTarget = resolveAiProviderTarget,
   serverFactory = http.createServer,
 } = {}) {
   const routes = new Map();
+  const loadMaskingPolicy = typeof masking?.loadPolicy === "function"
+    ? () => masking.loadPolicy()
+    : createDefaultMaskingPolicyLoader();
   let server;
   let startTask;
   let baseUrl = null;
@@ -155,21 +256,33 @@ function createHarnessProviderProxy({
 
     try {
       const body = applyResponseStoragePolicy(await readRequestBody(req, maxBodyBytes), route);
+      const maskingPolicy = await loadMaskingPolicy();
+      const outboundBody = applyRequestMasking(body, maskingPolicy);
       const target = await resolveTarget(route.baseUrl);
       const headers = {
         Accept: String(req.headers.accept || "application/json"),
         "Content-Type": String(req.headers["content-type"] || "application/json"),
-        "Content-Length": String(body.length),
+        "Content-Length": String(outboundBody.length),
       };
       if (route.apiKey) headers.Authorization = `Bearer ${route.apiKey}`;
       const response = await requestResolvedTarget(target, endpoint, {
         method: "POST",
         headers,
-        body,
+        body: outboundBody,
         redirect: "error",
       });
-      writeProviderResponse(res, response, await response.text());
+      writeProviderResponse(res, response, maskResponseText(await response.text(), maskingPolicy));
     } catch (error) {
+      if (Array.isArray(error?.maskingRules)) {
+        writeJson(res, 403, {
+          error: {
+            message: String(error.message),
+            code: "masking_policy_violation",
+            rules: error.maskingRules,
+          },
+        });
+        return;
+      }
       writeJson(res, Number(error?.status) || 502, publicError(error));
     }
   }

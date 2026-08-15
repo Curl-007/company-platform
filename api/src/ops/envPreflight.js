@@ -32,6 +32,27 @@ function preflightEnv(env = process.env, options = {}) {
     issues.push({ level: "error", code: "PORT_INVALID", message: "PORT must be an integer between 1 and 65535." });
   }
 
+  // Browser control capability timeouts/limits: invalid values fall back to
+  // defaults inside the service with a one-time warning; preflight surfaces
+  // them as warnings so a typo is visible at startup.
+  for (const [code, name, fallback] of [
+    ["BROWSER_TIMEOUT_MS_INVALID", "BROWSER_TIMEOUT_MS", 30000],
+    ["BROWSER_MAX_PAGES_INVALID", "BROWSER_MAX_PAGES", 1],
+    ["BROWSER_TEXT_LIMIT_INVALID", "BROWSER_TEXT_LIMIT", 4000],
+    ["BROWSER_SESSION_TTL_MS_INVALID", "BROWSER_SESSION_TTL_MS", 300000],
+  ]) {
+    const raw = String(env[name] || "").trim();
+    if (!raw) continue;
+    const parsed = Number(raw);
+    if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+      issues.push({
+        level: "warn",
+        code,
+        message: `${name} must be a positive integer; using the default (${fallback}).`,
+      });
+    }
+  }
+
   if (jwt.length < 16) {
     issues.push({
       level: isProd ? "error" : "warn",

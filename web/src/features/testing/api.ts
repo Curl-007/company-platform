@@ -118,6 +118,10 @@ export function fetchDefects(filters: DefectFilters = {}): Promise<Defect[]> {
   return unwrap<Defect[]>(`/api/defects${buildQuery(filters as Record<string, string | undefined>)}`);
 }
 
+export function fetchDefect(id: string): Promise<Defect> {
+  return unwrap<Defect>(`/api/defects/${encodeURIComponent(id)}`);
+}
+
 export interface CreateDefectInput {
   title: string;
   projectId: string;

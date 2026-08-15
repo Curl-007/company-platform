@@ -107,9 +107,10 @@ test("splitSqlStatements keeps defaults with semicolons inside strings out of sp
 
 test("listMigrationFiles discovers current migrations with stable checksums", () => {
   const migrations = listMigrationFiles(path.resolve(__dirname, "..", "migrations"));
-  assert.equal(migrations.length, 24);
+  // 26 = ai_interactions (Sprint 5.x), 27 = ai_reminders (Sprint 5.2), 28 = ai_masking_rules.
+  assert.equal(migrations.length, 28);
   assert.equal(migrations[0].id, "20260713_01_work_calendar");
-  assert.equal(migrations[migrations.length - 1].id, "20260814_24_ai_capability_invocations");
+  assert.equal(migrations[migrations.length - 1].id, "20260815_28_ai_masking_rules");
   assert.match(migrations[0].checksum, /^[a-f0-9]{64}$/);
 });
 

@@ -94,23 +94,23 @@ export default function BurndownChart({ data, height = 300 }: BurndownChartProps
       </div>
       <ResponsiveContainer width="100%" height={height}>
         <RC.LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 4, left: -8 }}>
-          <RC.CartesianGrid strokeDasharray="3 3" stroke="var(--color-border, #e2e8f0)" />
-          <RC.XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--color-text-secondary, #64748b)' }} />
+          <RC.CartesianGrid strokeDasharray="3 3" stroke="var(--color-border, #E4E4E7)" />
+          <RC.XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--color-text-secondary, #71717A)' }} />
           <RC.YAxis
-            tick={{ fontSize: 11, fill: 'var(--color-text-secondary, #64748b)' }}
-            label={{ value: t('common.remainingHours'), angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: 'var(--color-text-secondary, #64748b)' } }}
+            tick={{ fontSize: 11, fill: 'var(--color-text-secondary, #71717A)' }}
+            label={{ value: t('common.remainingHours'), angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: 'var(--color-text-secondary, #71717A)' } }}
             allowDecimals={false}
           />
           <RC.Tooltip
             contentStyle={{
               borderRadius: 6,
-              border: '1px solid var(--color-border, #e2e8f0)',
+              border: '1px solid var(--color-border, #E4E4E7)',
               fontSize: 12,
             }}
             labelFormatter={(_value: unknown, payload: Array<{ payload?: { date?: string } }>) => payload?.[0]?.payload?.date ?? ''}
           />
           <RC.Legend wrapperStyle={{ fontSize: 12 }} />
-          <RC.ReferenceLine y={0} stroke="var(--color-border, #cbd5e1)" />
+          <RC.ReferenceLine y={0} stroke="var(--color-border, #E4E4E7)" />
           <RC.Line
             type="monotone"
             dataKey="ideal"
@@ -124,7 +124,7 @@ export default function BurndownChart({ data, height = 300 }: BurndownChartProps
             type="monotone"
             dataKey="remaining"
             name={t('common.actualRemaining')}
-            stroke="var(--color-primary, #2563eb)"
+            stroke="var(--color-primary, #3B82F6)"
             dot={{ r: 3 }}
             strokeWidth={2.5}
             connectNulls

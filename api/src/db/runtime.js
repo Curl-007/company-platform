@@ -8,7 +8,7 @@
  * Default remains sqlite for local/dev and normal test execution. Real
  * PostgreSQL validation is explicit opt-in through the dedicated CI test.
  *
- * @see docs/w2-postgres-plan.md
+ * @see docs/postgresql-migration-runbook.md
  */
 
 const { createPostgresRuntime } = require("./postgres");

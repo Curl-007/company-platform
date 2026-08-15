@@ -1,0 +1,92 @@
+# Lightweight draft composition: the default company composition minus
+# compaction, session-projection, and company-projections. Inference, tools,
+# skills, and session persistence stay; nothing projects read models or
+# compacts context, so short-lived draft turns pay no projection overhead.
+# stdout belongs exclusively to the SDK JSON-RPC transport; do not add a
+# console logger, terminal UI, dynamic config loader, or user profile patch
+# path here.
+
+- id: sdk-jsonrpc-server
+  name: '@deepseek-ai/dsh-sdk-jsonrpc-server'
+  config:
+    maxTokensAsSuccess: false
+
+- id: attachments
+  name: '@deepseek-ai/dsh-attachment-local'
+  config:
+    dshHome: !!js process.env.DSH_HOME
+    maxImageBytes: 5242880
+    maxImagesPerMessage: 6
+    maxMessageImageBytes: 12582912
+    maxImagePixels: 40000000
+
+- id: llm-company
+  name: '@deepseek-ai/dsh-llm-pi-ai'
+  config:
+    providers:
+      company:
+        displayName: Company Platform Provider Proxy
+        apiKeyEnv: DSH_API_KEY
+        api: !!js "process.env.DSH_WIRE_API === 'responses' ? 'openai-responses' : 'openai-completions'"
+        baseURL: !!js process.env.DSH_BASE_URL
+        defaultInput: [text, image]
+        models:
+          - id: !!js process.env.DSH_MODEL
+            contextWindow: !!js Number(process.env.DSH_CONTEXT_WINDOW ?? 262144)
+            maxTokens: !!js Number(process.env.DSH_MODEL_MAX_TOKENS ?? 32768)
+            input: [text, image]
+
+- id: company-agent-spine
+  name: ../company-agent-spine.mjs
+  config:
+    includeHarnessIdentity: false
+    includeRuntimeContext: false
+    persona: !!js process.env.DSH_SYSTEM_PROMPT
+
+# Registers only the token-bound project_snapshot tool when a company
+# invocation supplies a complete loopback execution-gateway environment.
+- id: company-execution-tool
+  name: ../company-execution-tool.mjs
+
+- id: call-options
+  name: ../call-options.mjs
+
+# Runtime hardening: tool-call deadline enforcement, loop detection,
+# semantic session checkpoints before model requests and tool side
+# effects, and provider token metering. All zero-config except where
+# noted. The draft composition intentionally drops context compaction.
+- id: timeout-policy
+  name: '@deepseek-ai/dsh-tool-call-timeout-policy'
+
+- id: repeat-tool-reminder
+  name: '@deepseek-ai/dsh-repeat-tool-reminder'
+
+- id: session-checkpoint-policy
+  name: '@deepseek-ai/dsh-session-checkpoint-policy'
+
+- id: token-meter
+  name: '@deepseek-ai/dsh-token-meter'
+
+# Company delivery-methodology skills: the registry owns ctx.skills, the
+# filesystem provider scans only the company-managed skill root (isolated:
+# no project/user defaults), and the tool exposes the catalog to the model.
+- id: skills
+  name: '@deepseek-ai/dsh-skill'
+
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    providerName: company-skills
+    includeDefaultRoots: false
+    dshHome: !!js process.env.DSH_HOME
+    customSkillDirs: !!js "process.env.DSH_SKILL_ROOT ? [process.env.DSH_SKILL_ROOT] : []"
+    watch: true
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+- id: sessions
+  name: '@deepseek-ai/dsh-session-persistence-sqlite'
+  config:
+    path: !!js process.env.DSH_SESSION_DB
+    journalMode: wal

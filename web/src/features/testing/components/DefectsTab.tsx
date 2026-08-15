@@ -37,6 +37,7 @@ import {
   labelOf,
 } from '../../../constants/enums';
 import { canOperate } from '../../../constants/roles';
+import { useAgentPageContextPublisher } from '../../ai/agentPageContext';
 import DefectForm from './DefectForm';
 
 type DefectFocus = 'all' | 'open' | 'severe' | 'unassigned' | 'closed';
@@ -72,6 +73,12 @@ export default function DefectsTab({
     () => new Map((projects ?? []).map((item) => [item.id, item.name])),
     [projects],
   );
+  // Tell the global agent sidebar which project this view is scoped to.
+  useAgentPageContextPublisher({
+    page: 'testing',
+    projectId: filters.projectId,
+    projectName: filters.projectId ? projectMap.get(filters.projectId) : undefined,
+  });
 
   const signals = useMemo(() => {
     const total = defects.length;

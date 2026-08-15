@@ -170,7 +170,17 @@ function createDocumentCollaborationServer({
   reindexDocument,
   transaction,
 }) {
-  const wss = new WebSocketServer({ server, path });
+  // noServer + selective upgrade routing: the agent event bridge shares this
+  // HTTP server on /ws/agent, and ws's default { server, path } binding would
+  // abort that channel's upgrades with a 400 handshake rejection. Only claim
+  // upgrades that match this channel's path.
+  const wss = new WebSocketServer({ noServer: true });
+  server.on("upgrade", (req, socket, head) => {
+    let pathname = "";
+    try { pathname = new URL(req.url || "/", "http://localhost").pathname; } catch { return; }
+    if (pathname !== path) return;
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+  });
   const repository = suppliedRepository || createDocumentsRepository({ row, run });
   const rooms = new Map();
   wss.on("connection", (socket, req) => {

@@ -4,7 +4,7 @@ import { LoaderCircle, RefreshCw } from 'lucide-react';
 import type { AiJob, AiProviderConfig } from '../../../types';
 import Panel from '../../../components/common/Panel';
 import StatusBadge from '../../../components/common/StatusBadge';
-import type { AiSummaryExtended, JobReviewDraft } from '../aiChatModel';
+import type { AiSummaryExtended, JobReviewDraft } from '../models/aiChatModel';
 import AiJobReviewPanel from './AiJobReviewPanel';
 
 type ConnectionTone = 'green' | 'red' | 'unknown';

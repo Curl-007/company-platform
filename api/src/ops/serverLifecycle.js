@@ -10,6 +10,7 @@ function createServerLifecycle({
   now,
   processExit = process.exit,
   recoverPendingAiJobs,
+  reminderScheduler,
   server,
   serveWeb,
   startAiJobTimeoutMonitor,
@@ -17,6 +18,7 @@ function createServerLifecycle({
   clearTimeoutFn = clearTimeout,
   setTimeoutFn = setTimeout,
   wss,
+  agentWss,
 }) {
   if (!server || !wss || typeof closeDatabase !== "function" || typeof recoverPendingAiJobs !== "function" || typeof startAiJobTimeoutMonitor !== "function") {
     throw new Error("Server lifecycle dependencies are required.");
@@ -38,6 +40,7 @@ function createServerLifecycle({
     const handleError = (err) => onError(port, err);
     server.on("error", handleError);
     wss.on("error", handleError);
+    agentWss?.on("error", handleError);
     server.listen(port, () => {
       recoverPendingAiJobs();
       if (!aiJobTimeoutTimer) {
@@ -50,6 +53,9 @@ function createServerLifecycle({
           actor: { id: "system", name: "AI Worker Monitor" },
         });
       }
+      // Reminder scheduling starts with the server (db already initialized by
+      // the caller) and immediately sweeps reminders overdue across restarts.
+      reminderScheduler?.start?.();
       logger.log(`Company project management API listening on http://localhost:${port}`);
       if (serveWeb) logger.log(`Same-origin web UI: http://localhost:${port}/ (HashRouter SPA)`);
     });
@@ -65,21 +71,26 @@ function createServerLifecycle({
       aiJobTimeoutTimer = null;
     }
 
+    // Stop sweeping before the database closes so no delivery races shutdown.
+    reminderScheduler?.stop?.();
+
     try {
-      for (const client of wss.clients || []) {
-        try {
-          client.close(1001, "Server shutting down");
-        } catch {
-          // A closing socket cannot prevent the rest of the process shutdown.
+      for (const wssInstance of [wss, agentWss].filter(Boolean)) {
+        for (const client of wssInstance.clients || []) {
+          try {
+            client.close(1001, "Server shutting down");
+          } catch {
+            // A closing socket cannot prevent the rest of the process shutdown.
+          }
         }
+        await new Promise((resolve) => {
+          try {
+            wssInstance.close(() => resolve());
+          } catch {
+            resolve();
+          }
+        });
       }
-      await new Promise((resolve) => {
-        try {
-          wss.close(() => resolve());
-        } catch {
-          resolve();
-        }
-      });
     } catch (error) {
       logger.warn("WebSocket shutdown warning:", error && error.message ? error.message : error);
     }

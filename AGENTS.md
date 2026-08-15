@@ -6,6 +6,7 @@
 
 - monorepo workspaces：`api`（Express API）、`web`（React + Vite）
 - 文档台账：`docs/10-实现状态与差异清单.md`、`docs/15-项目审查一页摘要.md`
+- 设计/架构：`docs/design-and-architecture.md`；权衡决策：`docs/trade-offs-and-decisions.md`；部署运维：`docs/deployment-and-ops.md`；dsh 执行计划：`docs/17-dsh-foundation-plan.md`
 - 当前主开发分支（as-built）：`main`（GitHub 公开仓库 `company-platform` 默认分支）
 
 ## 约束提示

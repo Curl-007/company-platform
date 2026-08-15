@@ -271,7 +271,7 @@ function TreeTable<T extends { id: string }>({
                                 top: 0,
                                 bottom: 0,
                                 width: 1,
-                                borderLeft: isLast ? 'none' : '1px dashed #d0d0d0',
+                                borderLeft: isLast ? 'none' : '1px dashed var(--border-default)',
                               }}
                             />
                           ))}

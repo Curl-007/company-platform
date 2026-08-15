@@ -390,6 +390,26 @@ test.describe('admin key interactions', () => {
     await expect(draftTitle.first()).toBeVisible({ timeout: 45_000 });
   });
 
+  test('M3 global Copilot sidebar opens on any page with page context', async ({ page }) => {
+    test.setTimeout(60_000);
+    await loginAs(page, 'admin');
+    await openNav(page, '需求管理');
+
+    // Bot entry toggles the global agent sidebar outside the AI workspace.
+    await page.getByRole('button', { name: /显示 AI 面板/ }).click();
+    const sidebar = page.locator('.agent-sidebar');
+    await expect(sidebar).toBeVisible();
+    // Context strip names the current page for the agent.
+    await expect(sidebar.locator('.ai-sidebar-context')).toContainText('需求管理');
+    // Shared chat pieces mount in compact mode.
+    await expect(sidebar.locator('textarea')).toBeVisible();
+
+    // The fixed sidebar overlays the topbar edge (same as the legacy one), so
+    // closing goes through the sidebar's own close button.
+    await sidebar.getByRole('button', { name: '关闭 AI 助手' }).click();
+    await expect(page.locator('.agent-sidebar')).toHaveCount(0);
+  });
+
   test('N system settings account/api/ai region', async ({ page }) => {
     test.setTimeout(60_000);
     await loginAs(page, 'admin');
@@ -421,6 +441,8 @@ test.describe('multi-role permission probes', () => {
     await expect(nav.getByRole('button', { name: '系统设置', exact: true })).toHaveCount(0);
     await expect(nav.getByRole('button', { name: '产品管理', exact: true })).toHaveCount(0);
     await expect(nav.getByRole('button', { name: '项目执行', exact: true })).toBeVisible();
+    // Without ai:* capabilities the Copilot sidebar entry stays hidden (was a 403 trap).
+    await expect(page.getByRole('button', { name: /AI 面板/ })).toHaveCount(0);
   });
 
   test('PDM can open products and requirements', async ({ page }) => {

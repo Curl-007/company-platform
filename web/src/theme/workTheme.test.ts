@@ -53,10 +53,10 @@ describe('work theme settings', () => {
     vi.restoreAllMocks();
   });
 
-  it('uses the single Codex theme and current defaults', () => {
+  it('uses the single glass theme and current defaults', () => {
     expect(WORK_THEMES).toHaveLength(1);
     expect(WORK_THEMES[0].id).toBe('kaneo');
-    expect(WORK_THEMES[0].label).toBe('Codex');
+    expect(WORK_THEMES[0].label).toBe('液态玻璃');
     expect(defaultWorkThemeSettings).toEqual({
       theme: 'kaneo',
       mode: 'dark',
@@ -144,8 +144,8 @@ describe('work theme settings', () => {
     expect(root.classList.contains('dark')).toBe(true);
     expect(root.dataset.workAmbient).toBeUndefined();
     expect(root.dataset.workNavLayout).toBeUndefined();
-    expect(root.style.getPropertyValue('--background')).toBe('#181818');
-    expect(root.style.getPropertyValue('--primary')).toBe('#339cff');
+    expect(root.style.getPropertyValue('--background')).toBe('#0A0C11');
+    expect(root.style.getPropertyValue('--primary')).toBe('#7D8BF5');
     expect(root.style.getPropertyValue('--fs-body')).toBe('18px');
     expect(root.style.getPropertyValue('--border-default')).toContain('color-mix');
     expect(root.style.getPropertyValue('--text-secondary')).toContain('88%');

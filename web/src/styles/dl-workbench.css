@@ -25,7 +25,7 @@
   border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   border-radius: 10px;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--card) 92%, transparent), color-mix(in srgb, var(--muted) 35%, var(--card)));
+    color-mix(in srgb, var(--muted) 35%, var(--card));
 }
 
 .dl-signal-label,
@@ -57,21 +57,18 @@
 .dl-signal.is-info,
 .dl-ai-signal.is-info {
   border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--primary) 10%, var(--card)), var(--card));
+  background: color-mix(in srgb, var(--primary) 10%, var(--card));
 }
 
 .dl-signal.is-warn,
 .dl-ai-signal.is-warn {
-  border-color: color-mix(in srgb, var(--color-warning, #fbbf24) 40%, var(--border));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-warning, #fbbf24) 10%, var(--card)), var(--card));
+  border-color: color-mix(in srgb, var(--color-warning, #D97706) 40%, var(--border));
+  background: color-mix(in srgb, var(--color-warning, #D97706) 10%, var(--card));
 }
 
 .dl-signal.is-risk {
   border-color: color-mix(in srgb, var(--destructive) 35%, var(--border));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--destructive) 8%, var(--card)), var(--card));
+  background: color-mix(in srgb, var(--destructive) 8%, var(--card));
 }
 
 .dl-signal.is-risk strong {
@@ -209,7 +206,7 @@
 }
 
 .dl-stage.done {
-  border-color: color-mix(in srgb, var(--color-success, #40c977) 30%, var(--border));
+  border-color: color-mix(in srgb, var(--color-success, #16A34A) 30%, var(--border));
 }
 
 .dl-stage.running {
@@ -241,8 +238,8 @@
 }
 
 .dl-stage.done .dl-stage-icon {
-  color: var(--color-success, #40c977);
-  border-color: color-mix(in srgb, var(--color-success, #40c977) 30%, var(--border));
+  color: var(--color-success, #16A34A);
+  border-color: color-mix(in srgb, var(--color-success, #16A34A) 30%, var(--border));
 }
 
 .dl-stage.running .dl-stage-icon {
@@ -384,7 +381,7 @@
   border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   border-radius: 12px;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--card) 94%, transparent), color-mix(in srgb, var(--muted) 28%, var(--card)));
+    color-mix(in srgb, var(--muted) 28%, var(--card));
   cursor: pointer;
 }
 
@@ -410,8 +407,8 @@
 }
 
 .dl-record-icon.release {
-  color: var(--color-success, #40c977);
-  border-color: color-mix(in srgb, var(--color-success, #40c977) 30%, var(--border));
+  color: var(--color-success, #16A34A);
+  border-color: color-mix(in srgb, var(--color-success, #16A34A) 30%, var(--border));
 }
 
 .dl-record-main {
@@ -460,8 +457,8 @@
 }
 
 .dl-gate-chip.is-ready {
-  border-color: color-mix(in srgb, var(--color-success, #40c977) 40%, var(--border));
-  background: color-mix(in srgb, var(--color-success, #40c977) 12%, var(--card));
+  border-color: color-mix(in srgb, var(--color-success, #16A34A) 40%, var(--border));
+  background: color-mix(in srgb, var(--color-success, #16A34A) 12%, var(--card));
   color: var(--card-foreground);
 }
 
@@ -565,7 +562,7 @@
 }
 
 .dl-gate-card.ready {
-  border-color: color-mix(in srgb, var(--color-success, #40c977) 30%, var(--border));
+  border-color: color-mix(in srgb, var(--color-success, #16A34A) 30%, var(--border));
 }
 
 .dl-gate-card.blocked {
@@ -631,7 +628,7 @@
 }
 
 .dl-gate-line.passed {
-  border-color: color-mix(in srgb, var(--color-success, #40c977) 28%, var(--border));
+  border-color: color-mix(in srgb, var(--color-success, #16A34A) 28%, var(--border));
 }
 
 .dl-gate-line.blocked {

@@ -17,21 +17,21 @@ const STATE_COLORS: Record<GateState, { dot: string; ring: string; line: string;
     label: 'enums.flowState.passed',
   },
   in_progress: {
-    dot: 'var(--color-info, #2563eb)',
-    ring: 'var(--color-info, #2563eb)',
-    line: 'var(--color-info, #2563eb)',
+    dot: 'var(--color-info, #3B82F6)',
+    ring: 'var(--color-info, #3B82F6)',
+    line: 'var(--color-info, #3B82F6)',
     label: 'enums.flowState.in_progress',
   },
   blocked: {
     dot: 'var(--color-risk, #dc2626)',
     ring: 'var(--color-risk, #dc2626)',
-    line: 'var(--color-border, #e2e8f0)',
+    line: 'var(--color-border, #E4E4E7)',
     label: 'enums.flowState.blocked',
   },
   pending: {
-    dot: 'var(--color-border, #cbd5e1)',
-    ring: 'var(--color-border, #cbd5e1)',
-    line: 'var(--color-border, #e2e8f0)',
+    dot: 'var(--color-border, #E4E4E7)',
+    ring: 'var(--color-border, #E4E4E7)',
+    line: 'var(--color-border, #E4E4E7)',
     label: 'enums.flowState.pending',
   },
 };
@@ -75,7 +75,7 @@ export default function FlowPipeline({ gates }: FlowPipelineProps) {
               {index > 0 && (
                 <div
                   className={`flow-connector ${prevDone ? 'flow-connector-done' : ''}`}
-                  style={{ background: prevDone ? STATE_COLORS[gates[index - 1].state].line : 'var(--color-border, #e2e8f0)' }}
+                  style={{ background: prevDone ? STATE_COLORS[gates[index - 1].state].line : 'var(--color-border, #E4E4E7)' }}
                 />
               )}
               <button

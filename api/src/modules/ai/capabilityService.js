@@ -1,5 +1,7 @@
 const crypto = require("node:crypto");
 const { capabilityError, publicManifest } = require("./capabilityRegistry");
+const { NOOP_AGENT_EVENT_BUS } = require("./agentEventBus");
+const { extractTokenUsage } = require("./tokenUsage");
 
 function jsonSnapshot(json, value) {
   return json(value === undefined ? null : value);
@@ -89,6 +91,7 @@ function completionAuditFailureEvent(now, error, token) {
 
 function createAiCapabilityService({
   adapter,
+  agentEventBus = NOOP_AGENT_EVENT_BUS,
   audit,
   canAccessProject,
   controlStore,
@@ -103,6 +106,7 @@ function createAiCapabilityService({
   registry,
   repository,
   tokenService,
+  tokenUsage,
 }) {
   if (!adapter || typeof adapter.invoke !== "function") throw new Error("AI capability adapter is required.");
   if (!repository || typeof repository.create !== "function" || typeof repository.update !== "function") throw new Error("AI capability repository is required.");
@@ -238,6 +242,9 @@ function createAiCapabilityService({
             capabilityVersion: manifest.version,
             invocationId,
             projectId: input.projectId,
+            // Push-target claim: the execution gateway resolves ui-control
+            // directive recipients from the token, not from tool input.
+            userId: actor.id,
           });
           executionToken = issued.token;
           const startedAt = now();
@@ -260,11 +267,24 @@ function createAiCapabilityService({
         return beginExecutionTask;
       };
 
+      // Live dsh session events stream through the injected in-process bus
+      // (no-op when absent); a publishing failure must never fail the run.
+      const publishAgentEvent = typeof agentEventBus?.publish === "function"
+        ? (event) => {
+            try {
+              agentEventBus.publish({ event, invocationId, projectId: input.projectId, userId: actor.id });
+            } catch {
+              // Streaming is best-effort observability.
+            }
+          }
+        : undefined;
+
       const completed = await adapter.invoke({
         beginExecution,
         input,
         invocationId,
         manifest,
+        onEvent: publishAgentEvent,
       });
       if (!executionStarted) {
         throw capabilityError("AI_CAPABILITY_EXECUTION_NOT_STARTED", "AI capability adapter did not enter the scoped execution path.", 500);
@@ -306,6 +326,30 @@ function createAiCapabilityService({
           // evidence cannot be persisted after an audit outage.
         }
         logger?.warn?.("AI capability completion audit write failed:", auditEvent.detail.code);
+      }
+      if (tokenUsage && typeof tokenUsage.record === "function") {
+        try {
+          const usage = extractTokenUsage(events);
+          await tokenUsage.record({
+            id: `AITU-${crypto.randomUUID()}`,
+            invocation_id: invocationId,
+            job_id: null,
+            capability_id: manifest.id,
+            capability_version: manifest.version,
+            project_id: input.projectId,
+            actor_id: actor.id,
+            model: provider.model || null,
+            wire_api: provider.wireApi || null,
+            prompt_tokens: usage.promptTokens,
+            completion_tokens: usage.completionTokens,
+            total_tokens: usage.totalTokens,
+            created_at: completedAt,
+          });
+        } catch (usageError) {
+          // Metering is observability: a failed usage write must never turn a
+          // completed invocation into a failed request.
+          logger?.warn?.("AI capability token usage write failed:", usageError?.code || usageError?.message || usageError);
+        }
       }
       return publicInvocation(invocation, parse);
     } catch (error) {

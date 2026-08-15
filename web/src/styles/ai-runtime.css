@@ -1,0 +1,1346 @@
+/* ---------------------------------------------------------------------------
+   AI dsh runtime strip + capability invocation trace drawer
+   (companions to ai-connection.css on the AI workspace page)
+   --------------------------------------------------------------------------- */
+
+/* Runtime status strip: compact one-row card above the chat layout. */
+.ai-runtime-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--background) 45%, var(--card));
+}
+
+.ai-runtime-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ai-runtime-identity strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--card-foreground);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.ai-runtime-identity em {
+  font-style: normal;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.ai-runtime-plugins {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 260px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.ai-runtime-plugin {
+  flex: 0 0 auto;
+  max-width: 220px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+  background: color-mix(in srgb, var(--muted-foreground) 10%, var(--card));
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-runtime-plugin.is-company {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  background: color-mix(in srgb, var(--primary) 14%, var(--card));
+  color: color-mix(in srgb, var(--primary) 72%, var(--card-foreground));
+}
+
+.ai-runtime-stats {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.ai-runtime-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.ai-runtime-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: currentColor;
+}
+
+.ai-runtime-dot.is-active {
+  color: var(--color-success, #16A34A);
+  animation: ai-runtime-breathe 1.8s ease-in-out infinite;
+}
+
+.ai-runtime-dot.is-idle {
+  color: var(--muted-foreground);
+  opacity: 0.6;
+}
+
+@keyframes ai-runtime-breathe {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 6%, transparent);
+  }
+}
+
+.ai-runtime-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid color-mix(in srgb, var(--destructive) 30%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--destructive) 8%, var(--card));
+  color: color-mix(in srgb, var(--destructive) 78%, var(--card-foreground));
+  font-size: 12px;
+}
+
+/* ---------------------------------------------------------------------------
+   Invocation trace drawer (slide-over)
+   --------------------------------------------------------------------------- */
+.ai-invocation-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay, 80);
+  background: color-mix(in srgb, #000000 42%, transparent);
+  animation: ai-invocation-fade 0.16s ease-out;
+}
+
+.ai-invocation-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: calc(var(--z-overlay, 80) + 1);
+  width: min(560px, 94vw);
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: -18px 0 42px color-mix(in srgb, #000000 22%, transparent);
+  animation: ai-invocation-slide 0.18s ease-out;
+}
+
+@keyframes ai-invocation-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ai-invocation-slide {
+  from { transform: translateX(24px); opacity: 0.4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.ai-invocation-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-divider, var(--border));
+}
+
+.ai-invocation-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-invocation-header-row:first-child {
+  justify-content: space-between;
+}
+
+.ai-invocation-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--card-foreground);
+}
+
+.ai-invocation-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ai-invocation-meta .text-mono {
+  overflow-wrap: anywhere;
+}
+
+.ai-invocation-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 16px;
+}
+
+.ai-invocation-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ai-invocation-events {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0 0 0 0;
+  list-style: none;
+}
+
+.ai-invocation-event {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px 24px minmax(0, 1fr);
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 10px 8px 0;
+}
+
+.ai-invocation-event::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: color-mix(in srgb, var(--border) 75%, transparent);
+}
+
+.ai-invocation-event:first-child::before {
+  top: 14px;
+}
+
+.ai-invocation-event:last-child::before {
+  bottom: calc(100% - 14px);
+}
+
+.ai-invocation-event-seq {
+  padding-top: 2px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.ai-invocation-event-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted-foreground);
+}
+
+.ai-invocation-event.is-success .ai-invocation-event-icon {
+  color: var(--color-success, #16A34A);
+}
+
+.ai-invocation-event.is-error .ai-invocation-event-icon {
+  color: var(--destructive);
+}
+
+.ai-invocation-event-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ai-invocation-event-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.ai-invocation-event-name {
+  font-weight: 600;
+  color: var(--card-foreground);
+}
+
+.ai-invocation-event.is-error .ai-invocation-event-name {
+  color: var(--destructive);
+}
+
+.ai-invocation-event.is-success .ai-invocation-event-name {
+  color: var(--color-success, #16A34A);
+}
+
+.ai-invocation-event-time {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.ai-invocation-event-summary {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.ai-invocation-event-summary .text-mono {
+  font-size: 11px;
+}
+
+.ai-invocation-event.is-tool {
+  margin: 2px 0;
+  border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+}
+
+.ai-invocation-event.is-tool .ai-invocation-event-icon {
+  color: color-mix(in srgb, var(--primary) 78%, var(--card-foreground));
+  border-color: color-mix(in srgb, var(--primary) 42%, transparent);
+}
+
+.ai-invocation-event.is-tool .ai-invocation-event-name {
+  color: color-mix(in srgb, var(--primary) 80%, var(--card-foreground));
+}
+
+/* Tool rows keep the vertical rail visible through their tinted card. */
+.ai-invocation-event.is-tool::before {
+  left: 14.5px;
+}
+
+.ai-invocation-empty {
+  padding: 18px 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-align: center;
+}
+
+.ai-invocation-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-divider, var(--border));
+  background: color-mix(in srgb, var(--background) 40%, var(--card));
+}
+
+.ai-invocation-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-invocation-usage-bar {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.ai-invocation-usage-segment {
+  min-width: 2px;
+  height: 100%;
+}
+
+.ai-invocation-usage-segment.is-prompt {
+  background: color-mix(in srgb, var(--primary) 72%, var(--card));
+}
+
+.ai-invocation-usage-segment.is-completion {
+  background: var(--color-success, #16A34A);
+}
+
+.ai-invocation-usage-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.ai-invocation-result {
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--background) 40%, var(--card));
+}
+
+.ai-invocation-result summary {
+  padding: 8px 12px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ai-invocation-result pre {
+  max-height: 260px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  color: var(--card-foreground);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Realtime stream badge (header) + polling fallback note (footer corner). */
+.ai-invocation-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--color-success, #16A34A) 45%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-success, #16A34A) 12%, var(--card));
+  color: color-mix(in srgb, var(--color-success, #16A34A) 78%, var(--card-foreground));
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.ai-invocation-live-note {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  text-align: right;
+}
+
+/* ---------------------------------------------------------------------------
+   Recent invocations list inside the capability tray
+   --------------------------------------------------------------------------- */
+.ai-capability-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.ai-capability-recent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ai-capability-recent-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-capability-recent-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--background) 40%, var(--card));
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ai-capability-recent-item:hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+}
+
+.ai-capability-recent-item-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.ai-capability-recent-item-capability {
+  color: var(--card-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-capability-recent-item-time {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.ai-capability-recent-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.ai-capability-recent-hint,
+.ai-capability-recent-error {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ai-capability-recent-error {
+  color: var(--destructive);
+}
+
+.ai-capability-recent-project {
+  min-height: 28px;
+  max-width: 180px;
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
+/* ---------------------------------------------------------------------------
+   AI token usage dashboard (Sprint 5.3): sits under the runtime strip.
+   --------------------------------------------------------------------------- */
+.ai-usage-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--background) 45%, var(--card));
+}
+
+.ai-usage-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.ai-usage-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ai-usage-heading svg {
+  align-self: center;
+  color: var(--muted-foreground);
+}
+
+.ai-usage-heading strong {
+  color: var(--card-foreground);
+  font-size: 13px;
+}
+
+.ai-usage-heading em {
+  font-style: normal;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.ai-usage-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.ai-usage-controls .form-select {
+  min-height: 28px;
+  max-width: 180px;
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
+.ai-usage-view-toggle {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.ai-usage-state {
+  padding: 14px 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-align: center;
+}
+
+.ai-usage-state.is-error {
+  color: var(--destructive);
+}
+
+.ai-usage-table-wrap {
+  overflow-x: auto;
+}
+
+.ai-usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ai-usage-table th,
+.ai-usage-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ai-usage-table th {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ai-usage-table th:first-child,
+.ai-usage-table td:first-child {
+  text-align: left;
+}
+
+.ai-usage-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.ai-usage-version {
+  margin-left: 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.ai-usage-days {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-usage-day {
+  display: grid;
+  grid-template-columns: 92px minmax(80px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-usage-day-date {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.ai-usage-day-bar {
+  display: block;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 65%, transparent);
+}
+
+.ai-usage-day-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--primary) 70%, var(--card));
+}
+
+.ai-usage-day-meta {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.ai-usage-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+@media (max-width: 640px) {
+  .ai-runtime-stats {
+    margin-left: 0;
+  }
+
+  .ai-usage-controls {
+    margin-left: 0;
+  }
+
+  .ai-usage-day {
+    grid-template-columns: 80px minmax(60px, 1fr);
+  }
+
+  .ai-usage-day-meta {
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  .ai-invocation-drawer {
+    width: 100vw;
+    border-left: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Sprint 5.1 ask-user / user-approval interaction cards (AI workspace page):
+   pending dsh questions and approvals awaiting a platform user's reply.
+   --------------------------------------------------------------------------- */
+
+.ai-interaction-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--background) 45%, var(--card));
+}
+
+/* AI workspace note: pending interactions are answered in the global sidebar. */
+.ai-interaction-moved-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px dashed color-mix(in srgb, var(--border) 90%, transparent);
+  border-radius: 10px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.ai-interaction-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--card-foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ai-interaction-count {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border));
+  background: color-mix(in srgb, var(--primary) 14%, var(--card));
+  color: color-mix(in srgb, var(--primary) 72%, var(--card-foreground));
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ai-interaction-empty {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.ai-interaction-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-interaction-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+  border-left: 3px solid color-mix(in srgb, var(--primary) 60%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card) 92%, var(--muted-foreground));
+}
+
+.ai-interaction-item.is-approval {
+  border-left-color: color-mix(in srgb, var(--destructive, #DC2626) 55%, var(--border));
+}
+
+.ai-interaction-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--card-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ai-interaction-item-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.ai-interaction-question {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-interaction-question-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--card-foreground);
+}
+
+.ai-interaction-question-text small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.ai-interaction-question-text em {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.ai-interaction-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ai-interaction-custom {
+  font-size: 12px;
+}
+
+.ai-interaction-reason,
+.ai-interaction-risk,
+.ai-interaction-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.ai-interaction-risk {
+  color: color-mix(in srgb, var(--destructive, #DC2626) 72%, var(--card-foreground));
+}
+
+.ai-interaction-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ai-interaction-cancel-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ---------------------------------------------------------------------------
+   AI workspace section tabs: capabilities / usage / governance
+   (semantic variables only, matches the runtime strip above)
+   --------------------------------------------------------------------------- */
+
+.ai-view-tabs {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ai-view-tabs .ui-tabs-list {
+  border-bottom-color: color-mix(in srgb, var(--border) 88%, transparent);
+}
+
+.ai-view-tab-panel {
+  padding-top: var(--space-4);
+}
+
+/* Governance placeholder: shown to non-admin users (panels are admin-only). */
+.ai-view-governance {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  border: 1px dashed color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--background) 45%, var(--card));
+  color: var(--muted-foreground);
+  font-size: var(--fs-helper);
+}
+
+/* Governance panels (admin): masking rules / session replay / directive console. */
+.ai-view-governance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: var(--space-4, 16px);
+  align-items: start;
+}
+
+.ai-view-governance-grid > section {
+  min-width: 0;
+}
+
+.ai-masking-admin,
+.ai-session-replay,
+.ai-ui-console {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--background) 45%, var(--card));
+}
+
+.ai-masking-header,
+.ai-session-header,
+.ai-ui-console-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ai-masking-heading,
+.ai-session-heading,
+.ai-ui-console-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-section-title);
+}
+
+.ai-masking-heading strong,
+.ai-session-heading strong,
+.ai-ui-console-heading strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-body);
+  color: var(--card-foreground);
+}
+
+.ai-masking-heading em,
+.ai-session-heading em,
+.ai-ui-console-heading em {
+  font-style: normal;
+  font-size: var(--fs-helper);
+  color: var(--muted-foreground);
+}
+
+.ai-masking-state,
+.ai-session-state {
+  padding: 14px 10px;
+  border-radius: 8px;
+  font-size: var(--fs-helper);
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+}
+
+.ai-masking-state.is-error,
+.ai-session-state.is-error {
+  color: var(--color-risk, var(--destructive));
+}
+
+/* Masking rule table */
+.ai-masking-table-wrap {
+  overflow-x: auto;
+}
+
+.ai-masking-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-table-body);
+}
+
+.ai-masking-table th,
+.ai-masking-table td {
+  padding: 7px 8px;
+  text-align: left;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  vertical-align: middle;
+}
+
+.ai-masking-table th {
+  color: var(--muted-foreground);
+  font-weight: 500;
+  font-size: var(--fs-helper);
+}
+
+.ai-masking-table tr.is-disabled td {
+  opacity: 0.55;
+}
+
+.ai-masking-table td small {
+  color: var(--muted-foreground);
+}
+
+.ai-masking-mode-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.ai-masking-mode-badge.is-replace {
+  color: var(--color-info, var(--info));
+  background: var(--color-info-bg, color-mix(in srgb, var(--info) 14%, transparent));
+}
+
+.ai-masking-mode-badge.is-block {
+  color: var(--color-risk, var(--destructive));
+  background: var(--color-risk-bg, color-mix(in srgb, var(--destructive) 14%, transparent));
+}
+
+.ai-masking-row-actions {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+/* Instant-enable switch */
+.ai-masking-switch {
+  display: inline-flex;
+  align-items: center;
+  width: 34px;
+  height: 18px;
+  padding: 2px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+  background: color-mix(in srgb, var(--muted) 70%, transparent);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ai-masking-switch.is-on {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.ai-masking-switch-knob {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--background);
+  transition: transform 0.15s ease;
+}
+
+.ai-masking-switch.is-on .ai-masking-switch-knob {
+  transform: translateX(16px);
+}
+
+.ai-masking-switch:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Create / edit form */
+.ai-masking-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--background) 55%, var(--card));
+}
+
+.ai-masking-form-title {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--card-foreground);
+}
+
+.ai-masking-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-helper);
+  color: var(--muted-foreground);
+}
+
+.ai-masking-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.ai-masking-form-hint {
+  margin: 0;
+  font-size: var(--fs-helper);
+  color: var(--muted-foreground);
+}
+
+.ai-masking-form-checks {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.ai-masking-check {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-helper);
+  color: var(--card-foreground);
+}
+
+.ai-masking-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Inline rule tester */
+.ai-masking-test {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px dashed color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: 8px;
+}
+
+.ai-masking-test-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--card-foreground);
+}
+
+.ai-masking-test label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-helper);
+  color: var(--muted-foreground);
+}
+
+.ai-masking-test-input {
+  font-size: 12px;
+  resize: vertical;
+}
+
+.ai-masking-test-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-masking-test-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-masking-test-label {
+  font-size: var(--fs-helper);
+  color: var(--muted-foreground);
+}
+
+.ai-masking-test-block pre {
+  margin: 0;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: color-mix(in srgb, var(--muted) 40%, transparent);
+  color: var(--card-foreground);
+}
+
+.ai-masking-test-empty {
+  font-size: var(--fs-helper);
+  color: var(--muted-foreground);
+}
+
+.ai-masking-test-violations {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.ai-masking-test-violations li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--card-foreground);
+}
+
+.ai-masking-test-violations small {
+  color: var(--muted-foreground);
+}
+
+/* Session replay */
+.ai-session-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-session-item {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ai-session-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--card-foreground);
+  font-size: var(--fs-table-body);
+  cursor: pointer;
+  text-align: left;
+}
+
+.ai-session-row:hover {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.ai-session-id {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-session-item .ai-invocation-events {
+  padding: 4px 10px 10px 18px;
+}
+
+.ai-session-meta {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: var(--fs-helper);
+  white-space: nowrap;
+}
+
+.ai-session-count {
+  color: var(--muted-foreground);
+  font-size: var(--fs-helper);
+  white-space: nowrap;
+}
+
+.ai-session-chevron {
+  color: var(--muted-foreground);
+}
+
+.ai-session-item .ai-session-state {
+  border-radius: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+/* UI directive console */
+.ai-ui-console-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-ui-console-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-helper);
+  color: var(--muted-foreground);
+}
+
+.ai-ui-console-check {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px;
+  color: var(--card-foreground) !important;
+}
+
+.ai-ui-console-color {
+  padding: 2px;
+  height: 32px;
+  width: 64px;
+  cursor: pointer;
+}
+
+.ai-ui-console-delivered {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: var(--fs-helper);
+  color: var(--color-success, var(--success));
+  background: var(--color-success-bg, color-mix(in srgb, var(--success) 14%, transparent));
+}

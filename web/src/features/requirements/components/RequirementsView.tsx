@@ -40,6 +40,7 @@ import {
   labelOf,
 } from '../../../constants/enums';
 import { canOperate } from '../../../constants/roles';
+import { useAgentPageContextPublisher } from '../../ai/agentPageContext';
 import { clearRequirementFocusFromHash, readRequirementFocusFromHash } from './requirementsFocus';
 
 type FocusFilter = 'all' | 'open' | 'high' | 'unassigned' | 'done';
@@ -95,6 +96,12 @@ export default function RequirementsView() {
     () => new Map(projects.map((item) => [item.id, item.name])),
     [projects],
   );
+  // Tell the global agent sidebar which project this view is scoped to.
+  useAgentPageContextPublisher({
+    page: 'requirements',
+    projectId: filters.projectId,
+    projectName: filters.projectId ? projectMap.get(filters.projectId) : undefined,
+  });
   const requirements = data ?? [];
 
   const signals = useMemo(() => {

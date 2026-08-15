@@ -25,7 +25,7 @@
   border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   border-radius: 10px;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--card) 92%, transparent), color-mix(in srgb, var(--muted) 35%, var(--card)));
+    color-mix(in srgb, var(--muted) 35%, var(--card));
 }
 
 .reports-signal-label,
@@ -62,33 +62,29 @@
 .reports-signal.is-success,
 .flow-signal.is-success,
 .product-signal.is-success {
-  border-color: color-mix(in srgb, var(--color-success, #40c977) 40%, var(--border));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-success, #40c977) 10%, var(--card)), var(--card));
+  border-color: color-mix(in srgb, var(--color-success, #16A34A) 40%, var(--border));
+  background: color-mix(in srgb, var(--color-success, #16A34A) 10%, var(--card));
 }
 
 .reports-signal.is-warn,
 .flow-signal.is-warn,
 .product-signal.is-warn {
-  border-color: color-mix(in srgb, var(--color-warning, #fbbf24) 40%, var(--border));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-warning, #fbbf24) 10%, var(--card)), var(--card));
+  border-color: color-mix(in srgb, var(--color-warning, #D97706) 40%, var(--border));
+  background: color-mix(in srgb, var(--color-warning, #D97706) 10%, var(--card));
 }
 
 .reports-signal.is-risk,
 .flow-signal.is-risk,
 .product-signal.is-risk {
-  border-color: color-mix(in srgb, var(--color-risk, #f87171) 40%, var(--border));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-risk, #f87171) 10%, var(--card)), var(--card));
+  border-color: color-mix(in srgb, var(--color-risk, #DC2626) 40%, var(--border));
+  background: color-mix(in srgb, var(--color-risk, #DC2626) 10%, var(--card));
 }
 
 .reports-signal.is-info,
 .flow-signal.is-info,
 .product-signal.is-info {
-  border-color: color-mix(in srgb, var(--color-info, #60a5fa) 40%, var(--border));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-info, #60a5fa) 10%, var(--card)), var(--card));
+  border-color: color-mix(in srgb, var(--color-info, #3B82F6) 40%, var(--border));
+  background: color-mix(in srgb, var(--color-info, #3B82F6) 10%, var(--card));
 }
 
 @media (max-width: 1100px) {

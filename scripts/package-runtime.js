@@ -50,7 +50,7 @@ for (const file of [
   "api/db.js",
   "api/openapi.json",
   "web/package.json",
-  "docs/16-sqlite-trial-deploy.md",
+  "docs/deployment-and-ops.md",
 ]) {
   copyFile(file);
 }

@@ -29,17 +29,15 @@
 }
 
 .ai-connection-status.is-green {
-  color: var(--color-success, #40c977);
-  border-color: color-mix(in srgb, var(--color-success, #40c977) 35%, var(--border));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-success, #40c977) 12%, var(--card)), var(--card));
+  color: var(--color-success, #16A34A);
+  border-color: color-mix(in srgb, var(--color-success, #16A34A) 35%, var(--border));
+  background: color-mix(in srgb, var(--color-success, #16A34A) 12%, var(--card));
 }
 
 .ai-connection-status.is-red {
-  color: var(--destructive, #fa423e);
-  border-color: color-mix(in srgb, var(--destructive, #fa423e) 35%, var(--border));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--destructive, #fa423e) 10%, var(--card)), var(--card));
+  color: var(--destructive, #DC2626);
+  border-color: color-mix(in srgb, var(--destructive, #DC2626) 35%, var(--border));
+  background: color-mix(in srgb, var(--destructive, #DC2626) 10%, var(--card));
 }
 
 .ai-connection-status.is-unknown {
@@ -224,6 +222,19 @@
 
 .ai-capability-result-fields dt {
   color: var(--muted-foreground);
+}
+
+.ai-capability-result-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary, var(--accent));
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ai-capability-result-link:hover {
+  text-decoration: underline;
 }
 
 .ai-capability-result-fields dd {

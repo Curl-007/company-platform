@@ -54,7 +54,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         <MotionGuard fallback={<div className="login-aurora-static" />}>
           <Suspense fallback={null}>
             <Aurora
-              colorStops={['#339cff', '#1f7fdf', '#0a3d7a']}
+              colorStops={['#8B93E8', '#5E6AD2', '#4F52B5']}
               amplitude={0.8}
               blend={0.6}
             />
@@ -67,7 +67,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           <h1 className="login-brand-title">
             <MotionGuard fallback={<span>{t('auth.brandTitle')}</span>}>
               <GradientText
-                colors={['#339cff', '#7cc4ff', '#1f7fdf', '#339cff']}
+                colors={['#5E6AD2', '#A5ACF5', '#7B85EA', '#5E6AD2']}
                 animationSpeed={6}
               >
                 {t('auth.brandTitle')}

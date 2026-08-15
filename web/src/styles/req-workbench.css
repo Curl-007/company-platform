@@ -24,7 +24,7 @@
   border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   border-radius: 10px;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--card) 92%, transparent), color-mix(in srgb, var(--muted) 35%, var(--card)));
+    color-mix(in srgb, var(--muted) 35%, var(--card));
 }
 
 .req-signal-label {
@@ -53,8 +53,7 @@
 
 .req-signal.is-risk {
   border-color: color-mix(in srgb, var(--destructive) 35%, var(--border));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--destructive) 8%, var(--card)), var(--card));
+  background: color-mix(in srgb, var(--destructive) 8%, var(--card));
 }
 
 .req-signal.is-risk strong {
@@ -62,9 +61,8 @@
 }
 
 .req-signal.is-warn {
-  border-color: color-mix(in srgb, var(--color-warning, #fbbf24) 40%, var(--border));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-warning, #fbbf24) 10%, var(--card)), var(--card));
+  border-color: color-mix(in srgb, var(--color-warning, #D97706) 40%, var(--border));
+  background: color-mix(in srgb, var(--color-warning, #D97706) 10%, var(--card));
 }
 
 .req-pool-panel .panel-body {
@@ -301,8 +299,7 @@
   padding: 12px 14px;
   border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   border-radius: 10px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--muted) 42%, var(--card)), var(--card));
+  background: color-mix(in srgb, var(--muted) 42%, var(--card));
 }
 
 .req-detail-badges {

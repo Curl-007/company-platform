@@ -36,7 +36,7 @@ export default function DonutChart({ value, label, size = 120, color }: DonutCha
     { name: 'value', value: v },
     { name: 'rest', value: 100 - v },
   ];
-  const colors = [arcColor, 'var(--color-border, #e2e8f0)'];
+  const colors = [arcColor, 'var(--color-border, #E4E4E7)'];
 
   return (
     <div className="donut-chart" style={{ width: size, height: size, position: 'relative' }}>

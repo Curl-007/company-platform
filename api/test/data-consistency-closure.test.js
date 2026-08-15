@@ -26,6 +26,13 @@ async function startApi(databaseFile) {
     cwd: apiRoot,
     env: {
       ...process.env,
+      NODE_ENV: "test",
+      SEED_ADMIN_EMAIL: "",
+      SEED_ADMIN_PASSWORD: "",
+      SEED_PM_PASSWORD: "",
+      SEED_DEV_PASSWORD: "",
+      SEED_QA_PASSWORD: "",
+      SEED_PDM_PASSWORD: "",
       PORT: String(port),
       DATABASE_FILE: databaseFile,
       JWT_SECRET: "data-consistency-closure-secret",

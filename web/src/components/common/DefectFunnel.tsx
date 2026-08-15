@@ -16,9 +16,9 @@ interface DefectFunnelProps {
 const STAGES = [
   { key: 'new', label: 'enums.defectStatus.new', color: 'var(--color-risk, #dc2626)' },
   { key: 'confirmed', label: 'enums.defectStatus.confirmed', color: 'var(--color-warning, #d97706)' },
-  { key: 'in_fix', label: 'enums.defectStatus.in_fix', color: 'var(--color-info, #2563eb)' },
+  { key: 'in_fix', label: 'enums.defectStatus.in_fix', color: 'var(--color-info, #3B82F6)' },
   { key: 'resolved', label: 'enums.defectStatus.resolved', color: 'var(--color-success, #16a34a)' },
-  { key: 'closed', label: 'enums.defectStatus.closed', color: 'var(--text-tertiary, #8C959F)' },
+  { key: 'closed', label: 'enums.defectStatus.closed', color: 'var(--text-tertiary, #A1A1AA)' },
 ] as const;
 
 export default function DefectFunnel({ data }: DefectFunnelProps) {

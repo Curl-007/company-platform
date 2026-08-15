@@ -191,7 +191,7 @@ preflight → export:postgres → verify:postgres-export
 
 > **诚实说明（as-built，2026-07-21）**  
 > - 仓库默认 CI / 无 `DATABASE_URL` 时：单测仍以 **sqlite** 为主；门控 PG 测试 **skip**。  
-> - 本机有可达 PG 时：W6 全链路与 W7 drill **已在开发机验证**（见 [w2-postgres-plan.md](./w2-postgres-plan.md)）。  
+> - 本机有可达 PG 时：W6 全链路与 W7 drill **已在开发机验证**（决策与进度口径见 [trade-offs-and-decisions.md](./trade-offs-and-decisions.md)）。  
 > - **未做**：CI 挂 Postgres service；生产冻结写 / 灰度切写 / 运维签字回滚。
 
 ## 回滚

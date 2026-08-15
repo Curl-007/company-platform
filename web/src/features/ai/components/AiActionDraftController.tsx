@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { AiProposedAction, Project } from '../../../types';
 import { ApiError } from '../../../services/api';
 import { getSessionUser } from '../../../services/auth';
-import { executeAiProposedAction } from '../aiActionExecutor';
+import { executeAiProposedAction } from '../models/aiActionExecutor';
 import {
   aiActionLabelKey,
   availableAiActionProjects,
@@ -11,9 +11,9 @@ import {
   type AiActionDraftField,
   updateAiActionDraftField,
   updateAiActionDraftObjective,
-} from '../aiActionDraftModel';
-import { openAiActionResult } from '../aiActionDraftNavigation';
-import { canWriteAiAction } from '../aiActionDraftPermissions';
+} from '../models/aiActionDraftModel';
+import { openAiActionResult } from '../models/aiActionDraftNavigation';
+import { canWriteAiAction } from '../models/aiActionDraftPermissions';
 import AiActionDraftForm from './AiActionDraftForm';
 import AiActionDraftSuccess from './AiActionDraftSuccess';
 

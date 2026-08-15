@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Play, Sparkles, X } from 'lucide-react';
+import { ListTree, Play, Sparkles, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { AiCapabilityInvocation, AiCapabilityManifest, Project } from '../../../types';
 import {
   capabilityInputFields,
   capabilityOutputEntries,
   validateCapabilityInput,
-} from '../capabilityPresentation';
-import type { AiCapabilityAvailability } from '../api';
+} from '../models/capabilityPresentation';
+import type { AiCapabilityAvailability } from '../api/capabilities';
+import { invocationStatusLabel } from '../models/harnessModel';
+
+// project-snapshot is hidden from the tray surface (the capability stays
+// available to the harness); the tray lists the actionable tools only.
+const HIDDEN_CAPABILITY_IDS = new Set(['project-snapshot']);
 
 function capabilityTitle(capability: AiCapabilityManifest, t: (key: string) => string): string {
   if (capability.id === 'project-snapshot') return t('features.ai.aiCapabilityTray.projectSnapshot');
@@ -25,19 +30,26 @@ export default function AiCapabilityTray({
   latestInvocation,
   invokingCapabilityId,
   onInvoke,
+  onOpenInvocationTrace,
 }: {
   availability: AiCapabilityAvailability | null;
   projects: Project[];
   latestInvocation: AiCapabilityInvocation | null;
   invokingCapabilityId: string | null;
   onInvoke: (capability: AiCapabilityManifest, input: Record<string, string>) => Promise<void>;
+  onOpenInvocationTrace: (invocationId: string) => void;
 }) {
   const { t } = useTranslation();
   const [selectedCapabilityId, setSelectedCapabilityId] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [invalidFields, setInvalidFields] = useState<string[]>([]);
 
-  const capabilities = availability?.capabilities ?? [];
+  // project-snapshot is hidden from the tray surface (the capability stays
+  // available to the harness); the tray lists the actionable tools only.
+  const capabilities = useMemo(
+    () => (availability?.capabilities ?? []).filter((capability) => !HIDDEN_CAPABILITY_IDS.has(capability.id)),
+    [availability?.capabilities],
+  );
   const selectedCapability = useMemo(
     () => capabilities.find((capability) => capability.id === selectedCapabilityId) ?? null,
     [capabilities, selectedCapabilityId],
@@ -97,32 +109,25 @@ export default function AiCapabilityTray({
 
   return (
     <div className="ai-capability-tray" aria-label={t('features.ai.aiCapabilityTray.title')}>
-      <div className="ai-capability-header">
-        <div className="ai-capability-heading">
-          <Sparkles size={14} aria-hidden="true" />
-          <span>{t('features.ai.aiCapabilityTray.title')}</span>
-        </div>
-        <div className="ai-capability-actions" role="group" aria-label={t('features.ai.aiCapabilityTray.title')}>
-          {capabilities.map((capability) => (
-            <button
-              key={capability.id}
-              type="button"
-              className={`btn btn-secondary btn-sm ${selectedCapabilityId === capability.id ? 'active' : ''}`}
-              onClick={() => setSelectedCapabilityId((current) => current === capability.id ? null : capability.id)}
-              aria-pressed={selectedCapabilityId === capability.id}
-              disabled={invokingCapabilityId !== null}
-            >
-              <Sparkles size={14} aria-hidden="true" />
-              {capabilityTitle(capability, t)}
-            </button>
-          ))}
-        </div>
+      <div className="ai-capability-actions" role="group" aria-label={t('features.ai.aiCapabilityTray.title')}>
+        {capabilities.map((capability) => (
+          <button
+            key={capability.id}
+            type="button"
+            className={`btn btn-secondary btn-sm ${selectedCapabilityId === capability.id ? 'active' : ''}`}
+            onClick={() => setSelectedCapabilityId((current) => current === capability.id ? null : capability.id)}
+            aria-pressed={selectedCapabilityId === capability.id}
+            disabled={invokingCapabilityId !== null}
+          >
+            <Sparkles size={14} aria-hidden="true" />
+            {capabilityTitle(capability, t)}
+          </button>
+        ))}
       </div>
 
       {selectedCapability ? (
         <div className="ai-capability-form">
           <div className="ai-capability-form-meta">
-            <span>{t('features.ai.aiCapabilityTray.readOnly')}</span>
             <span className="text-mono">v{selectedCapability.version}</span>
           </div>
           {fields.map((field) => {
@@ -189,13 +194,32 @@ export default function AiCapabilityTray({
         <div className="ai-capability-result" role="status">
           <div className="ai-capability-result-header">
             <span>{capabilityTitle(latestCapability, t)}</span>
-            <span className="text-mono">{latestInvocation.status}</span>
+            <span className="ai-capability-recent-meta">
+              <span className="text-mono">{invocationStatusLabel(latestInvocation.status)}</span>
+              {latestInvocation.invocationId ? (
+                <button
+                  type="button"
+                  className="btn btn-text btn-xs"
+                  onClick={() => onOpenInvocationTrace(latestInvocation.invocationId as string)}
+                  title={t('features.ai.aiCapabilityTray.traceButtonTitle')}
+                >
+                  <ListTree size={12} aria-hidden="true" />
+                  {t('features.ai.aiCapabilityTray.openTrace')}
+                </button>
+              ) : null}
+            </span>
           </div>
           <dl className="ai-capability-result-fields">
             {outputEntries.map((entry) => (
               <div key={entry.name}>
                 <dt>{entry.name}</dt>
-                <dd>{entry.value}</dd>
+                <dd>
+                  {entry.link ? (
+                    <a className="ai-capability-result-link" href={entry.link} target="_blank" rel="noreferrer">
+                      {t('features.ai.aiCapabilityTray.viewArtifact')}
+                    </a>
+                  ) : entry.value}
+                </dd>
               </div>
             ))}
           </dl>

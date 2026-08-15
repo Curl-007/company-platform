@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import i18n, { LOCALE_STORAGE_KEY, SUPPORTED_LOCALES, type SupportedLocale } from './index';
+import i18n, { LOCALE_STORAGE_KEY, SUPPORTED_LOCALES, ensureLocaleLoaded, type SupportedLocale } from './index';
 
 interface LanguageContextValue {
   locale: SupportedLocale;
@@ -22,7 +22,8 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       // 存储不可用时语言切换仍生效（仅本次会话）。
     }
     document.documentElement.lang = next;
-    void i18n.changeLanguage(next);
+    // 目标语言包可能尚未加载（非默认语言按需 import），先补载再切换。
+    void ensureLocaleLoaded(next).then(() => i18n.changeLanguage(next));
   }, []);
 
   const value = useMemo(() => ({ locale, setLocale }), [locale, setLocale]);

@@ -46,6 +46,7 @@ import {
   labelOf,
 } from '../../../constants/enums';
 import { canOperate } from '../../../constants/roles';
+import { useAgentPageContextPublisher } from '../../ai/agentPageContext';
 
 const PROJECT_DETAIL_TABS: Array<{ key: DetailTab; label: string; icon: LucideIcon }> = [
   { key: 'overview', label: 'features.projects.projectDetailView.tabOverview', icon: FolderKanban },
@@ -62,6 +63,12 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
     [id],
     { cacheKey: 'projects:detail' },
   );
+  // Tell the global agent sidebar which project is open.
+  useAgentPageContextPublisher({
+    page: 'projects',
+    projectId: id,
+    projectName: data?.name,
+  });
   const [tab, setTab] = useState<DetailTab>(() => {
     const saved = window.localStorage.getItem(STORAGE_KEYS.detailTab);
     return saved === 'wbs' || saved === 'kanban' || saved === 'flow' || saved === 'governance' ? saved : 'overview';

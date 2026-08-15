@@ -35,6 +35,7 @@ import {
   labelOf,
 } from '../../../constants/enums';
 import { canOperate } from '../../../constants/roles';
+import { useAgentPageContextPublisher } from '../../ai/agentPageContext';
 import { passRate } from './testingHelpers';
 import TestCaseForm from './TestCaseForm';
 import TestExecutionForm from './TestExecutionForm';
@@ -68,6 +69,12 @@ export default function TestCasesTab({
     () => new Map((projects ?? []).map((item) => [item.id, item.name])),
     [projects],
   );
+  // Tell the global agent sidebar which project this view is scoped to.
+  useAgentPageContextPublisher({
+    page: 'testing',
+    projectId: projectFilter || undefined,
+    projectName: projectFilter ? projectMap.get(projectFilter) : undefined,
+  });
 
   const signals = useMemo(() => {
     const total = tests.length;

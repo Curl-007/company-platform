@@ -46,7 +46,16 @@ async function startApi(databaseFile) {
       PORT: String(port),
       DATABASE_FILE: databaseFile,
       JWT_SECRET: "phase1-test-secret-at-least-16-characters",
+      NODE_ENV: "test",
       SEED_DEMO_DATA: "0",
+      // Neutralize host api/.env seed credentials injected by the dotenv
+      // loader; this suite creates its own accounts with fixed passwords.
+      SEED_ADMIN_EMAIL: "",
+      SEED_ADMIN_PASSWORD: "",
+      SEED_PM_PASSWORD: "",
+      SEED_DEV_PASSWORD: "",
+      SEED_QA_PASSWORD: "",
+      SEED_PDM_PASSWORD: "",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -80,7 +89,9 @@ async function login(port, email, password) {
 }
 
 async function waitForAiJobStatus(port, id, headers, status) {
-  const deadline = Date.now() + 5_000;
+  // Real harness inference (document_analysis) routinely exceeds a short
+  // window; allow a full model round-trip before declaring failure.
+  const deadline = Date.now() + 60_000;
   let latest = null;
   while (Date.now() < deadline) {
     latest = await request(port, `/api/ai/jobs/${id}`, { headers });

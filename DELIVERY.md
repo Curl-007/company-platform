@@ -11,7 +11,7 @@
 - `api/config/harness/cordis.yml`：受审查的无头 Harness 推理组合（不可放入 stdout logger 或终端 UI）。
 - `web/dist/`：已构建的单页应用。
 - `api/migrations/`：数据库迁移。
-- `docs/16-sqlite-trial-deploy.md`：SQLite 部署、备份、恢复与回滚手册。
+- `docs/deployment-and-ops.md`：SQLite 部署、备份、恢复与回滚手册。
 
 ## 2. 部署前准备
 
@@ -107,7 +107,7 @@ npm run restore:sqlite
 npm run drill:sqlite-backup
 ```
 
-升级时依次执行：备份、停止服务（等待 Harness runtime 与 loopback proxy 关闭）、替换交付目录、`npm ci --omit=dev`、检查环境变量和 `api/config/harness/cordis.yml`、启动服务、检查 `/api/health`、执行管理员 Provider 连接测试、执行关键业务登录与项目读写验证。详细回滚步骤见 `docs/16-sqlite-trial-deploy.md`。
+升级时依次执行：备份、停止服务（等待 Harness runtime 与 loopback proxy 关闭）、替换交付目录、`npm ci --omit=dev`、检查环境变量和 `api/config/harness/cordis.yml`、启动服务、检查 `/api/health`、执行管理员 Provider 连接测试、执行关键业务登录与项目读写验证。详细回滚步骤见 `docs/deployment-and-ops.md`。
 
 ## 7. 交付验收清单
 

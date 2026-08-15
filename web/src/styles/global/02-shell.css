@@ -1,0 +1,436 @@
+/* --------------------------------------------------------------------------
+   App Shell Layout
+   -------------------------------------------------------------------------- */
+
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  min-height: 100vh;
+}
+
+.app-shell.ai-sidebar-open {
+  grid-template-columns: var(--sidebar-width) 1fr var(--ai-sidebar-width);
+}
+
+/* --------------------------------------------------------------------------
+   Sidebar
+   -------------------------------------------------------------------------- */
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border-sidebar);
+  overflow-y: auto;
+  overflow-x: hidden;
+  z-index: 30;
+  transition: width var(--transition-normal);
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-sidebar);
+  min-height: var(--topbar-height);
+}
+
+.sidebar-brand-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--sidebar-primary, var(--primary)), var(--primary));
+  color: var(--sidebar-primary-foreground, var(--accent-contrast));
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--text-primary) 15%, transparent);
+}
+
+
+.sidebar-nav {
+  flex: 1;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+
+
+/* Active nav item: light gray bg + left thin accent line per design doc */
+
+
+
+
+
+
+/* --------------------------------------------------------------------------
+   Top Bar
+   -------------------------------------------------------------------------- */
+
+
+
+
+
+
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.topbar-icon-button {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-button);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border: none;
+  background: none;
+  transition: background var(--transition-fast);
+}
+
+.topbar-icon-button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Plain (non-topbar) icon button — same affordance, smaller footprint. */
+.icon-button {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-button);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border: none;
+  background: none;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.icon-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Mobile hamburger: hidden on desktop, shown in the <= 768px media query */
+
+
+
+.topbar-notification-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-risk);
+  border: 2px solid var(--bg-content);
+}
+
+
+
+
+
+
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.profile-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border-divider);
+  border-radius: var(--radius-card);
+  background: var(--bg-primary);
+}
+
+.profile-dialog-avatar {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(130, 232, 219, 0.28), rgba(142, 202, 255, 0.2));
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.profile-dialog-name {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.profile-dialog-meta {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: var(--fs-helper);
+}
+
+.profile-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* --------------------------------------------------------------------------
+   Main Content Area
+   -------------------------------------------------------------------------- */
+
+.main-content {
+  min-width: 0;
+  min-height: calc(100vh - var(--topbar-height));
+}
+
+.main-content-body {
+  padding: var(--content-padding);
+}
+
+/* Kaneo density settings are independent from the removed legacy skins. */
+html[data-work-density='compact'] {
+  --page-stack-gap: 12px;
+  --page-header-margin: 14px;
+  --panel-header-padding-y: 10px;
+  --panel-header-padding-x: 14px;
+  --panel-body-padding: 14px;
+  --filter-bar-padding: 10px;
+  --metric-card-padding: 12px 14px;
+  --kpi-card-padding: 12px 14px;
+  --kpi-card-min-height: 92px;
+  --kpi-icon-size: 34px;
+  --fs-kpi-value: 24px;
+  --table-head-height: 32px;
+  --table-row-height: 40px;
+  --table-cell-padding-x: 12px;
+  --kanban-card-padding: 8px 10px;
+}
+
+html[data-work-density='compact'] .panel-body,
+html[data-work-density='compact'] .data-table th,
+html[data-work-density='compact'] .data-table td {
+  padding-block: 10px;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--page-header-gap);
+  margin-bottom: var(--page-header-margin);
+  padding: 2px 2px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-divider) 88%, transparent);
+}
+
+.page-header-crumbs-only {
+  padding-bottom: var(--space-2);
+}
+
+.page-breadcrumbs {
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-weight: 500;
+  opacity: 0.78;
+}
+
+.page-breadcrumb-item {
+  opacity: 0.9;
+}
+
+.page-breadcrumb-current {
+  opacity: 1;
+  font-weight: 500;
+}
+
+.page-header-info h1 {
+  font-size: var(--fs-page-title);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.page-header-info p {
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  line-height: 1.55;
+  max-width: 760px;
+  margin: 6px 0 0;
+}
+
+/* --------------------------------------------------------------------------
+   AI Sidebar
+   -------------------------------------------------------------------------- */
+
+.ai-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  background: var(--bg-content);
+  border-left: 1px solid var(--border-default);
+  z-index: 25;
+}
+
+.ai-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-divider);
+  min-height: var(--topbar-height);
+}
+
+.ai-sidebar-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+}
+
+.ai-sidebar-context {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-divider);
+  color: var(--text-secondary);
+  font-size: var(--fs-helper);
+}
+
+.ai-sidebar-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ai-sidebar-message {
+  padding: 10px 12px;
+  border: 1px solid var(--border-divider);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--bg-content) 82%, transparent);
+}
+
+.ai-sidebar-message.user {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border-default));
+  background: color-mix(in srgb, var(--bg-hover) 72%, transparent);
+}
+
+.ai-sidebar-message-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-helper);
+}
+
+.ai-sidebar-message-meta span:first-child {
+  color: var(--text-secondary);
+  font-weight: 800;
+}
+
+.ai-sidebar-message-body {
+  color: var(--text-primary);
+  font-size: var(--fs-table-body);
+  line-height: 1.62;
+}
+
+.ai-sidebar-message-body p {
+  margin: 0 0 7px;
+}
+
+.ai-sidebar-message-body p:last-child {
+  margin-bottom: 0;
+}
+
+.ai-sidebar-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.ai-sidebar-files span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  max-width: 100%;
+  padding: 3px 7px;
+  border: 1px solid var(--border-divider);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-hover) 72%, transparent);
+  font-size: var(--fs-helper);
+}
+
+.ai-sidebar-files.pending span {
+  max-width: 100%;
+}
+
+.ai-sidebar-files button {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-tertiary);
+}
+
+.ai-sidebar-composer {
+  padding: 12px;
+  border-top: 1px solid var(--border-divider);
+  background: color-mix(in srgb, var(--bg-content) 86%, transparent);
+}
+
+.ai-sidebar-input-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.ai-sidebar-input-row .form-textarea {
+  min-height: 44px;
+  max-height: 120px;
+  resize: vertical;
+  font-size: var(--fs-table-body);
+}
+
+.ai-sidebar-input-row .btn {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+

@@ -96,12 +96,21 @@ const { createCapacityRepository } = require("./src/modules/capacity/repository"
 const { createAiJobsRouter } = require("./src/modules/ai/routes");
 const { createAiJobRepository, createBusinessAdviceRepository } = require("./src/modules/ai/repository");
 const { createAiCapabilityRepository } = require("./src/modules/ai/capabilityRepository");
+const { createTokenUsageRepository } = require("./src/modules/ai/tokenUsage");
 const { createAiCapabilitiesRouter } = require("./src/modules/ai/capabilityRoutes");
 const { createAiCapabilityService } = require("./src/modules/ai/capabilityService");
+const { createAgentEventBus } = require("./src/modules/ai/agentEventBus");
+const { createAgentEventBridge } = require("./src/modules/ai/agentEventBridge");
 const { createAiCapabilityControlStore } = require("./src/modules/ai/capabilityControls");
 const { createCapabilityRegistry } = require("./src/modules/ai/capabilityRegistry");
 const { createExecutionGateway } = require("./src/modules/ai/executionGateway");
+const { createBrowserControlService } = require("./src/modules/ai/browserControl");
 const { createScopedExecutionTokenService } = require("./src/modules/ai/executionToken");
+const { resolveHarnessPaths } = require("./src/modules/ai/harnessRuntime");
+const { createAiSessionReplayService } = require("./src/modules/ai/sessionReplay");
+const { createAiSessionReplayRouter } = require("./src/modules/ai/sessionReplayRoutes");
+const { createAgentInteractionService } = require("./src/modules/ai/agentInteractionsService");
+const { createAgentInteractionsRouter } = require("./src/modules/ai/agentInteractionsRoutes");
 const { createHarnessCapabilityAdapter } = require("./src/modules/ai/capabilityAdapter");
 const { createAiModelComposition } = require("./src/modules/ai/modelComposition");
 const { createDocumentAnalysisService } = require("./src/modules/ai/documentAnalysis");
@@ -109,6 +118,11 @@ const { createAiModelClient, normalizeAiWireApi } = require("./src/modules/ai/mo
 const { createAiJobDispatcher } = require("./src/modules/ai/jobDispatcher");
 const { createDocumentAnalysisRunner } = require("./src/modules/ai/jobRunner");
 const { failTimedOutAiJobs, startAiJobTimeoutMonitor } = require("./src/modules/ai/timeoutMonitor");
+const {
+  createAiReminderRepository,
+  createDynamicCenterReminderDelivery,
+  createReminderScheduler,
+} = require("./src/modules/ai/reminderScheduler");
 const { buildDocumentChunks } = require("./src/modules/ai/ragIndex");
 const { createAiInteractionsRouter } = require("./src/modules/ai/interactionsRoutes");
 const { createBusinessAdviceContextService, createBusinessAdviceHelpers } = require("./src/modules/ai/interactionsService");
@@ -122,6 +136,8 @@ const { createAiAssistantStore } = require("./src/modules/ai/assistantStore");
 const { createAiProviderAdminRouter } = require("./src/modules/ai/providerAdminRoutes");
 const { createAiProviderAdminService } = require("./src/modules/ai/providerAdminService");
 const { createAiProviderStore } = require("./src/modules/ai/providerStore");
+const { createAiMaskingRouter } = require("./src/modules/ai/maskingRoutes");
+const { createAiMaskingRuleRepository, createMaskingRulesService } = require("./src/modules/ai/maskingRules");
 const { assertAiProviderUrlAllowed } = require("./src/modules/ai/outboundUrlPolicy");
 const { createDashboardRouter } = require("./src/modules/dashboard/routes");
 const { createDashboardRepository } = require("./src/modules/dashboard/repository");
@@ -281,7 +297,8 @@ const aiCapabilityControlStore = createAiCapabilityControlStore({
   row,
   run,
 });
-const aiCapabilityRepository = createAiCapabilityRepository({ insert, row, run });
+const aiCapabilityRepository = createAiCapabilityRepository({ insert, row, rows, run });
+const aiTokenUsageRepository = createTokenUsageRepository({ insert, rows });
 const aiExecutionTokenService = createScopedExecutionTokenService({ secret: AI_CAPABILITY_TOKEN_SECRET });
 // Convert legacy plaintext API keys on startup before any configuration write
 // can copy them forward. New writes always use apiKeyEncrypted.
@@ -298,16 +315,9 @@ const {
   canWriteProject: projectAccess.canWriteProject,
   mapDocument,
 });
-const aiExecutionGateway = createExecutionGateway({
-  canAccessProject: projectAccess.canAccessProject,
-  controlStore: aiCapabilityControlStore,
-  hasPermission,
-  publicUser,
-  registry: aiCapabilityRegistry,
-  row,
-  rows,
-  tokenService: aiExecutionTokenService,
-});
+// The execution gateway is assembled after nextId and the audit facade exist:
+// domain capability dispatch writes through insert/nextId and audits every
+// write plus every rejection. (See createExecutionGateway further below.)
 const { resolveAccessScope } = createAccessScopeResolver({
   rows,
   canAccessProject: projectAccess.canAccessProject,
@@ -370,6 +380,13 @@ const aiProviderAdminService = createAiProviderAdminService({
 const aiAssistantAdminService = createAiAssistantAdminService({
   assistantStore: aiAssistantStore,
   readProviderList: aiProviderStore.readList,
+});
+// Masking rules share one process-wide cache with the harness proxy default
+// engine, so admin writes here invalidate the proxy snapshot immediately.
+const aiMaskingRulesService = createMaskingRulesService({
+  nextId,
+  now,
+  repository: createAiMaskingRuleRepository({ insert, row, rows, run }),
 });
 const { callChatAssistantModel, callRealModel } = createAiModelComposition({
   aiAssistantAdminService,
@@ -623,13 +640,70 @@ app.use("/api", wrapRouterAsync(createMetaRouter({
   publicEnums,
 })));
 
+// Sprint 5.1 ask-user/user-approval bridge: the dsh child asks the platform
+// user through the execution gateway's loopback server (created before the
+// gateway so its handler can be delegated there); platform users answer over
+// the agent interactions REST routes and the /ws/agent push.
+const aiAgentInteractionService = createAgentInteractionService({
+  audit,
+  canAccessProject: projectAccess.canAccessProject,
+  findInvocation: aiCapabilityRepository.find,
+  hasPermission,
+  insert,
+  json,
+  now,
+  publicUser,
+  row,
+  rows,
+  run,
+  tokenService: aiExecutionTokenService,
+  notifyInteraction: (userId, invocationId, interaction) =>
+    agentEventBridge.pushInteraction(userId, invocationId, interaction),
+});
+aiAgentInteractionService.start();
+
+// Browser control service for the dsh agent (headless Playwright over system
+// Chrome). Screenshots land in storage/browser/<invocationId>.png and are
+// served through the project-scoped artifact route on the capabilities router.
+const aiBrowserControl = createBrowserControlService({
+  storageDir: STORAGE_DIR,
+  masking: aiMaskingRulesService,
+});
+
+const aiExecutionGateway = createExecutionGateway({
+  audit,
+  browserControl: aiBrowserControl,
+  canAccessProject: projectAccess.canAccessProject,
+  canWriteProject: projectAccess.canWriteProject,
+  controlStore: aiCapabilityControlStore,
+  hasPermission,
+  insert,
+  interactionHandler: aiAgentInteractionService.loopbackHandler,
+  json,
+  nextId,
+  now,
+  publicUser,
+  registry: aiCapabilityRegistry,
+  row,
+  rows,
+  tokenService: aiExecutionTokenService,
+  transaction,
+  // ui-control directive fan-out: the same user-addressed push the REST
+  // test-fire route uses. Late-bound — the bridge attaches to the shared HTTP
+  // server further below, before any request reaches this gateway.
+  uiDirectiveSink: (userId, directive) => agentEventBridge.pushUiDirective(userId, directive),
+});
 const aiCapabilityAdapter = createHarnessCapabilityAdapter({
   callModel: callChatAssistantModel,
   executionGateway: aiExecutionGateway,
   now,
 });
+// In-process fan-out of live dsh session events; injected into both the
+// capability service (publisher) and the /ws/agent bridge (subscriber).
+const agentEventBus = createAgentEventBus();
 const aiCapabilityService = createAiCapabilityService({
   adapter: aiCapabilityAdapter,
+  agentEventBus,
   audit,
   canAccessProject: projectAccess.canAccessProject,
   controlStore: aiCapabilityControlStore,
@@ -646,6 +720,7 @@ const aiCapabilityService = createAiCapabilityService({
   registry: aiCapabilityRegistry,
   repository: aiCapabilityRepository,
   tokenService: aiExecutionTokenService,
+  tokenUsage: aiTokenUsageRepository,
 });
 
 app.get("/api/health", async (req, res) => {
@@ -1043,6 +1118,14 @@ app.use("/api", wrapRouterAsync(createAiProviderAdminRouter({
   service: aiProviderAdminService,
 })));
 
+app.use("/api", wrapRouterAsync(createAiMaskingRouter({
+  audit,
+  fail,
+  ok,
+  requirePermission,
+  service: aiMaskingRulesService,
+})));
+
 app.use("/api", wrapRouterAsync(createAiAssistantAdminRouter({
   audit,
   fail,
@@ -1052,9 +1135,44 @@ app.use("/api", wrapRouterAsync(createAiAssistantAdminRouter({
 })));
 
 app.use("/api", wrapRouterAsync(createAiCapabilitiesRouter({
+  audit,
+  browserScreenshotDir: aiBrowserControl.config.enabled ? require("node:path").join(STORAGE_DIR, "browser") : null,
+  canAccessProject: projectAccess.canAccessProject,
+  fail,
+  modelClient: aiModelClient,
+  ok,
+  // Late-bound like the interaction push above: the bridge instance is
+  // created further below on the shared HTTP server, before any request can
+  // reach this route.
+  pushUiDirective: (userId, directive) => agentEventBridge.pushUiDirective(userId, directive),
+  repository: aiCapabilityRepository,
+  requirePermission,
+  resolveAccessScope,
+  service: aiCapabilityService,
+  tokenUsage: aiTokenUsageRepository,
+})));
+
+app.use("/api", wrapRouterAsync(createAgentInteractionsRouter({
+  fail,
   ok,
   requirePermission,
-  service: aiCapabilityService,
+  service: aiAgentInteractionService,
+})));
+
+// dsh session replay (admin): strictly read-only over the harness session
+// store. Paths follow the resident composition's resolution so HARNESS_HOME /
+// HARNESS_SESSION_DB overrides stay consistent with the runtime that writes
+// them; a missing or busy store simply answers an empty replay.
+const harnessSessionPaths = resolveHarnessPaths({ env: process.env });
+app.use("/api", wrapRouterAsync(createAiSessionReplayRouter({
+  fail,
+  ok,
+  requirePermission,
+  service: createAiSessionReplayService({
+    DatabaseSync: require("node:sqlite").DatabaseSync,
+    databaseFile: harnessSessionPaths.sessionDb,
+    jsonlRoot: harnessSessionPaths.sessionRoot,
+  }),
 })));
 
 app.use("/api", wrapRouterAsync(createAiInteractionsRouter({
@@ -1138,6 +1256,21 @@ const collaborationServer = createDocumentCollaborationServer({
 const { wss } = collaborationServer;
 revokeUserSessions = (userId) => collaborationServer.closeUserConnections(userId, 1008, "Session revoked");
 
+// Agent event streaming rides the shared HTTP server on its own /ws/agent
+// channel (collab connections are document-bound at upgrade, so they cannot
+// carry per-invocation agent subscriptions).
+const agentEventBridge = createAgentEventBridge({
+  WebSocketServer,
+  server,
+  path: "/ws/agent",
+  authenticateSocket,
+  hasPermission,
+  canAccessProject: projectAccess.canAccessProject,
+  capabilityRepository: aiCapabilityRepository,
+  agentEventBus,
+  audit,
+});
+
 const { recoverPendingAiJobs } = createAiJobRecovery({
   aiJobsRepository,
   aiJobDispatcher,
@@ -1150,6 +1283,16 @@ const { recoverPendingAiJobs } = createAiJobRecovery({
   mapDocument,
 });
 
+// Sprint 5.2 platform-side AI reminder scheduling: due reminders are delivered
+// to the dynamic center (objects bucket "ai-reminder"); pending rows persist
+// across restarts and the first start() sweep picks up overdue ones.
+const reminderScheduler = createReminderScheduler({
+  repository: createAiReminderRepository({ insert, rows, run }),
+  deliver: createDynamicCenterReminderDelivery({ insert, nextId, now }),
+  now,
+  intervalMs: Number(process.env.AI_REMINDER_SWEEP_MS || 0) || undefined,
+});
+
 serverLifecycle = createServerLifecycle({
   aiExecutionGateway,
   aiJobTimeoutMs: AI_JOB_TIMEOUT_MS,
@@ -1160,10 +1303,12 @@ serverLifecycle = createServerLifecycle({
   closeDatabase,
   now,
   recoverPendingAiJobs,
+  reminderScheduler,
   server,
   serveWeb: SERVE_WEB,
   startAiJobTimeoutMonitor,
   wss,
+  agentWss: agentEventBridge.wss,
 });
 serverLifecycle.installSignalHandlers();
 
