@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  AI_CAPABILITY_INVOKE_TIMEOUT_MS,
   fetchAiCapabilityAvailability,
   fetchAiCapabilities,
   invokeAiCapability,
@@ -92,5 +93,28 @@ describe('AI capability BFF client', () => {
       status: 'completed',
       result: { summary: 'Current project status' },
     });
+  });
+
+  it('uses the extended BFF window and forwards an idempotency key for a retryable invocation', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      data: { invocationId: 'AINV-RETRY', status: 'queued', capabilityId: 'project-snapshot' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const timeoutSpy = vi.spyOn(window, 'setTimeout');
+
+    await expect(invokeAiCapability(
+      'project-snapshot',
+      { projectId: 'PRJ-1' },
+      { idempotencyKey: 'aic-retry-1' },
+    )).resolves.toMatchObject({ invocationId: 'AINV-RETRY' });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/ai/capabilities/project-snapshot/invocations',
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Idempotency-Key': 'aic-retry-1' }),
+        method: 'POST',
+      }),
+    );
+    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), AI_CAPABILITY_INVOKE_TIMEOUT_MS);
   });
 });

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
+import SortableSectionLayout, { SortableSection } from '../../../components/common/SortableSectionLayout';
 import StatusBadge from '../../../components/common/StatusBadge';
 import { USER_ROLE_LABELS, labelOf } from '../../../constants/enums';
 import type { TeamWorkSummaryMember } from '../../../types';
@@ -41,8 +42,9 @@ export default function MemberSummaryDialog({
           </div>
         }
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
+        <SortableSectionLayout surface="teamlogs.member-summary" className="teamlogs-member-summary-sortable">
+          <SortableSection id="status" label={t('features.workLogs.memberSummaryDialog.title', { author: member.author })}>
+            <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
             <StatusBadge status={member.role} label={labelOf(USER_ROLE_LABELS, member.role)} showDot={false} />
             <span className="tag">{t('features.workLogs.common.logCountTag', { count: member.count })}</span>
             {blocked ? (
@@ -50,20 +52,30 @@ export default function MemberSummaryDialog({
                 {t('features.workLogs.common.hasBlockers')}
               </span>
             ) : null}
-          </div>
+            </div>
+          </SortableSection>
 
-          <div>
+          <SortableSection id="summary" label={t('features.workLogs.memberSummaryDialog.summaryHeading')}>
+            <div>
             <div className="section-title">{t('features.workLogs.memberSummaryDialog.summaryHeading')}</div>
             <div className="body-text" style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>
               {member.summary.summary || t('features.workLogs.common.noSummary')}
             </div>
-          </div>
+            </div>
+          </SortableSection>
 
-          <SummaryList title={t('features.workLogs.memberSummaryDialog.thisWeekCompleted')} items={member.summary.completedItems} emptyText={t('features.workLogs.memberSummaryDialog.noCompletedItems')} />
-          <SummaryList title={t('features.workLogs.memberSummaryDialog.currentBlockers')} items={member.summary.blockers.filter((item) => item !== 'No explicit blocker was detected.')} emptyText={t('features.workLogs.memberSummaryDialog.noBlockers')} />
-          <SummaryList title={t('features.workLogs.memberSummaryDialog.nextPlans')} items={member.summary.nextPlans} emptyText={t('features.workLogs.memberSummaryDialog.noNextPlans')} />
+          <SortableSection id="completed" label={t('features.workLogs.memberSummaryDialog.thisWeekCompleted')}>
+            <SummaryList title={t('features.workLogs.memberSummaryDialog.thisWeekCompleted')} items={member.summary.completedItems} emptyText={t('features.workLogs.memberSummaryDialog.noCompletedItems')} />
+          </SortableSection>
+          <SortableSection id="blockers" label={t('features.workLogs.memberSummaryDialog.currentBlockers')}>
+            <SummaryList title={t('features.workLogs.memberSummaryDialog.currentBlockers')} items={member.summary.blockers.filter((item) => item !== 'No explicit blocker was detected.')} emptyText={t('features.workLogs.memberSummaryDialog.noBlockers')} />
+          </SortableSection>
+          <SortableSection id="next-plans" label={t('features.workLogs.memberSummaryDialog.nextPlans')}>
+            <SummaryList title={t('features.workLogs.memberSummaryDialog.nextPlans')} items={member.summary.nextPlans} emptyText={t('features.workLogs.memberSummaryDialog.noNextPlans')} />
+          </SortableSection>
 
-          <div>
+          <SortableSection id="related-details" label={t('features.workLogs.memberSummaryDialog.relatedDetails')}>
+            <div>
             <div className="section-title">{t('features.workLogs.memberSummaryDialog.relatedDetails')}</div>
             {relatedLinks.length ? (
               <div className="summary-card-links" style={{ marginTop: 8 }}>
@@ -76,9 +88,11 @@ export default function MemberSummaryDialog({
             ) : (
               <div className="body-text" style={{ marginTop: 8 }}>{t('features.workLogs.memberSummaryDialog.noRelatedItems')}</div>
             )}
-          </div>
+            </div>
+          </SortableSection>
 
-          <div>
+          <SortableSection id="weekly-markdown" label={t('features.workLogs.memberSummaryDialog.weeklyMarkdown')}>
+            <div>
             <div className="section-title">{t('features.workLogs.memberSummaryDialog.weeklyMarkdown')}</div>
             <pre
               style={{
@@ -95,8 +109,9 @@ export default function MemberSummaryDialog({
             >
               {member.markdown}
             </pre>
-          </div>
-        </div>
+            </div>
+          </SortableSection>
+        </SortableSectionLayout>
       </Panel>
     </Overlay>
   );

@@ -17,6 +17,7 @@ import { ApiError } from '../../../services/api';
 import Panel from '../../../components/common/Panel';
 import PageState from '../../../components/common/PageState';
 import StatusBadge from '../../../components/common/StatusBadge';
+import SortableSectionLayout, { SortableSection } from '../../../components/common/SortableSectionLayout';
 import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { canOperate } from '../../../constants/roles';
@@ -75,7 +76,7 @@ export default function ProgramsTab() {
   if (!programs.length) {
     return (
       <>
-        {canManagePrograms ? <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>{t('features.products.programsTab.new')}</button></div> : null}
+        {canManagePrograms ? <div className="management-list-toolbar"><button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>{t('features.products.programsTab.new')}</button></div> : null}
         <ManagementEmptyState
           title={t('features.products.programsTab.emptyTitle')}
           description={t('features.products.programsTab.emptyDescription')}
@@ -129,7 +130,9 @@ export default function ProgramsTab() {
 
             {selected ? (
               <div className="management-detail-pane">
-                <div className="management-hero">
+                <SortableSectionLayout surface="programs.detail" className="management-detail-sortable">
+                  <SortableSection id="hero" label={selected.name} className="wide">
+                    <div className="management-hero">
                   <div>
                     <div className="product-hero-top">
                       <StatusBadge status={selected.status} label={labelOf(PROJECT_STATUS_LABELS, selected.status)} />
@@ -153,21 +156,16 @@ export default function ProgramsTab() {
                       <strong>{selected.risks.length}</strong>
                     </div>
                   </div>
-                </div>
-                <div className="management-progress">
-                  <span>{t('features.products.programsTab.progressLabel')}</span>
-                  <div><i style={{ width: `${Math.min(100, Math.max(0, selected.progress))}%` }} /></div>
-                </div>
-                {canManagePrograms ? (
-                  <div className="product-hero-actions">
-                    <button className="btn btn-secondary btn-sm" onClick={() => setEditing(selected)}>{t('features.products.programsTab.edit')}</button>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(selected)} disabled={deletingId === selected.id}>
-                      {deletingId === selected.id ? t('features.products.programsTab.deleting') : t('features.products.programsTab.delete')}
-                    </button>
-                  </div>
-                ) : null}
-                <div className="management-detail-grid">
-                  <div className="product-section">
+                    </div>
+                  </SortableSection>
+                  <SortableSection id="progress" label={t('features.products.programsTab.progressLabel')} className="wide">
+                    <div className="management-progress">
+                      <span>{t('features.products.programsTab.progressLabel')}</span>
+                      <div><i style={{ width: `${Math.min(100, Math.max(0, selected.progress))}%` }} /></div>
+                    </div>
+                  </SortableSection>
+                  <SortableSection id="linked-projects" label={t('features.products.programsTab.linkedProjects')}>
+                    <div className="product-section">
                     <div className="product-section-head">
                       <div>
                         <h3>{t('features.products.programsTab.linkedProjects')}</h3>
@@ -179,8 +177,10 @@ export default function ProgramsTab() {
                         <span key={id} title={projectNameById.has(id) ? t('features.products.programsTab.idPrefix', { id }) : undefined}>{projectNameById.get(id) ?? id}</span>
                       )) : <div className="product-empty-line">{t('features.products.programsTab.noProjects')}</div>}
                     </div>
-                  </div>
-                  <div className="product-section">
+                    </div>
+                  </SortableSection>
+                  <SortableSection id="risks" label={t('features.products.programsTab.risks')}>
+                    <div className="product-section">
                     <div className="product-section-head">
                       <div>
                         <h3>{t('features.products.programsTab.risks')}</h3>
@@ -194,8 +194,17 @@ export default function ProgramsTab() {
                     ) : (
                       <div className="product-empty-line">{t('features.products.programsTab.noRisks')}</div>
                     )}
+                    </div>
+                  </SortableSection>
+                </SortableSectionLayout>
+                {canManagePrograms ? (
+                  <div className="product-hero-actions">
+                    <button className="btn btn-secondary btn-sm" onClick={() => setEditing(selected)}>{t('features.products.programsTab.edit')}</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(selected)} disabled={deletingId === selected.id}>
+                      {deletingId === selected.id ? t('features.products.programsTab.deleting') : t('features.products.programsTab.delete')}
+                    </button>
                   </div>
-                </div>
+                ) : null}
               </div>
             ) : null}
           </div>

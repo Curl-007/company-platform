@@ -23,19 +23,24 @@ const ROLE_PAGES: Record<Role, PageKey[]> = {
     'dashboard', 'projects', 'mywork', 'team', 'teamlogs', 'requirements', 'testing', 'builds',
     'releases', 'delivery', 'flow', 'documents', 'reports', 'dynamic', 'ai', 'products', 'capacity',
     'settings',
+    'dsh-ui',
   ],
   pm: [
     'dashboard', 'projects', 'mywork', 'team', 'teamlogs', 'requirements', 'testing', 'builds',
     'releases', 'delivery', 'flow', 'documents', 'reports', 'dynamic', 'ai', 'products', 'capacity',
+    'dsh-ui',
   ],
   pdm: [
     'dashboard', 'projects', 'mywork', 'products', 'requirements', 'documents', 'dynamic',
+    'dsh-ui',
   ],
   dev: [
     'dashboard', 'projects', 'mywork', 'requirements', 'builds', 'delivery', 'documents', 'dynamic',
+    'dsh-ui',
   ],
   qa: [
     'dashboard', 'mywork', 'testing', 'documents', 'dynamic',
+    'dsh-ui',
   ],
 };
 
@@ -52,6 +57,9 @@ export function canAccessPage(role: string | undefined | null, page: PageKey): b
 export function canAccessPageForUser(user: SessionUser | null | undefined, page: PageKey): boolean {
   if (!user) return false;
   if (page === 'login') return true;
+  // dsh-ui is a local-only declarative surface. It is safe for every signed-in
+  // role and does not depend on the server's older page-capability snapshot.
+  if (page === 'dsh-ui') return true;
   const pages = user.capabilities?.pages;
   // Prefer server capabilities when present (including empty = no pages).
   // Only fall back to static ROLE_PAGES when capabilities were never loaded.

@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Bot, X } from 'lucide-react';
@@ -6,11 +5,9 @@ import type { PageKey } from '../../../../types';
 import { fetchProjects } from '../../../projects/api';
 import { useAgentPageContext } from '../../agentPageContext';
 import { useHarnessStatus } from '../../hooks/useHarnessStatus';
-import { useCapabilityRunner } from '../../hooks/useCapabilityRunner';
 import { usePendingInteractions } from '../../hooks/usePendingInteractions';
 import { useAiChatState } from '../../hooks/useAiChatState';
 import AiInteractionCard from '../AiInteractionCard';
-import AiInvocationTimeline from '../AiInvocationTimeline';
 import AgentMessages from './AgentMessages';
 import AgentComposer from './AgentComposer';
 
@@ -57,11 +54,9 @@ function HarnessStatusChip() {
 }
 
 /**
- * Global agent (dsh Copilot) sidebar: chat, capability tray, pending
- * interactions and execution traces available on every page. The AI
- * workspace stays the deep bench (usage, governance, job review); this is
- * the always-there surface. Chat keeps the BFF /api/ai/chat path while the
- * capability tray goes through dsh invocations.
+ * Global agent (dsh Copilot) sidebar: chat and pending interactions available
+ * on every page. Manual capability controls stay hidden; the backend retains
+ * approved-tool discovery, permission, scope, audit, and confirmation gates.
  */
 export default function AgentSidebar({
   currentPage,
@@ -87,20 +82,10 @@ export default function AgentSidebar({
     currentPage: () => `${currentPage}:${contextLabel}${projectName ? ` · ${projectName}` : ''}`,
   });
 
-  const runner = useCapabilityRunner();
-
-  // Prefill the capability invocation project scope from the current page
-  // context (used by trace/usage surfaces).
-  const contextProjectId = pageContext?.projectId ?? '';
-  useEffect(() => {
-    if (contextProjectId) runner.setInvocationProjectId(contextProjectId);
-  }, [contextProjectId, runner.setInvocationProjectId]);
-
   const projectsQuery = useQuery({
     queryKey: ['projects', 'list'],
     queryFn: () => fetchProjects(),
   });
-
   // Read-only pending count (Layout owns the toast variant of this query).
   const { pendingCount } = usePendingInteractions({ notify: false });
 
@@ -159,13 +144,6 @@ export default function AgentSidebar({
           compact
         />
       </div>
-
-      {runner.timelineInvocationId ? (
-        <AiInvocationTimeline
-          invocationId={runner.timelineInvocationId}
-          onClose={() => runner.setTimelineInvocationId(null)}
-        />
-      ) : null}
     </aside>
   );
 }

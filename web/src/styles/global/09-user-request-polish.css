@@ -1,0 +1,566 @@
+/* ==========================================================================
+   User-requested polish — 6 截图评审反馈 + 个人资料修改密码分区
+
+   Covers: progress-bar contrast, risk numerals, dynamic-center hierarchy,
+   AI provider config density, profile form legibility, security section.
+   Loaded last (after 07/08) in main.tsx.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Progress bars — visible against dark glass (audit: "68% blends in")
+   -------------------------------------------------------------------------- */
+.progress-bar-track {
+  background: color-mix(in srgb, var(--bg-page) 72%, var(--bg-hover));
+  box-shadow: inset 0 1px 2px color-mix(in srgb, #000 30%, transparent);
+}
+
+.progress-bar-fill {
+  background: var(--accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.progress-bar-fill.success {
+  background: var(--color-success);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-success) 42%, transparent);
+}
+
+.progress-bar-fill.warning {
+  background: var(--color-warning);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-warning) 42%, transparent);
+}
+
+.progress-bar-fill.risk {
+  background: var(--color-risk);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-risk) 42%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   2. Risk numerals — readable, not washed out (audit: "风险1 too faint")
+   -------------------------------------------------------------------------- */
+.pd-hero-metric-value .is-risk {
+  color: color-mix(in srgb, var(--color-risk) 82%, white);
+  font-weight: 650;
+}
+
+.pd-hero-metric-value .is-muted {
+  color: var(--text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   3. Dynamic center — entry rhythm & hierarchy (audit: cramped list)
+   -------------------------------------------------------------------------- */
+.dynamic-timeline-item {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.dynamic-timeline-item + .dynamic-timeline-item {
+  border-top: 1px solid var(--border-divider);
+}
+
+.dynamic-timeline-meta {
+  gap: 6px 12px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.dynamic-timeline-resource {
+  font-size: 12px;
+}
+
+/* Filter panel: one row rhythm, aligned controls (audit: misaligned filters). */
+.dynamic-filter-grid {
+  gap: 10px;
+  align-items: center;
+}
+
+/* Attention cards breathe like the signal strips. */
+.dynamic-attention-list {
+  gap: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   4. AI provider config — action spacing & status weight
+   -------------------------------------------------------------------------- */
+.ai-provider-row-actions {
+  gap: 6px;
+}
+
+.ai-provider-status-meta {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.ai-provider-row-main {
+  gap: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   6. Project detail overview — layout re-flow (audit: cramped stat strip)
+   The six delivery signals get a titled block with a right-aligned refresh
+   action instead of squeezing a button into the card row; cards flow onto a
+   responsive grid and the whole overview breathes at one rhythm.
+   -------------------------------------------------------------------------- */
+.pd-overview {
+  gap: 16px;
+}
+
+.pd-signal-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pd-signal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pd-signal-title {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.pd-signal-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 12px;
+}
+
+.pd-signal {
+  gap: 5px;
+  padding: 13px 14px;
+}
+
+.pd-signal-label,
+.pd-signal-meta {
+  font-size: 12px;
+}
+
+.pd-signal-value {
+  font-size: 21px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.pd-focus-row {
+  gap: 14px;
+}
+
+.pd-side-grid {
+  gap: 14px;
+}
+
+@media (max-width: 900px) {
+  .pd-focus-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   6b. Layout re-flow — the five audited surfaces
+   -------------------------------------------------------------------------- */
+
+/* Requirement detail modal: a form dialog reads full-width, not as two
+   squeezed half-columns. Summary strip on top, two-column form grid inside
+   the fields section stays as-is. */
+.req-detail-sortable {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.req-detail-badges {
+  margin-bottom: 12px;
+}
+
+.req-detail-strip {
+  margin-top: 0;
+}
+
+/* Test-case dialog: sectioned form rhythm (basics / execution). */
+.qa-form-section {
+  margin-top: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-divider);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.qa-form-section:first-of-type {
+  margin-top: 0;
+}
+
+.qa-form-section:not(:first-of-type) {
+  margin-top: 10px;
+}
+
+/* AI provider config: the row actions container never had a flex layout —
+   buttons stacked edge to edge. */
+.ai-provider-row-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ai-provider-row-main {
+  display: grid;
+  gap: 8px;
+}
+
+/* Active-config strip flows instead of squeezing five cells in one row. */
+.ai-provider-config .detail-strip,
+.detail-section .detail-strip {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+/* Dynamic center: deterministic filter row — three equal dropdowns with the
+   page-visit checkbox docked on the same baseline. auto-fit made the
+   checkbox wrap onto its own line (audit feedback). */
+.dynamic-filter-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.dynamic-filter-checkbox {
+  min-height: 38px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 1080px) {
+  /* Single-column stack (base module): the checkbox stops stretching and
+     aligns with the dropdown column. */
+  .dynamic-filter-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dynamic-filter-checkbox {
+    justify-self: start;
+  }
+}
+
+.dynamic-attention-list {
+  gap: 10px;
+}
+
+.dynamic-summary-grid {
+  gap: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   6c. Project detail — hero metrics inline + two-column overview
+   Hero: the four key metrics stop being a boxed card inside the hero and
+   become an inline hairline-divided row, so the hero reads as ONE block.
+   Overview: the trace table becomes the main column; next actions, latest
+   artifacts, milestones, and sprints stack in a sticky aside.
+   -------------------------------------------------------------------------- */
+.pd-hero-metrics {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+  border-radius: 0;
+  background: transparent;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.pd-hero-metric {
+  padding: 2px 16px 2px 0;
+  border-right: 1px solid var(--border-divider);
+  background: transparent;
+}
+
+.pd-hero-metric:last-child {
+  border-right: none;
+}
+
+.pd-hero-metric-value {
+  margin-top: 6px;
+}
+
+.pd-ov-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.pd-ov-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pd-ov-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: calc(var(--topbar-height, 56px) + 12px);
+}
+
+/* Trace table: rebalance — requirement column yields width to the five
+   status columns (audit: "需求列略宽"). */
+.pd-trace-head,
+.pd-trace-row {
+  grid-template-columns: minmax(150px, 1.45fr) repeat(5, minmax(80px, 0.95fr));
+}
+
+.pd-aside-card {
+  min-width: 0;
+}
+
+.pd-aside-pad {
+  padding: 12px 14px;
+}
+
+.pd-ov-aside .pd-action-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pd-ov-aside .pd-action-list li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.pd-ov-aside .pd-artifact {
+  padding: 8px 0;
+}
+
+.pd-ov-aside .pd-artifact + .pd-artifact {
+  border-top: 1px solid var(--border-divider);
+}
+
+@media (max-width: 1280px) {
+  /* Two columns only have room from ~1280px up; below that the main column
+     and the aside both get squeezed into truncation (audit feedback). */
+  .pd-ov-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .pd-ov-aside {
+    position: static;
+  }
+
+  /* Fold the aside back into a 2x2 card grid on narrow screens. */
+  .pd-ov-aside {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  /* Override the base module's fixed 2-col hero metric patchwork: the
+     auto-fit row wraps on its own and needs no nth-child border surgery. */
+  .pd-hero-metrics {
+    grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  }
+
+  .pd-hero-metric:nth-child(2),
+  .pd-hero-metric:nth-child(3),
+  .pd-hero-metric:nth-child(4) {
+    border-top: none;
+    border-right: 1px solid var(--border-divider);
+  }
+}
+
+@media (max-width: 680px) {
+  .pd-ov-aside {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The project detail surface stacks page-level sections (hero, tabs, AI
+   advice) vertically — the earlier 2-col patch squeezed the tab workspace
+   into half width with the AI advice card beside it. */
+.project-detail-sortable {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* --------------------------------------------------------------------------
+   6d. Dynamic center workbench — the 2-col grid held THREE children (rail,
+   timeline stage, filter panel); the filter panel fell onto its own row
+   with a dead column beside it, and rail/stage/filter-panel had no styles
+   at all. The rail + filter now stack inside one left column (TSX wrapper)
+   and the timeline owns the right column end to end.
+   -------------------------------------------------------------------------- */
+.dynamic-workbench {
+  grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.15fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.dynamic-rail-column {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dynamic-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.dynamic-rail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.dynamic-rail-header strong {
+  min-width: 22px;
+  padding: 1px 8px;
+  border: 1px solid var(--border-divider);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: center;
+}
+
+.dynamic-timeline-stage {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dynamic-filter-panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.dynamic-filter-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* The queue is a summary rail, not the full history: cap it so the filter
+   card below stays in the first screen instead of being pushed thousands of
+   pixels down by long audit trails. */
+.dynamic-attention-list {
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+@media (max-width: 1080px) {
+  .dynamic-workbench {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   7. Profile dialog — required markers, focus, field rhythm (audit round 1)
+   -------------------------------------------------------------------------- */
+.profile-form .form-row {
+  gap: 12px;
+}
+
+.profile-form .form-label .text-risk,
+.form-label [aria-hidden='true'] {
+  color: color-mix(in srgb, var(--destructive) 70%, white);
+}
+
+/* Security section (change password) */
+.profile-security {
+  margin-top: 14px;
+  border-top: 1px solid var(--border-divider);
+  padding-top: 12px;
+}
+
+.profile-security-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--bg-subtle) 46%, transparent);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.profile-security-toggle:hover,
+.profile-security-toggle:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-default));
+  outline: none;
+}
+
+.profile-security-toggle[aria-expanded='true'] {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.profile-security-hint {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.profile-security-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 12px;
+  border: 1px solid var(--border-default);
+  border-top: none;
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+  background: color-mix(in srgb, var(--bg-subtle) 38%, transparent);
+}
+
+.profile-security-note {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+}

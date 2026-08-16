@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Bug } from 'lucide-react';
 import Panel from '../../../components/common/Panel';
 import StatusBadge from '../../../components/common/StatusBadge';
+import SortableSectionLayout, { SortableSection } from '../../../components/common/SortableSectionLayout';
 import {
   DEFECT_SEVERITY_LABELS,
   DEFECT_STATUS_LABELS,
@@ -210,8 +211,9 @@ export default function MyWorkDefectsPanel({
         }
       >
         {selected ? (
-          <div className="mywork-detail">
-            <div className="mywork-detail-header">
+          <SortableSectionLayout surface="mywork.defect-detail" className="mywork-detail mywork-detail-sortable">
+            <SortableSection id="header" label={selected.title}>
+              <div className="mywork-detail-header">
               <div>
                 <h3>{selected.title}</h3>
                 <div className="text-secondary" style={{ fontSize: 13, marginTop: 4 }}>
@@ -219,8 +221,10 @@ export default function MyWorkDefectsPanel({
                 </div>
               </div>
               <StatusBadge status={selected.status} label={labelOf(DEFECT_STATUS_LABELS, selected.status)} />
-            </div>
-            <div className="mywork-detail-meta">
+              </div>
+            </SortableSection>
+            <SortableSection id="metadata" label={t('features.mywork.myWorkDefectsPanel.severityLabel')}>
+              <div className="mywork-detail-meta">
               <div className="detail-field">
                 <span className="detail-label">{t('features.mywork.myWorkDefectsPanel.severityLabel')}</span>
                 <span className="detail-value">{labelOf(DEFECT_SEVERITY_LABELS, selected.severity)}</span>
@@ -245,18 +249,26 @@ export default function MyWorkDefectsPanel({
                 <span className="detail-label">{t('features.mywork.myWorkDefectsPanel.affectedVersionLabel')}</span>
                 <span className="detail-value">{selected.affectedVersion || '-'}</span>
               </div>
-            </div>
-            {selected.description ? (
-              <div className="detail-field" style={{ marginTop: 12 }}>
-                <span className="detail-label">{t('features.mywork.myWorkDefectsPanel.descriptionLabel')}</span>
-                <div className="detail-value" style={{ whiteSpace: 'pre-wrap' }}>{selected.description}</div>
               </div>
+            </SortableSection>
+            {selected.description ? (
+              <SortableSection id="description" label={t('features.mywork.myWorkDefectsPanel.descriptionLabel')}>
+                <div className="detail-field">
+                  <span className="detail-label">{t('features.mywork.myWorkDefectsPanel.descriptionLabel')}</span>
+                  <div className="detail-value" style={{ whiteSpace: 'pre-wrap' }}>{selected.description}</div>
+                </div>
+              </SortableSection>
             ) : (
-              <div className="body-text" style={{ marginTop: 12 }}>{t('features.mywork.myWorkDefectsPanel.noDescription')}</div>
+              <SortableSection id="description" label={t('features.mywork.myWorkDefectsPanel.descriptionLabel')}>
+                <div className="body-text">{t('features.mywork.myWorkDefectsPanel.noDescription')}</div>
+              </SortableSection>
             )}
 
             {(canAssignToDev || canAssignToQa) ? (
-              <div className="mywork-handoff" style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border-color, #e5e7eb)' }}>
+              <SortableSection id="handoff" label={role === 'qa' || (canAssignToDev && !canAssignToQa)
+                ? t('features.mywork.myWorkDefectsPanel.handoffToDevTitle')
+                : t('features.mywork.myWorkDefectsPanel.handoffToQaTitle')}>
+                <div className="mywork-handoff" style={{ paddingTop: 12, borderTop: '1px solid var(--border-color, #e5e7eb)' }}>
                 <div className="detail-label" style={{ marginBottom: 8 }}>
                   {role === 'qa' || (canAssignToDev && !canAssignToQa)
                     ? t('features.mywork.myWorkDefectsPanel.handoffToDevTitle')
@@ -310,15 +322,18 @@ export default function MyWorkDefectsPanel({
                     </button>
                   ) : null}
                 </div>
-              </div>
+                </div>
+              </SortableSection>
             ) : null}
 
             {!canOpenTesting ? (
-              <div className="text-secondary" style={{ marginTop: 12, fontSize: 12 }}>
-                {t('features.mywork.myWorkDefectsPanel.noTestingAccessHint')}
-              </div>
+              <SortableSection id="access-hint" label={t('features.mywork.myWorkDefectsPanel.noTestingAccessHint')}>
+                <div className="text-secondary" style={{ fontSize: 12 }}>
+                  {t('features.mywork.myWorkDefectsPanel.noTestingAccessHint')}
+                </div>
+              </SortableSection>
             ) : null}
-          </div>
+          </SortableSectionLayout>
         ) : null}
       </Panel>
     </div>

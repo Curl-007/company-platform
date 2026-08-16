@@ -10,6 +10,7 @@ import {
   GitBranch,
   LayoutDashboard,
   Package,
+  PanelsTopLeft,
   Settings,
   TestTube2,
   UserCheck,
@@ -35,6 +36,7 @@ const DynamicPage = lazyWithRetry(() => import('../pages/DynamicPage'));
 const DeliveryCenterPage = lazyWithRetry(() => import('../pages/DeliveryCenterPage'));
 const MyWorkPage = lazyWithRetry(() => import('../pages/MyWorkPage'));
 const SettingsPage = lazyWithRetry(() => import('../pages/SettingsPage'));
+const DshUiPage = lazyWithRetry(() => import('../pages/DshUiPage'));
 
 export interface NavEntry {
   key: PageKey;
@@ -44,7 +46,7 @@ export interface NavEntry {
 }
 
 export interface NavGroup {
-  /** 稳定标识，用于 i18n 翻译 key（nav:group.<id>）。 */
+  /** 稳定标识，用于 i18n 翻译 key（nav.group.<id>）。 */
   id: string;
   label: string;
   items: NavEntry[];
@@ -79,6 +81,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: 'documents', label: '文档中心', icon: FileText, phase: 1 },
       { key: 'ai', label: 'AI 分析', icon: GitBranch, phase: 2 },
+      { key: 'dsh-ui', label: 'DSH 界面', icon: PanelsTopLeft, phase: 2 },
       { key: 'reports', label: '报表中心', icon: BarChart3, phase: 2 },
     ],
   },
@@ -121,5 +124,6 @@ export const PAGE_COMPONENTS: Record<PageKey, React.FC<{ user?: SessionUser | nu
   releases: DeliveryCenterPage,
   mywork: MyWorkPage,
   settings: SettingsPage,
+  'dsh-ui': DshUiPage,
   login: () => null,
 };

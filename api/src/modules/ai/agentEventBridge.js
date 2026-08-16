@@ -29,6 +29,9 @@
 
 const { createAgentEventBus } = require("./agentEventBus");
 
+const MAX_PENDING_AUTH_MESSAGES = 100;
+const MAX_PENDING_AUTH_BYTES = 256 * 1024;
+
 function sendJson(socket, payload) {
   if (socket?.readyState !== 1) return;
   try {
@@ -41,6 +44,16 @@ function sendJson(socket, payload) {
 function normalizeInvocationId(value) {
   const text = String(value ?? "").trim();
   return /^[A-Za-z0-9-]{1,128}$/.test(text) ? text : "";
+}
+
+function sendAgentError(socket, { code, message, invocationId } = {}) {
+  const scopedInvocationId = normalizeInvocationId(invocationId);
+  sendJson(socket, {
+    type: "agent.error",
+    code: String(code || "AGENT_ERROR"),
+    message: String(message || "Realtime agent stream error."),
+    ...(scopedInvocationId ? { invocationId: scopedInvocationId } : {}),
+  });
 }
 
 function createAgentEventBridge({
@@ -109,24 +122,26 @@ function createAgentEventBridge({
   }
 
   async function handleSubscribe(socket, user, message, remoteAddress) {
+    if (socket.agentClosed || !socket.agentReady || socket.readyState !== 1) return;
     const invocationId = normalizeInvocationId(message.invocationId);
     if (!invocationId) {
-      sendJson(socket, { type: "agent.error", code: "VALIDATION_FAILED", message: "A valid invocationId is required." });
+      sendAgentError(socket, { code: "VALIDATION_FAILED", message: "A valid invocationId is required." });
       return;
     }
     if (!hasPermission(user, "ai:*")) {
-      sendJson(socket, { type: "agent.error", code: "PERMISSION_DENIED", message: "You cannot subscribe to agent event streams." });
+      sendAgentError(socket, { invocationId, code: "PERMISSION_DENIED", message: "You cannot subscribe to agent event streams." });
       return;
     }
     const record = await capabilityRepository.find(invocationId);
     if (!record) {
-      sendJson(socket, { type: "agent.error", code: "PERMISSION_DENIED", message: "AI capability invocation not found." });
+      sendAgentError(socket, { invocationId, code: "PERMISSION_DENIED", message: "AI capability invocation not found." });
       return;
     }
     if (!(await canAccessProject(user, record.project_id))) {
-      sendJson(socket, { type: "agent.error", code: "PERMISSION_DENIED", message: "You cannot access this AI capability invocation." });
+      sendAgentError(socket, { invocationId, code: "PERMISSION_DENIED", message: "You cannot access this AI capability invocation." });
       return;
     }
+    if (socket.agentClosed || !socket.agentReady || socket.readyState !== 1) return;
     socket.agentSubscriptions.set(invocationId, record.project_id);
     sendJson(socket, { type: "agent.subscribed", invocationId });
     writeAudit(user, "subscribe", invocationId, record.project_id, remoteAddress);
@@ -170,53 +185,140 @@ function createAgentEventBridge({
     }
   });
 
+  // Authentication is asynchronous, but ws emits client frames immediately
+  // after the upgrade. Install the message/close handlers before awaiting auth
+  // and queue a bounded number of frames so the first subscribe cannot be
+  // dropped. A per-connection promise chain preserves frame ordering after the
+  // identity is established.
+  const authenticating = new Set();
+  const userRevocationGeneration = new Map();
+  let revocationGeneration = 0;
+
+  function cleanupSocket(socket) {
+    socket.agentClosed = true;
+    socket.agentReady = false;
+    socket.agentPendingMessages = [];
+    socket.agentPendingBytes = 0;
+    socket.agentSubscriptions?.clear();
+    socket.agentUiSubscribed = false;
+    connections.delete(socket);
+    authenticating.delete(socket);
+  }
+
+  function processMessage(socket, user, raw, remoteAddress) {
+    if (socket.agentClosed || !socket.agentReady || socket.readyState !== 1) return Promise.resolve();
+    let message;
+    try {
+      message = JSON.parse(raw.toString());
+    } catch {
+      sendJson(socket, { type: "agent.error", code: "VALIDATION_FAILED", message: "Messages must be JSON objects." });
+      return Promise.resolve();
+    }
+    if (!message || typeof message !== "object" || Array.isArray(message)) {
+      sendJson(socket, { type: "agent.error", code: "VALIDATION_FAILED", message: "Messages must be JSON objects." });
+      return Promise.resolve();
+    }
+    if (message.type === "agent.subscribe") {
+      return handleSubscribe(socket, user, message, remoteAddress).catch((error) => {
+        logger?.warn?.("Agent event subscribe failed:", error?.message || error);
+        sendAgentError(socket, {
+          invocationId: message.invocationId,
+          code: "AGENT_BRIDGE_SUBSCRIBE_FAILED",
+          message: "Subscription could not be established.",
+        });
+      });
+    }
+    if (message.type === "agent.unsubscribe") {
+      handleUnsubscribe(socket, user, message, remoteAddress);
+      return Promise.resolve();
+    }
+    if (message.type === "agent.subscribeUi") {
+      handleSubscribeUi(socket, user, remoteAddress);
+      return Promise.resolve();
+    }
+    if (message.type === "agent.unsubscribeUi") {
+      handleUnsubscribeUi(socket, user, remoteAddress);
+      return Promise.resolve();
+    }
+    sendJson(socket, { type: "agent.error", code: "AGENT_BRIDGE_UNKNOWN_MESSAGE", message: "Unsupported message type." });
+    return Promise.resolve();
+  }
+
+  function enqueueMessage(socket, raw) {
+    if (socket.agentClosed) return;
+    socket.agentMessageChain = socket.agentMessageChain
+      .then(() => processMessage(socket, socket.agentUser, raw, socket.agentRemoteAddress))
+      .catch((error) => {
+        logger?.warn?.("Agent event message failed:", error?.message || error);
+        sendJson(socket, { type: "agent.error", code: "AGENT_BRIDGE_MESSAGE_FAILED", message: "Agent message could not be processed." });
+      });
+  }
+
   wss.on("connection", (socket, req) => {
+    socket.agentSubscriptions = new Map();
+    socket.agentUiSubscribed = false;
+    socket.agentReady = false;
+    socket.agentClosed = false;
+    socket.agentPendingMessages = [];
+    socket.agentPendingBytes = 0;
+    socket.agentMessageChain = Promise.resolve();
+    socket.agentRemoteAddress = req.socket?.remoteAddress;
+    socket.agentAuthGeneration = revocationGeneration;
+    authenticating.add(socket);
+
+    // These handlers deliberately precede the async authenticateSocket call.
+    socket.on("message", (raw) => {
+      if (socket.agentClosed) return;
+      if (!socket.agentReady) {
+        const bytes = Buffer.byteLength(raw?.toString?.() || "", "utf8");
+        if (
+          socket.agentPendingMessages.length >= MAX_PENDING_AUTH_MESSAGES
+          || socket.agentPendingBytes + bytes > MAX_PENDING_AUTH_BYTES
+        ) {
+          socket.agentClosed = true;
+          try { socket.close(1008, "Too many messages before authentication"); } catch { /* ignore */ }
+          return;
+        }
+        socket.agentPendingMessages.push(raw);
+        socket.agentPendingBytes += bytes;
+        return;
+      }
+      enqueueMessage(socket, raw);
+    });
+    socket.on("close", () => cleanupSocket(socket));
+    socket.on("error", () => cleanupSocket(socket));
+
     void (async () => {
-      const user = await authenticateSocket(req);
-      if (!user || !hasPermission(user, "ai:*")) return socket.close(1008, "Unauthorized");
-      socket.agentSubscriptions = new Map();
-      socket.agentUiSubscribed = false;
+      let user;
+      try {
+        user = await authenticateSocket(req);
+        if (!user || !hasPermission(user, "ai:*")) {
+          try { socket.close(1008, "Unauthorized"); } catch { /* ignore */ }
+          return;
+        }
+      } catch (error) {
+        logger?.warn?.("Agent event authentication failed:", error?.message || error);
+        try { socket.close(1011, "Internal error"); } catch { /* ignore */ }
+        return;
+      }
+      if (socket.agentClosed || socket.readyState !== 1) return;
+      if ((userRevocationGeneration.get(String(user.id)) || 0) > socket.agentAuthGeneration) {
+        try { socket.close(1008, "Session revoked"); } catch { /* ignore */ }
+        return;
+      }
+
       // Sprint 5.1 interaction push targets: server-initiated messages are
       // user-addressed, so the connection keeps its authenticated identity.
+      socket.agentUser = user;
       socket.agentUserId = user.id;
+      socket.agentReady = true;
+      authenticating.delete(socket);
       connections.add(socket);
-      socket.on("message", (raw) => {
-        let message;
-        try {
-          message = JSON.parse(raw.toString());
-        } catch {
-          sendJson(socket, { type: "agent.error", code: "VALIDATION_FAILED", message: "Messages must be JSON objects." });
-          return;
-        }
-        if (!message || typeof message !== "object") {
-          sendJson(socket, { type: "agent.error", code: "VALIDATION_FAILED", message: "Messages must be JSON objects." });
-          return;
-        }
-        if (message.type === "agent.subscribe") {
-          handleSubscribe(socket, user, message, req.socket.remoteAddress).catch((error) => {
-            logger?.warn?.("Agent event subscribe failed:", error?.message || error);
-            sendJson(socket, { type: "agent.error", code: "AGENT_BRIDGE_SUBSCRIBE_FAILED", message: "Subscription could not be established." });
-          });
-        } else if (message.type === "agent.unsubscribe") {
-          handleUnsubscribe(socket, user, message, req.socket.remoteAddress);
-        } else if (message.type === "agent.subscribeUi") {
-          handleSubscribeUi(socket, user, req.socket.remoteAddress);
-        } else if (message.type === "agent.unsubscribeUi") {
-          handleUnsubscribeUi(socket, user, req.socket.remoteAddress);
-        } else {
-          sendJson(socket, { type: "agent.error", code: "AGENT_BRIDGE_UNKNOWN_MESSAGE", message: "Unsupported message type." });
-        }
-      });
-      socket.on("close", () => {
-        socket.agentSubscriptions?.clear();
-        socket.agentUiSubscribed = false;
-        connections.delete(socket);
-      });
-      socket.on("error", () => {
-        socket.agentSubscriptions?.clear();
-        socket.agentUiSubscribed = false;
-        connections.delete(socket);
-      });
+
+      const pending = socket.agentPendingMessages;
+      socket.agentPendingMessages = [];
+      socket.agentPendingBytes = 0;
+      for (const raw of pending) enqueueMessage(socket, raw);
     })().catch((error) => {
       logger?.warn?.("Agent event bridge connection failed:", error?.message || error);
       try { socket.close(1011, "Internal error"); } catch { /* ignore */ }
@@ -238,7 +340,7 @@ function createAgentEventBridge({
     let delivered = 0;
     const messaged = new Set();
     for (const socket of connections) {
-      if (socket.agentUserId !== targetUser) continue;
+      if (String(socket.agentUserId || "") !== targetUser) continue;
       if (!socket.agentSubscriptions?.has(targetInvocation) && !socket.agentUiSubscribed) continue;
       if (messaged.has(socket)) continue;
       messaged.add(socket);
@@ -257,7 +359,7 @@ function createAgentEventBridge({
     if (!targetUser) return 0;
     let delivered = 0;
     for (const socket of connections) {
-      if (socket.agentUserId !== targetUser) continue;
+      if (String(socket.agentUserId || "") !== targetUser) continue;
       if (!socket.agentUiSubscribed) continue;
       sendJson(socket, { type: "agent.ui", directive });
       delivered += 1;
@@ -265,19 +367,36 @@ function createAgentEventBridge({
     return delivered;
   }
 
+  function closeUserConnections(userId, code = 1008, reason = "Session revoked") {
+    const targetUser = String(userId || "");
+    if (!targetUser) return 0;
+    userRevocationGeneration.set(targetUser, ++revocationGeneration);
+    let closed = 0;
+    for (const socket of connections) {
+      if (String(socket.agentUserId || "") !== targetUser) continue;
+      cleanupSocket(socket);
+      try {
+        socket.close(code, reason);
+        closed += 1;
+      } catch {
+        // The close/error handler will finish cleanup if the transport already died.
+      }
+    }
+    return closed;
+  }
+
   function close(callback) {
     unsubscribeBus();
-    for (const socket of connections) {
-      socket.agentSubscriptions?.clear();
-      socket.agentUiSubscribed = false;
+    for (const socket of new Set([...connections, ...authenticating])) {
+      cleanupSocket(socket);
       try { socket.close(1001, "Server shutting down"); } catch { /* ignore */ }
     }
-    connections.clear();
     return wss.close(callback);
   }
 
   return {
     close,
+    closeUserConnections,
     pushInteraction,
     pushUiDirective,
     wss,

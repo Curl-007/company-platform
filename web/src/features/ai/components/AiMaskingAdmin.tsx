@@ -79,7 +79,11 @@ function RuleForm({
   }
 
   return (
-    <form className="ai-masking-form" onSubmit={handleSubmit} aria-label={t('features.ai.aiMaskingAdmin.formTitle')}>
+    <form
+      className="ai-masking-form"
+      onSubmit={handleSubmit}
+      aria-label={t(initial ? 'features.ai.aiMaskingAdmin.formTitleEdit' : 'features.ai.aiMaskingAdmin.formTitleNew')}
+    >
       <div className="ai-masking-form-title">
         {initial ? t('features.ai.aiMaskingAdmin.formTitleEdit') : t('features.ai.aiMaskingAdmin.formTitleNew')}
       </div>

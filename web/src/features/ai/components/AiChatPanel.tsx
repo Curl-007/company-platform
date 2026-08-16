@@ -1,4 +1,4 @@
-import type { Dispatch, ReactNode, SetStateAction } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AiChatAttachment, AiChatMessage, Project } from '../../../types';
 import Panel from '../../../components/common/Panel';
@@ -8,9 +8,10 @@ import AgentComposer from './agent/AgentComposer';
 
 /**
  * Workspace chat panel: thin shell over the shared agent chat pieces
- * (AgentMessages / AgentComposer) with the provider header strip and the
- * capability tray slot. The global agent sidebar renders the same shared
- * pieces in compact mode.
+ * (AgentMessages / AgentComposer) with the provider header strip. The global
+ * agent sidebar renders the same shared pieces in compact mode. Capability
+ * policy stays behind the DSH/runtime
+ * boundary rather than appearing as a manual toolbar in the conversation.
  */
 export default function AiChatPanel({
   providerStatus,
@@ -26,7 +27,6 @@ export default function AiChatPanel({
   onSend,
   projects = [],
   onActionDone,
-  capabilityTray,
 }: {
   providerStatus: string;
   providerConfigured?: boolean;
@@ -41,7 +41,6 @@ export default function AiChatPanel({
   onSend: () => void;
   projects?: Project[];
   onActionDone?: (result: { type: string; id: string; label: string }) => void;
-  capabilityTray?: ReactNode;
 }) {
   const { t } = useTranslation();
 
@@ -63,7 +62,6 @@ export default function AiChatPanel({
         fileError={fileError}
         onFiles={onFiles}
         onSend={onSend}
-        before={capabilityTray}
       />
     </Panel>
   );

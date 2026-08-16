@@ -13,6 +13,7 @@ const {
   isRetryable,
   mapAiJob,
 } = require("./service");
+const { buildRequirementCreate } = require("../requirements/service");
 
 function trimmed(value, maxLength = 5000) {
   return String(value ?? "").trim().slice(0, maxLength);
@@ -23,13 +24,69 @@ function ids(value, maxItems = 100) {
   return [...new Set(value.map((item) => trimmed(item, 128)).filter(Boolean))].slice(0, maxItems);
 }
 
+// Requirement creation has side effects beyond the requirements row itself.
+// Keep the AI entry points on the same lifecycle used by the requirements
+// router so status history, the synchronized follow-up task, and
+// linked_tasks cannot drift apart.
+function createRequirementLifecycle({
+  json,
+  mergeRequirementLinkedTask,
+  nextId,
+  repository,
+  statusHistory,
+  syncRequirementTask,
+  transaction,
+}) {
+  if (
+    typeof json !== "function" ||
+    typeof mergeRequirementLinkedTask !== "function" ||
+    typeof nextId !== "function" ||
+    typeof repository?.createRequirement !== "function" ||
+    typeof statusHistory?.record !== "function" ||
+    typeof syncRequirementTask !== "function" ||
+    typeof transaction !== "function"
+  ) {
+    throw new Error("AI requirement lifecycle dependencies are required.");
+  }
+
+  return async function createRequirementWithInvariants({ actor, id: requestedId, projectId, requirementDraft }) {
+    return transaction(async () => {
+      const requirement = buildRequirementCreate(
+        {
+          acceptanceCriteria: requirementDraft?.acceptanceCriteria,
+          description: requirementDraft?.description,
+          owner: requirementDraft?.owner || actor?.name || "Product Office",
+          priority: requirementDraft?.priority,
+          projectId,
+          title: requirementDraft?.title,
+        },
+        { id: requestedId || await nextId("REQ", "requirements"), json },
+      );
+      await repository.createRequirement(requirement);
+      await statusHistory.record({
+        resourceType: "requirement",
+        resourceId: requirement.id,
+        projectId: requirement.project_id,
+        toStatus: requirement.status,
+        reason: "需求创建",
+        actor,
+      });
+      const taskId = await syncRequirementTask(requirement);
+      await mergeRequirementLinkedTask(requirement.id, taskId);
+      return requirement;
+    });
+  };
+}
+
 function createAiJobsRouter({
   audit,
   canAccessProject,
   canViewDocument,
   canWriteProject,
+  createRequirementWithInvariants,
   dispatcher,
   fail,
+  hasPermission,
   json,
   mapDocument,
   nextId,
@@ -41,6 +98,9 @@ function createAiJobsRouter({
   requirePermission,
   transaction,
 }) {
+  if (typeof createRequirementWithInvariants !== "function" || typeof hasPermission !== "function") {
+    throw new Error("AI jobs require requirement lifecycle and permission dependencies.");
+  }
   const router = express.Router();
   const respond = (res, job) => res.json(ok(mapAiJob(job, parse)));
 
@@ -209,6 +269,9 @@ function createAiJobsRouter({
     if (requirementDraft?.priority && !requirementPriorities.includes(requirementDraft.priority)) {
       return fail(res, 400, "VALIDATION_FAILED", `Priority must be one of: ${requirementPriorities.join(", ")}`);
     }
+    if (requirementDraft && !job.written_requirement_id && !hasPermission(req.user, "requirement:*")) {
+      return fail(res, 403, "PERMISSION_DENIED", "无权创建需求。");
+    }
     let projectId = req.body?.projectId || sourceDocument.project_id || null;
     if (!projectId) {
       const linkedRequirements = parse(sourceDocument.linked_requirements, []);
@@ -228,21 +291,12 @@ function createAiJobsRouter({
           const project = await repository.findLiveProject(projectId);
           if (!project) throw Object.assign(new Error("projectId does not match a known project."), { code: "VALIDATION_FAILED" });
           if (!(await canWriteProject(req.user, project.id))) throw Object.assign(new Error("Cannot write an AI-confirmed requirement to an archived or inaccessible project."), { code: "PROJECT_ARCHIVED_OR_ACCESS_DENIED", status: 403 });
-          writtenRequirementId = await nextId("REQ", "requirements");
-          await repository.createRequirement({
-            id: writtenRequirementId,
-            title: requirementDraft.title,
-            description: requirementDraft.description,
-            status: "draft",
-            priority: requirementDraft.priority,
-            project_id: project.id,
-            product_id: null,
-            portfolio_id: null,
-            owner: req.user.name,
-            completion: 0,
-            linked_tasks: json([]),
-            acceptance_criteria: json(requirementDraft.acceptanceCriteria),
+          const requirement = await createRequirementWithInvariants({
+            actor: req.user,
+            projectId: project.id,
+            requirementDraft,
           });
+          writtenRequirementId = requirement.id;
         }
         return await repository.transition(job, "confirmed", {
           confirmed_at: now(),
@@ -306,4 +360,4 @@ function createAiJobsRouter({
   return router;
 }
 
-module.exports = { createAiJobsRouter };
+module.exports = { createAiJobsRouter, createRequirementLifecycle };

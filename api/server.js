@@ -6,6 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const http = require("http");
 const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const { WebSocketServer } = require("ws");
 
@@ -93,7 +94,7 @@ const { createAuthRepository } = require("./src/modules/auth/repository");
 const { createAuthService } = require("./src/modules/auth/service");
 const { createCapacityRouter } = require("./src/modules/capacity/routes");
 const { createCapacityRepository } = require("./src/modules/capacity/repository");
-const { createAiJobsRouter } = require("./src/modules/ai/routes");
+const { createAiJobsRouter, createRequirementLifecycle } = require("./src/modules/ai/routes");
 const { createAiJobRepository, createBusinessAdviceRepository } = require("./src/modules/ai/repository");
 const { createAiCapabilityRepository } = require("./src/modules/ai/capabilityRepository");
 const { createTokenUsageRepository } = require("./src/modules/ai/tokenUsage");
@@ -104,8 +105,10 @@ const { createAgentEventBridge } = require("./src/modules/ai/agentEventBridge");
 const { createAiCapabilityControlStore } = require("./src/modules/ai/capabilityControls");
 const { createCapabilityRegistry } = require("./src/modules/ai/capabilityRegistry");
 const { createExecutionGateway } = require("./src/modules/ai/executionGateway");
+const { createPlatformOperationProxy } = require("./src/modules/ai/platformOperationProxy");
 const { createBrowserControlService } = require("./src/modules/ai/browserControl");
 const { createScopedExecutionTokenService } = require("./src/modules/ai/executionToken");
+const { createAiAssistantExecutionService } = require("./src/modules/ai/assistantExecutionService");
 const { resolveHarnessPaths } = require("./src/modules/ai/harnessRuntime");
 const { createAiSessionReplayService } = require("./src/modules/ai/sessionReplay");
 const { createAiSessionReplayRouter } = require("./src/modules/ai/sessionReplayRoutes");
@@ -227,11 +230,15 @@ const server = http.createServer(app);
 const PORT = Number(process.env.PORT) || 4010;
 const NODE_ENV = process.env.NODE_ENV || "development";
 const IS_PROD = NODE_ENV === "production";
-const { isTrustedSessionRequest, rateLimitHandler } = createRateLimitPolicy({
+const { createInternalServiceMatcher, isTrustedSessionRequest, rateLimitHandler } = createRateLimitPolicy({
   env: process.env,
   isProd: IS_PROD,
   randomUUID: crypto.randomUUID,
 });
+// Per-boot secret shared between the platform operation proxy (request header)
+// and the API rate limiter (matcher): internal loopback calls are exempt from
+// the shared IP bucket, and no external client can forge a loopback socket.
+const INTERNAL_SERVICE_TOKEN = crypto.randomUUID();
 
 // Fail closed in production before opening sockets or loading secrets deeply.
 // Also validates SQLite parent-dir writability (DATABASE_FILE or default api/app.db).
@@ -259,6 +266,25 @@ const AI_JOB_TIMEOUT_SWEEP_MS = Number(process.env.AI_JOB_TIMEOUT_SWEEP_MS || 60
 const JWT_SECRET = resolveJwtSecret({ env: process.env, isProd: IS_PROD });
 const secretCodec = createSecretCodec(resolveAiConfigEncryptionKey(JWT_SECRET, { env: process.env, isProd: IS_PROD }));
 const AI_CAPABILITY_TOKEN_SECRET = resolveAiCapabilityTokenSecret(JWT_SECRET, { env: process.env });
+
+function issueAccessToken(user) {
+  return jwt.sign({
+    sub: user.id,
+    role: user.role,
+    tv: Number(user.token_version || 0),
+  }, JWT_SECRET, { expiresIn: "8h" });
+}
+
+// Platform-operation proxy calls are one-shot internal requests acting for an
+// already-authenticated actor: the minted token dies with the call instead of
+// exposing an 8-hour session credential on any leak path.
+function issueInternalAccessToken(user) {
+  return jwt.sign({
+    sub: user.id,
+    role: user.role,
+    tv: Number(user.token_version || 0),
+  }, JWT_SECRET, { expiresIn: "60s" });
+}
 
 const RELEASE_READY_REQUIREMENT_STATUSES = new Set(["accepted", "closed"]);
 const CLOSED_TASK_STATUSES = new Set(["done", "cancelled"]);
@@ -336,6 +362,7 @@ const organizationRepository = createOrganizationRepository({ insert, row, rows,
 const projectSourceBrowser = createProjectSourceBrowser({ fs, path });
 const dashboardRepository = createDashboardRepository({ row, rows });
 const aiJobsRepository = createAiJobRepository({ insert, row, rows, run });
+const requirementsRepository = createRequirementsRepository({ insert, row, rows, run });
 const { reindexDocumentForRag, deleteDocumentRagIndex } = createRagMaintenance({
   buildDocumentChunks,
   aiJobsRepository,
@@ -408,11 +435,8 @@ const aiJobDispatcher = createAiJobDispatcher({
 });
 const authService = createAuthService({
   comparePassword: (password, passwordHash) => require("bcryptjs").compareSync(password, passwordHash),
-  issueToken: (user) => require("jsonwebtoken").sign({
-    sub: user.id,
-    role: user.role,
-    tv: Number(user.token_version || 0),
-  }, JWT_SECRET, { expiresIn: "8h" }),
+  hashPassword: (password) => require("bcryptjs").hashSync(password, 10),
+  issueToken: issueAccessToken,
   publicUser,
   repository: createAuthRepository({ row, run }),
 });
@@ -530,6 +554,34 @@ const teamService = createTeamService({
 });
 let revokeUserSessions = () => 0;
 
+// The team router updates role/status through repository methods. Wrap the
+// session-affecting mutations at the production composition boundary so every
+// established real-time connection is closed after a permission or account
+// state change as well as after a password reset.
+const teamRepositoryWithSessionRevocation = {
+  ...teamRepository,
+  updateUserRole: async (input) => {
+    const result = await teamRepository.updateUserRole(input);
+    revokeUserSessions(input?.id);
+    return result;
+  },
+  updateUserPermissions: async (input) => {
+    const result = await teamRepository.updateUserPermissions(input);
+    revokeUserSessions(input?.id);
+    return result;
+  },
+  updateUserStatus: async (input) => {
+    const result = await teamRepository.updateUserStatus(input);
+    revokeUserSessions(input?.id);
+    return result;
+  },
+  disableUser: async (userId) => {
+    const result = await teamRepository.disableUser(userId);
+    revokeUserSessions(userId);
+    return result;
+  },
+};
+
 // Same-origin SPA hosting for single-process SQLite trial / internal production.
 // Default: production + web/dist present, or SERVE_WEB=1. Disable with SERVE_WEB=0.
 const SERVE_WEB = shouldServeWeb(process.env, { apiRoot: __dirname, isProd: IS_PROD });
@@ -570,6 +622,7 @@ app.use((req, res, next) => {
 });
 
 // Reject abusive API request rates before allocating memory to parse request bodies.
+const isInternalServiceRequest = createInternalServiceMatcher(INTERNAL_SERVICE_TOKEN);
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: Number.isInteger(Number(process.env.API_RATE_LIMIT_MAX)) && Number(process.env.API_RATE_LIMIT_MAX) > 0
@@ -577,7 +630,7 @@ const apiLimiter = rateLimit({
     : IS_PROD ? 600 : 5000,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => !IS_PROD && isTrustedSessionRequest(req),
+  skip: (req) => isInternalServiceRequest(req) || (!IS_PROD && isTrustedSessionRequest(req)),
   handler: rateLimitHandler("请求过于频繁，请稍后再试。"),
 });
 app.use("/api/", apiLimiter);
@@ -601,6 +654,15 @@ const { syncRequirementTask, mergeRequirementLinkedTask } = createRequirementTas
   nextId,
   json,
   parse,
+});
+const createRequirementWithInvariants = createRequirementLifecycle({
+  json,
+  mergeRequirementLinkedTask,
+  nextId,
+  repository: requirementsRepository,
+  statusHistory,
+  syncRequirementTask,
+  transaction,
 });
 const { syncTestCaseTask } = createTestCaseTaskSync({ nextId, repository: testingRepository });
 const { syncDefectTask } = createDefectTaskSync({
@@ -670,18 +732,33 @@ const aiBrowserControl = createBrowserControlService({
   masking: aiMaskingRulesService,
 });
 
+// The platform proxy invokes existing authenticated REST routes with a short-
+// lived internal token for the current actor. It never exposes that token to
+// the model or to the browser, and the original route remains the permission
+// and business-rule authority. The internal service header exempts these
+// loopback calls from the shared IP rate bucket.
+const aiPlatformOperationProxy = createPlatformOperationProxy({
+  baseUrl: `http://127.0.0.1:${PORT}`,
+  internalToken: INTERNAL_SERVICE_TOKEN,
+  issueAccessToken: issueInternalAccessToken,
+});
+
 const aiExecutionGateway = createExecutionGateway({
   audit,
   browserControl: aiBrowserControl,
   canAccessProject: projectAccess.canAccessProject,
   canWriteProject: projectAccess.canWriteProject,
+  createRequirementWithInvariants,
   controlStore: aiCapabilityControlStore,
+  findInvocation: aiCapabilityRepository.find,
   hasPermission,
   insert,
   interactionHandler: aiAgentInteractionService.loopbackHandler,
   json,
   nextId,
   now,
+  isPlatformAssistantEnabled: async () => (await aiAssistantAdminService.resolve()).available,
+  platformOperationProxy: aiPlatformOperationProxy,
   publicUser,
   registry: aiCapabilityRegistry,
   row,
@@ -692,6 +769,29 @@ const aiExecutionGateway = createExecutionGateway({
   // test-fire route uses. Late-bound — the bridge attaches to the shared HTTP
   // server further below, before any request reaches this gateway.
   uiDirectiveSink: (userId, directive) => agentEventBridge.pushUiDirective(userId, directive),
+});
+const aiAssistantExecutionService = createAiAssistantExecutionService({
+  audit,
+  canAccessProject: projectAccess.canAccessProject,
+  executionGateway: aiExecutionGateway,
+  findActiveActor: (id) => row("SELECT * FROM users WHERE id = @id", { id }),
+  getAssistant: () => aiAssistantAdminService.resolve(),
+  hasPermission,
+  json,
+  now,
+  publicUser,
+  repository: aiCapabilityRepository,
+  selectProjectAnchor: async ({ accessScope, actor }) => {
+    const candidates = accessScope?.all === true
+      ? (await rows("SELECT id FROM projects WHERE deleted_at IS NULL ORDER BY id LIMIT 20")).map((item) => item.id)
+      : Array.isArray(accessScope?.projectIds) ? accessScope.projectIds : [];
+    for (const projectId of candidates) {
+      const project = await row("SELECT id FROM projects WHERE id = @id AND deleted_at IS NULL", { id: projectId });
+      if (project && await projectAccess.canAccessProject(actor, project.id)) return project.id;
+    }
+    return null;
+  },
+  tokenService: aiExecutionTokenService,
 });
 const aiCapabilityAdapter = createHarnessCapabilityAdapter({
   callModel: callChatAssistantModel,
@@ -866,7 +966,7 @@ app.use("/api", wrapRouterAsync(createRequirementsRouter({
   requirementScore,
   requirementStatuses: REQUIREMENT_STATUSES,
   requirePermission,
-  repository: createRequirementsRepository({ insert, row, rows, run }),
+  repository: requirementsRepository,
   statusHistory,
   syncRequirementTask,
   transaction,
@@ -974,8 +1074,10 @@ app.use("/api", wrapRouterAsync(createAiJobsRouter({
   canAccessProject: projectAccess.canAccessProject,
   canViewDocument,
   canWriteProject: projectAccess.canWriteProject,
+  createRequirementWithInvariants,
   dispatcher: aiJobDispatcher,
   fail,
+  hasPermission,
   json,
   mapDocument,
   nextId,
@@ -1088,7 +1190,7 @@ app.use("/api", wrapRouterAsync(createTeamRouter({
   now,
   ok,
   paginatedResponse,
-  repository: teamRepository,
+  repository: teamRepositoryWithSessionRevocation,
   requirePermission,
   revokeUserSessions: (userId) => revokeUserSessions(userId),
   systemRoles: SYSTEM_ROLES,
@@ -1136,9 +1238,11 @@ app.use("/api", wrapRouterAsync(createAiAssistantAdminRouter({
 
 app.use("/api", wrapRouterAsync(createAiCapabilitiesRouter({
   audit,
+  beginIdempotentRequest,
   browserScreenshotDir: aiBrowserControl.config.enabled ? require("node:path").join(STORAGE_DIR, "browser") : null,
   canAccessProject: projectAccess.canAccessProject,
   fail,
+  hasPermission,
   modelClient: aiModelClient,
   ok,
   // Late-bound like the interaction push above: the bridge instance is
@@ -1176,6 +1280,7 @@ app.use("/api", wrapRouterAsync(createAiSessionReplayRouter({
 })));
 
 app.use("/api", wrapRouterAsync(createAiInteractionsRouter({
+  assistantExecutionService: aiAssistantExecutionService,
   audit,
   buildAiChatPrompt: aiChatService.buildPrompt,
   buildAiChatContext: aiChatService.buildContext,
@@ -1270,6 +1375,10 @@ const agentEventBridge = createAgentEventBridge({
   agentEventBus,
   audit,
 });
+revokeUserSessions = (userId) => (
+  collaborationServer.closeUserConnections(userId, 1008, "Session revoked")
+  + agentEventBridge.closeUserConnections(userId, 1008, "Session revoked")
+);
 
 const { recoverPendingAiJobs } = createAiJobRecovery({
   aiJobsRepository,

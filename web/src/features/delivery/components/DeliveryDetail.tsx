@@ -24,6 +24,7 @@ import Panel from '../../../components/common/Panel';
 import ProgressBar from '../../../components/common/ProgressBar';
 import StatusBadge from '../../../components/common/StatusBadge';
 import BusinessAdvicePanel from '../../../components/common/BusinessAdvicePanel';
+import SortableSectionLayout, { SortableSection } from '../../../components/common/SortableSectionLayout';
 import { useToast } from '../../../components/common/Toast';
 import type { DeliveryGateResult, ReleaseApproval, ReleaseReport, RollbackRecord } from '../../../types';
 
@@ -136,160 +137,178 @@ export default function DeliveryDetail({
         subtitle={`${record.kind === 'build' ? t('features.delivery.deliveryDetail.buildRecord') : t('features.delivery.deliveryDetail.releaseRecord')} · ${record.ownerLabel}`}
         toolbar={<StatusBadge status={record.status} label={statusLabel(record.kind, record.status)} />}
       >
-        <div className="delivery-detail-grid">
-          <DetailItem label={t('features.delivery.deliveryDetail.versionLabel')} value={record.version ? `v${record.version}` : t('enums.unset')} />
-          <DetailItem label={t('features.delivery.deliveryDetail.dateLabel')} value={formatDate(record.date)} />
-          <DetailItem label={record.kind === 'build' ? t('features.delivery.deliveryDetail.projectLabel') : t('features.delivery.deliveryDetail.productLabel')} value={record.ownerLabel} />
-          <DetailItem label={t('features.delivery.deliveryDetail.readinessLabel')} value={`${readiness}%`} />
-        </div>
-        <div className="delivery-detail-readiness">
-          <div className="delivery-detail-readiness-head">
-            <span>{t('features.delivery.deliveryDetail.readinessTitle')}</span>
-            <strong>{readiness}%</strong>
-          </div>
-          <ProgressBar percent={readiness} height={8} variant={gate?.ready ? 'success' : statusTone(record)} />
-        </div>
-        {canUseAi ? (
-          <BusinessAdvicePanel
-            targetType={record.kind}
-            targetId={record.id}
-            title={record.kind === 'build' ? t('features.delivery.deliveryDetail.aiBuildAdvice') : t('features.delivery.deliveryDetail.aiReleaseAdvice')}
-            description={record.kind === 'build'
-              ? t('features.delivery.deliveryDetail.aiBuildDesc')
-              : t('features.delivery.deliveryDetail.aiReleaseDesc')}
-            buttonText={record.kind === 'build' ? t('features.delivery.deliveryDetail.aiAnalyzeBuild') : t('features.delivery.deliveryDetail.aiAnalyzeRelease')}
-            question={record.kind === 'build'
-              ? t('features.delivery.deliveryDetail.aiBuildQuestion')
-              : t('features.delivery.deliveryDetail.aiReleaseQuestion')}
-            draft={() => ({
-              status: record.status,
-              readiness,
-              gateSummary: gate?.summary,
-              failedGates: gate?.gates.filter((item) => !item.passed).map((item) => `${item.label}: ${item.message}`),
-            })}
-          />
-        ) : null}
-        <section className={`delivery-detail-gates ${gate?.ready ? 'ready' : 'blocked'}`}>
-          <div className="delivery-detail-gates-head">
-            <div>
-              <h3>{t('features.delivery.deliveryDetail.gatesTitle')}</h3>
-              <p>{gate?.summary ?? t('features.delivery.deliveryDetail.noGateSummary')}</p>
+        <SortableSectionLayout surface={`delivery.${record.kind}-detail`} className="delivery-detail-sortable">
+          <SortableSection id="metrics" label={t('features.delivery.deliveryDetail.versionLabel')} className="wide">
+            <div className="delivery-detail-grid">
+              <DetailItem label={t('features.delivery.deliveryDetail.versionLabel')} value={record.version ? `v${record.version}` : t('enums.unset')} />
+              <DetailItem label={t('features.delivery.deliveryDetail.dateLabel')} value={formatDate(record.date)} />
+              <DetailItem label={record.kind === 'build' ? t('features.delivery.deliveryDetail.projectLabel') : t('features.delivery.deliveryDetail.productLabel')} value={record.ownerLabel} />
+              <DetailItem label={t('features.delivery.deliveryDetail.readinessLabel')} value={`${readiness}%`} />
             </div>
-            <StatusBadge status={gate?.ready ? 'passed' : 'blocked'} label={gate?.ready ? t('features.delivery.deliveryDetail.releasable') : t('features.delivery.deliveryDetail.needsAction')} showDot={false} />
-          </div>
-          <div className="delivery-detail-gate-list">
-            {gateLines.map((line, index) => (
-              <GateLine
-                key={line.id || `${line.label || 'gate'}-${index}`}
-                label={line.label || t('features.delivery.deliveryDetail.gateItem')}
-                passed={Boolean(line.passed)}
-                value={line.message || (line.passed ? t('features.delivery.deliveryDetail.passed') : t('features.delivery.deliveryDetail.notPassed'))}
+          </SortableSection>
+          <SortableSection id="readiness" label={t('features.delivery.deliveryDetail.readinessTitle')} className="wide">
+            <div className="delivery-detail-readiness">
+              <div className="delivery-detail-readiness-head">
+                <span>{t('features.delivery.deliveryDetail.readinessTitle')}</span>
+                <strong>{readiness}%</strong>
+              </div>
+              <ProgressBar percent={readiness} height={8} variant={gate?.ready ? 'success' : statusTone(record)} />
+            </div>
+          </SortableSection>
+          {canUseAi ? (
+            <SortableSection id="ai-advice" label={record.kind === 'build' ? t('features.delivery.deliveryDetail.aiBuildAdvice') : t('features.delivery.deliveryDetail.aiReleaseAdvice')} className="wide">
+              <BusinessAdvicePanel
+                targetType={record.kind}
+                targetId={record.id}
+                title={record.kind === 'build' ? t('features.delivery.deliveryDetail.aiBuildAdvice') : t('features.delivery.deliveryDetail.aiReleaseAdvice')}
+                description={record.kind === 'build'
+                  ? t('features.delivery.deliveryDetail.aiBuildDesc')
+                  : t('features.delivery.deliveryDetail.aiReleaseDesc')}
+                buttonText={record.kind === 'build' ? t('features.delivery.deliveryDetail.aiAnalyzeBuild') : t('features.delivery.deliveryDetail.aiAnalyzeRelease')}
+                question={record.kind === 'build'
+                  ? t('features.delivery.deliveryDetail.aiBuildQuestion')
+                  : t('features.delivery.deliveryDetail.aiReleaseQuestion')}
+                draft={() => ({
+                  status: record.status,
+                  readiness,
+                  gateSummary: gate?.summary,
+                  failedGates: gate?.gates.filter((item) => !item.passed).map((item) => `${item.label}: ${item.message}`),
+                })}
               />
-            ))}
-            {!gate || gateLines.length === 0 ? (
-              <GateLine label={t('features.delivery.deliveryDetail.gatePrecheck')} passed={false} value={t('features.delivery.deliveryDetail.precheckUnavailable')} />
-            ) : null}
-          </div>
-        </section>
-        <div className="delivery-detail-sections">
-          <section>
-            <h3>{t('features.delivery.deliveryDetail.linkedStoriesTitle')}</h3>
-            <TagList items={linkedStories} empty={t('features.delivery.deliveryDetail.noLinkedStories')} />
-          </section>
-          <section>
-            <h3>{t('features.delivery.deliveryDetail.linkedBugsTitle')}</h3>
-            <TagList items={linkedBugs} empty={t('features.delivery.deliveryDetail.noLinkedBugs')} />
-          </section>
-          <section className="wide">
-            <h3>{record.kind === 'build' ? t('features.delivery.deliveryDetail.buildNotes') : t('features.delivery.deliveryDetail.releaseNotes')}</h3>
-            <p>{record.notes || t('features.delivery.deliveryDetail.noNotes')}</p>
-          </section>
-        </div>
-        {record.kind === 'release' ? (
-          <section className="delivery-governance">
-            <div className="delivery-governance-head">
-              <div>
-                <h3>{t('features.delivery.deliveryDetail.governanceTitle')}</h3>
-                <p>{t('features.delivery.deliveryDetail.governanceDesc')}</p>
+            </SortableSection>
+          ) : null}
+          <SortableSection id="gates" label={t('features.delivery.deliveryDetail.gatesTitle')} className="wide">
+            <section className={`delivery-detail-gates ${gate?.ready ? 'ready' : 'blocked'}`}>
+              <div className="delivery-detail-gates-head">
+                <div>
+                  <h3>{t('features.delivery.deliveryDetail.gatesTitle')}</h3>
+                  <p>{gate?.summary ?? t('features.delivery.deliveryDetail.noGateSummary')}</p>
+                </div>
+                <StatusBadge status={gate?.ready ? 'passed' : 'blocked'} label={gate?.ready ? t('features.delivery.deliveryDetail.releasable') : t('features.delivery.deliveryDetail.needsAction')} showDot={false} />
               </div>
-              <StatusBadge status={record.status} label={statusLabel(record.kind, record.status)} showDot={false} />
-            </div>
-            {governanceError ? <div className="form-error">{governanceError}</div> : null}
-            <div className="delivery-governance-grid">
-              <div className="delivery-governance-box">
-                <h4>{t('features.delivery.deliveryDetail.approvalTitle')}</h4>
-                <textarea
-                  className="form-textarea"
-                  rows={3}
-                  value={approvalComment}
-                  onChange={(event) => setApprovalComment(event.target.value)}
-                  placeholder={t('features.delivery.deliveryDetail.approvalPlaceholder')}
-                  disabled={!canManageDelivery || submittingGovernance}
-                />
-                {canManageDelivery ? (
-                  <div className="delivery-governance-actions">
-                    <button className="btn btn-primary btn-sm" disabled={submittingGovernance} onClick={() => void submitApproval('approve')}>{t('features.delivery.deliveryDetail.approve')}</button>
-                    <button className="btn btn-secondary btn-sm" disabled={submittingGovernance} onClick={() => void submitApproval('reject')}>{t('features.delivery.deliveryDetail.reject')}</button>
-                  </div>
+              <div className="delivery-detail-gate-list">
+                {gateLines.map((line, index) => (
+                  <GateLine
+                    key={line.id || `${line.label || 'gate'}-${index}`}
+                    label={line.label || t('features.delivery.deliveryDetail.gateItem')}
+                    passed={Boolean(line.passed)}
+                    value={line.message || (line.passed ? t('features.delivery.deliveryDetail.passed') : t('features.delivery.deliveryDetail.notPassed'))}
+                  />
+                ))}
+                {!gate || gateLines.length === 0 ? (
+                  <GateLine label={t('features.delivery.deliveryDetail.gatePrecheck')} passed={false} value={t('features.delivery.deliveryDetail.precheckUnavailable')} />
                 ) : null}
-                <RecordList
-                  loading={approvalsState.loading}
-                  empty={t('features.delivery.deliveryDetail.noApprovals')}
-                  records={(approvalsState.data ?? []).map((item) => ({
-                    id: item.id,
-                    title: item.decision === 'approve' ? t('features.delivery.deliveryDetail.approved') : t('features.delivery.deliveryDetail.rejected'),
-                    meta: `${item.approverName || t('features.delivery.deliveryDetail.unknown')} · ${formatDate(item.createdAt)}`,
-                    body: item.comment || t('features.delivery.deliveryDetail.noApprovalComment'),
-                  }))}
-                />
               </div>
-              <div className="delivery-governance-box">
-                <h4>{t('features.delivery.deliveryDetail.rollbackTitle')}</h4>
-                <input
-                  className="form-input"
-                  value={rollbackReason}
-                  onChange={(event) => setRollbackReason(event.target.value)}
-                  placeholder={t('features.delivery.deliveryDetail.rollbackReasonPlaceholder')}
-                  disabled={!canManageDelivery || submittingGovernance}
-                />
-                <textarea
-                  className="form-textarea"
-                  rows={2}
-                  value={rollbackImpact}
-                  onChange={(event) => setRollbackImpact(event.target.value)}
-                  placeholder={t('features.delivery.deliveryDetail.impactPlaceholder')}
-                  disabled={!canManageDelivery || submittingGovernance}
-                />
-                <textarea
-                  className="form-textarea"
-                  rows={2}
-                  value={rollbackPlan}
-                  onChange={(event) => setRollbackPlan(event.target.value)}
-                  placeholder={t('features.delivery.deliveryDetail.planPlaceholder')}
-                  disabled={!canManageDelivery || submittingGovernance}
-                />
-                {canManageDelivery ? (
-                  <div className="delivery-governance-actions">
-                    <button className="btn btn-danger btn-sm" disabled={submittingGovernance} onClick={() => void submitRollback()}>{t('features.delivery.deliveryDetail.registerRollback')}</button>
+            </section>
+          </SortableSection>
+          <SortableSection id="linked-stories" label={t('features.delivery.deliveryDetail.linkedStoriesTitle')}>
+            <section className="delivery-detail-related-card">
+              <h3>{t('features.delivery.deliveryDetail.linkedStoriesTitle')}</h3>
+              <TagList items={linkedStories} empty={t('features.delivery.deliveryDetail.noLinkedStories')} />
+            </section>
+          </SortableSection>
+          <SortableSection id="linked-bugs" label={t('features.delivery.deliveryDetail.linkedBugsTitle')}>
+            <section className="delivery-detail-related-card">
+              <h3>{t('features.delivery.deliveryDetail.linkedBugsTitle')}</h3>
+              <TagList items={linkedBugs} empty={t('features.delivery.deliveryDetail.noLinkedBugs')} />
+            </section>
+          </SortableSection>
+          <SortableSection id="notes" label={record.kind === 'build' ? t('features.delivery.deliveryDetail.buildNotes') : t('features.delivery.deliveryDetail.releaseNotes')} className="wide">
+            <section className="delivery-detail-related-card">
+              <h3>{record.kind === 'build' ? t('features.delivery.deliveryDetail.buildNotes') : t('features.delivery.deliveryDetail.releaseNotes')}</h3>
+              <p>{record.notes || t('features.delivery.deliveryDetail.noNotes')}</p>
+            </section>
+          </SortableSection>
+          {record.kind === 'release' ? (
+            <SortableSection id="governance" label={t('features.delivery.deliveryDetail.governanceTitle')} className="wide">
+              <section className="delivery-governance">
+                <div className="delivery-governance-head">
+                  <div>
+                    <h3>{t('features.delivery.deliveryDetail.governanceTitle')}</h3>
+                    <p>{t('features.delivery.deliveryDetail.governanceDesc')}</p>
                   </div>
-                ) : null}
-                <RecordList
-                  loading={rollbacksState.loading}
-                  empty={t('features.delivery.deliveryDetail.noRollbacks')}
-                  records={(rollbacksState.data ?? []).map((item) => ({
-                    id: item.id,
-                    title: item.reason,
-                    meta: `${item.operatorName || t('features.delivery.deliveryDetail.unknown')} · ${formatDate(item.createdAt)}`,
-                    body: [item.impact, item.plan].filter(Boolean).join(' / ') || t('features.delivery.deliveryDetail.noImpactOrPlan'),
-                  }))}
-                />
-              </div>
-            </div>
-          </section>
-        ) : null}
-        {record.kind === 'release' ? (
-          <ReleaseReportSection report={reportState.data} loading={reportState.loading} error={reportState.error} />
-        ) : null}
+                  <StatusBadge status={record.status} label={statusLabel(record.kind, record.status)} showDot={false} />
+                </div>
+                {governanceError ? <div className="form-error">{governanceError}</div> : null}
+                <div className="delivery-governance-grid">
+                  <div className="delivery-governance-box">
+                    <h4>{t('features.delivery.deliveryDetail.approvalTitle')}</h4>
+                    <textarea
+                      className="form-textarea"
+                      rows={3}
+                      value={approvalComment}
+                      onChange={(event) => setApprovalComment(event.target.value)}
+                      placeholder={t('features.delivery.deliveryDetail.approvalPlaceholder')}
+                      disabled={!canManageDelivery || submittingGovernance}
+                    />
+                    {canManageDelivery ? (
+                      <div className="delivery-governance-actions">
+                        <button className="btn btn-primary btn-sm" disabled={submittingGovernance} onClick={() => void submitApproval('approve')}>{t('features.delivery.deliveryDetail.approve')}</button>
+                        <button className="btn btn-secondary btn-sm" disabled={submittingGovernance} onClick={() => void submitApproval('reject')}>{t('features.delivery.deliveryDetail.reject')}</button>
+                      </div>
+                    ) : null}
+                    <RecordList
+                      loading={approvalsState.loading}
+                      empty={t('features.delivery.deliveryDetail.noApprovals')}
+                      records={(approvalsState.data ?? []).map((item) => ({
+                        id: item.id,
+                        title: item.decision === 'approve' ? t('features.delivery.deliveryDetail.approved') : t('features.delivery.deliveryDetail.rejected'),
+                        meta: `${item.approverName || t('features.delivery.deliveryDetail.unknown')} · ${formatDate(item.createdAt)}`,
+                        body: item.comment || t('features.delivery.deliveryDetail.noApprovalComment'),
+                      }))}
+                    />
+                  </div>
+                  <div className="delivery-governance-box">
+                    <h4>{t('features.delivery.deliveryDetail.rollbackTitle')}</h4>
+                    <input
+                      className="form-input"
+                      value={rollbackReason}
+                      onChange={(event) => setRollbackReason(event.target.value)}
+                      placeholder={t('features.delivery.deliveryDetail.rollbackReasonPlaceholder')}
+                      disabled={!canManageDelivery || submittingGovernance}
+                    />
+                    <textarea
+                      className="form-textarea"
+                      rows={2}
+                      value={rollbackImpact}
+                      onChange={(event) => setRollbackImpact(event.target.value)}
+                      placeholder={t('features.delivery.deliveryDetail.impactPlaceholder')}
+                      disabled={!canManageDelivery || submittingGovernance}
+                    />
+                    <textarea
+                      className="form-textarea"
+                      rows={2}
+                      value={rollbackPlan}
+                      onChange={(event) => setRollbackPlan(event.target.value)}
+                      placeholder={t('features.delivery.deliveryDetail.planPlaceholder')}
+                      disabled={!canManageDelivery || submittingGovernance}
+                    />
+                    {canManageDelivery ? (
+                      <div className="delivery-governance-actions">
+                        <button className="btn btn-danger btn-sm" disabled={submittingGovernance} onClick={() => void submitRollback()}>{t('features.delivery.deliveryDetail.registerRollback')}</button>
+                      </div>
+                    ) : null}
+                    <RecordList
+                      loading={rollbacksState.loading}
+                      empty={t('features.delivery.deliveryDetail.noRollbacks')}
+                      records={(rollbacksState.data ?? []).map((item) => ({
+                        id: item.id,
+                        title: item.reason,
+                        meta: `${item.operatorName || t('features.delivery.deliveryDetail.unknown')} · ${formatDate(item.createdAt)}`,
+                        body: [item.impact, item.plan].filter(Boolean).join(' / ') || t('features.delivery.deliveryDetail.noImpactOrPlan'),
+                      }))}
+                    />
+                  </div>
+                </div>
+              </section>
+            </SortableSection>
+          ) : null}
+          {record.kind === 'release' && (reportState.loading || reportState.error || reportState.data) ? (
+            <SortableSection id="release-report" label={t('features.delivery.deliveryDetailParts.reportTitle')} className="wide">
+              <ReleaseReportSection report={reportState.data} loading={reportState.loading} error={reportState.error} />
+            </SortableSection>
+          ) : null}
+        </SortableSectionLayout>
         {statusError ? <div className="form-error">{statusError}</div> : null}
         {canManageDelivery ? (
           <div className="delivery-detail-actions">

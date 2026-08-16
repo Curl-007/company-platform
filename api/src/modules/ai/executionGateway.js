@@ -1,13 +1,18 @@
 const http = require("node:http");
 
-const { findExecutionCapability } = require("./executionCapabilities");
+const {
+  findExecutionCapability,
+  PLATFORM_ASSISTANT_CAPABILITY_ID,
+  PLATFORM_ASSISTANT_CAPABILITY_VERSION,
+} = require("./executionCapabilities");
+const { findPlatformOperation, publicPlatformOperation } = require("./platformOperationRegistry");
 const { assertUiDirective } = require("./uiDirectives");
 const { REQUIREMENT_PRIORITIES } = require("../../domain/enums");
-const { buildRequirementCreate } = require("../requirements/service");
 const { buildTaskCreate } = require("../tasks/service");
 
 const MAX_GATEWAY_BODY_BYTES = 128 * 1024;
 const DOMAIN_EXECUTION_ROUTE = "/v1/execution";
+const PLATFORM_OPERATION_ROUTE = "/v1/platform-operation";
 const DOMAIN_LIST_LIMIT = 100;
 const DOMAIN_TITLE_LIMIT = 200;
 const DOMAIN_TEXT_LIMIT = 2048;
@@ -17,6 +22,7 @@ const REMINDER_MESSAGE_LIMIT = 500;
 // sweep never races a just-created reminder, and at most 180 days ahead.
 const REMINDER_MIN_LEAD_MS = 60_000;
 const REMINDER_MAX_LEAD_MS = 180 * 24 * 60 * 60 * 1000;
+const REVOKED_INVOCATION_TTL_MS = 40 * 60 * 1000;
 
 function gatewayError(code, message, status = 502) {
   const error = new Error(message);
@@ -184,12 +190,32 @@ function readDomainEstimatedHours(value) {
   return parsed;
 }
 
+function normalizePlatformOperationInput(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw gatewayError("VALIDATION_FAILED", "Platform operation input must be an object.", 400);
+  }
+  const allowed = new Set(["operation", "request"]);
+  if (Object.keys(input).some((key) => !allowed.has(key))) {
+    throw gatewayError("VALIDATION_FAILED", "Platform operation input contains unsupported fields.", 400);
+  }
+  const operation = String(input.operation || "").trim();
+  if (!operation || operation.length > 160) {
+    throw gatewayError("VALIDATION_FAILED", "Platform operation is required.", 400);
+  }
+  if (input.request !== undefined && (!input.request || typeof input.request !== "object" || Array.isArray(input.request))) {
+    throw gatewayError("VALIDATION_FAILED", "Platform operation request must be an object.", 400);
+  }
+  return { operation, request: input.request || {} };
+}
+
 function createExecutionGateway({
   audit,
   browserControl,
   canAccessProject,
   canWriteProject,
+  createRequirementWithInvariants,
   controlStore,
+  findInvocation,
   hasPermission,
   insert,
   interactionHandler,
@@ -197,6 +223,8 @@ function createExecutionGateway({
   maxBodyBytes = MAX_GATEWAY_BODY_BYTES,
   nextId,
   now = () => new Date().toISOString(),
+  isPlatformAssistantEnabled,
+  platformOperationProxy,
   publicUser,
   registry,
   row,
@@ -217,6 +245,7 @@ function createExecutionGateway({
   const capturedByInvocation = new Map();
   const consumedTokenIds = new Map();
   const inFlightTokenIds = new Set();
+  const revokedInvocationIds = new Map();
   let baseUrl = null;
   let closeTask;
   let server;
@@ -237,7 +266,7 @@ function createExecutionGateway({
   // release a token they failed to reserve.
   function reserveToken(claims) {
     pruneConsumed();
-    if (consumedTokenIds.has(claims.jti) || inFlightTokenIds.has(claims.jti)) {
+    if (inFlightTokenIds.has(claims.jti) || (!claims.reusable && consumedTokenIds.has(claims.jti))) {
       throw gatewayError("AI_CAPABILITY_TOKEN_REPLAYED", "Execution token was already used.", 409);
     }
     inFlightTokenIds.add(claims.jti);
@@ -245,7 +274,7 @@ function createExecutionGateway({
 
   function commitToken(claims) {
     inFlightTokenIds.delete(claims.jti);
-    consumedTokenIds.set(claims.jti, claims.exp);
+    if (!claims.reusable) consumedTokenIds.set(claims.jti, claims.exp);
   }
 
   function releaseToken(claims) {
@@ -333,6 +362,11 @@ function createExecutionGateway({
       if (!hasPermission(user, "ai:*")) {
         throw gatewayError("PERMISSION_DENIED", "Execution actor cannot use AI capabilities.", 403);
       }
+      // Mirror the invocation-gate permission standard here so the boundary
+      // check cannot drift from what accessDecision enforced at issuance.
+      if (!manifest.requiredPermissions.every((permission) => hasPermission(user, permission))) {
+        throw gatewayError("PERMISSION_DENIED", "Execution actor cannot use this AI capability.", 403);
+      }
       if (!(await canAccessProject(user, claims.projectId))) {
         throw gatewayError("PERMISSION_DENIED", "Execution actor cannot access this project.", 403);
       }
@@ -381,7 +415,10 @@ function createExecutionGateway({
   // compensation audit must never replace the policy error the caller sees.
   async function auditDomainRejection({ actor, capability, capabilityId, claims, error }) {
     const status = Number(error?.status) || 502;
-    const denied = status >= 400 && status < 500;
+    // Kill-switch refusals are 503 but still policy denials (same taxonomy as
+    // capabilityService.invoke), so operators can filter denials vs outages.
+    const denied = (status >= 400 && status < 500)
+      || ["AI_CAPABILITY_DISABLED", "AI_CAPABILITY_UNAPPROVED"].includes(String(error?.code || ""));
     try {
       await audit(
         actor || null,
@@ -399,6 +436,155 @@ function createExecutionGateway({
       );
     } catch {
       // Keep the original policy failure authoritative.
+    }
+  }
+
+  function pruneRevokedInvocations() {
+    const time = Date.now();
+    for (const [invocationId, expiresAt] of revokedInvocationIds) {
+      if (expiresAt <= time) revokedInvocationIds.delete(invocationId);
+    }
+  }
+
+  function revokeInvocation(invocationId) {
+    const id = String(invocationId || "").trim();
+    if (!id) return;
+    pruneRevokedInvocations();
+    revokedInvocationIds.set(id, Date.now() + REVOKED_INVOCATION_TTL_MS);
+  }
+
+  function platformOperationEvidence(operation, claims, source) {
+    return {
+      at: now(),
+      capabilityId: PLATFORM_ASSISTANT_CAPABILITY_ID,
+      capabilityVersion: PLATFORM_ASSISTANT_CAPABILITY_VERSION,
+      action: operation.action,
+      domain: operation.domain,
+      event: "execution-gateway.platform-operation",
+      method: operation.method,
+      mode: operation.write ? "write" : "read",
+      projectId: claims.projectId,
+      source: source === "runtime-tool" ? "runtime-tool" : "assistant-tool",
+    };
+  }
+
+  async function auditPlatformRejection({ actor, claims, operation, error }) {
+    const status = Number(error?.status) || 502;
+    const denied = (status >= 400 && status < 500)
+      || ["AI_CAPABILITY_DISABLED", "AI_CAPABILITY_UNAPPROVED"].includes(String(error?.code || ""));
+    try {
+      await audit(
+        actor || null,
+        denied ? "ai.platform_operation_denied" : "ai.platform_operation_failed",
+        "ai_platform_operation",
+        operation?.action || null,
+        null,
+        {
+          action: operation?.action || null,
+          domain: operation?.domain || null,
+          errorCode: String(error?.code || "AI_PLATFORM_OPERATION_FAILED"),
+          invocationId: claims?.invocationId || null,
+          method: operation?.method || null,
+        },
+        null,
+      );
+    } catch {
+      // Preserve the policy/runtime error that the tool needs to see.
+    }
+  }
+
+  async function executePlatformOperation({ input = {}, source = "runtime-tool", token } = {}) {
+    let normalizedInput;
+    let operation = null;
+    let claims = null;
+    let actorRow = null;
+    let reserved = false;
+    try {
+      // Verify the scoped token before touching the operation catalog, so an
+      // unauthenticated loopback caller cannot even distinguish registered
+      // from unknown operations (no 400-before-401 information leak).
+      claims = tokenService.verify(token, {
+        capabilityId: PLATFORM_ASSISTANT_CAPABILITY_ID,
+        capabilityVersion: PLATFORM_ASSISTANT_CAPABILITY_VERSION,
+      });
+      if (claims.reusable !== true) {
+        throw gatewayError("AI_CAPABILITY_TOKEN_SCOPE_MISMATCH", "Platform assistant requires a reusable session token.", 403);
+      }
+      normalizedInput = normalizePlatformOperationInput(input);
+      operation = findPlatformOperation(normalizedInput.operation);
+      if (!operation) {
+        throw gatewayError("AI_PLATFORM_OPERATION_UNKNOWN", "Platform operation is not registered for the assistant.", 400);
+      }
+      if (!platformOperationProxy || typeof platformOperationProxy.execute !== "function") {
+        throw gatewayError("AI_PLATFORM_OPERATION_UNAVAILABLE", "Platform operation gateway is unavailable.", 503);
+      }
+      if (typeof findInvocation !== "function") {
+        throw gatewayError("AI_PLATFORM_OPERATION_UNAVAILABLE", "Platform assistant invocation store is unavailable.", 503);
+      }
+      reserveToken(claims);
+      reserved = true;
+      actorRow = await row("SELECT * FROM users WHERE id = @id", { id: claims.actorId });
+      if (!actorRow || actorRow.status !== "active") {
+        throw gatewayError("AI_CAPABILITY_ACTOR_UNAVAILABLE", "Execution actor is unavailable.", 403);
+      }
+      const user = publicUser(actorRow);
+      if (!hasPermission(user, "ai:*")) {
+        throw gatewayError("PERMISSION_DENIED", "Execution actor cannot use AI capabilities.", 403);
+      }
+      if (typeof isPlatformAssistantEnabled === "function" && !(await isPlatformAssistantEnabled())) {
+        throw gatewayError("AI_CAPABILITY_DISABLED", "Platform assistant tools are disabled by the control plane.", 503);
+      }
+      pruneRevokedInvocations();
+      if (revokedInvocationIds.has(claims.invocationId)) {
+        throw gatewayError("AI_CAPABILITY_INVOCATION_INACTIVE", "Platform assistant session is no longer active.", 403);
+      }
+      const invocation = await findInvocation(claims.invocationId);
+      if (!invocation || invocation.status !== "running" || invocation.actor_id !== claims.actorId || invocation.project_id !== claims.projectId) {
+        throw gatewayError("AI_CAPABILITY_INVOCATION_INACTIVE", "Platform assistant session is no longer active.", 403);
+      }
+
+      // Writes are audited before the original API is called. An audit outage
+      // therefore fails closed without creating an unaudited side effect.
+      if (operation.write) {
+        try {
+          await audit(
+            actorRow,
+            "ai.platform_operation_requested",
+            "ai_platform_operation",
+            operation.action,
+            null,
+            {
+              action: operation.action,
+              domain: operation.domain,
+              invocationId: claims.invocationId,
+              method: operation.method,
+            },
+            null,
+          );
+        } catch {
+          throw gatewayError("AI_CAPABILITY_AUDIT_WRITE_FAILED", "Platform operation audit failed; the write was not executed.", 502);
+        }
+      }
+
+      const result = await platformOperationProxy.execute({
+        actor: actorRow,
+        operation,
+        request: normalizedInput.request,
+      });
+      commitToken(claims);
+      reserved = false;
+      return {
+        claims: tokenService.publicClaims(claims),
+        evidence: platformOperationEvidence(operation, claims, source),
+        result: {
+          operation: publicPlatformOperation(operation),
+          ...result,
+        },
+      };
+    } catch (error) {
+      if (reserved) releaseToken(claims);
+      await auditPlatformRejection({ actor: actorRow, claims, operation, error });
+      throw error;
     }
   }
 
@@ -579,19 +765,32 @@ function createExecutionGateway({
     if (!REQUIREMENT_PRIORITIES.includes(priority)) {
       throw gatewayError("VALIDATION_FAILED", `priority must be one of: ${REQUIREMENT_PRIORITIES.join(", ")}.`, 400);
     }
+    if (typeof createRequirementWithInvariants !== "function") {
+      throw gatewayError("AI_REQUIREMENT_LIFECYCLE_UNAVAILABLE", "Requirement creation lifecycle is unavailable.", 500);
+    }
     const id = await nextId("REQ");
-    const record = buildRequirementCreate(
-      { description, priority, projectId: claims.projectId, title },
-      { id, json },
-    );
+    let record;
     await commitDomainWrite({
       actor,
       capability,
       claims,
-      createEntity: () => insert("requirements", record),
+      createEntity: async () => {
+        record = await createRequirementWithInvariants({
+          actor,
+          id,
+          projectId: claims.projectId,
+          requirementDraft: {
+            acceptanceCriteria: [],
+            description,
+            owner: "Product Office",
+            priority,
+            title,
+          },
+        });
+      },
       resourceType: "requirement",
       resourceId: id,
-      auditAfter: () => ({ projectId: claims.projectId, requirementId: id, status: record.status, title: record.title }),
+      auditAfter: () => ({ projectId: claims.projectId, requirementId: id, status: record?.status || "draft", title }),
     });
     return {
       requirement: {
@@ -737,6 +936,11 @@ function createExecutionGateway({
         return { projectId: claims.projectId, ...(await listDomainReminders(claims.projectId)) };
       case "reminder-create":
         return createDomainReminder({ actor, capability, claims, input });
+      case PLATFORM_ASSISTANT_CAPABILITY_ID:
+        // Ordinary assistant sessions use a reusable platform-assistant token.
+        // The standalone company-ui-tool may only reach this closed directive
+        // validator; business operations continue through /v1/platform-operation.
+        return executeUiControl({ actor, capability, claims, input });
       case "ui-control":
         return executeUiControl({ actor, capability, claims, input });
       case "browser-control":
@@ -780,6 +984,40 @@ function createExecutionGateway({
       if (!hasPermission(user, capability.permission)) {
         throw gatewayError("PERMISSION_DENIED", `Execution actor cannot use the ${capability.id} capability.`, 403);
       }
+      // Control-plane kill switch at the execution boundary: a capability
+      // disabled after this token was issued must stop here, not only at
+      // issuance time. platform-assistant and ui-control carry no registry
+      // manifest; their gate is the platform-assistant availability check
+      // below (plus the ai:* baseline and the mandatory audit).
+      const manifest = registry.get(capability.id);
+      if (manifest) {
+        if (manifest.status !== "approved") {
+          throw gatewayError("AI_CAPABILITY_UNAPPROVED", "AI capability is not approved.", 503);
+        }
+        const control = await controlStore.get(capability.id);
+        if (!control.enabled) {
+          throw gatewayError("AI_CAPABILITY_DISABLED", "AI capability is disabled by the control plane.", 503);
+        }
+      }
+      if (capability.id === PLATFORM_ASSISTANT_CAPABILITY_ID) {
+        if (claims.reusable !== true) {
+          throw gatewayError("AI_CAPABILITY_TOKEN_SCOPE_MISMATCH", "Platform assistant requires a reusable session token.", 403);
+        }
+        if (typeof findInvocation !== "function") {
+          throw gatewayError("AI_PLATFORM_OPERATION_UNAVAILABLE", "Platform assistant invocation store is unavailable.", 503);
+        }
+        if (typeof isPlatformAssistantEnabled === "function" && !(await isPlatformAssistantEnabled())) {
+          throw gatewayError("AI_CAPABILITY_DISABLED", "Platform assistant tools are disabled by the control plane.", 503);
+        }
+        pruneRevokedInvocations();
+        if (revokedInvocationIds.has(claims.invocationId)) {
+          throw gatewayError("AI_CAPABILITY_INVOCATION_INACTIVE", "Platform assistant session is no longer active.", 403);
+        }
+        const invocation = await findInvocation(claims.invocationId);
+        if (!invocation || invocation.status !== "running" || invocation.actor_id !== claims.actorId || invocation.project_id !== claims.projectId) {
+          throw gatewayError("AI_CAPABILITY_INVOCATION_INACTIVE", "Platform assistant session is no longer active.", 403);
+        }
+      }
       // Project-scope gates apply to every project-data capability. ui-control
       // is a declared non-project capability (projectScoped: false): it
       // addresses the invoking user's own live UI through the token's
@@ -805,7 +1043,13 @@ function createExecutionGateway({
       reserved = false;
       const captured = {
         claims: tokenService.publicClaims(claims),
-        evidence: domainEvidence(capability, claims, source),
+        evidence: capability.id === PLATFORM_ASSISTANT_CAPABILITY_ID
+          ? {
+            ...domainEvidence(capability, claims, source),
+            event: "execution-gateway.company-ui",
+            mode: "write",
+          }
+          : domainEvidence(capability, claims, source),
         result,
       };
       // Mirror the project-snapshot hand-off: a successful Harness tool call
@@ -847,6 +1091,19 @@ function createExecutionGateway({
     if (parsed.pathname === DOMAIN_EXECUTION_ROUTE) {
       try {
         const result = await executeDomain({
+          input: await readJsonBody(req, maxBodyBytes),
+          source: "runtime-tool",
+          token: readBearerToken(req.headers.authorization),
+        });
+        writeJson(res, 200, { data: { evidence: result.evidence, result: result.result } });
+      } catch (error) {
+        writeJson(res, Number(error?.status) || 502, publicGatewayError(error));
+      }
+      return;
+    }
+    if (parsed.pathname === PLATFORM_OPERATION_ROUTE) {
+      try {
+        const result = await executePlatformOperation({
           input: await readJsonBody(req, maxBodyBytes),
           source: "runtime-tool",
           token: readBearerToken(req.headers.authorization),
@@ -901,6 +1158,7 @@ function createExecutionGateway({
       }
     });
     await closeTask;
+    revokedInvocationIds.clear();
     if (typeof browserControl?.close === "function") {
       await browserControl.close().catch(() => {});
     }
@@ -913,19 +1171,23 @@ function createExecutionGateway({
     close,
     execute,
     executeDomain,
+    executePlatformOperation,
     getCaptured(invocationId) {
       const key = String(invocationId || "");
       const captured = capturedByInvocation.get(key) || null;
       if (captured) capturedByInvocation.delete(key);
       return captured;
     },
+    revokeInvocation,
     start,
-    status: () => ({ capturedInvocations: capturedByInvocation.size, started: Boolean(baseUrl) }),
+    status: () => ({ capturedInvocations: capturedByInvocation.size, revokedInvocations: revokedInvocationIds.size, started: Boolean(baseUrl) }),
   };
 }
 
 module.exports = {
   MAX_GATEWAY_BODY_BYTES,
+  PLATFORM_OPERATION_ROUTE,
+  REVOKED_INVOCATION_TTL_MS,
   buildSnapshotSummary,
   createExecutionGateway,
   gatewayError,

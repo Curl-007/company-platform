@@ -165,6 +165,7 @@ async function main() {
       "e2e/ui-responsive.spec.ts",
       "e2e/roles-flow.spec.ts",
       "e2e/rc-security-flow.spec.ts",
+      "e2e/dsh-foundation.spec.ts",
     ];
     if (options.withFullUi) {
       e2eSpecs.push("e2e/full-ui-flow.spec.ts");

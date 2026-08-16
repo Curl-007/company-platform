@@ -1,0 +1,190 @@
+.sortable-section-layout {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  gap: var(--space-4, 16px);
+}
+
+.sortable-section-layout-tools {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  min-height: 26px;
+  margin-bottom: -10px;
+}
+
+.sortable-section-reset,
+.sortable-section-edit,
+.sortable-section-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border-divider, var(--border));
+  border-radius: 4px;
+  background: var(--bg-content, var(--card));
+  color: var(--text-secondary, var(--muted-foreground));
+}
+
+.sortable-section-reset {
+  opacity: 0.72;
+}
+
+.sortable-section-reset:hover:not(:disabled),
+.sortable-section-reset:focus-visible,
+.sortable-section-edit:hover,
+.sortable-section-edit:focus-visible,
+.sortable-section-edit[aria-pressed='true'],
+.sortable-section-controls button:hover:not(:disabled),
+.sortable-section-controls button:focus-visible {
+  z-index: 1;
+  border-color: var(--accent);
+  color: var(--accent);
+  opacity: 1;
+  outline: 2px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  outline-offset: 1px;
+}
+
+.sortable-section-reset:disabled,
+.sortable-section-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.28;
+}
+
+.sortable-section {
+  position: relative;
+  min-width: 0;
+  transition: opacity 140ms ease, outline-color 140ms ease, padding-top 140ms ease, transform 140ms ease;
+}
+
+.sortable-section-layout.is-layout-editing > .sortable-section {
+  padding-top: 32px;
+}
+
+.sortable-section.wide {
+  grid-column: 1 / -1;
+}
+
+.flow-detail-sortable {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.team-detail-sortable {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.task-detail-sortable {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.delivery-detail-sortable {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.product-detail-sortable {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.management-detail-sortable {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.teamlogs-member-summary-sortable {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.product-detail-sortable .product-section {
+  height: 100%;
+}
+
+.delivery-detail-related-card {
+  height: 100%;
+  padding: 14px;
+  border: 1px solid var(--border-divider, var(--border));
+  border-radius: var(--radius-card, 6px);
+  background: var(--bg-primary, var(--card));
+}
+
+.delivery-detail-related-card h3 {
+  margin: 0 0 10px;
+  color: var(--text-primary, var(--foreground));
+  font-size: var(--fs-body, 14px);
+}
+
+.delivery-detail-related-card p {
+  margin: 0;
+  color: var(--text-secondary, var(--muted-foreground));
+  line-height: 1.6;
+}
+
+.task-detail-sortable .detail-field {
+  height: 100%;
+  border: 1px solid var(--border-divider, var(--border));
+  border-radius: var(--radius-card, 6px);
+}
+
+.sortable-section-controls {
+  position: absolute;
+  z-index: 3;
+  top: 2px;
+  right: 2px;
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid color-mix(in srgb, var(--border-divider, var(--border)) 82%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--bg-content, var(--card)) 92%, transparent);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+  opacity: 0.72;
+  transition: opacity 140ms ease;
+}
+
+.sortable-section:hover > .sortable-section-controls,
+.sortable-section:focus-within > .sortable-section-controls,
+.sortable-section.is-dragging > .sortable-section-controls,
+.sortable-section.is-drop-target > .sortable-section-controls {
+  opacity: 1;
+}
+
+.sortable-section-handle {
+  cursor: grab;
+}
+
+.sortable-section-handle:active {
+  cursor: grabbing;
+}
+
+.sortable-section.is-dragging {
+  opacity: 0.48;
+}
+
+.sortable-section.is-drop-target {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sortable-section,
+  .sortable-section-controls {
+    transition: none;
+  }
+}
+
+[data-work-motion='reduced'] .sortable-section,
+[data-work-motion='reduced'] .sortable-section-controls {
+  transition: none;
+}
+
+@media (max-width: 768px) {
+  .flow-detail-sortable,
+  .team-detail-sortable,
+  .task-detail-sortable,
+  .delivery-detail-sortable,
+  .product-detail-sortable,
+  .management-detail-sortable {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,297 @@
+/* ==========================================================================
+   Detail surface system — 统一详情页视觉体系（液态玻璃）
+
+   Appended last so it wins the cascade. Scope is strictly limited to detail
+   surfaces (heroes, metric strips, section cards, field grids, modal/drawer
+   detail bodies). Two glass tiers keep depth legible instead of stacking blur:
+   - Surface tier: cards sitting directly on the app canvas keep the full
+     frosted recipe (translucent tint + backdrop blur + inset highlight).
+   - Inner tier: cards nested inside an already-frosted panel (modal / drawer
+     / workbench panes) use a lighter translucent wash WITHOUT backdrop-filter
+     so nested glass does not double-blur into mush.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Surface tier — full frosted glass (page-level detail cards)
+   -------------------------------------------------------------------------- */
+.pd-hero,
+.pd-side-panel,
+.pd-focus-card,
+.pd-gov-panel,
+.pd-flow-side-card,
+.pd-flow-checks-panel,
+.detail-section,
+.detail-strip,
+.detail-grid,
+.product-hero,
+.product-section,
+.management-hero,
+.flow-detail-binding {
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 6%, transparent), var(--shadow-panel);
+}
+
+/* --------------------------------------------------------------------------
+   2. Inner tier — translucent wash inside frosted containers
+   (modal bodies, drawers, workbench detail panes)
+   -------------------------------------------------------------------------- */
+.team-detail-hero,
+.team-detail-metric,
+.team-detail-section,
+.team-detail-workload,
+.doc-detail-block,
+.doc-detail-metrics,
+.delivery-detail-gates,
+.delivery-detail-readiness,
+.delivery-detail-related-card,
+.mywork-queue-item,
+.mywork-detail-header,
+.mywork-handoff,
+.req-detail-chip,
+.management-score-grid > div,
+.product-metric-grid .detail-grid {
+  background: color-mix(in srgb, var(--bg-subtle) 46%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+/* Handoff block keeps its section semantics: hairline top + breathing room. */
+.mywork-handoff {
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-divider);
+  border-radius: var(--radius-card);
+}
+
+/* Workbench list toolbar row (products/programs/portfolios). */
+.management-list-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.task-detail-sortable .detail-field {
+  background: color-mix(in srgb, var(--bg-subtle) 38%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   3. Unified hero rhythm — one title scale, one eyebrow scale, one spacing
+   -------------------------------------------------------------------------- */
+.pd-hero,
+.product-hero,
+.management-hero {
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+  border-radius: var(--radius-card);
+}
+
+.pd-hero-title,
+.product-hero h2,
+.management-hero h2 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.pd-hero-desc,
+.product-hero p,
+.management-hero p {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.pd-hero-eyebrow,
+.product-hero-facts {
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+
+/* Metric numerals: one emphasized scale across every detail hero/strip. */
+.pd-hero-metric-value,
+.detail-strip-value,
+.management-score-grid strong {
+  font-size: 19px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.team-detail-metric strong {
+  font-size: 19px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Metric labels: quiet, consistent. */
+.pd-hero-metric-label,
+.detail-strip-label,
+.team-detail-metric span,
+.management-score-grid span {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.01em;
+}
+
+/* --------------------------------------------------------------------------
+   4. Unified section cards — one padding, one header scale
+   -------------------------------------------------------------------------- */
+.detail-section,
+.team-detail-section,
+.product-section,
+.doc-detail-block {
+  padding: 14px 16px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+}
+
+.detail-section-header,
+.team-section-title,
+.product-section-head h3,
+.doc-detail-block .section-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-secondary);
+}
+
+.product-section-head {
+  margin-bottom: 10px;
+}
+
+.product-section-head p {
+  margin: 4px 0 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+/* Inner section cards keep a hairline, not a heavy border. */
+.team-detail-metric,
+.team-detail-workload,
+.delivery-detail-related-card,
+.management-score-grid > div {
+  border: 1px solid var(--border-divider);
+  border-radius: var(--radius-card);
+}
+
+/* --------------------------------------------------------------------------
+   5. Field grid — define the missing .detail-value, align label/value rhythm
+   -------------------------------------------------------------------------- */
+.detail-value {
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.detail-label,
+.detail-field .detail-label,
+.mywork-detail-meta .detail-label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.01em;
+}
+
+.detail-field > span:last-child,
+.detail-field > strong:last-child {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------------
+   6. Missing sortable grids — these surfaces previously fell back to a
+      single dense column; give them the standard 2-col responsive grid.
+   -------------------------------------------------------------------------- */
+.project-detail-sortable,
+.req-detail-sortable,
+.mywork-detail-sortable {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* Full-page project detail reads better with a wider main column feel:
+   hero + tabs sections stay full-width via .wide in TSX already. */
+
+@media (max-width: 768px) {
+  .project-detail-sortable,
+  .req-detail-sortable,
+  .mywork-detail-sortable {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   7. Modal / drawer detail polish
+   -------------------------------------------------------------------------- */
+
+/* Detail modal footers: one hairline + one rhythm. */
+.req-detail-footer,
+.delivery-detail-actions,
+.team-detail-actions {
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-divider);
+}
+
+/* Drawer close target: comfortable hit area, clearer affordance. */
+.doc-detail-drawer .panel-toolbar .topbar-icon-button {
+  width: 30px;
+  height: 30px;
+}
+
+/* Status chips inside requirement detail: consistent pill skin. */
+.req-detail-chip {
+  border: 1px solid var(--border-divider);
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   8. Unified empty states for detail surfaces
+   -------------------------------------------------------------------------- */
+.pd-empty,
+.mywork-queue .pd-empty,
+.team-detail-section .empty,
+.detail-section .pd-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  letter-spacing: 0.01em;
+}
+
+/* Trace table header: readable against the frosted card. */
+.pd-focus-card .pd-trace-head {
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-page) 42%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   9. Micro-interactions — quiet lift on hover for clickable list cards
+   -------------------------------------------------------------------------- */
+.mywork-queue-item,
+.product-list-item,
+.management-list-item {
+  transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+.mywork-queue-item:hover,
+.product-list-item:hover,
+.management-list-item:hover {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-default));
+}
+
+/* --------------------------------------------------------------------------
+   10. Reduced motion
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .mywork-queue-item,
+  .product-list-item,
+  .management-list-item {
+    transition: none;
+  }
+}

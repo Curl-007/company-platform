@@ -7,7 +7,22 @@ function authError(code, message, status) {
   return error;
 }
 
-function createAuthService({ comparePassword, issueToken, publicUser, repository }) {
+function createAuthService({ comparePassword, hashPassword, issueToken, publicUser, repository }) {
+  const PASSWORD_MIN_LENGTH = 8;
+  const PASSWORD_MAX_LENGTH = 72; // bcrypt input ceiling
+
+  function assertNewPassword(password) {
+    if (typeof password !== "string" || password.length < PASSWORD_MIN_LENGTH) {
+      throw authError("WEAK_PASSWORD", `新密码至少 ${PASSWORD_MIN_LENGTH} 位。`, 400);
+    }
+    if (password.length > PASSWORD_MAX_LENGTH) {
+      throw authError("WEAK_PASSWORD", `新密码不能超过 ${PASSWORD_MAX_LENGTH} 位。`, 400);
+    }
+    if (/^\s+$/.test(password) || password !== password.trim()) {
+      throw authError("WEAK_PASSWORD", "新密码不能以空白字符开头或结尾。", 400);
+    }
+  }
+
   return {
     async login({ email, password }) {
       if (typeof password !== "string" || password.length === 0) {
@@ -45,6 +60,26 @@ function createAuthService({ comparePassword, issueToken, publicUser, repository
         throw error;
       }
       return { before, after };
+    },
+    // Self-service password change: the current password must be proven, the
+    // new one meets the minimum policy, and every established session is
+    // revoked via token_version. The caller receives a fresh token so the
+    // requesting session itself stays signed in. A wrong current password is
+    // a 400 validation failure — a bare 401 would trip the client's global
+    // session-expiry interceptor and sign the user out.
+    async changePassword(userId, { currentPassword, newPassword } = {}) {
+      const user = await repository.findById(userId);
+      if (!user) throw authError("RESOURCE_NOT_FOUND", "用户不存在。", 404);
+      if (typeof currentPassword !== "string" || currentPassword.length === 0
+        || !comparePassword(currentPassword, user.password_hash)) {
+        throw authError("CURRENT_PASSWORD_INVALID", "当前密码不正确。", 400);
+      }
+      assertNewPassword(newPassword);
+      if (newPassword === currentPassword) {
+        throw authError("WEAK_PASSWORD", "新密码不能与当前密码相同。", 400);
+      }
+      const after = await repository.updatePassword(userId, hashPassword(newPassword));
+      return { user: publicUser(after), token: issueToken(after) };
     },
   };
 }

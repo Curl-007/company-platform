@@ -1,3 +1,13 @@
+import {
+  parseDshDeclarativeView,
+  parseDshSectionOrder,
+  parseDshSurfaceId,
+  parseDshSurfaceStyle,
+  parseDshViewId,
+  type DshDeclarativeView,
+  type DshSurfaceStyle,
+} from '../../dshUi/models/declarativeViewModel';
+
 // ---------------------------------------------------------------------------
 // AI UI directive contract (agent.ui wire payloads + /api/ai/ui-directives).
 //
@@ -19,8 +29,13 @@ export type AgentUiDirective =
   | { kind: 'accentColor'; value: string }
   | { kind: 'contentPadding'; value: number }
   | { kind: 'reduceMotion'; value: boolean }
-  | { kind: 'navigate'; page: string }
-  | { kind: 'openAiSidebar'; open: boolean };
+  | { kind: 'navigate'; page: string; focus?: string }
+  | { kind: 'openAiSidebar'; open: boolean }
+  | { kind: 'layout'; surface: string; order: string[] }
+  | { kind: 'surfaceStyle'; surface: string; style: DshSurfaceStyle }
+  | { kind: 'viewUpsert'; view: DshDeclarativeView }
+  | { kind: 'viewRemove'; viewId: string }
+  | { kind: 'viewOpen'; viewId: string };
 
 export type UiDirectiveKind = AgentUiDirective['kind'];
 
@@ -34,6 +49,11 @@ export const UI_DIRECTIVE_KINDS: UiDirectiveKind[] = [
   'reduceMotion',
   'navigate',
   'openAiSidebar',
+  'layout',
+  'surfaceStyle',
+  'viewUpsert',
+  'viewRemove',
+  'viewOpen',
 ];
 
 export const UI_THEME_MODE_VALUES: UiDirectiveThemeMode[] = ['dark', 'light'];
@@ -44,6 +64,7 @@ export const UI_FONT_SIZE_MAX = 18;
 export const UI_CONTENT_PADDING_MIN = 0;
 export const UI_CONTENT_PADDING_MAX = 240;
 const ACCENT_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+const NAVIGATE_FOCUS_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -105,7 +126,14 @@ export function parseAgentUiDirective(value: unknown): AgentUiDirective | null {
       return null;
     case 'navigate':
       if (typeof value.page === 'string' && value.page.trim()) {
-        return { kind: 'navigate', page: value.page.trim() };
+        if (value.focus === undefined || value.focus === null || value.focus === '') {
+          return { kind: 'navigate', page: value.page.trim() };
+        }
+        if (typeof value.focus === 'string' && NAVIGATE_FOCUS_PATTERN.test(value.focus.trim())) {
+          return { kind: 'navigate', page: value.page.trim(), focus: value.focus.trim() };
+        }
+        warnIgnored('navigate focus must be a bounded platform entity id', value.focus);
+        return null;
       }
       warnIgnored('navigate requires a page', value);
       return null;
@@ -113,6 +141,38 @@ export function parseAgentUiDirective(value: unknown): AgentUiDirective | null {
       if (typeof value.open === 'boolean') return { kind: 'openAiSidebar', open: value.open };
       warnIgnored('openAiSidebar requires a boolean', value);
       return null;
+    case 'layout': {
+      const surface = parseDshSurfaceId(value.surface);
+      const order = parseDshSectionOrder(value.order);
+      if (surface && order) return { kind: 'layout', surface, order };
+      warnIgnored('layout requires a valid surface and unique section order', value);
+      return null;
+    }
+    case 'surfaceStyle': {
+      const surface = parseDshSurfaceId(value.surface);
+      const style = parseDshSurfaceStyle(value.style);
+      if (surface && style) return { kind: 'surfaceStyle', surface, style };
+      warnIgnored('surfaceStyle requires a valid surface and whitelisted style', value);
+      return null;
+    }
+    case 'viewUpsert': {
+      const view = parseDshDeclarativeView(value.view);
+      if (view) return { kind: 'viewUpsert', view };
+      warnIgnored('viewUpsert requires a valid declarative view', value.view);
+      return null;
+    }
+    case 'viewRemove': {
+      const viewId = parseDshViewId(value.viewId);
+      if (viewId) return { kind: 'viewRemove', viewId };
+      warnIgnored('viewRemove requires a valid viewId', value.viewId);
+      return null;
+    }
+    case 'viewOpen': {
+      const viewId = parseDshViewId(value.viewId);
+      if (viewId) return { kind: 'viewOpen', viewId };
+      warnIgnored('viewOpen requires a valid viewId', value.viewId);
+      return null;
+    }
     default:
       warnIgnored('unknown kind', value.kind);
       return null;

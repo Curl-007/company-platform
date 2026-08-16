@@ -30,7 +30,7 @@ export default function AppSidebar({ currentPage, user, onNavigate }: AppSidebar
   const { locale, setLocale } = useLocale();
   const expanded = isMobile ? mobileOpen : open;
   const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>(() => (
-    Object.fromEntries(NAV_GROUPS.map((group) => [group.label, true]))
+    Object.fromEntries(NAV_GROUPS.map((group) => [group.id, true]))
   ));
 
   const navigate = (page: PageKey, focusId?: string) => {
@@ -53,10 +53,10 @@ export default function AppSidebar({ currentPage, user, onNavigate }: AppSidebar
       </SidebarHeader>
       <SidebarContent className="sidebar-nav">
         {accessibleGroups.map((group) => {
-          const isGroupExpanded = expandedGroups[group.label] ?? true;
-          const groupId = `sidebar-group-${group.label}`;
+          const isGroupExpanded = expandedGroups[group.id] ?? true;
+          const groupId = `sidebar-group-${group.id}`;
           return (
-            <SidebarGroup key={group.label}>
+            <SidebarGroup key={group.id}>
               {expanded ? (
                 <SidebarGroupLabel>
                   <button
@@ -64,9 +64,9 @@ export default function AppSidebar({ currentPage, user, onNavigate }: AppSidebar
                     className="kaneo-sidebar-group-toggle"
                     aria-expanded={isGroupExpanded}
                     aria-controls={groupId}
-                    onClick={() => setExpandedGroups((state) => ({ ...state, [group.label]: !isGroupExpanded }))}
+                    onClick={() => setExpandedGroups((state) => ({ ...state, [group.id]: !isGroupExpanded }))}
                   >
-                    <span>{t(`nav:group.${group.id}`, { defaultValue: group.label })}</span>
+                    <span>{t(`nav.group.${group.id}`, { defaultValue: group.label })}</span>
                     {isGroupExpanded ? <ChevronDown size={13} aria-hidden="true" /> : <ChevronRight size={13} aria-hidden="true" />}
                   </button>
                 </SidebarGroupLabel>
@@ -76,9 +76,9 @@ export default function AppSidebar({ currentPage, user, onNavigate }: AppSidebar
                   {group.items.map((item) => {
                     const Icon = item.icon;
                     const isActive = currentPage === item.key;
-                    const itemLabel = t(`nav:item.${item.key}`, { defaultValue: item.label });
+                    const itemLabel = t(`nav.item.${item.key}`, { defaultValue: item.label });
                     return (
-                      <SidebarMenuItem key={`${group.label}-${item.key}`}>
+                      <SidebarMenuItem key={`${group.id}-${item.key}`}>
                         <SidebarMenuButton
                           isActive={isActive}
                           title={itemLabel}

@@ -175,9 +175,7 @@ test.describe('RC products three tabs', () => {
         .getByRole('tab', { name: tab, exact: true })
         .click();
       await expect(page.locator('.nav-tabs .nav-tab.active')).toContainText(tab);
-      // Tabs may legitimately render an empty state (no Panel/card) when no
-      // portfolio data exists; accept either a content shell or empty state.
-      await expect(page.locator('.panel, .card, .data-table, .page-header, .management-empty-state, .empty-state').first()).toBeVisible();
+      await expect(page.getByRole('tabpanel', { name: tab, exact: true })).toBeVisible();
     }
 
     await expect(page.locator('.nav-tabs .nav-tab')).toHaveCount(3);

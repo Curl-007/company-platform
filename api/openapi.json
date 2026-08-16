@@ -2263,6 +2263,51 @@
         }
       }
     },
+    "/api/tasks/{id}/handoff": {
+      "post": {
+        "summary": "Cross-role task handoff with server-derived status",
+        "description": "Submit a task for testing or return it for a fix. Status and assignee role are derived from the action; requires optimistic version.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TaskId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskHandoffInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Handed-off task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeTask"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
     "/api/tasks/{id}/kanban-position": {
       "patch": {
         "summary": "Move a task on the kanban board with optimistic locking",
@@ -5811,6 +5856,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Client-generated key used to safely retry an invocation after a transport failure.",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
           }
         ],
         "requestBody": {
@@ -5842,6 +5897,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "The key is already processing or was reused with different input"
           },
           "503": {
             "description": "Capability is disabled or unavailable"
@@ -7009,6 +7067,73 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/auth/change-password": {
+      "post": {
+        "summary": "Change the authenticated user password (revokes other sessions)",
+        "description": "Requires the current password. Bumps token_version so every other established session is revoked; the response carries a fresh token for the requesting session.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "currentPassword",
+                  "newPassword"
+                ],
+                "properties": {
+                  "currentPassword": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 72
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password updated; a fresh session token is returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "user": {
+                          "$ref": "#/components/schemas/User"
+                        },
+                        "token": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "user",
+                        "token"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
@@ -9996,6 +10121,45 @@
           },
           "reason": {
             "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TaskHandoffInput": {
+        "type": "object",
+        "required": [
+          "action",
+          "version"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "submit_for_testing",
+              "return_for_fix"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Optimistic concurrency token from the current task."
+          },
+          "assignee": {
+            "type": "string",
+            "description": "Target user display name. Optional when the project has exactly one member for the target role."
+          },
+          "assigneeId": {
+            "type": "string",
+            "description": "Target user id (preferred when known)."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason recorded in task status history."
+          },
+          "progress": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
           }
         },
         "additionalProperties": false
@@ -13113,6 +13277,10 @@
           },
           "modelUsed": {
             "type": "string"
+          },
+          "refreshing": {
+            "type": "boolean",
+            "description": "Whether a local snapshot is being refreshed by the configured model."
           },
           "metrics": {
             "type": "object",

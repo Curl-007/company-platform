@@ -11,6 +11,7 @@ import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
 import StatusBadge from '../../../components/common/StatusBadge';
 import ProgressBar from '../../../components/common/ProgressBar';
+import SortableSectionLayout, { SortableSection } from '../../../components/common/SortableSectionLayout';
 import { ApiError } from '../../../services/api';
 import { getSessionUser } from '../../../services/auth';
 import type { AiBusinessAdvice, Project, Requirement } from '../../../types';
@@ -173,7 +174,9 @@ export default function RequirementDetail({
         )}
       >
         <div className="detail-sections req-detail-body">
-          <section className="detail-section" aria-label={t('features.requirements.requirementDetail.summaryAriaLabel')}>
+          <SortableSectionLayout surface="requirements.detail" className="req-detail-sortable">
+            <SortableSection id="summary" label={t('features.requirements.requirementDetail.summaryTitle')}>
+              <section className="detail-section" aria-label={t('features.requirements.requirementDetail.summaryAriaLabel')}>
             <div className="detail-section-header">
               <span>{t('features.requirements.requirementDetail.summaryTitle')}</span>
             </div>
@@ -184,7 +187,7 @@ export default function RequirementDetail({
                 <span className="req-detail-chip">{t(assignmentLabel)}</span>
               </div>
 
-              <div className="detail-strip" style={{ marginTop: 14 }}>
+              <div className="detail-strip req-detail-strip">
                 <div className="detail-strip-item">
                   <span className="detail-strip-label">{t('features.requirements.requirementDetail.ownerLabel')}</span>
                   <span className="detail-strip-value">{requirement.owner || t('enums.unset')}</span>
@@ -217,12 +220,12 @@ export default function RequirementDetail({
                 </div>
               </div>
             </div>
-          </section>
-
-          {formError ? <div className="form-error req-detail-error">{formError}</div> : null}
+              </section>
+            </SortableSection>
 
           {(aiAdvice || aiLoading || aiError) ? (
-            <section className="requirement-ai-advice-panel req-detail-ai">
+            <SortableSection id="ai-advice" label={t('features.requirements.requirementDetail.aiTitle')}>
+              <section className="requirement-ai-advice-panel req-detail-ai">
               <div className="requirement-ai-advice-head">
                 <div>
                   <div className="section-title req-ai-title">
@@ -252,14 +255,17 @@ export default function RequirementDetail({
                   <AdviceList title={t('common.missingInfo')} items={aiAdvice.missingInfo} />
                 </div>
               ) : null}
-            </section>
+              </section>
+            </SortableSection>
           ) : null}
 
-          <section className="detail-section" aria-label={t('features.requirements.requirementDetail.editAriaLabel')}>
+            <SortableSection id="fields" label={t('features.requirements.requirementDetail.fieldsTitle')}>
+              <section className="detail-section" aria-label={t('features.requirements.requirementDetail.editAriaLabel')}>
             <div className="detail-section-header">
               <span>{t('features.requirements.requirementDetail.fieldsTitle')}</span>
             </div>
             <div className="detail-section-body">
+              {formError ? <div className="form-error req-detail-error">{formError}</div> : null}
               <div className="req-detail-form">
                 <div className="form-group">
                   <label className="form-label">{t('features.requirements.requirementDetail.titleLabel')}</label>
@@ -373,7 +379,9 @@ export default function RequirementDetail({
                 </div>
               </div>
             </div>
-          </section>
+              </section>
+            </SortableSection>
+          </SortableSectionLayout>
 
           <div className="req-detail-footer">
             <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>

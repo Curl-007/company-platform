@@ -4,7 +4,11 @@ const test = require("node:test");
 const { hasPermission, publicUser } = require("../src/security/accessControl");
 const { createCapabilityRegistry } = require("../src/modules/ai/capabilityRegistry");
 const { createExecutionGateway } = require("../src/modules/ai/executionGateway");
+const { createRequirementLifecycle } = require("../src/modules/ai/routes");
 const { createScopedExecutionTokenService } = require("../src/modules/ai/executionToken");
+const { createRequirementsRepository } = require("../src/modules/requirements/repository");
+const { createRequirementTaskSync } = require("../src/modules/requirements/taskSync");
+const { createStatusHistory } = require("../src/workflow/statusHistory");
 const { createAuditService } = require("../src/db/audit");
 const { createSqliteAccess } = require("../src/db/access");
 const { createSqliteRuntime } = require("../src/db/runtime");
@@ -194,9 +198,14 @@ const DOMAIN_SCHEMA = `
     after_json TEXT, ip TEXT, scope_type TEXT DEFAULT 'global',
     project_id TEXT, subject_user_id TEXT, created_at TEXT
   );
+  CREATE TABLE status_histories (
+    id TEXT PRIMARY KEY, resource_type TEXT, resource_id TEXT,
+    project_id TEXT, from_status TEXT, to_status TEXT, reason TEXT,
+    actor_id TEXT, actor_name TEXT, created_at TEXT
+  );
 `;
 
-function createDomainFixture({ actorPermissions = ["*"], allowProject = true, allowWrite = true, useTransaction = true, failingAudit = false, uiDirectiveSink, browserControl } = {}) {
+function createDomainFixture({ actorPermissions = ["*"], allowProject = true, allowWrite = true, controlEnabled = true, useTransaction = true, failingAudit = false, uiDirectiveSink, browserControl, findInvocation, assistantEnabled = true } = {}) {
   const runtime = createSqliteRuntime({ DatabaseSync, databaseFile: ":memory:" });
   runtime.exec(DOMAIN_SCHEMA);
   const access = createSqliteAccess(runtime);
@@ -207,17 +216,43 @@ function createDomainFixture({ actorPermissions = ["*"], allowProject = true, al
   let idCounter = 0;
   const nextId = async (prefix) => `${prefix}-DOM-${(idCounter += 1)}`;
   const tokenService = createScopedExecutionTokenService({ secret: "gateway-domain-test-secret-16" });
+  const requirementRepository = createRequirementsRepository({
+    insert: access.insert,
+    row: access.row,
+    rows: access.rows,
+    run: access.run,
+  });
+  const { syncRequirementTask, mergeRequirementLinkedTask } = createRequirementTaskSync({
+    insert: access.insert,
+    json,
+    nextId,
+    parse: JSON.parse,
+    row: access.row,
+    run: access.run,
+  });
+  const createRequirementWithInvariants = createRequirementLifecycle({
+    json,
+    mergeRequirementLinkedTask,
+    nextId,
+    repository: requirementRepository,
+    statusHistory: createStatusHistory({ insert: access.insert, nextId, now, rows: access.rows }),
+    syncRequirementTask,
+    transaction: access.transaction,
+  });
   const gateway = createExecutionGateway({
     audit,
     browserControl,
     canAccessProject: async (_user, projectId) => allowProject && projectId === "PRJ-1",
     canWriteProject: async (_user, projectId) => allowWrite && projectId === "PRJ-1",
-    controlStore: { get: async () => ({ enabled: true }) },
+    createRequirementWithInvariants,
+    controlStore: { get: async () => ({ enabled: controlEnabled }) },
+    findInvocation,
     hasPermission,
     insert: access.insert,
     json,
     nextId,
     now,
+    isPlatformAssistantEnabled: async () => assistantEnabled,
     publicUser,
     registry: createCapabilityRegistry(),
     row: access.row,
@@ -395,6 +430,18 @@ test("execution gateway creates a requirement, records the write audit, and reje
     assert.equal(stored.project_id, "PRJ-1");
     assert.equal(stored.owner, "Product Office");
     assert.deepEqual(JSON.parse(stored.acceptance_criteria), []);
+    const history = await access.row(
+      "SELECT * FROM status_histories WHERE resource_type = 'requirement' AND resource_id = @id",
+      { id: created.id },
+    );
+    assert.equal(history.to_status, "draft");
+    assert.equal(history.reason, "需求创建");
+    const followUpTask = await access.row(
+      "SELECT * FROM tasks WHERE source_type = 'requirement' AND source_id = @id",
+      { id: created.id },
+    );
+    assert.equal(followUpTask.requirement_id, created.id);
+    assert.deepEqual(JSON.parse(stored.linked_tasks), [followUpTask.id]);
     const audits = await auditRows();
     assert.equal(audits.length, 1);
     assert.equal(audits[0].action, "ai.capability_execution_write");
@@ -463,6 +510,36 @@ test("execution gateway creates a task linked to a same-project requirement", as
       { code: "RESOURCE_NOT_FOUND", status: 404 },
     );
     assert.equal((await access.row("SELECT COUNT(*) AS count FROM tasks")).count, 1);
+  } finally {
+    await gateway.close();
+    access.runtime?.close?.();
+  }
+});
+
+test("execution gateway enforces the control-plane kill switch at the execution boundary", async () => {
+  const { access, gateway, issue, seed, auditRows } = createDomainFixture({ controlEnabled: false });
+  await seed.user();
+  await seed.project();
+  await seed.requirement("REQ-1");
+  try {
+    // A capability disabled after this token was issued must be refused here,
+    // not only at issuance time (the admin PATCH route flips controlStore).
+    await assert.rejects(
+      () => gateway.executeDomain({
+        input: { capabilityId: "requirements-list", capabilityVersion: "1.0.0", projectId: "PRJ-1" },
+        token: issue().token,
+      }),
+      { code: "AI_CAPABILITY_DISABLED", status: 503 },
+    );
+    await assert.rejects(
+      () => gateway.executeDomain({
+        input: { capabilityId: "requirement-create", capabilityVersion: "1.0.0", projectId: "PRJ-1", title: "Must not be created" },
+        token: issue({ capabilityId: "requirement-create" }).token,
+      }),
+      { code: "AI_CAPABILITY_DISABLED", status: 503 },
+    );
+    assert.equal((await access.row("SELECT COUNT(*) AS count FROM requirements")).count, 1);
+    assert.ok((await auditRows()).some((entry) => entry.action === "ai.capability_execution_denied"));
   } finally {
     await gateway.close();
     access.runtime?.close?.();
@@ -851,6 +928,73 @@ test("execution gateway dispatches ui-control without a project scope and audits
     assert.equal(audits.length, 1);
     assert.equal(audits[0].action, "ai.tool.ui_control");
     assert.equal(audits[0].resource_type, "ai_ui_directive");
+  } finally {
+    await gateway.close();
+    access.runtime?.close?.();
+  }
+});
+
+test("execution gateway lets the standalone UI plugin use an active reusable assistant session", async () => {
+  const sinks = [];
+  const invocationId = "AIC-ASSISTANT-UI";
+  const { access, gateway, issue, seed, auditRows } = createDomainFixture({
+    findInvocation: async (id) => (id === invocationId ? {
+      actor_id: "USR-PM",
+      project_id: "PRJ-1",
+      status: "running",
+    } : null),
+    uiDirectiveSink: (userId, directive) => {
+      sinks.push({ directive, userId });
+      return 1;
+    },
+  });
+  await seed.user();
+  await seed.project();
+  const token = issue({
+    capabilityId: "platform-assistant",
+    invocationId,
+    reusable: true,
+    userId: "USR-PM",
+  }).token;
+  try {
+    const first = await gateway.executeDomain({
+      input: {
+        capabilityId: "platform-assistant",
+        capabilityVersion: "1.0.0",
+        directive: { kind: "layout", surface: "projects.detail", order: ["hero", "workspace"] },
+      },
+      token,
+    });
+    assert.deepEqual(first.result, { delivered: 1, ok: true });
+    assert.equal(first.evidence.event, "execution-gateway.company-ui");
+    assert.equal(first.evidence.mode, "write");
+
+    const second = await gateway.executeDomain({
+      input: {
+        capabilityId: "platform-assistant",
+        capabilityVersion: "1.0.0",
+        directive: { kind: "viewOpen", viewId: "risk-room" },
+      },
+      token,
+    });
+    assert.deepEqual(second.result, { delivered: 1, ok: true }, "the assistant token remains reusable within the active turn");
+    assert.equal(sinks.length, 2);
+    assert.deepEqual(sinks[0].directive, { kind: "layout", surface: "projects.detail", order: ["hero", "workspace"] });
+    assert.deepEqual(sinks[1].directive, { kind: "viewOpen", viewId: "risk-room" });
+    assert.equal((await auditRows()).filter((item) => item.action === "ai.tool.ui_control").length, 2);
+
+    gateway.revokeInvocation(invocationId);
+    await assert.rejects(
+      () => gateway.executeDomain({
+        input: {
+          capabilityId: "platform-assistant",
+          capabilityVersion: "1.0.0",
+          directive: { kind: "viewOpen", viewId: "risk-room" },
+        },
+        token,
+      }),
+      { code: "AI_CAPABILITY_INVOCATION_INACTIVE", status: 403 },
+    );
   } finally {
     await gateway.close();
     access.runtime?.close?.();

@@ -18,18 +18,20 @@
 
 **迁移方式**:strangler(绞杀者)而非一步重写——现有服务在完整垂直切片通过 parity 检查前保持权威;任一聚合同一时刻只有一个写入方;切写前排水任务、拒绝新写、只读切换窗口。业务事实留在公司数据库,`HARNESS_HOME` 只存敏感执行证据(会话、提示词、输出、附件),由 API 服务账户独占。
 
-## 2. 前端扩展机制:声明式 manifest vs 动态插件
+## 2. 前端扩展机制:封闭声明式 UI vs 动态代码
 
-**决策**(18 blueprint / 17-old 一致):React 客户端始终是编译产物可信客户端;扩展走「声明式 UI manifest(版本化)→ 受信 React 渲染器 → 预览 → 管理员批准 → 发布/回滚」。模型可以产出 manifest 或源码补丁两种工件,但两者都不在生产浏览器直接执行。
+**决策(as-built)**:React 客户端始终是编译产物可信客户端。dsh 通过独立 `company-ui-tool` 产生封闭 JSON 声明,由受信 React 渲染器解释;现有页面只接受登记过的 surface/layout/style 指令,新视图只接受 7 类 block 和内部页面链接。模型生成 HTML、JavaScript、CSS、选择器、外部 URL 或任意 fetch 均不进入生产浏览器。
 
-| 维度 | 声明式 manifest(as-built 方向) | 动态插件/模型生成代码 |
+| 维度 | 封闭声明式 UI(as-built) | 动态插件/模型生成代码 |
 | --- | --- | --- |
-| 安全边界 | 渲染器白名单解释,无 eval/动态脚本 | Harness VM 明确不是安全边界,定义仅进程内存 |
-| 审批与回滚 | manifest 版本化,预览-批准-发布-kill switch 全链可控 | 运行时行为难静态审查 |
-| 表达能力 | 受限(已批准的字段/视图/动作块) | 任意 |
-| 适用面 | 业务块、字段、表单、动作的受控扩展 | 仅隔离设计沙箱,不进生产 |
+| 安全边界 | 服务端 + 前端双重白名单;无 eval、脚本、任意样式或网络地址 | Harness VM 不是浏览器安全边界,运行时行为难静态审查 |
+| 状态与回滚 | 当前按 userId 存浏览器 localStorage;view 可 upsert/remove,布局可重置 | 动态副作用难复原,且可能绕过平台状态 |
+| 表达能力 | `stat/text/list/table/progress/notice/links` + 有限 surface token;业务数据先经平台工具读取后物化到 block | 任意,同时带来任意代码与出站能力 |
+| 适用面 | 个人工作视图、页面风格和详情区块排序 | 仅隔离开发/设计沙箱,不进生产 |
 
-**非目标**(18 明确):不用 prompt 指令替代 RBAC/审计/事务/状态机;不做浏览器直连 Harness/Provider;不把模型生成或第三方动态插件当可信生产代码;不把 PG/Redis/微服务拆分设为前提。
+当前**没有**服务端共享发布、版本审批、组织级插件市场或跨设备同步;此前蓝图中的“预览→管理员批准→发布/回滚”仍是未来共享视图的准入条件,不能写成已实现。若以后增加 live 数据绑定,必须使用批准的数据源/operation id,不能让 view spec 携带 URL。
+
+**非目标**:不用 prompt 指令替代 RBAC/审计/事务/状态机;不做浏览器直连 Harness/Provider;不把模型生成或第三方动态插件当可信生产代码;不把 PG/Redis/微服务拆分设为前提。
 
 ## 3. 数据库:SQLite 默认 / PostgreSQL 可选
 
@@ -87,32 +89,50 @@ w2 已锁定的技术决策(用户采纳):不加 SQL FK(继续应用层 prefligh
 - 优点:覆盖全流量(无论哪个调用方、哪条代码路径出站,都被同一策略拦截),运维只需维护一处规则。
 - 代价:无法按调用方/能力/项目区分策略粒度;所有出站文本都要过一遍规则引擎,proxy 成为吞吐与延迟单点;fail-open 意味着规则表损坏时脱敏降级(可用性优先),只有 block 语义保持硬失败。
 
-## 9. 已知遗留与风险清单
+## 9. 业务工具目录:OpenAPI 派生 + 显式排除
+
+**决策(as-built)**:普通 AI 助手的业务工具不再手写逐端点 wrapper;`platformOperationRegistry` 从 OpenAPI 派生所有符合准入的 JSON 业务操作,再用 denylist 排除敏感/传输面。当前结果是 19 个领域、152 个操作,由 1 个 catalog + 19 个领域工具承载。
+
+| 收益 | 代价/控制 |
+| --- | --- |
+| OpenAPI 与 AI 请求 schema 同源,新增字段/枚举不需再维护第二份工具参数 | OpenAPI 的错误会直接影响工具面;契约测试必须锁定操作数、schema 和关键排除项 |
+| catalog 可按需发现 method/path/path-query-body 精确契约,避免把 152 个 schema 全塞进提示词 | 工具目录较宽,模型选错 action 的概率上升;按领域分工具并要求先 catalog discovery |
+| 调用原 REST,自然复用 RBAC、项目范围、状态机与业务校验 | 新 OpenAPI 端点可能自动进入目录;评审时必须判断是否应加入 excluded prefix/operation |
+| 无需让 dsh 直连数据库或复制业务服务 | 多一次回环与 JSON 序列化;响应限制 512KiB、请求 body 限 64KiB |
+
+认证、AI Provider/助手/runtime 管理、health/meta、对象存储、二进制上传下载和页面访问遥测保持排除。写操作还需 dsh `allowed-once` 确认并先审计;这两层控制不能因“全量纳管”而放宽。
+
+## 10. 已知遗留与风险清单
 
 汇总自 17-dsh 各 Sprint 执行记录,按域归并(状态以 17-dsh 执行记录为准):
 
-**能力面**
-- capabilityRegistry manifest 仍只有 project-snapshot:领域能力经真实 invocation 启用需补 manifest 并扩 CAPABILITY_RISKS 风险模型(gateway/工具面/注册表链路已就绪,有直连测试)。
-- PM 对 defects-list 403(持 project:* 无 defect:*);如需放开改声明为 project:read。
-- 正式 capability 接入 ask 能力需放宽 capabilityAdapter 30s timeoutMs 与提示词(当前多工具被禁)。
+**能力与业务工具面**
+- 普通助手工具会话需要 `ai:*`、可用助手和一个可访问项目作为 invocation 归属锚点;无项目用户继续得到模型/本地对话,不会获得无法审计归属的业务工具。
+- OpenAPI 新增 JSON 路由默认可能进入业务工具目录;代码评审必须同步检查敏感 prefix/operation 排除与 catalog contract 测试。
+- `company_platform_catalog` 给出精确请求 schema,但模型仍可能选错合法操作;原 REST 权限/版本冲突/状态机是最终保护,不能依赖提示词正确性。
+- 工具面与模型提示已对齐(2026-08-16 修正):`skill` 工具(tool-skill 插件对所有会话注册,方法论技能目录)此前被窄域能力调用的系统提示误标为不存在,现提示已改为如实声明;助手会话提示同时声明无浏览器/shell/subagent。若新增模型可见工具,必须同步更新两处提示(company-execution-tool / company-platform-tool)。
+- browser_control 只注册在窄域能力调用路径(company-execution-tool 对 platform-assistant 会话跳过);普通助手会话无浏览器外联能力,这是有意的安全收敛——助手工具面保持纯平台 REST 目录,外联能力须走带 scoped token 与 invocation 审计的能力调用。若未来要放开,需先过 outboundUrlPolicy/browser 白名单评审并同步助手提示。
+
+**DSH UI**
+- 视图、surface style 与布局目前按用户存浏览器 localStorage,没有服务端跨设备同步、共享发布、版本审批与集中回滚。
+- 新建视图是数据物化后的封闭 block,没有自主 live query;实时数据必须由 AI 再调用业务工具并 upsert。未来若做绑定,只允许批准的 operation id/参数模板。
+- 19 个 page surface 只承诺受限 style;仅 15 个登记 detail surface 支持区块排序,不把“全部页面纳管”解释为任意 DOM 重排。
 
 **运行时与组合**
-- 生产 launcher 钉死 cordis.yml;draft/review 组合生产启用需改 company-runtime.mjs 守卫(HARNESS_ALLOW_COMPOSITION_VARIANTS=1 opt-in)。
+- 生产默认钉死 cordis.yml;draft/review 组合只有显式 `HARNESS_ALLOW_COMPOSITION_VARIANTS=1` 才启用,部署时不得把 opt-in 当默认值。
 - runtime 未初始化时 status 的 maxRunsPerRuntime 上报编译期默认值,首次推理后精确。
 
 **事件与交互**
-- 前端未监听 ws agent.interaction 加速刷新(轮询兜底可用,提速只需在 agentEventSocket 接一行)。
 - live 期间保留 8s 详情轮询作为对账兜底,后续可降频。
-- 实时事件流端到端演示需真实 AI 供应商 key(当前无 key;ws 通道已用临时 server 端到端验证)。
+- Provider 可用性独立于 API readiness;实时流断开时前端会回落到轮询,不能只凭 `/api/health` 判断真实模型链路健康。
 
 **计量与数据**
 - ai_token_usage.job_id 恒 null(为 AI job 计量预留);as-built 适配器事件暂不带 usage,先落 0 值行。
 - 演示数据 INV-DEMO-0001 与演示项目保留在运行库供界面查看,可随时删除。
 
 **测试与工程**
-- 迁移计数断言(atomic-upsert/postgres-import)已随 25/26/27 号迁移更新,后续加迁移需同步。
+- 迁移计数断言(atomic-upsert/postgres-import)在新增迁移时仍需同步。
 - zod 为传递依赖使用,待显式声明。
-- graceful-shutdown drill 在 Sprint 3 修复后未重跑 `npm run check` 全链验证。
 - Sprint 3 曾出现双 WSS 握手竞争(ws 库 abortHandshake 400),已改 noServer + 各自 upgrade 认领;后续若再增 ws 通道需沿用该模式。
 - CI 挂 PG service、生产 PG 切换窗口:见 §3。
 
@@ -121,7 +141,7 @@ w2 已锁定的技术决策(用户采纳):不加 SQL FK(继续应用层 prefligh
 - MCP client:企业微信/GitLab/CI 的 MCP 服务(须先过 outboundUrlPolicy 安全评审)。
 - 完全反转评估:仅当产品定位转向 agent 优先工作台时启动。
 
-## 10. 决策时间线(关键锁定点)
+## 11. 决策时间线(关键锁定点)
 
 | 时间 | 决策 | 落点 |
 | --- | --- | --- |
@@ -133,10 +153,11 @@ w2 已锁定的技术决策(用户采纳):不加 SQL FK(继续应用层 prefligh
 | 2026-08-14 | 双底座原则成文:不做完全反转三理由、回环安全不变量 | 17-dsh;本文 §1 |
 | 2026-08-14~15 | dsh 底座化 Sprint 1-5:计量/投影→可见→常驻→能力面→交互与提醒;常驻 runtime、平台侧调度、token 单绑定、waitToken 补丁相继锁定 | 17-dsh 执行记录;本文 §5-§7 |
 | 2026-08-15 | masking 双向脱敏挂 harnessProxy、block 403 fail-closed | 本文 §8 |
+| 2026-08-16 | OpenAPI 派生 19 域/152 项业务工具(含任务移交 POST);独立 UI 插件纳管 19 page + 15 detail surface,新建 UI 锁定封闭 JSON schema | 本文 §2、§9 |
 
 > 时间线仅为索引;每条决策的执行证据与验收细节以 10/15 台账和 17-dsh 执行记录为准,不在本文重复。
 
-## 11. 决策变更的触发条件
+## 12. 决策变更的触发条件
 
 下表是「重新打开某项决策」的信号,不是待办:出现左侧信号前,对应决策视为已锁定,实现与文档均不应偏离。
 
@@ -148,3 +169,4 @@ w2 已锁定的技术决策(用户采纳):不加 SQL FK(继续应用层 prefligh
 | token 单绑定 | 多工具单事务链路成为主流调用形态 |
 | masking 单点 | 按租户/项目差异化脱敏成为合规要求 |
 | 声明式前端扩展 | 高信任隔离环境建成且通过安全评审(在此之前动态插件永不进生产) |
+| OpenAPI 派生业务工具 | OpenAPI 无法稳定表达请求契约,或自动准入审查成本持续高于手写注册表 |

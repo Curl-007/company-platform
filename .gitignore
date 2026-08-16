@@ -40,3 +40,6 @@ outputs/
 # Windows PowerShell module analysis cache (machine-generated)
 Microsoft/
 api/Microsoft/
+# local run artifacts (repo-root databases, GUI test evidence)
+/app-*.db*
+gui-test-screenshots/

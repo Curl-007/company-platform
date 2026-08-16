@@ -1,8 +1,8 @@
 # dsh 底座化完整实施计划
 
-> 状态:执行中(Sprint 1)
+> 状态:已完成(Sprint 1-5 + 业务 API / 前端 UI 全量纳管收口)
 > 创建:2026-08-14
-> 范围分支:`remove-remote-docs`
+> 当前 as-built 分支:`main`
 > 关联讨论:前端凸显 dsh 方案、dsh 可集成能力清单、双底座架构评估(会话结论,未单独成文)
 
 ## 目标
@@ -24,13 +24,13 @@
             │ SDK JSON-RPC(回环,永不直接暴露)
 ┌───────────▼────────────────────────────────────────────────┐
 │ 常驻 dsh host(agent 底座 = 能力层)cordis 组合              │
-│   事件日志 session · 领域 tools(requirement/task/defect)    │
+│   session · 19 域/152 项业务操作 · 独立 UI 工具插件         │
 │   skills(交付方法论)· user-approval · schedule · subagent  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 - dsh host 只绑 127.0.0.1,永不直接对外,由平台 agent-gateway 做唯一入口(安全不变量,写入部署手册与 envPreflight)。
-- 领域数据与操作注册为 dsh 工具,全部经 executionGateway 签发 scoped token;平台用户成为 dsh 的审批人。
+- OpenAPI 中符合条件的 JSON 业务操作注册为 dsh 工具,全部经 executionGateway 签发 scoped token;认证、AI 控制面、密钥、健康/元数据、对象与二进制传输端点明确排除;平台用户成为 dsh 写操作的审批人。
 - 不做「完全反转」(业务全迁 cordis 插件):dsh 为 RC 期框架、Host 层无认证体系、业务与 agent 演进节奏不同。仅当产品定位转向 agent 优先工作台时重新评估。
 
 ## Sprint 1 · 地基:稳定性 + 计量 + 投影(约 3 人日)
@@ -165,3 +165,12 @@
   - **行为变化点**:dev/qa/pdm 不再看到侧栏入口(原先可见但 403)——按设计收口,交付说明标注。
   - **验证**:web typecheck/lint 0 警告、vitest 160 全过(新增 12:上下文桥 5 / usePendingInteractions 4 / useCapabilityRunner 3)、build 通过;e2e full-ui-flow 新增 M3(Bot 开关→侧栏可见→上下文条显示当前页面→侧栏内关闭)与 DEV 无 Bot 入口断言,针对受影响页面(B/C/D/M/M3/DEV)6 用例全过(隔离 API 4011 + 演示种子,SEED_* 清空避免 .env 污染);浏览器目检:需求管理选项目后侧栏上下文条显示「当前页面:需求管理 / 项目:Work Platform Optimization」、状态 chip「空闲 · 队列 0 · 已启动」、7 能力托盘 300px 宽无横向溢出、切到工作台后项目行不残留(防串页守卫生效)。测试过程中修正 e2e 关闭路径:固定定位侧栏覆盖顶栏右缘(与旧侧栏一致),关闭走侧栏内 X 按钮。
   - 遗留:① 侧栏聊天仍走 /api/ai/chat,直连 dsh harness 会话需后端会话型端点(超出纯前端范围,按计划不做);② 页面级能力入口植入按用户决策仅保留侧栏方案;③ 交互卡在侧栏关闭时不显示(仅顶栏徽标 + toast 提醒),打开侧栏即见——如需关闭侧栏也能应答,后续可把交互卡提升为全局浮层。
+- 2026-08-16:**业务 API 与前端 UI 纳入 dsh 管理的 as-built 收口**:
+  - **业务工具目录**:`platformOperationRegistry.js` 从 `api/openapi.json` 派生 19 个业务域、152 个受控 JSON REST 操作;`company-platform-tool.mjs` 注册 `company_platform_catalog` + 19 个 `company_<domain>` 工具。catalog 无 domain 时返回领域/工具/操作数,指定 domain 时返回每项操作的 method/path、读写属性以及精确 path/query/body schema(含本地 `$ref` 展开后的公开 schema),工具请求只允许 `{path,query,body}`。最终静态审计补齐了前端已调用但此前未入 OpenAPI 的任务移交 `POST /api/tasks/{id}/handoff`,因此最终计数由 151 更新为 152。
+  - **执行与安全边界**:业务工具经回环 `/v1/platform-operation` 恢复当前平台用户,再以内部 actor token 调原 REST 路由;原 RBAC、项目范围、状态机与业务校验继续是唯一裁决者。写操作在工具层要求 `allowed-once` 人工确认,网关在调用原 API 前写审计,审计不可用则 fail-closed。认证、AI runtime/Provider 管理、健康/元数据、对象与二进制上传下载等端点不进入目录;因此“全部纳管”特指可安全表达为 JSON 的业务 API,不包含敏感控制面或文件流。
+  - **独立 UI 插件**:`company-ui-tool.mjs` 独立注册 7 个工具(`catalog/control/layout/style/view_upsert/view_remove/view_open`),由 `company_ui_catalog` 暴露 14 类指令、34 个 surface(19 个页面 + 15 个详情)、7 类声明式区块及安全边界。内部 `navigate` 可携带受限平台实体 `focus`,直接打开现有详情路由,但不能表达任意 URL。所有已登记页面根节点统一有 `data-layout-surface`;页面支持受限风格,详情同时支持区块顺序。
+  - **布局与设计**:15 个详情 surface 接入 `SortableSectionLayout`;正常浏览隐藏拖拽控件,进入布局编辑模式后可拖拽、键盘/上下移动和重置。人工排序与 dsh `layout` 指令均按用户写入浏览器 `localStorage`,刷新恢复;新增区块会安全追加,未知/重复区块 id 会被忽略。`surfaceStyle` 只接受 `default|quiet|contrast`、1-3 列和 8-32px 间距,不接受选择器或任意 CSS。
+  - **新建声明式 UI**:`viewUpsert` 可创建/更新当前用户的持久化 DSH 视图,渲染器只接受 `stat/text/list/table/progress/notice/links`;链接只能指向登记过的内部页面。服务端和前端双重归一化拒绝 HTML、JavaScript、CSS、外部 URL、未知字段和越界集合;业务数据须先通过 `company_platform_catalog`/领域工具读取,view spec 本身没有任意 fetch 或可执行数据源。
+  - **AI 页面体验**:人工能力工具栏已从 AI 分析页移除;control plane 中 `approved` 能力默认启用,但服务端 kill switch、`ai:*`、原 REST 权限、项目范围和写确认仍生效。AI 摘要首载使用有界自动重试(`retry=2`,800ms),首载最终失败后再自动 reload 一次,缓存采用 stale-while-revalidate;模型后台刷新另有一次 30s 有界跟进,避免浏览器刷新后必须手点“重试”。
+  - **契约证据**:`platform-operation-registry.test.js`、`ai-company-platform-tool.test.js`、`ai-platform-operation-gateway.test.js` 覆盖目录/schema/排除项/确认与网关;`ai-company-ui-tool.test.js`、`ai-ui-directives.test.js` 覆盖独立插件和双重白名单;`SortableSectionLayout.test.tsx`、`dshUiStore.test.ts`、`useUiCommandExecutor.test.tsx` 覆盖排序、持久化与指令执行;`web/e2e/dsh-foundation.spec.ts` 覆盖中英文 17 项导航、AI 硬刷新、声明式视图刷新恢复、页面风格恢复和详情排序恢复;`roles-flow.spec.ts` 覆盖 admin/pm/pdm/dev/qa 五角色的 DSH 界面可见与打开。
+  - **数据库口径不变**:平台默认业务数据库仍为 SQLite;PostgreSQL 仅为可选验证路径。DSH UI 偏好当前是按用户隔离的浏览器本地状态,不是服务端跨设备配置表。

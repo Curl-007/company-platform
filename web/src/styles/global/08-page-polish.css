@@ -1,0 +1,215 @@
+/* ==========================================================================
+   Page-wide polish — 全页面共性问题收口（液态玻璃）
+
+   Based on the full-app vision audit (17 routes + detail surfaces):
+   1. Sidebar active state reads too weak against the dark rail.
+   2. Stat strips exist in two systems (metric-card vs *-signal-strip) with
+      drifting card skins; three strip containers lack a grid definition.
+   3. Tertiary text sits below comfortable contrast on frosted surfaces.
+   4. Modal glass is too translucent for form-heavy dialogs.
+   Appended after 07 so both win the cascade over the base modules.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Sidebar active state — clearer rail signal (audit: mentioned on 6+ pages)
+   -------------------------------------------------------------------------- */
+.kaneo-sidebar-menu-button[data-active='true'] {
+  background: color-mix(in srgb, var(--sidebar-primary, var(--accent)) 24%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+
+.kaneo-sidebar-menu-button[data-active='true']::before {
+  height: 20px;
+  width: 3px;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--sidebar-primary, var(--accent)) 55%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   2. Signal-strip system — one card skin, one grid, glass-registered
+   -------------------------------------------------------------------------- */
+.req-signal-strip,
+.qa-signal-strip,
+.dl-signal-strip,
+.doc-signal-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Signal cards join the surface glass tier so strips stop looking flat
+   next to frosted panels. */
+.req-signal,
+.qa-signal,
+.dl-signal,
+.doc-signal {
+  border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+/* One numeral scale across every strip. */
+.req-signal strong,
+.qa-signal strong,
+.dl-signal strong,
+.doc-signal strong {
+  font-size: 21px;
+  font-weight: 650;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.req-signal-label,
+.qa-signal-label,
+.dl-signal-label,
+.doc-signal-label {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* Risk emphasis stays, but tinted — not a saturated slab. */
+.req-signal.is-risk,
+.qa-signal.is-risk,
+.dl-signal.is-risk,
+.doc-signal.is-risk {
+  border-color: color-mix(in srgb, var(--destructive) 35%, var(--border-default));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--destructive) 9%, transparent), transparent),
+    color-mix(in srgb, var(--card) 78%, transparent);
+}
+
+/* Metric grid keeps its own system but breathes with the same rhythm. */
+.metric-grid {
+  gap: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   3. Tertiary text contrast — lift one step for frosted surfaces
+   -------------------------------------------------------------------------- */
+:root {
+  --tertiary: color-mix(in srgb, var(--muted-foreground) 82%, white);
+}
+
+/* --------------------------------------------------------------------------
+   4. Dialog glass — more body for form-heavy modals (audit: testcase dialog)
+   -------------------------------------------------------------------------- */
+.ai-invocation-drawer,
+.ui-dialog-content,
+.ui-sheet-content,
+.ui-popover-content,
+.app-overlay-dialog > .panel,
+.login-shell {
+  background: color-mix(in srgb, var(--popover) 92%, transparent);
+}
+
+/* Dialog section labels get one quiet scale (audit: field crowding). */
+.ui-dialog-content .form-label,
+.app-overlay-dialog .form-label {
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  color: var(--text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   5. Table status legibility (audit: "活跃/ready blend into background")
+   -------------------------------------------------------------------------- */
+.status-badge {
+  font-weight: 550;
+}
+
+.status-badge.neutral {
+  color: color-mix(in srgb, var(--text-secondary) 88%, white);
+}
+
+.data-table th {
+  letter-spacing: 0.01em;
+}
+
+/* --------------------------------------------------------------------------
+   6. Filter/toolbars — consistent wrap rhythm (audit: dense filter rows)
+   -------------------------------------------------------------------------- */
+.req-pool-toolbar,
+.qa-toolbar,
+.dl-toolbar,
+.doc-toolbar {
+  gap: 10px;
+}
+
+/* --------------------------------------------------------------------------
+   7. Responsive strips
+   -------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+  .req-signal-strip,
+  .qa-signal-strip,
+  .dl-signal-strip,
+  .doc-signal-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .req-signal-strip,
+  .qa-signal-strip,
+  .dl-signal-strip,
+  .doc-signal-strip {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* AI advice panels: description text reads as content, not decoration
+   (audit: grey-on-grey advice copy on multiple pages). */
+.requirement-ai-advice-panel p,
+.business-ai-panel p,
+.requirement-ai-advice-panel .body-text,
+.business-ai-panel .body-text {
+  color: var(--text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   8. Round-2 polish — interaction feedback & density (vision audit follow-up)
+   -------------------------------------------------------------------------- */
+
+/* Form controls answer hover before focus (audit: "filters feel dead"). */
+.form-input:hover:not(:focus):not([aria-invalid='true']),
+.form-select:hover:not(:focus):not([aria-invalid='true']),
+.form-textarea:hover:not(:focus):not([aria-invalid='true']) {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-strong));
+}
+
+/* Table row hover reads clearly (audit: weak interaction feedback). */
+.data-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--bg-hover) 76%, transparent);
+}
+
+/* Dialog form rhythm: fields breathe (audit: testcase dialog crowding). */
+.ui-dialog-content .form-group,
+.app-overlay-dialog .form-group,
+.ui-dialog-content form,
+.app-overlay-dialog form {
+  gap: 8px;
+}
+
+/* Risk signal stays semantic but one notch calmer (audit: red too loud). */
+.req-signal.is-risk strong,
+.qa-signal.is-risk strong,
+.dl-signal.is-risk strong,
+.doc-signal.is-risk strong {
+  color: color-mix(in srgb, var(--destructive) 86%, white);
+}
+
+.req-signal.is-risk,
+.qa-signal.is-risk,
+.dl-signal.is-risk,
+.doc-signal.is-risk {
+  border-color: color-mix(in srgb, var(--destructive) 28%, var(--border-default));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--destructive) 7%, transparent), transparent),
+    color-mix(in srgb, var(--card) 80%, transparent);
+}

@@ -1,6 +1,7 @@
 import { FileText, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import BusinessAdvicePanel from '../../../components/common/BusinessAdvicePanel';
+import SortableSectionLayout, { SortableSection } from '../../../components/common/SortableSectionLayout';
 import StatusBadge from '../../../components/common/StatusBadge';
 import { DOC_TYPE_LABELS, DOC_AI_STATUS_LABELS, labelOf } from '../../../constants/enums';
 import type { Document } from '../../../types';
@@ -48,8 +49,9 @@ export default function DocumentDetail({
               </button>
             </div>
           </div>
-          <div className="panel-body doc-detail-body">
-            <section className="doc-detail-summary">
+          <SortableSectionLayout surface="documents.detail" className="panel-body doc-detail-body">
+            <SortableSection id="summary" label={doc.title}>
+              <section className="doc-detail-summary">
               <div className="doc-detail-badges">
                 <span className="doc-ext-chip">{formatLabel(doc.fileName || doc.title)}</span>
                 <StatusBadge label={labelOf(DOC_TYPE_LABELS, doc.type)} status={doc.type} />
@@ -77,30 +79,34 @@ export default function DocumentDetail({
                   <strong className="text-mono">{updated}</strong>
                 </div>
               </div>
-            </section>
+              </section>
+            </SortableSection>
 
             {canUseAi ? (
-              <BusinessAdvicePanel
-                targetType="document"
-                targetId={doc.id}
-                title={t('features.documents.documentDetail.aiDocumentAnalysis')}
-                description={t('features.documents.documentDetail.aiAnalysisDescription')}
-                buttonText={t('features.documents.documentDetail.aiSummarize')}
-                question={t('features.documents.documentDetail.aiSummarizeQuestion')}
-                draft={() => ({
-                  title: doc.title,
-                  type: doc.type,
-                  category: doc.category,
-                  owner: doc.owner,
-                  projectName,
-                  linkedRequirements: doc.linkedRequirements,
-                })}
-              />
+              <SortableSection id="ai-advice" label={t('features.documents.documentDetail.aiDocumentAnalysis')}>
+                <BusinessAdvicePanel
+                  targetType="document"
+                  targetId={doc.id}
+                  title={t('features.documents.documentDetail.aiDocumentAnalysis')}
+                  description={t('features.documents.documentDetail.aiAnalysisDescription')}
+                  buttonText={t('features.documents.documentDetail.aiSummarize')}
+                  question={t('features.documents.documentDetail.aiSummarizeQuestion')}
+                  draft={() => ({
+                    title: doc.title,
+                    type: doc.type,
+                    category: doc.category,
+                    owner: doc.owner,
+                    projectName,
+                    linkedRequirements: doc.linkedRequirements,
+                  })}
+                />
+              </SortableSection>
             ) : null}
 
-            <section className="doc-detail-block">
-              <div className="section-title">{t('features.documents.documentDetail.fileInfo')}</div>
-              <div className="doc-file-grid">
+            <SortableSection id="file-info" label={t('features.documents.documentDetail.fileInfo')}>
+              <section className="doc-detail-block">
+                <div className="section-title">{t('features.documents.documentDetail.fileInfo')}</div>
+                <div className="doc-file-grid">
                 <div>
                   <span>{t('features.documents.documentDetail.size')}</span>
                   <strong>{doc.fileSize ? formatFileSize(doc.fileSize) : t('features.documents.documentDetail.unknown')}</strong>
@@ -117,43 +123,50 @@ export default function DocumentDetail({
                   <span>{t('features.documents.documentDetail.version')}</span>
                   <strong>{doc.version || '-'}</strong>
                 </div>
-              </div>
-            </section>
+                </div>
+              </section>
+            </SortableSection>
 
             {doc.linkedRequirements?.length ? (
-              <section className="doc-detail-block">
-                <div className="section-title">{t('features.documents.documentDetail.linkedRequirements')}</div>
-                <ul className="doc-detail-list">
-                  {doc.linkedRequirements.map((requirement, index) => (
-                    <li key={`${requirement}-${index}`}>{requirement}</li>
-                  ))}
-                </ul>
-              </section>
+              <SortableSection id="linked-requirements" label={t('features.documents.documentDetail.linkedRequirements')}>
+                <section className="doc-detail-block">
+                  <div className="section-title">{t('features.documents.documentDetail.linkedRequirements')}</div>
+                  <ul className="doc-detail-list">
+                    {doc.linkedRequirements.map((requirement, index) => (
+                      <li key={`${requirement}-${index}`}>{requirement}</li>
+                    ))}
+                  </ul>
+                </section>
+              </SortableSection>
             ) : null}
 
             {doc.risks?.length ? (
-              <section className="doc-detail-block">
-                <div className="section-title">{t('features.documents.documentDetail.riskItems')}</div>
-                <ul className="doc-detail-list">
-                  {doc.risks.map((risk, index) => (
-                    <li key={`${risk}-${index}`}>{risk}</li>
-                  ))}
-                </ul>
-              </section>
+              <SortableSection id="risks" label={t('features.documents.documentDetail.riskItems')}>
+                <section className="doc-detail-block">
+                  <div className="section-title">{t('features.documents.documentDetail.riskItems')}</div>
+                  <ul className="doc-detail-list">
+                    {doc.risks.map((risk, index) => (
+                      <li key={`${risk}-${index}`}>{risk}</li>
+                    ))}
+                  </ul>
+                </section>
+              </SortableSection>
             ) : null}
 
-            <section className="doc-detail-block">
-              <div className="section-title">{t('features.documents.documentDetail.documentContent')}</div>
-              {doc.content ? (
-                <pre className="doc-content-preview">{doc.content}</pre>
-              ) : (
-                <div className="doc-content-empty">
-                  <FileText size={16} aria-hidden="true" />
-                  {t('features.documents.documentDetail.noExtractedBody')}
-                </div>
-              )}
-            </section>
-          </div>
+            <SortableSection id="content" label={t('features.documents.documentDetail.documentContent')}>
+              <section className="doc-detail-block">
+                <div className="section-title">{t('features.documents.documentDetail.documentContent')}</div>
+                {doc.content ? (
+                  <pre className="doc-content-preview">{doc.content}</pre>
+                ) : (
+                  <div className="doc-content-empty">
+                    <FileText size={16} aria-hidden="true" />
+                    {t('features.documents.documentDetail.noExtractedBody')}
+                  </div>
+                )}
+              </section>
+            </SortableSection>
+          </SortableSectionLayout>
         </div>
       </div>
     </>

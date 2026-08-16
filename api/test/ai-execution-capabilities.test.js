@@ -19,6 +19,7 @@ test("execution capability registry declares the domain toolset with platform pe
   assert.deepEqual(
     EXECUTION_CAPABILITIES.map(({ id, version, permission, mode }) => ({ id, version, permission, mode })),
     [
+      { id: "platform-assistant", version: "1.0.0", permission: "ai:*", mode: "read" },
       { id: "project-snapshot", version: "1.0.0", permission: "project:read", mode: "read" },
       { id: "requirements-list", version: "1.0.0", permission: "requirement:read", mode: "read" },
       { id: "requirement-get", version: "1.0.0", permission: "requirement:read", mode: "read" },

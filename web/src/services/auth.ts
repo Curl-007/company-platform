@@ -135,6 +135,32 @@ export async function updateMyProfile(input: UpdateProfileInput): Promise<Sessio
   return res.data;
 }
 
+export type ChangePasswordInput = {
+  currentPassword: string;
+  newPassword: string;
+};
+
+/**
+ * Self-service password change. The server revokes every established session
+ * (token_version bump) and returns a fresh token for this session only —
+ * it replaces the stored token so the user stays signed in here.
+ */
+export async function changeMyPassword(input: ChangePasswordInput): Promise<SessionUser> {
+  const generation = getSessionGeneration();
+  const tokenAtStart = getToken();
+  const userIdAtStart = currentUser?.id ?? null;
+  const res = await post<ApiResponse<{ user: SessionUser; token: string }>>('/api/auth/change-password', input);
+  assertCurrentSession(generation, tokenAtStart);
+  if ((currentUser?.id ?? null) !== userIdAtStart) {
+    throw new SessionSupersededError();
+  }
+  setToken(res.data.token);
+  currentUser = res.data.user;
+  writeUser(res.data.user);
+  setAsyncCacheUser(res.data.user.id);
+  return res.data.user;
+}
+
 /**
  * Clear token, user snapshot, and async data cache.
  * Used by explicit logout and automatic 401 session expiry.

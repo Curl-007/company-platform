@@ -42,6 +42,10 @@ interface AsyncState<T> {
 export interface UseAsyncOptions {
   /** Stable cache namespace used by mutation invalidation. */
   cacheKey: string;
+  /** Optional bounded retry policy for first-load requests that can recover from transient failures. */
+  retry?: boolean | number;
+  /** Delay between retries, in milliseconds. */
+  retryDelay?: number;
 }
 
 function messageFromError(error: unknown): string {
@@ -75,7 +79,8 @@ export function useAsync<T>(
     initialData: seed?.data,
     initialDataUpdatedAt: seed?.at,
     staleTime: ASYNC_CACHE_FRESH_MS,
-    retry: false,
+    retry: options.retry ?? false,
+    ...(options.retryDelay !== undefined ? { retryDelay: options.retryDelay } : {}),
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });

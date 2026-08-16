@@ -52,6 +52,19 @@
     "bioPlaceholder": "补充职责范围、协作偏好或当前负责的方向",
     "saving": "保存中...",
     "saveProfile": "保存资料",
+    "changePassword": "修改密码",
+    "changePasswordSubmit": "确认修改",
+    "changePasswordNote": "修改成功后，其他已登录设备将被强制退出；当前设备保持登录。",
+    "currentPassword": "当前密码",
+    "newPassword": "新密码",
+    "confirmNewPassword": "确认新密码",
+    "passwordTooShort": "新密码至少 8 位。",
+    "passwordMismatch": "两次输入的新密码不一致。",
+    "passwordSameAsCurrent": "新密码不能与当前密码相同。",
+    "passwordChanged": "密码已修改，其他设备已退出登录。",
+    "passwordChangeFailed": "密码修改失败，请重试。",
+    "collapse": "收起",
+    "expand": "展开",
     "hideAiPanel": "隐藏 AI 面板",
     "showAiPanel": "显示 AI 面板",
     "openProfile": "打开个人资料",
@@ -152,6 +165,7 @@
       "delivery": "交付中心",
       "documents": "文档中心",
       "ai": "AI 分析",
+      "dsh-ui": "DSH 界面",
       "reports": "报表中心",
       "products": "产品管理",
       "flow": "研发流程",
@@ -461,6 +475,19 @@
     }
   },
   "features": {
+    "dshUi": {
+      "viewSelect": "选择 DSH 视图",
+      "empty": "暂无 DSH 声明式视图",
+      "blockType": {
+        "stat": "指标",
+        "text": "文本",
+        "list": "列表",
+        "table": "表格",
+        "progress": "进度",
+        "notice": "通知",
+        "links": "站内导航"
+      }
+    },
     "testing": {
       "testCasesTab": {
         "noPermissionDelete": "当前账号无权删除测试用例。",
@@ -523,6 +550,8 @@
         "empty": "暂无匹配的测试用例。"
       },
       "testCaseForm": {
+        "sectionBasic": "基本信息",
+        "sectionExecution": "执行内容",
         "nameRequired": "请输入测试用例名称。",
         "projectRequired": "请选择所属项目。",
         "createFailed": "创建测试用例失败",
@@ -1488,6 +1517,7 @@
         "aiAdviceQuestion": "请分析该项目的执行状态、主要风险、交付缺口和下一步动作。"
       },
       "projectDeliveryPanel": {
+        "signalTitle": "交付概览",
         "signalReqAccept": "需求验收",
         "signalReqOpen": "{{count}} 未关闭",
         "signalTaskProgress": "任务进度",
@@ -2104,6 +2134,8 @@
         "retryJobFailed": "重试 AI 任务失败",
         "capabilityQueued": "已将批准工具作为 AI 任务启动。",
         "capabilityInvokeFailed": "无法启动批准工具。",
+        "capabilityInvocationPending": "该工具调用仍在处理中，请稍后重试。",
+        "capabilityInvocationUncertain": "请求状态暂不明确；重试将继续使用同一次工具调用。",
         "interactionsMovedToSidebar": "待处理交互已全局化：点击顶部 AI Copilot 按钮打开侧栏即可应答。",
         "newChat": "新对话",
         "tabs": {
@@ -2142,7 +2174,12 @@
         "kindNavigate": "已跳转到页面 {{page}}",
         "kindOpenAiSidebar": "AI 侧边栏已{{value}}",
         "openAiSidebarOpen": "打开",
-        "openAiSidebarClose": "收起"
+        "openAiSidebarClose": "收起",
+        "kindLayout": "已更新 {{surface}} 的区块顺序",
+        "kindSurfaceStyle": "已更新 {{surface}} 的界面风格",
+        "kindViewUpsert": "已保存声明式视图“{{title}}”",
+        "kindViewRemove": "已移除声明式视图 {{viewId}}",
+        "kindViewOpen": "已打开声明式视图 {{viewId}}"
       },
       "aiMaskingAdmin": {
         "title": "内容脱敏规则",
@@ -2310,6 +2347,11 @@
         "kind_reduceMotion": "减弱动效",
         "kind_navigate": "页面跳转",
         "kind_openAiSidebar": "AI 侧边栏开关",
+        "kind_layout": "区块顺序",
+        "kind_surfaceStyle": "界面风格",
+        "kind_viewUpsert": "创建或更新声明式视图",
+        "kind_viewRemove": "移除声明式视图",
+        "kind_viewOpen": "打开声明式视图",
         "modeLabel": "主题模式",
         "mode_dark": "深色",
         "mode_light": "浅色",
@@ -2323,6 +2365,7 @@
         "reduceMotionLabel": "开启减弱动效",
         "pageLabel": "目标页面",
         "openAiSidebarLabel": "打开侧边栏",
+        "jsonPayloadLabel": "安全 JSON 参数",
         "submit": "发送指令",
         "sending": "发送中...",
         "invalid": "指令参数无效，请检查取值范围",

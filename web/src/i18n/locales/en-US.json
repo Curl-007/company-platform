@@ -52,6 +52,19 @@
     "bioPlaceholder": "Describe your scope, collaboration preferences, or current focus",
     "saving": "Saving...",
     "saveProfile": "Save profile",
+    "changePassword": "Change password",
+    "changePasswordSubmit": "Change password",
+    "changePasswordNote": "After changing your password, all other signed-in devices are signed out; this device stays signed in.",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmNewPassword": "Confirm new password",
+    "passwordTooShort": "The new password must be at least 8 characters.",
+    "passwordMismatch": "The two new passwords do not match.",
+    "passwordSameAsCurrent": "The new password must differ from the current one.",
+    "passwordChanged": "Password changed; other devices were signed out.",
+    "passwordChangeFailed": "Password change failed. Please retry.",
+    "collapse": "Collapse",
+    "expand": "Expand",
     "hideAiPanel": "Hide AI panel",
     "showAiPanel": "Show AI panel",
     "openProfile": "Open profile",
@@ -152,6 +165,7 @@
       "delivery": "Delivery",
       "documents": "Documents",
       "ai": "AI Analysis",
+      "dsh-ui": "DSH UI",
       "reports": "Reports",
       "products": "Products",
       "flow": "Workflow",
@@ -461,6 +475,19 @@
     }
   },
   "features": {
+    "dshUi": {
+      "viewSelect": "Select DSH view",
+      "empty": "No DSH declarative views",
+      "blockType": {
+        "stat": "Metric",
+        "text": "Text",
+        "list": "List",
+        "table": "Table",
+        "progress": "Progress",
+        "notice": "Notice",
+        "links": "Internal navigation"
+      }
+    },
     "testing": {
       "testCasesTab": {
         "noPermissionDelete": "Your account does not have permission to delete test cases.",
@@ -523,6 +550,8 @@
         "empty": "No matching test cases."
       },
       "testCaseForm": {
+        "sectionBasic": "Basics",
+        "sectionExecution": "Execution",
         "nameRequired": "Please enter a test case name.",
         "projectRequired": "Please select a project.",
         "createFailed": "Failed to create test case",
@@ -1488,6 +1517,7 @@
         "aiAdviceQuestion": "Analyze this project's execution status, key risks, delivery gaps, and next actions."
       },
       "projectDeliveryPanel": {
+        "signalTitle": "Delivery overview",
         "signalReqAccept": "Requirements Accepted",
         "signalReqOpen": "{{count}} open",
         "signalTaskProgress": "Task Progress",
@@ -2104,6 +2134,8 @@
         "retryJobFailed": "Failed to retry AI job",
         "capabilityQueued": "Approved tool started as an AI job.",
         "capabilityInvokeFailed": "Unable to start the approved tool.",
+        "capabilityInvocationPending": "This tool invocation is still being processed. Try again shortly.",
+        "capabilityInvocationUncertain": "The request outcome is uncertain; retrying will continue the same tool invocation.",
         "interactionsMovedToSidebar": "Pending interactions are now global: open the AI Copilot sidebar from the top bar to answer them.",
         "newChat": "New Chat",
         "tabs": {
@@ -2142,7 +2174,12 @@
         "kindNavigate": "navigated to page {{page}}",
         "kindOpenAiSidebar": "AI sidebar {{value}}",
         "openAiSidebarOpen": "opened",
-        "openAiSidebarClose": "closed"
+        "openAiSidebarClose": "closed",
+        "kindLayout": "updated block order for {{surface}}",
+        "kindSurfaceStyle": "updated interface style for {{surface}}",
+        "kindViewUpsert": "saved declarative view “{{title}}”",
+        "kindViewRemove": "removed declarative view {{viewId}}",
+        "kindViewOpen": "opened declarative view {{viewId}}"
       },
       "aiMaskingAdmin": {
         "title": "Content masking rules",
@@ -2310,6 +2347,11 @@
         "kind_reduceMotion": "Reduce motion",
         "kind_navigate": "Navigate",
         "kind_openAiSidebar": "AI sidebar toggle",
+        "kind_layout": "Block order",
+        "kind_surfaceStyle": "Surface style",
+        "kind_viewUpsert": "Create or update declarative view",
+        "kind_viewRemove": "Remove declarative view",
+        "kind_viewOpen": "Open declarative view",
         "modeLabel": "Theme mode",
         "mode_dark": "Dark",
         "mode_light": "Light",
@@ -2323,6 +2365,7 @@
         "reduceMotionLabel": "Enable reduce motion",
         "pageLabel": "Target page",
         "openAiSidebarLabel": "Open sidebar",
+        "jsonPayloadLabel": "Safe JSON payload",
         "submit": "Send directive",
         "sending": "Sending...",
         "invalid": "Invalid directive parameters; check the value ranges",

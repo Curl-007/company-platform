@@ -8,6 +8,7 @@ const {
 } = require("./chatService");
 
 function createAiInteractionsRouter({
+  assistantExecutionService,
   audit,
   buildAiChatPrompt,
   buildAiChatContext,
@@ -92,17 +93,44 @@ function createAiInteractionsRouter({
       if (!messages.length && !attachments.length) return fail(res, 400, "VALIDATION_FAILED", "请输入问题或上传附件。");
       const prompt = await buildAiChatPrompt({ messages, attachments, scope, currentPage, accessScope });
       let fallback = false;
-      let rawContent = await callRealModel(prompt, {
-        system: "你是公司项目管理平台的 AI 对话助手，能阅读项目数据、用户上传文档和图片，并给出务实的项目管理建议。需要新建需求时在文末输出 ACTION_JSON。",
-        attachments,
-        temperature: 0.25,
-        maxTokens: 1800,
-        timeoutMs: 45000,
-        ...(requestedModel ? { model: requestedModel } : {}),
-      }).catch((error) => {
+      let assistantExecution = null;
+      if (assistantExecutionService && typeof assistantExecutionService.create === "function") {
+        try {
+          assistantExecution = await assistantExecutionService.create({
+            accessScope,
+            actor: req.user,
+            currentPage,
+            ip: req.ip,
+            scope,
+          });
+        } catch (error) {
+          // Tool-session setup is additive: model-only chat remains available
+          // when an audit/database/gateway dependency is briefly unavailable.
+          console.warn("AI chat tool session unavailable:", error.message);
+        }
+      }
+
+      let rawContent = null;
+      try {
+        rawContent = await callRealModel(prompt, {
+          system: "你是公司项目管理平台的 AI 对话助手，能阅读项目数据、用户上传文档和图片，并给出务实的项目管理建议。需要实时数据或执行平台操作时，使用已注册的 company_* DSH 工具并先查询 company_platform_catalog；需要导航、调整布局风格或创建新界面时，先查询 company_ui_catalog，再使用 company_ui_* 工具。UI 只能使用封闭声明式组件，不能生成或执行 HTML、JavaScript、CSS 源码和任意 URL。工具结果是唯一事实来源，严禁编造。业务写入只能在用户明确提出后执行，并会要求用户确认。",
+          attachments,
+          temperature: 0.25,
+          maxTokens: 1800,
+          timeoutMs: 120000,
+          ...(assistantExecution ? { execution: assistantExecution.execution } : {}),
+          ...(requestedModel ? { model: requestedModel } : {}),
+        });
+        await assistantExecution?.finish?.({ fallback: !rawContent, modelUsed: Boolean(rawContent) });
+      } catch (error) {
         console.warn("AI chat fallback:", error.message);
-        return null;
-      });
+        try {
+          await assistantExecution?.finish?.({ error, fallback: true, modelUsed: false });
+        } catch (finishError) {
+          console.warn("AI chat tool-session cleanup failed:", finishError.message);
+        }
+        rawContent = null;
+      }
       if (!rawContent) {
         fallback = true;
         rawContent = await localAiChatReply({ messages, attachments, accessScope });
@@ -185,6 +213,11 @@ function createAiInteractionsRouter({
         accessScope,
         cacheKey: visibilityKey,
         skipCache,
+        // The model can spend 20+ seconds on reasoning before returning JSON.
+        // Return the auditable local snapshot immediately on normal page loads
+        // and let the summary service refresh the same cache in the background.
+        backgroundRefresh: !skipCache,
+        timeoutMs: 30_000,
       });
       return res.json(ok({
         scope,
@@ -194,6 +227,7 @@ function createAiInteractionsRouter({
         recommendations: aiSummary.recommendations,
         generatedBy: aiSummary.generatedBy,
         modelUsed: aiSummary.modelUsed,
+        refreshing: Boolean(aiSummary.refreshing),
         metrics: summary.metrics,
         aiProvider,
         aiAssistant,

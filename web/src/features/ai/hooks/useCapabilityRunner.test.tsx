@@ -129,6 +129,64 @@ describe('useCapabilityRunner', () => {
     vi.spyOn(queryClient, 'invalidateQueries').mockRestore();
   });
 
+  it('reuses the idempotency key after an uncertain network outcome', async () => {
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new TypeError('network disconnected'))
+      .mockResolvedValueOnce(jsonResponse({
+        data: { invocationId: 'INV-RETRY', jobId: 'JOB-RETRY', status: 'queued', capabilityId: 'project-snapshot' },
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries').mockImplementation(() => Promise.resolve());
+
+    const { container, unmount } = renderProbe();
+    await flushAct();
+    const button = container.querySelector<HTMLButtonElement>('[data-testid="invoke"]');
+
+    await act(async () => { button?.click(); });
+    await flushAct();
+    expect(onInvocationQueued).not.toHaveBeenCalled();
+
+    await act(async () => { button?.click(); });
+    await flushAct();
+    await flushAct();
+
+    const firstOptions = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const retryOptions = fetchMock.mock.calls[1]?.[1] as RequestInit;
+    const firstKey = (firstOptions.headers as Record<string, string>)['Idempotency-Key'];
+    const retryKey = (retryOptions.headers as Record<string, string>)['Idempotency-Key'];
+    expect(firstKey).toMatch(/^aic-/);
+    expect(retryKey).toBe(firstKey);
+    expect(container.querySelector('[data-testid="latest"]')?.textContent).toBe('INV-RETRY');
+    expect(onInvocationQueued).toHaveBeenCalledTimes(1);
+
+    unmount();
+    invalidateSpy.mockRestore();
+  });
+
+  it('keeps retry keys distinct when input values contain fingerprint delimiters', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('network disconnected'));
+    vi.stubGlobal('fetch', fetchMock);
+    const { unmount } = renderProbe();
+    await flushAct();
+
+    await act(async () => {
+      await runner?.invokeCapability(capability, { projectId: 'PRJ-1', note: 'alpha|phase:one' });
+    });
+    await act(async () => {
+      await runner?.invokeCapability(capability, { projectId: 'PRJ-1', note: 'alpha', phase: 'one' });
+    });
+
+    const firstOptions = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const secondOptions = fetchMock.mock.calls[1]?.[1] as RequestInit;
+    const firstKey = (firstOptions.headers as Record<string, string>)['Idempotency-Key'];
+    const secondKey = (secondOptions.headers as Record<string, string>)['Idempotency-Key'];
+    expect(firstKey).toMatch(/^aic-/);
+    expect(secondKey).toMatch(/^aic-/);
+    expect(secondKey).not.toBe(firstKey);
+
+    unmount();
+  });
+
   it('tracks the trace drawer target and clears the latest invocation', async () => {
     vi.stubGlobal('fetch', vi.fn());
     const { container, unmount } = renderProbe();

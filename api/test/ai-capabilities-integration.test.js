@@ -104,13 +104,21 @@ test("AI capability API invokes the scoped fallback, records audit evidence, and
 
   const invoked = await request(api.port, "/api/ai/capabilities/project-snapshot/invocations", {
     method: "POST",
-    headers,
+    headers: { ...headers, "Idempotency-Key": "capability-invocation-retry-001" },
     body: JSON.stringify({ projectId }),
   });
   assert.equal(invoked.response.status, 200);
   assert.equal(invoked.body.data.status, "completed");
   assert.equal(invoked.body.data.result.project.id, projectId);
   assert.equal(invoked.body.data.result.generatedBy, "platform_snapshot");
+
+  const replayed = await request(api.port, "/api/ai/capabilities/project-snapshot/invocations", {
+    method: "POST",
+    headers: { ...headers, "Idempotency-Key": "capability-invocation-retry-001" },
+    body: JSON.stringify({ projectId }),
+  });
+  assert.equal(replayed.response.status, 200);
+  assert.deepEqual(replayed.body, invoked.body, "a retry replays the cached invocation instead of running it again");
 
   const disabled = await request(api.port, "/api/admin/ai-capabilities/project-snapshot", {
     method: "PATCH",

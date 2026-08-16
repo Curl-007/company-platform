@@ -36,7 +36,12 @@ function messageSink(socket) {
   };
 }
 
-function createBridgeFixture({ user = { id: "USR-1", permissions: ["ai:*"] }, invocation, canAccessProject = async () => true } = {}) {
+function createBridgeFixture({
+  user = { id: "USR-1", permissions: ["ai:*"] },
+  invocation,
+  canAccessProject = async () => true,
+  authenticateSocket,
+} = {}) {
   const server = http.createServer((req, res) => {
     res.writeHead(404).end();
   });
@@ -57,7 +62,7 @@ function createBridgeFixture({ user = { id: "USR-1", permissions: ["ai:*"] }, in
       bridge = createAgentEventBridge({
         WebSocketServer: require("ws").WebSocketServer,
         server,
-        authenticateSocket: async () => user,
+        authenticateSocket: authenticateSocket || (async () => user),
         hasPermission: (candidate, permission) => (candidate?.permissions || []).includes(permission),
         canAccessProject,
         capabilityRepository: { find: async (id) => invocations.get(id) || null },
@@ -159,13 +164,23 @@ test("agent event bridge enforces invocation access on subscribe", { timeout: 10
     client.socket.send(JSON.stringify({ type: "agent.subscribe", invocationId: "AIC-MISSING" }));
     assert.deepEqual(
       await sink.next((message) => message.type === "agent.error"),
-      { type: "agent.error", code: "PERMISSION_DENIED", message: "AI capability invocation not found." },
+      {
+        type: "agent.error",
+        code: "PERMISSION_DENIED",
+        invocationId: "AIC-MISSING",
+        message: "AI capability invocation not found.",
+      },
     );
 
     client.socket.send(JSON.stringify({ type: "agent.subscribe", invocationId: "AIC-PRIVATE" }));
     assert.deepEqual(
       await sink.next((message) => message.message === "You cannot access this AI capability invocation."),
-      { type: "agent.error", code: "PERMISSION_DENIED", message: "You cannot access this AI capability invocation." },
+      {
+        type: "agent.error",
+        code: "PERMISSION_DENIED",
+        invocationId: "AIC-PRIVATE",
+        message: "You cannot access this AI capability invocation.",
+      },
     );
 
     client.socket.send(JSON.stringify({ type: "agent.subscribe", invocationId: "" }));
@@ -227,6 +242,100 @@ test("agent event bridge rejects unauthenticated or unauthorized connections", {
   } finally {
     await new Promise((resolve) => bridge.close(() => resolve()));
     await new Promise((resolve) => server.close(() => resolve()));
+  }
+});
+
+test("agent event bridge preserves immediate UI and invocation subscriptions while authentication is pending", { timeout: 10000 }, async () => {
+  let releaseAuthentication;
+  let authenticationStarted;
+  const authenticationGate = new Promise((resolve) => { releaseAuthentication = resolve; });
+  const authenticationReady = new Promise((resolve) => { authenticationStarted = resolve; });
+  const fixture = createBridgeFixture({
+    invocation: { id: "AIC-EARLY", project_id: "PRJ-1" },
+    authenticateSocket: async () => {
+      authenticationStarted();
+      await authenticationGate;
+      return { id: "USR-1", permissions: ["ai:*"] };
+    },
+  });
+  const { port } = await fixture.start();
+  try {
+    const client = connect(port);
+    await client.opened;
+    await authenticationReady;
+    const sink = messageSink(client.socket);
+
+    // Browser clients send these frames in onopen, before async token lookup
+    // completes on the server. Both must be processed in their original order.
+    client.socket.send(JSON.stringify({ type: "agent.subscribeUi" }));
+    client.socket.send(JSON.stringify({ type: "agent.subscribe", invocationId: "AIC-EARLY" }));
+    releaseAuthentication();
+
+    await sink.next((message) => message.type === "agent.subscribedUi");
+    await sink.next((message) => message.type === "agent.subscribed" && message.invocationId === "AIC-EARLY");
+    assert.equal(fixture.bridge().status().uiSubscriptions, 1);
+    assert.equal(fixture.bridge().status().subscriptions, 1);
+
+    fixture.bus.publish({ event: { seq: 1, type: "turn/start" }, invocationId: "AIC-EARLY" });
+    assert.deepEqual(
+      await sink.next((message) => message.type === "agent.event"),
+      { type: "agent.event", invocationId: "AIC-EARLY", event: { seq: 1, type: "turn/start" } },
+    );
+    client.socket.close();
+  } finally {
+    await fixture.stop();
+  }
+});
+
+test("agent event bridge session revocation closes active and in-flight user connections", { timeout: 10000 }, async () => {
+  const fixture = createBridgeFixture({
+    invocation: { id: "AIC-REVOKE", project_id: "PRJ-1" },
+  });
+  const { port } = await fixture.start();
+  try {
+    const active = connect(port);
+    await active.opened;
+    const activeSink = messageSink(active.socket);
+    active.socket.send(JSON.stringify({ type: "agent.subscribeUi" }));
+    active.socket.send(JSON.stringify({ type: "agent.subscribe", invocationId: "AIC-REVOKE" }));
+    await activeSink.next((message) => message.type === "agent.subscribedUi");
+    await activeSink.next((message) => message.type === "agent.subscribed");
+    const activeClosed = once(active.socket, "close");
+
+    assert.equal(fixture.bridge().closeUserConnections("USR-1"), 1);
+    assert.equal(await activeClosed, 1008);
+    assert.deepEqual(fixture.bridge().status(), { connections: 0, subscriptions: 0, uiSubscriptions: 0 });
+    assert.equal(fixture.bridge().pushInteraction("USR-1", "AIC-REVOKE", { status: "pending" }), 0);
+    assert.equal(fixture.bridge().pushUiDirective("USR-1", { type: "refresh" }), 0);
+
+    let releaseAuthentication;
+    let authenticationStarted;
+    const authenticationGate = new Promise((resolve) => { releaseAuthentication = resolve; });
+    const authenticationReady = new Promise((resolve) => { authenticationStarted = resolve; });
+    const delayedFixture = createBridgeFixture({
+      invocation: { id: "AIC-INFLIGHT", project_id: "PRJ-1" },
+      authenticateSocket: async () => {
+        authenticationStarted();
+        await authenticationGate;
+        return { id: "USR-1", permissions: ["ai:*"] };
+      },
+    });
+    const delayed = await delayedFixture.start();
+    try {
+      const pending = connect(delayed.port);
+      await pending.opened;
+      await authenticationReady;
+      pending.socket.send(JSON.stringify({ type: "agent.subscribe", invocationId: "AIC-INFLIGHT" }));
+      const pendingClosed = once(pending.socket, "close");
+      assert.equal(delayedFixture.bridge().closeUserConnections("USR-1"), 0);
+      releaseAuthentication();
+      assert.equal(await pendingClosed, 1008);
+      assert.deepEqual(delayedFixture.bridge().status(), { connections: 0, subscriptions: 0, uiSubscriptions: 0 });
+    } finally {
+      await delayedFixture.stop();
+    }
+  } finally {
+    await fixture.stop();
   }
 });
 

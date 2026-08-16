@@ -57,6 +57,8 @@ test("AI Provider admin routes test an unsaved draft through Harness and select 
     assert.equal(calls.length, 1);
     assert.equal(calls[0][0].baseUrl, "http://192.168.3.18:8000/v1");
     assert.equal(calls[0][0].apiKey, "");
+    assert.deepEqual(calls[0][1], "Please reply only: connection successful");
+    assert.deepEqual(calls[0][2], { temperature: 0, maxTokens: 64, timeoutMs: 30_000 });
     assert.equal(testPayload.data.provider.apiKeyMasked, "");
 
     const modelsResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/ai-provider/models?id=AIP-SECONDARY`);

@@ -54,8 +54,8 @@ function createAiProviderAdminRouter({ audit, callModelWithConfig, callRealModel
       const config = await service.prepareTest(req.body || {});
       const prompt = "Please reply only: connection successful";
       const text = typeof callModelWithConfig === "function"
-        ? await callModelWithConfig(config, prompt, { temperature: 0 })
-        : await callRealModel(prompt, { temperature: 0 });
+        ? await callModelWithConfig(config, prompt, { temperature: 0, maxTokens: 64, timeoutMs: 30_000 })
+        : await callRealModel(prompt, { temperature: 0, maxTokens: 64, timeoutMs: 30_000 });
       res.json(ok({
         ok: Boolean(text),
         latencyMs: Date.now() - started,

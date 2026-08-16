@@ -58,3 +58,50 @@ test("auth service maps database unique violations during profile update to conf
     });
   }
 });
+
+test("auth service changes the password after proving the current one and rotates the session token", async () => {
+  const users = [{ id: "USR-001", name: "Alice", email: "alice@example.com", password_hash: "old-hash", status: "active", role: "dev" }];
+  const updates = [];
+  const repository = {
+    findById: (id) => users.find((user) => user.id === id),
+    updatePassword: (id, passwordHash) => {
+      updates.push({ id, passwordHash });
+      const user = users.find((item) => item.id === id);
+      user.password_hash = passwordHash;
+      return user;
+    },
+  };
+  const service = createAuthService({
+    comparePassword: (password, hash) => (hash === "old-hash" && password === "correct-horse") || (hash === "new-hash" && password === "staple-battery-9"),
+    hashPassword: (password) => (password === "staple-battery-9" ? "new-hash" : "other-hash"),
+    issueToken: (user) => `token-${user.id}-v2`,
+    publicUser: (user) => ({ id: user.id, email: user.email }),
+    repository,
+  });
+
+  // Wrong current password, weak new password, and identical password all fail closed.
+  await assert.rejects(
+    () => service.changePassword("USR-001", { currentPassword: "wrong", newPassword: "staple-battery-9" }),
+    { code: "CURRENT_PASSWORD_INVALID", status: 400 },
+  );
+  await assert.rejects(
+    () => service.changePassword("USR-001", { currentPassword: "correct-horse", newPassword: "short" }),
+    { code: "WEAK_PASSWORD", status: 400 },
+  );
+  await assert.rejects(
+    () => service.changePassword("USR-001", { currentPassword: "correct-horse", newPassword: " pad-start-1 " }),
+    { code: "WEAK_PASSWORD", status: 400 },
+  );
+  await assert.rejects(
+    () => service.changePassword("USR-001", { currentPassword: "correct-horse", newPassword: "correct-horse" }),
+    { code: "WEAK_PASSWORD", status: 400 },
+  );
+  assert.equal(updates.length, 0);
+
+  const result = await service.changePassword("USR-001", { currentPassword: "correct-horse", newPassword: "staple-battery-9" });
+  assert.deepEqual(result.user, { id: "USR-001", email: "alice@example.com" });
+  assert.equal(result.token, "token-USR-001-v2");
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].passwordHash, "new-hash");
+  assert.equal(users[0].password_hash, "new-hash");
+});

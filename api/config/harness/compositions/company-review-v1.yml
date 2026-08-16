@@ -48,6 +48,12 @@
 - id: company-execution-tool
   name: ../company-execution-tool.mjs
 
+- id: company-platform-tool
+  name: ../company-platform-tool.mjs
+
+- id: company-ui-tool
+  name: ../company-ui-tool.mjs
+
 - id: call-options
   name: ../call-options.mjs
 

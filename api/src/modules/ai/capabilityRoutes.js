@@ -84,10 +84,15 @@ function harnessRuntimeStatus(modelClient) {
 
 function createAiCapabilitiesRouter({
   audit,
+  beginIdempotentRequest = async () => ({
+    abort: async () => {},
+    commit: async () => {},
+  }),
   browserScreenshotDir,
   canAccessProject,
   fail,
   fsImpl = require("node:fs"),
+  hasPermission,
   modelClient,
   ok,
   pushUiDirective,
@@ -198,6 +203,8 @@ function createAiCapabilitiesRouter({
 
   // Browser control screenshot artifact (ai:*): scoped to the invocation's
   // control-plane project, 404 when the invocation or the file is missing.
+  // A screenshot captures whatever the browsing actor opened, so within a
+  // shared project only the invoking actor (or an admin) may fetch it.
   router.get("/ai/browser/screenshots/:invocationId", requirePermission("ai:*"), async (req, res, next) => {
     try {
       const invocation = await repository.find(String(req.params.invocationId || "").trim());
@@ -205,6 +212,12 @@ function createAiCapabilitiesRouter({
         return fail(res, 404, "RESOURCE_NOT_FOUND", "Browser screenshot not found.");
       }
       if (!(await canAccessProject(req.user, invocation.project_id))) {
+        return fail(res, 403, "PERMISSION_DENIED", "You cannot access this browser screenshot.");
+      }
+      const actorIsAdmin = typeof hasPermission === "function"
+        ? hasPermission(req.user, "admin:*")
+        : req.user?.role === "admin";
+      if (invocation.actor_id !== req.user?.id && !actorIsAdmin) {
         return fail(res, 403, "PERMISSION_DENIED", "You cannot access this browser screenshot.");
       }
       const filePath = browserScreenshotDir
@@ -218,15 +231,23 @@ function createAiCapabilitiesRouter({
   });
 
   router.post("/ai/capabilities/:id/invocations", requirePermission("ai:*"), async (req, res, next) => {
+    let idempotency = null;
     try {
+      idempotency = await beginIdempotentRequest(req, res, "ai.capability.invoke");
+      if (!idempotency) return;
       const invocation = await service.invoke({
         actor: req.user,
         capabilityId: req.params.id,
         input: req.body || {},
         ip: req.ip,
       });
-      res.json(ok(invocation));
-    } catch (error) { next(error); }
+      const response = ok(invocation);
+      await idempotency.commit(200, response);
+      res.json(response);
+    } catch (error) {
+      await idempotency?.abort?.();
+      next(error);
+    }
   });
 
   // UI directive test-fire (ai:* REST): validates the directive against the

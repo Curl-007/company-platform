@@ -36,14 +36,14 @@ export default function ChatHistoryPanel({
   return (
     <Panel
       className="ai-chat-history"
-      title={t('features.ai.chatHistory.title')}
+      title={t('features.chatHistory.title')}
       toolbar={(
         <button
           type="button"
           className="topbar-icon-button"
           onClick={onCreate}
-          aria-label={t('features.ai.chatHistory.newChat')}
-          title={t('features.ai.chatHistory.newChat')}
+          aria-label={t('features.chatHistory.newChat')}
+          title={t('features.chatHistory.newChat')}
         >
           <MessageSquarePlus size={15} />
         </button>
@@ -52,7 +52,7 @@ export default function ChatHistoryPanel({
       {sessions.length === 0 ? (
         <div className="ai-chat-history-empty" role="status">
           <History size={14} aria-hidden="true" />
-          <span>{t('features.ai.chatHistory.empty')}</span>
+          <span>{t('features.chatHistory.empty')}</span>
         </div>
       ) : (
         <ul className="ai-chat-history-list">
@@ -74,8 +74,8 @@ export default function ChatHistoryPanel({
                   type="button"
                   className="icon-button ai-chat-history-delete"
                   onClick={() => onDelete(session.id)}
-                  aria-label={t('features.ai.chatHistory.delete', { title: session.title })}
-                  title={t('features.ai.chatHistory.delete', { title: session.title })}
+                  aria-label={t('features.chatHistory.delete', { title: session.title })}
+                  title={t('features.chatHistory.delete', { title: session.title })}
                 >
                   <Trash2 size={13} />
                 </button>

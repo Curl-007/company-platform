@@ -31,10 +31,13 @@ test("the default registry carries a manifest for every invocable execution capa
   // ui-control (projectScoped: false) is gateway-only: it is driven by the
   // dsh ui_control tool and has no invocation-surface manifest — the REST
   // invocation input is string-typed while a UI directive is an object.
+  // platform-assistant is the ordinary chat's multi-tool session. It is
+  // deliberately not exposed through the manual capability-invocation API.
   // browser-control is also projectScoped:false at the gateway but DOES carry
   // a manifest: its control-plane invocation carries a project for audit and
   // screenshot storage, and the action payload is plain strings.
-  const invocableCapabilities = EXECUTION_CAPABILITIES.filter((capability) => capability.id !== "ui-control");
+  const gatewayOnlyCapabilities = new Set(["platform-assistant", "ui-control"]);
+  const invocableCapabilities = EXECUTION_CAPABILITIES.filter((capability) => !gatewayOnlyCapabilities.has(capability.id));
   const expectedIds = invocableCapabilities.map((capability) => capability.id).sort();
   assert.deepEqual(
     registry.list().map((manifest) => manifest.id).sort(),
@@ -45,9 +48,9 @@ test("the default registry carries a manifest for every invocable execution capa
     expectedIds,
   );
   assert.equal(
-    invocableCapabilities.length + 1,
+    invocableCapabilities.length + gatewayOnlyCapabilities.size,
     EXECUTION_CAPABILITIES.length,
-    "exactly one gateway-only capability (ui-control) is exempt from the manifest invariant",
+    "only gateway-only capabilities are exempt from the manifest invariant",
   );
   for (const manifest of registry.list()) {
     assert.equal(manifest.status, "approved");

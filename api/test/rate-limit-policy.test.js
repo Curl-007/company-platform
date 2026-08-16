@@ -26,3 +26,36 @@ test("rate-limit policy only trusts an explicitly configured local bearer reques
     { type: "json", body: { errorCode: "RATE_LIMITED", message: "Slow down.", traceId: "trace-1" } },
   ]);
 });
+
+test("internal service matcher only accepts loopback requests with the boot token", () => {
+  const prodPolicy = createRateLimitPolicy({ env: {}, isProd: true, randomUUID: () => "trace-2" });
+  const isInternal = prodPolicy.createInternalServiceMatcher("boot-secret");
+  const externalRequest = { ip: "203.0.113.10", hostname: "api.example.com", headers: {} };
+
+  assert.equal(isInternal({
+    ip: "127.0.0.1",
+    hostname: "127.0.0.1",
+    headers: { "x-platform-internal-service": "boot-secret" },
+  }), true);
+  assert.equal(isInternal({
+    ip: "::ffff:127.0.0.1",
+    hostname: "localhost",
+    headers: { "x-platform-internal-service": "boot-secret" },
+  }), true);
+
+  // External socket: even the correct header must not match.
+  assert.equal(isInternal({ ...externalRequest, headers: { "x-platform-internal-service": "boot-secret" } }), false);
+  // Loopback socket without the shared secret must not match.
+  assert.equal(isInternal({ ip: "127.0.0.1", hostname: "localhost", headers: {} }), false);
+  assert.equal(isInternal({
+    ip: "127.0.0.1",
+    hostname: "localhost",
+    headers: { "x-platform-internal-service": "wrong" },
+  }), false);
+  // An unset token disables the matcher entirely.
+  assert.equal(prodPolicy.createInternalServiceMatcher("")({
+    ip: "127.0.0.1",
+    hostname: "localhost",
+    headers: { "x-platform-internal-service": "" },
+  }), false);
+});

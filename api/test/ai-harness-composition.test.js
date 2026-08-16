@@ -10,6 +10,7 @@ const { createHarnessRuntime } = require("../src/modules/ai/harnessRuntime");
 const { createCapabilityRegistry } = require("../src/modules/ai/capabilityRegistry");
 const { createExecutionGateway } = require("../src/modules/ai/executionGateway");
 const { createScopedExecutionTokenService } = require("../src/modules/ai/executionToken");
+const { createPlatformOperationProxy } = require("../src/modules/ai/platformOperationProxy");
 const { hasPermission, publicUser } = require("../src/security/accessControl");
 const { createSqliteAccess } = require("../src/db/access");
 const { createSqliteRuntime } = require("../src/db/runtime");
@@ -494,6 +495,305 @@ test("Harness composition round-trips requirements_list through the scoped execu
     });
     assert.equal(replay.status, 409);
     assert.equal((await replay.json()).error.code, "AI_CAPABILITY_TOKEN_REPLAYED");
+  } finally {
+    await runtime.close();
+    await closeServer(server);
+    await gateway.close();
+    await fs.rm(home, { force: true, recursive: true });
+  }
+});
+
+// The ordinary chat path uses platform-assistant rather than a narrow
+// capability. This proves the real DSH composition loads company_projects,
+// reaches the platform-operation gateway, and returns the original API data
+// to the model without exposing the harness token to that API.
+test("Harness composition round-trips company_projects through the platform operation gateway", { timeout: 30000 }, async () => {
+  const providerKey = "smoke-platform-provider-key";
+  const platformRequests = [];
+  const { port: platformPort, server: platformServer } = await listen(async (req, res) => {
+    platformRequests.push({
+      authorization: String(req.headers.authorization || ""),
+      method: req.method,
+      url: req.url,
+    });
+    if (req.method !== "GET" || req.url !== "/api/projects" || req.headers.authorization !== "Bearer platform-internal-token") {
+      res.writeHead(403, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: { code: "PERMISSION_DENIED", message: "Platform actor token is required." } }));
+      return;
+    }
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ data: [{ id: "PRJ-1", name: "Apollo", status: "in_progress" }] }));
+  });
+
+  const dbRuntime = createSqliteRuntime({ DatabaseSync, databaseFile: ":memory:" });
+  dbRuntime.exec("CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT, email TEXT, role TEXT, status TEXT DEFAULT 'active', permissions TEXT);");
+  const access = createSqliteAccess(dbRuntime);
+  const json = (value, fallback = null) => (value === undefined ? fallback : JSON.stringify(value));
+  await access.insert("users", {
+    id: "USR-PLATFORM",
+    name: "Platform Tool Tester",
+    email: "platform-tool@example.com",
+    role: "admin",
+    status: "active",
+    permissions: json(["*"]),
+  });
+
+  const tokenService = createScopedExecutionTokenService({ secret: "composition-platform-gateway-secret-16" });
+  const gateway = createExecutionGateway({
+    audit: async () => {},
+    canAccessProject: async (_user, projectId) => projectId === "PRJ-1",
+    controlStore: { get: async () => ({ enabled: true }) },
+    findInvocation: async (id) => (id === "AIC-PLATFORM-1" ? {
+      actor_id: "USR-PLATFORM",
+      project_id: "PRJ-1",
+      status: "running",
+    } : null),
+    hasPermission,
+    insert: async () => {},
+    isPlatformAssistantEnabled: async () => true,
+    json,
+    nextId: async (prefix) => `${prefix}-PLATFORM`,
+    platformOperationProxy: createPlatformOperationProxy({
+      baseUrl: `http://127.0.0.1:${platformPort}`,
+      issueAccessToken: () => "platform-internal-token",
+    }),
+    publicUser,
+    registry: createCapabilityRegistry(),
+    row: access.row,
+    rows: access.rows,
+    tokenService,
+  });
+  const gatewayBaseUrl = await gateway.start();
+  const executionToken = tokenService.issue({
+    actorId: "USR-PLATFORM",
+    capabilityId: "platform-assistant",
+    capabilityVersion: "1.0.0",
+    invocationId: "AIC-PLATFORM-1",
+    projectId: "PRJ-1",
+    reusable: true,
+  }).token;
+
+  const upstreamRequests = [];
+  const { port, server } = await listen(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    upstreamRequests.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+    res.writeHead(200, {
+      "Cache-Control": "no-store",
+      Connection: "keep-alive",
+      "Content-Type": "text/event-stream; charset=utf-8",
+    });
+    const chunkJson = (payload) => `data: ${JSON.stringify({ created: 0, id: "chatcmpl-platform", model: "smoke-model", object: "chat.completion.chunk", ...payload })}\n\n`;
+    if (upstreamRequests.length === 1) {
+      res.write(chunkJson({
+        choices: [{
+          delta: { tool_calls: [{ index: 0, id: "call-projects-1", type: "function", function: { name: "company_projects", arguments: "" } }] },
+          finish_reason: null,
+          index: 0,
+        }],
+      }));
+      res.write(chunkJson({
+        choices: [{
+          delta: { tool_calls: [{ index: 0, function: { arguments: JSON.stringify({ operation: "get_projects", request: {} }) } }] },
+          finish_reason: null,
+          index: 0,
+        }],
+      }));
+      res.write(chunkJson({ choices: [{ delta: {}, finish_reason: "tool_calls", index: 0 }] }));
+    } else {
+      res.write(chunkJson({
+        choices: [{ delta: { content: "Apollo is available." }, finish_reason: null, index: 0 }],
+      }));
+      res.write(chunkJson({ choices: [{ delta: {}, finish_reason: "stop", index: 0 }] }));
+    }
+    res.end("data: [DONE]\n\n");
+  });
+
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), "company-harness-platform-"));
+  let childEnv;
+  const runtime = createHarnessRuntime({
+    createProxy: () => createHarnessProviderProxy({ resolveTarget: async (baseUrl) => localResolvedTarget(baseUrl) }),
+    env: runtimeEnvironment(home),
+    importSdk: async () => {
+      const sdk = await import("@deepseek-ai/dsh-sdk-client");
+      class ObservedHarness extends sdk.DeepSeekHarness {
+        constructor(options) {
+          childEnv = options.launch.env;
+          super(options);
+        }
+      }
+      return { DeepSeekHarness: ObservedHarness };
+    },
+    logger: { warn: () => {} },
+  });
+
+  try {
+    const text = await runtime.run({
+      config: {
+        apiKey: providerKey,
+        baseUrl: `http://127.0.0.1:${port}/v1`,
+        disableResponseStorage: true,
+        model: "smoke-model",
+        wireApi: "chat_completions",
+      },
+      execution: {
+        capabilityId: "platform-assistant",
+        capabilityVersion: "1.0.0",
+        gatewayBaseUrl,
+        projectId: "PRJ-1",
+        token: executionToken,
+      },
+      prompt: "Use company_projects to list accessible projects, then summarize the result.",
+      timeoutMs: 25000,
+    });
+
+    assert.equal(text, "Apollo is available.");
+    assert.equal(upstreamRequests.length, 2);
+    const toolNames = (upstreamRequests[0].tools || []).map((tool) => tool.function?.name || tool.name);
+    assert.equal(toolNames.includes("company_platform_catalog"), true);
+    assert.equal(toolNames.includes("company_projects"), true);
+    assert.equal(JSON.stringify(upstreamRequests[1]).includes("Apollo"), true);
+    assert.deepEqual(platformRequests, [{
+      authorization: "Bearer platform-internal-token",
+      method: "GET",
+      url: "/api/projects",
+    }]);
+    assert.equal(childEnv.DSH_EXECUTION_CAPABILITY_ID, "platform-assistant");
+    assert.equal(childEnv.DSH_EXECUTION_TOKEN, executionToken);
+  } finally {
+    await runtime.close();
+    await closeServer(server);
+    await gateway.close();
+    await closeServer(platformServer);
+    await fs.rm(home, { force: true, recursive: true });
+  }
+});
+
+test("Harness composition round-trips a declarative view through the standalone company UI plugin", { timeout: 30000 }, async () => {
+  const providerKey = "smoke-ui-provider-key";
+  const invocationId = "AIC-UI-COMP-1";
+  const pushes = [];
+  const audits = [];
+  const tokenService = createScopedExecutionTokenService({ secret: "composition-ui-gateway-secret-16" });
+  const gateway = createExecutionGateway({
+    audit: async (...args) => audits.push(args),
+    canAccessProject: async () => true,
+    controlStore: { get: async () => ({ enabled: true }) },
+    findInvocation: async (id) => (id === invocationId ? {
+      actor_id: "USR-UI",
+      project_id: "PRJ-1",
+      status: "running",
+    } : null),
+    hasPermission,
+    insert: async () => {},
+    isPlatformAssistantEnabled: async () => true,
+    json: (value) => JSON.stringify(value),
+    nextId: async (prefix) => `${prefix}-UI`,
+    publicUser,
+    registry: createCapabilityRegistry(),
+    row: async (sql, params) => {
+      if (sql.includes("FROM users") && params.id === "USR-UI") {
+        return { id: "USR-UI", name: "UI Tester", role: "admin", status: "active", permissions: JSON.stringify(["*"]) };
+      }
+      return null;
+    },
+    rows: async () => [],
+    tokenService,
+    uiDirectiveSink: (userId, directive) => {
+      pushes.push({ directive, userId });
+      return 1;
+    },
+  });
+  const gatewayBaseUrl = await gateway.start();
+  const executionToken = tokenService.issue({
+    actorId: "USR-UI",
+    capabilityId: "platform-assistant",
+    capabilityVersion: "1.0.0",
+    invocationId,
+    projectId: "PRJ-1",
+    reusable: true,
+    userId: "USR-UI",
+  }).token;
+
+  const upstreamRequests = [];
+  const { port, server } = await listen(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    upstreamRequests.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+    res.writeHead(200, {
+      "Cache-Control": "no-store",
+      Connection: "keep-alive",
+      "Content-Type": "text/event-stream; charset=utf-8",
+    });
+    const chunkJson = (payload) => `data: ${JSON.stringify({ created: 0, id: "chatcmpl-ui", model: "smoke-model", object: "chat.completion.chunk", ...payload })}\n\n`;
+    if (upstreamRequests.length === 1) {
+      const args = {
+        view: {
+          id: "risk-room",
+          title: "风险驾驶舱",
+          blocks: [
+            { id: "high-risk", type: "stat", label: "高风险项目", value: 3, tone: "negative" },
+            { id: "project-link", type: "links", items: [{ label: "查看项目", page: "projects" }] },
+          ],
+        },
+      };
+      res.write(chunkJson({
+        choices: [{
+          delta: { tool_calls: [{ index: 0, id: "call-ui-view-1", type: "function", function: { name: "company_ui_view_upsert", arguments: JSON.stringify(args) } }] },
+          finish_reason: null,
+          index: 0,
+        }],
+      }));
+      res.write(chunkJson({ choices: [{ delta: {}, finish_reason: "tool_calls", index: 0 }] }));
+    } else {
+      res.write(chunkJson({
+        choices: [{ delta: { content: "风险驾驶舱已创建。" }, finish_reason: null, index: 0 }],
+      }));
+      res.write(chunkJson({ choices: [{ delta: {}, finish_reason: "stop", index: 0 }] }));
+    }
+    res.end("data: [DONE]\n\n");
+  });
+
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), "company-harness-ui-"));
+  const runtime = createHarnessRuntime({
+    createProxy: () => createHarnessProviderProxy({ resolveTarget: async (baseUrl) => localResolvedTarget(baseUrl) }),
+    env: runtimeEnvironment(home),
+    logger: { warn: () => {} },
+  });
+
+  try {
+    const text = await runtime.run({
+      config: {
+        apiKey: providerKey,
+        baseUrl: `http://127.0.0.1:${port}/v1`,
+        disableResponseStorage: true,
+        model: "smoke-model",
+        wireApi: "chat_completions",
+      },
+      execution: {
+        capabilityId: "platform-assistant",
+        capabilityVersion: "1.0.0",
+        gatewayBaseUrl,
+        projectId: "PRJ-1",
+        token: executionToken,
+      },
+      prompt: "Create a declarative risk dashboard with the company UI plugin.",
+      timeoutMs: 25000,
+    });
+
+    assert.equal(text, "风险驾驶舱已创建。");
+    assert.equal(upstreamRequests.length, 2);
+    const toolNames = (upstreamRequests[0].tools || []).map((tool) => tool.function?.name || tool.name);
+    assert.equal(toolNames.includes("company_ui_catalog"), true);
+    assert.equal(toolNames.includes("company_ui_view_upsert"), true);
+    assert.equal(toolNames.includes("company_ui_layout"), true);
+    assert.equal(JSON.stringify(upstreamRequests[1]).includes("delivered"), true);
+    assert.equal(pushes.length, 1);
+    assert.equal(pushes[0].userId, "USR-UI");
+    assert.equal(pushes[0].directive.kind, "viewUpsert");
+    assert.equal(pushes[0].directive.view.id, "risk-room");
+    assert.equal(pushes[0].directive.view.blocks.some((block) => block.type === "stat"), true);
+    assert.equal(audits.some((entry) => entry[1] === "ai.tool.ui_control"), true);
   } finally {
     await runtime.close();
     await closeServer(server);

@@ -18,3 +18,7 @@
 @import './global/04-project-flow.css';
 @import './global/05-utilities-widgets.css';
 @import './global/06-layout-features.css';
+@import './sortable-sections.css';
+/* 07/08 are imported from main.tsx AFTER the feature workbench stylesheets
+   so their detail-surface and page-polish overrides win the cascade over
+   the per-feature skins (req/qa/dl/doc-workbench.css). */

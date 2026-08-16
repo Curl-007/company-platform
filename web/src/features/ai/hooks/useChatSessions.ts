@@ -5,14 +5,15 @@ import type { AiChatMessage } from '../../../types';
 // useChatSessions: local chat-session persistence for the AI workspace.
 //
 // Chat is stateless on the BFF (POST /api/ai/chat returns one reply), so the
-// conversation history lives in localStorage, bucketed by chat scope
-// ('project-management' for the AI workspace, 'global-assistant' for the
-// sidebar). A session records its messages plus a title derived from the
-// first user message. Bounds: SESSION_LIMIT sessions per bucket, each kept
-// whole; when storage is full the oldest sessions are dropped first.
+// conversation history lives in localStorage, bucketed by authenticated user
+// and chat scope ('project-management' for the AI workspace,
+// 'global-assistant' for the sidebar). A session records its messages plus a
+// title derived from the first user message. Bounds: SESSION_LIMIT sessions
+// per bucket, each kept whole; when storage is full the oldest sessions are
+// dropped first.
 // ---------------------------------------------------------------------------
 
-const STORAGE_VERSION = 'v1';
+const STORAGE_VERSION = 'v2';
 const SESSION_LIMIT = 20;
 const TITLE_MAX_LENGTH = 30;
 
@@ -36,14 +37,24 @@ export interface ChatSessionsState {
   removeSession: (id: string) => void;
 }
 
-function storageKey(scope: string): string {
-  return `ai-chat-sessions:${STORAGE_VERSION}:${scope}`;
+interface LoadedChatSessionsState {
+  key: string | null;
+  storage: Storage | null;
+  sessions: ChatSession[];
+  activeSessionId: string | null;
 }
 
-function readSessions(scope: string, storage: Storage | null): ChatSession[] {
-  if (!storage) return [];
+function storageKey(scope: string, userId: string | null | undefined): string | null {
+  const normalizedScope = String(scope ?? '').trim();
+  const normalizedUserId = String(userId ?? '').trim();
+  if (!normalizedScope || !normalizedUserId) return null;
+  return `ai-chat-sessions:${STORAGE_VERSION}:${encodeURIComponent(normalizedUserId)}:${encodeURIComponent(normalizedScope)}`;
+}
+
+function readSessions(key: string | null, storage: Storage | null): ChatSession[] {
+  if (!key || !storage) return [];
   try {
-    const raw = storage.getItem(storageKey(scope));
+    const raw = storage.getItem(key);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -63,14 +74,27 @@ function isChatSession(value: unknown): value is ChatSession {
     && typeof record.updatedAt === 'string';
 }
 
-function writeSessions(scope: string, sessions: ChatSession[], storage: Storage | null): boolean {
-  if (!storage) return false;
+function writeSessions(key: string | null, sessions: ChatSession[], storage: Storage | null): boolean {
+  if (!key || !storage) return false;
   try {
-    storage.setItem(storageKey(scope), JSON.stringify(sessions.slice(0, SESSION_LIMIT)));
+    storage.setItem(key, JSON.stringify(sessions.slice(0, SESSION_LIMIT)));
     return true;
   } catch {
     return false;
   }
+}
+
+function loadState(key: string | null, storage: Storage | null): LoadedChatSessionsState {
+  return {
+    key,
+    storage,
+    sessions: readSessions(key, storage),
+    activeSessionId: null,
+  };
+}
+
+function isCurrentState(state: LoadedChatSessionsState, key: string | null, storage: Storage | null): boolean {
+  return state.key === key && state.storage === storage;
 }
 
 /** First user message text becomes the list title; empty chats fall back to a generic label. */
@@ -91,45 +115,65 @@ export function useChatSessions(
   scope: string,
   {
     titleFallback = '新对话',
+    userId = null,
     storage = typeof window !== 'undefined' ? window.localStorage : null,
-  }: { titleFallback?: string; storage?: Storage | null } = {},
+  }: { titleFallback?: string; userId?: string | null; storage?: Storage | null } = {},
 ): ChatSessionsState {
-  const [sessions, setSessions] = useState<ChatSession[]>(() => readSessions(scope, storage));
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const scopeRef = useRef(scope);
-  scopeRef.current = scope;
-  const storageRef = useRef(storage);
-  storageRef.current = storage;
+  const key = storageKey(scope, userId);
+  const [state, setState] = useState<LoadedChatSessionsState>(() => loadState(key, storage));
+  const stateCurrent = isCurrentState(state, key, storage);
+  // Do not render the previous account's in-memory state while the effect
+  // schedules the actual state reset after a login/account switch.
+  const visibleState = stateCurrent ? state : loadState(key, storage);
   const fallbackRef = useRef(titleFallback);
   fallbackRef.current = titleFallback;
+
+  useEffect(() => {
+    if (stateCurrent) return;
+    setState((previous) => (isCurrentState(previous, key, storage) ? previous : loadState(key, storage)));
+  }, [key, stateCurrent, storage]);
 
   // Persist after every change; drop the oldest sessions when the bucket is
   // full or the storage quota rejects the write.
   useEffect(() => {
-    const next = sessions.slice(0, SESSION_LIMIT);
-    if (!writeSessions(scopeRef.current, next, storageRef.current) && next.length > 0) {
-      writeSessions(scopeRef.current, next.slice(0, Math.max(0, next.length - 1)), storageRef.current);
+    if (!stateCurrent || !state.key || !state.storage) return;
+    const next = state.sessions.slice(0, SESSION_LIMIT);
+    if (!writeSessions(state.key, next, state.storage) && next.length > 0) {
+      writeSessions(state.key, next.slice(0, Math.max(0, next.length - 1)), state.storage);
     }
-  }, [sessions]);
+  }, [state, stateCurrent]);
 
   const createSession = useCallback((): string => {
     const id = newSessionId();
     const now = new Date().toISOString();
-    setSessions((current) => [
-      { id, title: fallbackRef.current, messages: [], createdAt: now, updatedAt: now },
-      ...current,
-    ].slice(0, SESSION_LIMIT));
-    setActiveSessionId(id);
+    setState((previous) => {
+      const current = isCurrentState(previous, key, storage) ? previous : loadState(key, storage);
+      return {
+        ...current,
+        sessions: [
+          { id, title: fallbackRef.current, messages: [], createdAt: now, updatedAt: now },
+          ...current.sessions,
+        ].slice(0, SESSION_LIMIT),
+        activeSessionId: id,
+      };
+    });
     return id;
-  }, []);
+  }, [key, storage]);
+
+  const setActiveSessionId = useCallback((id: string | null) => {
+    setState((previous) => {
+      const current = isCurrentState(previous, key, storage) ? previous : loadState(key, storage);
+      return { ...current, activeSessionId: id };
+    });
+  }, [key, storage]);
 
   const getSession = useCallback((id: string) => {
-    return sessions.find((session) => session.id === id) ?? null;
-  }, [sessions]);
+    return visibleState.sessions.find((session) => session.id === id) ?? null;
+  }, [visibleState.sessions]);
 
   const upsertSession = useCallback((id: string, messages: AiChatMessage[]): ChatSession | null => {
     const now = new Date().toISOString();
-    const existing = sessions.find((session) => session.id === id);
+    const existing = visibleState.sessions.find((session) => session.id === id);
     const updated: ChatSession = {
       id,
       title: sessionTitleOf(messages, fallbackRef.current),
@@ -137,23 +181,37 @@ export function useChatSessions(
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };
-    setSessions((current) => {
-      if (current.some((session) => session.id === id)) {
-        return current.map((session) => (session.id === id ? updated : session));
-      }
-      return [updated, ...current].slice(0, SESSION_LIMIT);
+    setState((previous) => {
+      const current = isCurrentState(previous, key, storage) ? previous : loadState(key, storage);
+      const persisted = current.sessions.find((session) => session.id === id);
+      const next = {
+        ...updated,
+        createdAt: persisted?.createdAt ?? updated.createdAt,
+      };
+      return {
+        ...current,
+        sessions: current.sessions.some((session) => session.id === id)
+          ? current.sessions.map((session) => (session.id === id ? next : session))
+          : [next, ...current.sessions].slice(0, SESSION_LIMIT),
+      };
     });
     return updated;
-  }, [sessions]);
+  }, [key, storage, visibleState.sessions]);
 
   const removeSession = useCallback((id: string) => {
-    setSessions((current) => current.filter((session) => session.id !== id));
-    setActiveSessionId((active) => (active === id ? null : active));
-  }, []);
+    setState((previous) => {
+      const current = isCurrentState(previous, key, storage) ? previous : loadState(key, storage);
+      return {
+        ...current,
+        sessions: current.sessions.filter((session) => session.id !== id),
+        activeSessionId: current.activeSessionId === id ? null : current.activeSessionId,
+      };
+    });
+  }, [key, storage]);
 
   return {
-    sessions,
-    activeSessionId,
+    sessions: visibleState.sessions,
+    activeSessionId: visibleState.activeSessionId,
     setActiveSessionId,
     createSession,
     upsertSession,

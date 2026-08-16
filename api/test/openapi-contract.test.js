@@ -40,6 +40,7 @@ test("OpenAPI core contract validates and describes versioned project writes", a
   assert.ok(document.paths["/api/tasks/{id}"]?.patch);
   assert.ok(document.paths["/api/tasks/{id}"]?.delete);
   assert.ok(document.paths["/api/tasks/{id}/status-history"]?.get);
+  assert.ok(document.paths["/api/tasks/{id}/handoff"]?.post);
   assert.ok(document.paths["/api/projects/{id}/wbs/tasks"]?.post);
   assert.ok(document.paths["/api/projects/{id}/wbs"]?.get);
   assert.ok(document.paths["/api/projects/{id}/tasks"]?.get);
@@ -154,6 +155,9 @@ test("OpenAPI core contract validates and describes versioned project writes", a
   assert.ok(document.components.schemas.CreateProjectInput.properties.objective);
   assert.deepEqual(document.components.schemas.UpdateRequirementInput.required, ["version"]);
   assert.deepEqual(document.components.schemas.UpdateTaskInput.required, ["version"]);
+  assert.deepEqual(document.components.schemas.TaskHandoffInput.required, ["action", "version"]);
+  assert.deepEqual(document.components.schemas.TaskHandoffInput.properties.action.enum, ["submit_for_testing", "return_for_fix"]);
+  assert.equal(document.components.schemas.TaskHandoffInput.additionalProperties, false);
   assert.deepEqual(document.components.schemas.Task.properties.type.enum, ["epic", "story", "task", "bug", "milestone", "work_package"]);
   assert.deepEqual(document.components.schemas.CreateWbsTaskInput.properties.type.enum, ["epic", "story", "task", "bug", "milestone", "work_package"]);
   assert.deepEqual(document.components.schemas.UpdateTaskInput.properties.type.enum, ["epic", "story", "task", "bug", "milestone", "work_package"]);
@@ -175,6 +179,7 @@ test("OpenAPI core contract validates and describes versioned project writes", a
   assert.equal(document.paths["/api/releases"].post.parameters[0].name, "Idempotency-Key");
   assert.equal(document.paths["/api/releases/{id}/approvals"].post.parameters[0].name, "Idempotency-Key");
   assert.equal(document.paths["/api/releases/{id}/rollbacks"].post.parameters[0].name, "Idempotency-Key");
+  assert.equal(document.paths["/api/ai/capabilities/{id}/invocations"].post.parameters[1].name, "Idempotency-Key");
   assert.equal(document.paths["/api/time-entries/{id}"].parameters[0].name, "id");
   assert.equal(document.components.schemas.TimeEntryUpdate.minProperties, 1);
   assert.match(document.paths["/api/projects/{id}"].delete.summary, /Soft-delete/);

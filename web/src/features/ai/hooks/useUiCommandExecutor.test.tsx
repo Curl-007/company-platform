@@ -9,6 +9,8 @@ import {
   saveWorkThemeSettings,
   saveWorkThemeSettingsWithTransition,
 } from '../../../theme/workTheme';
+import { readDshUiState } from '../../dshUi/store/dshUiStore';
+import { createMemoryStorage } from '../../../test/memoryStorage';
 
 // workTheme is mocked so assertions stay on the merged settings objects and
 // no real DOM theme side effects leak between cases.
@@ -36,6 +38,7 @@ const onNavigate = vi.fn();
 function Probe() {
   useUiCommandExecutor({
     onNavigate,
+    userId: 'USR-1',
     subscribe: (handlers) => {
       captured = handlers;
       return () => { captured = null; };
@@ -54,6 +57,10 @@ function pushDirective(payload: unknown): void {
 }
 
 beforeEach(() => {
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: createMemoryStorage(),
+  });
   vi.mocked(readWorkThemeSettings).mockReturnValue({ ...baseSettings });
   onNavigate.mockClear();
 });
@@ -126,10 +133,15 @@ describe('useUiCommandExecutor', () => {
     expect(onNavigate).toHaveBeenCalledTimes(1);
     expect(onNavigate).toHaveBeenCalledWith('projects');
 
+    pushDirective({ kind: 'navigate', page: 'projects', focus: 'PRJ-001' });
+    expect(onNavigate).toHaveBeenCalledTimes(2);
+    expect(onNavigate).toHaveBeenLastCalledWith('projects', 'PRJ-001');
+
     pushDirective({ kind: 'navigate', page: 'not-a-page' });
     pushDirective({ kind: 'navigate', page: 'login' });
-    expect(onNavigate).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledTimes(2);
+    pushDirective({ kind: 'navigate', page: 'projects', focus: '../../settings' });
+    expect(onNavigate).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenCalledTimes(3);
 
     unmount();
   });
@@ -162,6 +174,54 @@ describe('useUiCommandExecutor', () => {
     expect(root.style.getPropertyValue('--accent-bg')).toContain('color-mix');
     expect(root.style.getPropertyValue('--work-accent-rgb')).toBe('16, 185, 129');
 
+    unmount();
+  });
+
+  it('persists and opens a safe declarative view for the current user', async () => {
+    const { unmount } = renderProbe();
+    await flushAct();
+
+    pushDirective({
+      kind: 'viewUpsert',
+      view: {
+        id: 'delivery-pulse',
+        title: 'Delivery pulse',
+        blocks: [{ type: 'stat', id: 'health', label: 'Health', value: 94 }],
+      },
+    });
+    pushDirective({ kind: 'viewOpen', viewId: 'delivery-pulse' });
+    await flushAct();
+
+    const state = readDshUiState('USR-1');
+    expect(state.views[0]).toMatchObject({ id: 'delivery-pulse', surface: 'dsh-view:delivery-pulse' });
+    expect(state.activeViewId).toBe('delivery-pulse');
+    expect(onNavigate).toHaveBeenCalledWith('dsh-ui');
+    unmount();
+  });
+
+  it('persists layout/style and republishes both commands on the UI bus', async () => {
+    const { unmount } = renderProbe();
+    await flushAct();
+    const received: unknown[] = [];
+    const unsubscribe = subscribeToUiCommands((event) => received.push(event.detail.directive));
+
+    pushDirective({ kind: 'layout', surface: 'project:detail', order: ['summary', 'delivery'] });
+    pushDirective({
+      kind: 'surfaceStyle',
+      surface: 'project:detail',
+      style: { variant: 'quiet', columns: 2, gap: 20 },
+    });
+    await flushAct();
+
+    expect(readDshUiState('USR-1')).toMatchObject({
+      layouts: [{ surface: 'project:detail', order: ['summary', 'delivery'] }],
+      surfaceStyles: [{ surface: 'project:detail', style: { variant: 'quiet', columns: 2, gap: 20 } }],
+    });
+    expect(received).toEqual([
+      { kind: 'layout', surface: 'project:detail', order: ['summary', 'delivery'] },
+      { kind: 'surfaceStyle', surface: 'project:detail', style: { variant: 'quiet', columns: 2, gap: 20 } },
+    ]);
+    unsubscribe();
     unmount();
   });
 });

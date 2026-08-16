@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionUser } from '../types';
-import { canOperate } from './roles';
+import { canAccessPageForUser, canOperate } from './roles';
 
 function user(overrides: Partial<SessionUser> = {}): SessionUser {
   return {
@@ -35,5 +35,17 @@ describe('canOperate', () => {
 
   it('falls back to legacy permissions only when operations are absent', () => {
     expect(canOperate(user({ capabilities: undefined }), 'users:manage')).toBe(true);
+  });
+});
+
+describe('dsh-ui page access', () => {
+  it('keeps the frontend-only declarative surface available with older server capabilities', () => {
+    const current = user({
+      role: 'qa',
+      capabilities: { role: 'qa', pages: [], permissions: [], operations: [] },
+    });
+
+    expect(canAccessPageForUser(current, 'dsh-ui')).toBe(true);
+    expect(canAccessPageForUser(null, 'dsh-ui')).toBe(false);
   });
 });

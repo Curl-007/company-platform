@@ -184,6 +184,23 @@ test("AI provider policy errors do not trigger a second Harness wire request", a
   assert.equal(runtime.calls.length, 1);
 });
 
+test("AI Harness deadlines do not trigger a second wire request", async () => {
+  const runtime = harnessStub(async () => {
+    const error = new Error("Harness inference timed out after 12000ms.");
+    error.code = "AI_HARNESS_TIMEOUT";
+    error.status = 504;
+    throw error;
+  });
+  const client = createAiModelClient({
+    createRuntime: () => runtime,
+    getConfig: () => providerConfig(),
+    logger: { warn: () => assert.fail("deadline failures must not fall back") },
+  });
+
+  await assert.rejects(() => client.callModel("prompt"), { code: "AI_HARNESS_TIMEOUT", status: 504 });
+  assert.equal(runtime.calls.length, 1);
+});
+
 test("AI model client closes its lazy Harness runtime and rejects new inference", async () => {
   const runtime = harnessStub();
   const client = createAiModelClient({

@@ -25,6 +25,27 @@ const PREFIX = 'features.ai.aiUiDirectiveConsole';
 /** login renders nothing; every other registry page is a valid target. */
 const NAVIGABLE_PAGES = KNOWN_PAGES.filter((page) => page !== 'login');
 
+const ADVANCED_KINDS: UiDirectiveKind[] = ['layout', 'surfaceStyle', 'viewUpsert', 'viewRemove', 'viewOpen'];
+
+function advancedExample(kind: UiDirectiveKind): string {
+  const examples: Partial<Record<UiDirectiveKind, unknown>> = {
+    layout: { kind: 'layout', surface: 'projects.detail', order: ['hero', 'workspace', 'ai-advice'] },
+    surfaceStyle: { kind: 'surfaceStyle', surface: 'projects.detail', style: { variant: 'default', columns: 2, gap: 16 } },
+    viewUpsert: {
+      kind: 'viewUpsert',
+      view: {
+        id: 'delivery-overview',
+        title: 'Delivery overview',
+        surface: 'dsh-view:delivery-overview',
+        blocks: [{ type: 'stat', id: 'health', label: 'Health', value: 92 }],
+      },
+    },
+    viewRemove: { kind: 'viewRemove', viewId: 'delivery-overview' },
+    viewOpen: { kind: 'viewOpen', viewId: 'delivery-overview' },
+  };
+  return JSON.stringify(examples[kind] ?? {}, null, 2);
+}
+
 /**
  * Ops tool for the AI ui_control pipeline: pick a whitelisted directive, fill
  * its parameters and POST it to /api/ai/ui-directives — the server delivers
@@ -42,6 +63,7 @@ export default function AiUiDirectiveConsole() {
   const [reduceMotion, setReduceMotion] = useState(false);
   const [page, setPage] = useState('dashboard');
   const [openSidebar, setOpenSidebar] = useState(true);
+  const [advancedJson, setAdvancedJson] = useState(() => advancedExample('layout'));
   const [sending, setSending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [delivered, setDelivered] = useState<number | null>(null);
@@ -58,6 +80,18 @@ export default function AiUiDirectiveConsole() {
       case 'reduceMotion': return { kind: 'reduceMotion', value: reduceMotion };
       case 'navigate': return { kind: 'navigate', page };
       case 'openAiSidebar': return { kind: 'openAiSidebar', open: openSidebar };
+      case 'layout':
+      case 'surfaceStyle':
+      case 'viewUpsert':
+      case 'viewRemove':
+      case 'viewOpen': {
+        try {
+          const parsed = parseAgentUiDirective(JSON.parse(advancedJson));
+          return parsed?.kind === kind ? parsed : null;
+        } catch {
+          return null;
+        }
+      }
       default: return null;
     }
   }
@@ -98,7 +132,9 @@ export default function AiUiDirectiveConsole() {
             value={kind}
             aria-label={t(`${PREFIX}.kindLabel`)}
             onChange={(event) => {
-              setKind(event.target.value as UiDirectiveKind);
+              const nextKind = event.target.value as UiDirectiveKind;
+              setKind(nextKind);
+              if (ADVANCED_KINDS.includes(nextKind)) setAdvancedJson(advancedExample(nextKind));
               setFormError(null);
               setDelivered(null);
             }}
@@ -230,6 +266,19 @@ export default function AiUiDirectiveConsole() {
               onChange={(event) => setOpenSidebar(event.target.checked)}
             />
             <span>{t(`${PREFIX}.openAiSidebarLabel`)}</span>
+          </label>
+        ) : null}
+
+        {ADVANCED_KINDS.includes(kind) ? (
+          <label>
+            <span>{t(`${PREFIX}.jsonPayloadLabel`)}</span>
+            <textarea
+              className="form-textarea"
+              rows={10}
+              value={advancedJson}
+              spellCheck={false}
+              onChange={(event) => setAdvancedJson(event.target.value)}
+            />
           </label>
         ) : null}
 

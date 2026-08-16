@@ -75,6 +75,14 @@ test("AI summary route uses stable fresh cache keys and project-id scoped data",
 
 test("AI chat ignores a caller-supplied model and reports the resolved platform assistant", async () => {
   const calls = [];
+  const executionCalls = [];
+  const execution = {
+    capabilityId: "platform-assistant",
+    capabilityVersion: "1.0.0",
+    gatewayBaseUrl: "http://127.0.0.1:4011",
+    projectId: "PRJ-1",
+    token: "assistant-session-token",
+  };
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -82,6 +90,15 @@ test("AI chat ignores a caller-supplied model and reports the resolved platform 
     next();
   });
   app.use("/api", createAiInteractionsRouter({
+    assistantExecutionService: {
+      create: async (input) => {
+        executionCalls.push({ type: "create", input });
+        return {
+          execution,
+          finish: async (input) => executionCalls.push({ type: "finish", input }),
+        };
+      },
+    },
     audit: async () => {},
     buildAiChatContext: async () => ({ projects: [] }),
     buildAiChatPrompt: async () => "auditable chat prompt",
@@ -124,6 +141,10 @@ test("AI chat ignores a caller-supplied model and reports the resolved platform 
     assert.equal(response.status, 200);
     assert.equal(calls.length, 1);
     assert.equal(calls[0][1].model, undefined);
+    assert.equal(calls[0][1].execution, execution);
+    assert.equal(executionCalls[0].type, "create");
+    assert.equal(executionCalls[0].input.actor.id, "U-1");
+    assert.deepEqual(executionCalls[1], { type: "finish", input: { fallback: false, modelUsed: true } });
     assert.equal(payload.data.modelUsed, "assistant-model");
     assert.equal(payload.data.aiAssistant.resolvedProviderId, "AIP-2");
     assert.equal(Object.hasOwn(payload.data.aiAssistant, "systemPrompt"), false);

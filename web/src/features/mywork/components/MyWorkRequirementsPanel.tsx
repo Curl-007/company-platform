@@ -5,6 +5,7 @@ import Panel from '../../../components/common/Panel';
 import ProgressBar from '../../../components/common/ProgressBar';
 import StatusBadge from '../../../components/common/StatusBadge';
 import PageState from '../../../components/common/PageState';
+import SortableSectionLayout, { SortableSection } from '../../../components/common/SortableSectionLayout';
 import {
   PRIORITY_LABELS,
   REQUIREMENT_STATUS_LABELS,
@@ -118,8 +119,9 @@ export default function MyWorkRequirementsPanel({ items }: { items: RequirementP
         ) : detailAsync.loading || detailAsync.error ? (
           <PageState loading={detailAsync.loading} error={detailAsync.error} onRetry={() => { void detailAsync.reload(); }} />
         ) : detail ? (
-          <div className="mywork-detail">
-            <div className="mywork-detail-header">
+          <SortableSectionLayout surface="mywork.requirement-detail" className="mywork-detail mywork-detail-sortable">
+            <SortableSection id="header" label={detail.title}>
+              <div className="mywork-detail-header">
               <div>
                 <h3>{detail.title}</h3>
                 <div className="text-secondary" style={{ fontSize: 13, marginTop: 4 }}>
@@ -127,8 +129,10 @@ export default function MyWorkRequirementsPanel({ items }: { items: RequirementP
                 </div>
               </div>
               <StatusBadge status={detail.status} label={labelOf(REQUIREMENT_STATUS_LABELS, detail.status)} />
-            </div>
-            <div className="mywork-detail-meta">
+              </div>
+            </SortableSection>
+            <SortableSection id="metadata" label={t('features.mywork.myWorkRequirementsPanel.priorityLabel')}>
+              <div className="mywork-detail-meta">
               <div className="detail-field">
                 <span className="detail-label">{t('features.mywork.myWorkRequirementsPanel.priorityLabel')}</span>
                 <span className="detail-value">{labelOf(PRIORITY_LABELS, detail.priority)}</span>
@@ -149,33 +153,42 @@ export default function MyWorkRequirementsPanel({ items }: { items: RequirementP
                 <span className="detail-label">{t('features.mywork.myWorkRequirementsPanel.assignmentStatusLabel')}</span>
                 <span className="detail-value">{detail.assignmentStatus || '-'}</span>
               </div>
-            </div>
-            <div className="detail-field mywork-detail-progress">
-              <span className="detail-label">{t('features.mywork.myWorkRequirementsPanel.completionLabel')}</span>
-              <ProgressBar percent={detail.completion ?? selectedSummary.completion ?? 0} />
-            </div>
-            {detail.description ? (
-              <div className="detail-field" style={{ marginTop: 12 }}>
-                <span className="detail-label">{t('features.mywork.myWorkRequirementsPanel.descriptionLabel')}</span>
-                <div className="detail-value" style={{ whiteSpace: 'pre-wrap' }}>{detail.description}</div>
               </div>
+            </SortableSection>
+            <SortableSection id="progress" label={t('features.mywork.myWorkRequirementsPanel.completionLabel')}>
+              <div className="detail-field mywork-detail-progress">
+                <span className="detail-label">{t('features.mywork.myWorkRequirementsPanel.completionLabel')}</span>
+                <ProgressBar percent={detail.completion ?? selectedSummary.completion ?? 0} />
+              </div>
+            </SortableSection>
+            {detail.description ? (
+              <SortableSection id="description" label={t('features.mywork.myWorkRequirementsPanel.descriptionLabel')}>
+                <div className="detail-field">
+                  <span className="detail-label">{t('features.mywork.myWorkRequirementsPanel.descriptionLabel')}</span>
+                  <div className="detail-value" style={{ whiteSpace: 'pre-wrap' }}>{detail.description}</div>
+                </div>
+              </SortableSection>
             ) : null}
             {Array.isArray(detail.acceptanceCriteria) && detail.acceptanceCriteria.length > 0 ? (
-              <div className="detail-field" style={{ marginTop: 12 }}>
-                <span className="detail-label">{t('features.mywork.myWorkRequirementsPanel.acceptanceCriteriaLabel')}</span>
-                <ul className="detail-value" style={{ margin: '6px 0 0', paddingLeft: 18 }}>
-                  {detail.acceptanceCriteria.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              </div>
+              <SortableSection id="acceptance-criteria" label={t('features.mywork.myWorkRequirementsPanel.acceptanceCriteriaLabel')}>
+                <div className="detail-field">
+                  <span className="detail-label">{t('features.mywork.myWorkRequirementsPanel.acceptanceCriteriaLabel')}</span>
+                  <ul className="detail-value" style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                    {detail.acceptanceCriteria.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+              </SortableSection>
             ) : null}
             {!canOpenRequirements ? (
-              <div className="text-secondary" style={{ marginTop: 12, fontSize: 12 }}>
-                {t('features.mywork.myWorkRequirementsPanel.noRequirementsAccessHint')}
-              </div>
+              <SortableSection id="access-hint" label={t('features.mywork.myWorkRequirementsPanel.noRequirementsAccessHint')}>
+                <div className="text-secondary" style={{ fontSize: 12 }}>
+                  {t('features.mywork.myWorkRequirementsPanel.noRequirementsAccessHint')}
+                </div>
+              </SortableSection>
             ) : null}
-          </div>
+          </SortableSectionLayout>
         ) : (
           <div className="empty-state-desc">{t('features.mywork.myWorkRequirementsPanel.loadFailed')}</div>
         )}

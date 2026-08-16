@@ -460,8 +460,14 @@ function createHarnessRuntime({
       };
       const timer = setTimeout(() => {
         timedOut = true;
-        void disposeRuntime(runtime).finally(() => {
-          settle(reject, buildOverallTimeoutError(timeoutMs));
+        // The caller's deadline must not depend on the child process honoring
+        // its shutdown handshake. Mark the run timed out immediately and let
+        // cleanup finish in the background; otherwise a stuck child can leave
+        // every queued request waiting forever after the nominal timeout.
+        const timeoutError = buildOverallTimeoutError(timeoutMs);
+        settle(reject, timeoutError);
+        void disposeRuntime(runtime).catch((error) => {
+          logger?.warn?.("Harness timeout cleanup warning:", error?.message || error);
         });
       }, timeoutMs);
       Promise.resolve(runtime.harness.run(input, runOptions)).then(

@@ -26,11 +26,11 @@ const ACCOUNTS: Record<RoleKey, { email: string; password: string }> = {
 };
 
 const MUST_SEE: Record<RoleKey, string[]> = {
-  admin: ['工作台', '我的工作', '团队管理', '产品管理', '项目执行', '需求管理', '测试质量', '交付中心', '文档中心', '报表中心', '系统设置'],
-  pm: ['工作台', '项目执行', '需求管理', '交付中心', '报表中心', '团队容量', '研发流程'],
-  pdm: ['工作台', '产品管理', '需求管理', '文档中心'],
-  dev: ['工作台', '项目执行', '文档中心', '我的工作', '交付中心'],
-  qa: ['工作台', '测试质量', '文档中心', '我的工作'],
+  admin: ['工作台', '我的工作', '团队管理', '产品管理', '项目执行', '需求管理', '测试质量', '交付中心', '文档中心', 'DSH 界面', '报表中心', '系统设置'],
+  pm: ['工作台', '项目执行', '需求管理', '交付中心', 'DSH 界面', '报表中心', '团队容量', '研发流程'],
+  pdm: ['工作台', '产品管理', '需求管理', '文档中心', 'DSH 界面'],
+  dev: ['工作台', '项目执行', '文档中心', '我的工作', '交付中心', 'DSH 界面'],
+  qa: ['工作台', '测试质量', '文档中心', '我的工作', 'DSH 界面'],
 };
 
 const MUST_NOT_SEE: Record<RoleKey, string[]> = {
@@ -56,6 +56,7 @@ const WALK: Record<RoleKey, Array<[string, RegExp | string]>> = {
     ['交付中心', '交付中心'],
     ['文档中心', /文档/],
     ['AI 分析', /AI|分析|助手/],
+    ['DSH 界面', /DSH/],
     ['报表中心', /报表/],
     ['产品管理', '产品管理'],
     ['研发流程', /流程|研发/],
@@ -72,6 +73,7 @@ const WALK: Record<RoleKey, Array<[string, RegExp | string]>> = {
     ['报表中心', /报表/],
     ['研发流程', /流程|研发/],
     ['文档中心', /文档/],
+    ['DSH 界面', /DSH/],
   ],
   pdm: [
     ['工作台', /工作台/],
@@ -81,6 +83,7 @@ const WALK: Record<RoleKey, Array<[string, RegExp | string]>> = {
     ['文档中心', /文档/],
     ['动态中心', /动态/],
     ['我的工作', /我的工作/],
+    ['DSH 界面', /DSH/],
   ],
   dev: [
     ['工作台', /工作台/],
@@ -90,6 +93,7 @@ const WALK: Record<RoleKey, Array<[string, RegExp | string]>> = {
     ['交付中心', '交付中心'],
     ['文档中心', /文档/],
     ['动态中心', /动态/],
+    ['DSH 界面', /DSH/],
   ],
   qa: [
     ['工作台', /工作台/],
@@ -97,6 +101,7 @@ const WALK: Record<RoleKey, Array<[string, RegExp | string]>> = {
     ['测试质量', '测试质量'],
     ['文档中心', /文档/],
     ['动态中心', /动态/],
+    ['DSH 界面', /DSH/],
   ],
 };
 
@@ -165,7 +170,9 @@ test.describe('multi-role full-flow UI', () => {
         if ((await navBtn.count()) === 0) continue;
         await openNav(page, nav);
         await expectHeading(page, heading);
-        await expect(page.locator('.page-header, .panel, .page-title, .card, .metric-card').first()).toBeVisible();
+        await expect(
+          page.locator('.page-header, .panel, .page-title, .card, .metric-card, .dsh-ui-empty').first(),
+        ).toBeVisible();
       }
     });
   }

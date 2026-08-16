@@ -156,6 +156,7 @@ export default function DynamicView() {
       />
 
       <div className="dynamic-workbench dynamic-command-center">
+        <div className="dynamic-rail-column">
         <aside className="dynamic-rail">
           <div className="dynamic-rail-header">
             <span>{t('features.audit.dynamicView.attentionQueue')}</span>
@@ -175,6 +176,71 @@ export default function DynamicView() {
             <div className="body-text">{t('features.audit.dynamicView.noPriorityActivity')}</div>
           )}
         </aside>
+
+        <aside className="dynamic-filter-panel">
+          <div className="dynamic-filter-panel-title"><SlidersHorizontal size={15} /> {t('features.audit.dynamicView.filterStrategy')}</div>
+          <div className="dynamic-filter-grid">
+            <div className="form-group">
+              <label className="form-label">{t('features.audit.dynamicView.timeRange')}</label>
+              <select className="form-select" value={timeRange} onChange={(event) => setTimeRange(event.target.value as TimeRange)}>
+                <option value="today">{t('features.audit.dynamicView.today')}</option>
+                <option value="week">{t('features.audit.dynamicView.rangeLast7Days')}</option>
+                <option value="all">{t('features.audit.dynamicView.all')}</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">{t('features.audit.dynamicView.resourceType')}</label>
+              <select className="form-select" value={resourceTypeFilter} onChange={(event) => setResourceTypeFilter(event.target.value)}>
+                <option value="all">{t('features.audit.dynamicView.allResources')}</option>
+                <option value="project">{t('features.audit.dynamicMeta.resourceType.project')}</option>
+                <option value="requirement">{t('features.audit.dynamicMeta.resourceType.requirement')}</option>
+                <option value="task">{t('features.audit.dynamicMeta.resourceType.task')}</option>
+                <option value="defect">{t('features.audit.dynamicMeta.resourceType.defect')}</option>
+                <option value="test_case">{t('features.audit.dynamicMeta.resourceType.test_case')}</option>
+                <option value="document">{t('features.audit.dynamicMeta.resourceType.document')}</option>
+                <option value="work_log">{t('features.audit.dynamicMeta.resourceType.work_log')}</option>
+                <option value="build">{t('features.audit.dynamicMeta.resourceType.build')}</option>
+                <option value="release">{t('features.audit.dynamicMeta.resourceType.release')}</option>
+                <option value="user">{t('features.audit.dynamicMeta.resourceType.user')}</option>
+                <option value="page">{t('features.audit.dynamicMeta.resourceType.page')}</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">{t('features.audit.dynamicView.actionType')}</label>
+              <select className="form-select" value={actionFilter} onChange={(event) => setActionFilter(event.target.value)}>
+                <option value="all">{t('features.audit.dynamicView.allActions')}</option>
+                <option value="auth.">{t('features.audit.dynamicView.actionAuth')}</option>
+                <option value="project.">{t('features.audit.dynamicView.actionProject')}</option>
+                <option value="requirement.">{t('features.audit.dynamicView.actionRequirement')}</option>
+                <option value="task.">{t('features.audit.dynamicView.actionTask')}</option>
+                <option value="defect.">{t('features.audit.dynamicView.actionDefect')}</option>
+                <option value="test_case.">{t('features.audit.dynamicView.actionTestCase')}</option>
+                <option value="document.">{t('features.audit.dynamicView.actionDocument')}</option>
+                <option value="work_log.">{t('features.audit.dynamicView.actionWorkLog')}</option>
+                <option value="build.">{t('features.audit.dynamicView.actionBuild')}</option>
+                <option value="release.">{t('features.audit.dynamicView.actionRelease')}</option>
+                <option value="user.">{t('features.audit.dynamicView.actionUser')}</option>
+              </select>
+            </div>
+            <label className="form-checkbox dynamic-filter-checkbox">
+              <input type="checkbox" checked={includePageViews} onChange={(event) => setIncludePageViews(event.target.checked)} />
+              <span>{t('features.audit.dynamicView.includePageViews')}</span>
+            </label>
+          </div>
+          <div className="dynamic-category-dock">
+            {categoryCounts.map((item) => (
+              <button
+                key={item.key}
+                className={`dynamic-category-chip ${item.variant}${categoryFilter === item.key ? ' active' : ''}`}
+                onClick={() => setCategoryFilter(item.key === categoryFilter ? 'all' : item.key)}
+              >
+                <span>{t(item.label)}</span>
+                <strong>{item.count}</strong>
+              </button>
+            ))}
+          </div>
+        </aside>
+        </div>
 
         <section className="dynamic-timeline-stage">
           <div className="dynamic-stage-toolbar">
@@ -269,69 +335,6 @@ export default function DynamicView() {
           )}
         </section>
 
-        <aside className="dynamic-filter-panel">
-          <div className="dynamic-filter-panel-title"><SlidersHorizontal size={15} /> {t('features.audit.dynamicView.filterStrategy')}</div>
-          <div className="dynamic-filter-grid">
-            <div className="form-group">
-              <label className="form-label">{t('features.audit.dynamicView.timeRange')}</label>
-              <select className="form-select" value={timeRange} onChange={(event) => setTimeRange(event.target.value as TimeRange)}>
-                <option value="today">{t('features.audit.dynamicView.today')}</option>
-                <option value="week">{t('features.audit.dynamicView.rangeLast7Days')}</option>
-                <option value="all">{t('features.audit.dynamicView.all')}</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">{t('features.audit.dynamicView.resourceType')}</label>
-              <select className="form-select" value={resourceTypeFilter} onChange={(event) => setResourceTypeFilter(event.target.value)}>
-                <option value="all">{t('features.audit.dynamicView.allResources')}</option>
-                <option value="project">{t('features.audit.dynamicMeta.resourceType.project')}</option>
-                <option value="requirement">{t('features.audit.dynamicMeta.resourceType.requirement')}</option>
-                <option value="task">{t('features.audit.dynamicMeta.resourceType.task')}</option>
-                <option value="defect">{t('features.audit.dynamicMeta.resourceType.defect')}</option>
-                <option value="test_case">{t('features.audit.dynamicMeta.resourceType.test_case')}</option>
-                <option value="document">{t('features.audit.dynamicMeta.resourceType.document')}</option>
-                <option value="work_log">{t('features.audit.dynamicMeta.resourceType.work_log')}</option>
-                <option value="build">{t('features.audit.dynamicMeta.resourceType.build')}</option>
-                <option value="release">{t('features.audit.dynamicMeta.resourceType.release')}</option>
-                <option value="user">{t('features.audit.dynamicMeta.resourceType.user')}</option>
-                <option value="page">{t('features.audit.dynamicMeta.resourceType.page')}</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">{t('features.audit.dynamicView.actionType')}</label>
-              <select className="form-select" value={actionFilter} onChange={(event) => setActionFilter(event.target.value)}>
-                <option value="all">{t('features.audit.dynamicView.allActions')}</option>
-                <option value="auth.">{t('features.audit.dynamicView.actionAuth')}</option>
-                <option value="project.">{t('features.audit.dynamicView.actionProject')}</option>
-                <option value="requirement.">{t('features.audit.dynamicView.actionRequirement')}</option>
-                <option value="task.">{t('features.audit.dynamicView.actionTask')}</option>
-                <option value="defect.">{t('features.audit.dynamicView.actionDefect')}</option>
-                <option value="test_case.">{t('features.audit.dynamicView.actionTestCase')}</option>
-                <option value="document.">{t('features.audit.dynamicView.actionDocument')}</option>
-                <option value="work_log.">{t('features.audit.dynamicView.actionWorkLog')}</option>
-                <option value="build.">{t('features.audit.dynamicView.actionBuild')}</option>
-                <option value="release.">{t('features.audit.dynamicView.actionRelease')}</option>
-                <option value="user.">{t('features.audit.dynamicView.actionUser')}</option>
-              </select>
-            </div>
-            <label className="form-checkbox dynamic-filter-checkbox">
-              <input type="checkbox" checked={includePageViews} onChange={(event) => setIncludePageViews(event.target.checked)} />
-              <span>{t('features.audit.dynamicView.includePageViews')}</span>
-            </label>
-          </div>
-          <div className="dynamic-category-dock">
-            {categoryCounts.map((item) => (
-              <button
-                key={item.key}
-                className={`dynamic-category-chip ${item.variant}${categoryFilter === item.key ? ' active' : ''}`}
-                onClick={() => setCategoryFilter(categoryFilter === item.key ? 'all' : item.key)}
-              >
-                <span>{t(item.label)}</span>
-                <strong>{item.count}</strong>
-              </button>
-            ))}
-          </div>
-        </aside>
       </div>
     </div>
   );

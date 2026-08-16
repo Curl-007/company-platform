@@ -6,7 +6,10 @@
 // Security posture (mirrors outboundUrlPolicy):
 //   - navigation targets: http/https only, no URL credentials, DNS resolved
 //     and pinned at decision time, private/reserved IPs blocked unless the
-//     host is localhost or in BROWSER_PRIVATE_HOST_ALLOWLIST;
+//     host is in BROWSER_PRIVATE_HOST_ALLOWLIST (localhost by default; entries
+//     may be port-scoped as host:port to tighten the loopback surface); every
+//     network connection goes through a loopback proxy that resolves and dials
+//     a validated literal address, including each redirect hop;
 //   - browser sessions are isolated per (actor, project), carry no platform
 //     credentials, are serialized (BROWSER_MAX_PAGES) and closed after an
 //     idle TTL; every action is audited by the gateway BEFORE it runs;
@@ -16,6 +19,8 @@
 
 /* global document */
 
+const http = require("node:http");
+const net = require("node:net");
 const path = require("node:path");
 const { isPublicIp, normalizeHostname, parseAllowedPrivateHosts } = require("./outboundUrlPolicy");
 
@@ -39,8 +44,31 @@ function browserError(code, message, status = 400) {
   return error;
 }
 
+function normalizedAddressKey(address) {
+  if (!address) return "";
+  const value = typeof address === "string" ? address : address.address;
+  const family = typeof address === "string" ? net.isIP(address) : address.family;
+  return `${Number(family) || net.isIP(value)}:${String(value || "").toLowerCase()}`;
+}
+
+function sameResolvedAddresses(left, right) {
+  const a = new Set((left || []).map(normalizedAddressKey).filter(Boolean));
+  const b = new Set((right || []).map(normalizedAddressKey).filter(Boolean));
+  if (a.size !== b.size) return false;
+  for (const item of a) if (!b.has(item)) return false;
+  return true;
+}
+
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+// A bare-host allowlist entry grants every port on that host; a "host:port"
+// entry grants exactly that origin. Matching is case-normalized on both sides
+// by parseAllowedPrivateHosts/normalizeHostname.
+function matchesAllowedPrivateHost(allowlist, hostname, port) {
+  if (allowlist.has(hostname)) return true;
+  return Boolean(port) && allowlist.has(`${hostname}:${port}`);
 }
 
 function boundedInt(value, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
@@ -104,10 +132,14 @@ async function resolveBrowserNavigationTarget(value, {
     ? allowedPrivateHosts
     : parseAllowedPrivateHosts(allowedPrivateHosts);
 
-  if (allowlist.has(hostname) || hostname === "localhost" || hostname.endsWith(".localhost")) {
+  // A bare-host entry grants every port on that host; a "host:port" entry
+  // grants exactly that origin. There is no implicit localhost grant: an
+  // operator who clears or narrows the allowlist can actually enforce it.
+  const port = url.port || (url.protocol === "https:" ? "443" : "80");
+  if (matchesAllowedPrivateHost(allowlist, hostname, port)) {
     return Object.freeze({ url, hostname });
   }
-  if (require("node:net").isIP(hostname)) {
+  if (net.isIP(hostname)) {
     if (!isPublicIp(hostname)) {
       throw browserError("AI_BROWSER_PRIVATE_ADDRESS_FORBIDDEN", "Browser navigation cannot target a private or reserved address.", 403);
     }
@@ -176,12 +208,230 @@ function createBrowserControlService({
   masking,
   playwrightFactory = () => require("playwright"),
   fsImpl = require("node:fs"),
+  lookup = require("node:dns").lookup,
   logger = console,
 } = {}) {
   const config = resolveBrowserConfig(env, logger);
   const screenshotDir = storageDir ? path.join(storageDir, "browser") : null;
   let browserPromise = null;
+  let browserProxyPromise = null;
   let queue = Promise.resolve();
+
+  async function resolveProxyConnection(value) {
+    const target = await resolveBrowserNavigationTarget(value, {
+      allowedPrivateHosts: config.allowedPrivateHosts,
+      lookup,
+    });
+    if (target.addresses?.length) {
+      const selected = target.addresses.find((item) => Number(item.family) === 4) || target.addresses[0];
+      return { target, address: selected.address, family: Number(selected.family) || net.isIP(selected.address) };
+    }
+    const literalFamily = net.isIP(target.hostname);
+    if (literalFamily) return { target, address: target.hostname, family: literalFamily };
+
+    // Allowlisted private hostnames intentionally skip the public-address
+    // check above, but the proxy still resolves them itself and connects to the
+    // literal result rather than asking Chromium to resolve the hostname.
+    const addresses = await new Promise((resolve, reject) => {
+      lookup(target.hostname, { all: true, verbatim: true }, (error, resolved) => {
+        if (error) reject(browserError("AI_BROWSER_DNS_LOOKUP_FAILED", "Browser navigation hostname did not resolve.", 502));
+        else resolve(resolved || []);
+      });
+    });
+    const candidates = addresses
+      .map((item) => ({ address: typeof item === "string" ? item : item?.address, family: typeof item === "string" ? net.isIP(item) : item?.family }))
+      .filter((item) => net.isIP(item.address));
+    const selected = candidates.find((item) => Number(item.family) === 4) || candidates[0];
+    if (!selected) throw browserError("AI_BROWSER_DNS_LOOKUP_FAILED", "Browser navigation hostname did not resolve.", 502);
+    return { target, address: selected.address, family: Number(selected.family) || net.isIP(selected.address) };
+  }
+
+  function proxyResponseError(response, error) {
+    if (response.writableEnded) return;
+    if (response.headersSent) {
+      response.destroy();
+      return;
+    }
+    const status = error?.status === 403 ? 403 : 502;
+    response.writeHead(status, { Connection: "close", "Content-Length": "0" });
+    response.end();
+  }
+
+  async function createBrowserProxy() {
+    const clientSockets = new Set();
+    const upstreamSockets = new Set();
+    const proxy = http.createServer((request, response) => {
+      void (async () => {
+        let url;
+        try {
+          url = new URL(String(request.url || ""));
+          if (url.protocol !== "http:") {
+            throw browserError("AI_BROWSER_URL_SCHEME_FORBIDDEN", "Browser requests only allow http/https URLs.", 400);
+          }
+          const { target, address, family } = await resolveProxyConnection(url.toString());
+          const headers = {};
+          for (const [name, value] of Object.entries(request.headers || {})) {
+            const normalized = name.toLowerCase();
+            if (normalized === "host" || normalized === "proxy-authorization" || normalized === "proxy-connection") continue;
+            headers[name] = value;
+          }
+          headers.Host = target.url.host;
+          const upstream = http.request({
+            agent: false,
+            family,
+            headers,
+            hostname: address,
+            method: request.method,
+            path: `${target.url.pathname}${target.url.search}`,
+            port: Number(target.url.port) || 80,
+          }, (upstreamResponse) => {
+            response.writeHead(upstreamResponse.statusCode || 502, upstreamResponse.headers);
+            upstreamResponse.pipe(response);
+          });
+          upstreamSockets.add(upstream);
+          upstream.once("close", () => upstreamSockets.delete(upstream));
+          upstream.once("error", (error) => {
+            upstreamSockets.delete(upstream);
+            proxyResponseError(response, error);
+          });
+          request.once("aborted", () => upstream.destroy());
+          request.pipe(upstream);
+        } catch (error) {
+          request.resume();
+          proxyResponseError(response, error);
+        }
+      })();
+    });
+
+    proxy.on("connection", (socket) => {
+      clientSockets.add(socket);
+      socket.once("close", () => clientSockets.delete(socket));
+    });
+    proxy.on("connect", (request, clientSocket, head) => {
+      void (async () => {
+        let upstream;
+        try {
+          const authority = String(request.url || "").trim();
+          if (!authority || /[/?#]/.test(authority)) {
+            throw browserError("AI_BROWSER_URL_INVALID", "Browser proxy target is invalid.", 400);
+          }
+          const url = new URL(`https://${authority}`);
+          if (url.username || url.password || (url.pathname && url.pathname !== "/")) {
+            throw browserError("AI_BROWSER_URL_INVALID", "Browser proxy target is invalid.", 400);
+          }
+          const { target, address, family } = await resolveProxyConnection(url.toString());
+          if (clientSocket.destroyed) return;
+          upstream = net.connect({ host: address, port: Number(target.url.port) || 443, family });
+          upstreamSockets.add(upstream);
+          upstream.once("close", () => upstreamSockets.delete(upstream));
+          upstream.once("error", () => {
+            upstreamSockets.delete(upstream);
+            clientSocket.destroy();
+          });
+          clientSocket.once("error", () => upstream.destroy());
+          upstream.once("connect", () => {
+            if (clientSocket.destroyed) return upstream.destroy();
+            clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+            if (head?.length) upstream.write(head);
+            clientSocket.pipe(upstream);
+            upstream.pipe(clientSocket);
+          });
+        } catch {
+          clientSocket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+          upstream?.destroy();
+        }
+      })();
+    });
+
+    await new Promise((resolve, reject) => {
+      proxy.once("error", reject);
+      proxy.listen(0, "127.0.0.1", resolve);
+    });
+    const { port } = proxy.address();
+    return {
+      url: `http://127.0.0.1:${port}`,
+      async close() {
+        for (const socket of clientSockets) socket.destroy();
+        for (const socket of upstreamSockets) socket.destroy();
+        await new Promise((resolve) => proxy.close(() => resolve()));
+      },
+    };
+  }
+
+  async function getBrowserProxy() {
+    if (!browserProxyPromise) {
+      browserProxyPromise = createBrowserProxy().catch((error) => {
+        browserProxyPromise = null;
+        throw error;
+      });
+    }
+    return browserProxyPromise;
+  }
+
+  async function validateRequestUrl(session, value) {
+    let requestUrl;
+    try {
+      requestUrl = new URL(String(value || ""));
+    } catch {
+      throw browserError("AI_BROWSER_URL_INVALID", "Browser request URL is invalid.", 400);
+    }
+    if (requestUrl.protocol !== "http:" && requestUrl.protocol !== "https:") {
+      throw browserError("AI_BROWSER_URL_SCHEME_FORBIDDEN", "Browser requests only allow http/https URLs.", 400);
+    }
+    const target = await resolveBrowserNavigationTarget(requestUrl.toString(), {
+      allowedPrivateHosts: config.allowedPrivateHosts,
+      lookup,
+    });
+    // A hostname is pinned to the complete address set observed for the first
+    // request. A later DNS answer change is rejected instead of allowing a
+    // rebinding from a public address to an internal one (or vice versa).
+    if (target.addresses?.length) {
+      const previous = session.navigationPins.get(target.hostname);
+      if (previous && !sameResolvedAddresses(previous, target.addresses)) {
+        throw browserError(
+          "AI_BROWSER_DNS_REBINDING_DETECTED",
+          "Browser navigation hostname resolved to a different address during the session.",
+          403,
+        );
+      }
+      if (!previous) session.navigationPins.set(target.hostname, target.addresses);
+    }
+    return target;
+  }
+
+  async function installNavigationGuard(session) {
+    if (typeof session.context.route === "function") {
+      await session.context.route("**/*", async (route) => {
+        const request = typeof route.request === "function" ? route.request() : null;
+        try {
+          // Playwright routes only the first URL in a redirect chain. Every
+          // Chromium request instead goes through the loopback proxy created
+          // above, which resolves the next hop itself and connects to the
+          // literal approved address before any browser redirect can proceed.
+          if (request?.redirectedFrom?.()) {
+            throw browserError("AI_BROWSER_REDIRECT_FORBIDDEN", "Browser navigation redirects are not allowed.", 403);
+          }
+          const requestUrl = request?.url?.();
+          if (!requestUrl) throw browserError("AI_BROWSER_URL_INVALID", "Browser request URL is invalid.", 400);
+          await validateRequestUrl(session, requestUrl);
+          await route.continue();
+        } catch (error) {
+          const guardedError = error?.code?.startsWith?.("AI_BROWSER_")
+            ? error
+            : browserError("AI_BROWSER_NAVIGATION_BLOCKED", "Browser request was blocked by the navigation policy.", 403);
+          session.navigationGuardError ||= guardedError;
+          try { await route.abort("blockedbyclient"); } catch { /* route may already be closed */ }
+        }
+      });
+      session.navigationGuardInstalled = true;
+    }
+    // WebSocket requests are not handled by context.route. Browser control has
+    // no use for page-originated sockets, so block them when the installed
+    // Playwright version exposes the WebSocket routing API.
+    if (typeof session.context.routeWebSocket === "function") {
+      await session.context.routeWebSocket("**/*", (webSocket) => webSocket.close());
+    }
+  }
 
   function withPage(sessionKey) {
     if (!config.enabled) throw browserError("AI_BROWSER_DISABLED", "Browser control is disabled.", 403);
@@ -199,8 +449,27 @@ function createBrowserControlService({
     return browserPromise.then(async (browser) => {
       let session = sessions.get(sessionKey);
       if (!session) {
-        const context = await browser.newContext();
-        session = { context, page: null, lastUsed: Date.now() };
+        // BROWSER_MAX_PAGES bounds how many live browser contexts exist at
+        // once. A new (actor, project) session beyond the cap closes the
+        // least-recently-used one; the global action queue keeps runs
+        // serialized regardless.
+        if (sessions.size >= config.maxPages) releaseLeastRecentlyUsedSession();
+        // Context routes do not intercept requests claimed by a service worker.
+        // Block workers so the network policy remains the single egress gate.
+        const proxy = await getBrowserProxy();
+        const context = await browser.newContext({
+          proxy: { server: proxy.url, bypass: "" },
+          serviceWorkers: "block",
+        });
+        session = {
+          context,
+          page: null,
+          lastUsed: Date.now(),
+          navigationPins: new Map(),
+          navigationGuardError: null,
+          navigationGuardInstalled: false,
+        };
+        await installNavigationGuard(session);
         sessions.set(sessionKey, session);
       }
       session.lastUsed = Date.now();
@@ -212,6 +481,20 @@ function createBrowserControlService({
   // TTL sweep. Serialized by `queue` so concurrent invocations never share a
   // page mid-action.
   const sessions = new Map();
+
+  function releaseLeastRecentlyUsedSession() {
+    let oldestKey = null;
+    let oldest = null;
+    for (const [key, session] of sessions) {
+      if (!oldest || session.lastUsed < oldest.lastUsed) {
+        oldestKey = key;
+        oldest = session;
+      }
+    }
+    if (!oldestKey) return;
+    sessions.delete(oldestKey);
+    void oldest.context.close().catch(() => {});
+  }
 
   async function maskText(text) {
     if (!text) return text;
@@ -264,8 +547,22 @@ function createBrowserControlService({
 
     try {
       if (action === "open") {
-        const target = await resolveBrowserNavigationTarget(normalized.url, { allowedPrivateHosts: config.allowedPrivateHosts });
-        await bounded(() => page.goto(target.url.toString(), { waitUntil: "domcontentloaded", timeout: Math.min(config.timeoutMs, 15_000) }));
+        const target = await resolveBrowserNavigationTarget(normalized.url, {
+          allowedPrivateHosts: config.allowedPrivateHosts,
+          lookup,
+        });
+        if (target.addresses?.length) session.navigationPins.set(target.hostname, target.addresses);
+        session.navigationGuardError = null;
+        try {
+          await bounded(() => page.goto(target.url.toString(), {
+            waitUntil: "domcontentloaded",
+            timeout: Math.min(config.timeoutMs, 15_000),
+          }));
+        } catch (error) {
+          if (session.navigationGuardError) throw session.navigationGuardError;
+          throw error;
+        }
+        if (session.navigationGuardError) throw session.navigationGuardError;
         if (normalized.waitMs) await bounded(() => new Promise((resolve) => setTimeout(resolve, normalized.waitMs)));
         const title = (await page.title()) || "";
         const rawText = await page.evaluate(() => document.body?.innerText ?? "");
@@ -335,6 +632,9 @@ function createBrowserControlService({
       browserPromise = null;
       if (browser) await browser.close().catch(() => {});
     }
+    const proxy = browserProxyPromise ? await browserProxyPromise.catch(() => null) : null;
+    browserProxyPromise = null;
+    if (proxy) await proxy.close().catch(() => {});
   }
 
   return {
@@ -351,6 +651,7 @@ function createBrowserControlService({
 module.exports = {
   BROWSER_ACTIONS,
   createBrowserControlService,
+  matchesAllowedPrivateHost,
   normalizeBrowserAction,
   resolveBrowserConfig,
   resolveBrowserNavigationTarget,

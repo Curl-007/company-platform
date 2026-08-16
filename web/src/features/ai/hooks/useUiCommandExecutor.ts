@@ -7,6 +7,13 @@ import { useToast } from '../../../components/common/Toast';
 import { KNOWN_PAGES } from '../../../app/pageRegistry';
 import type { PageKey } from '../../../types';
 import {
+  openDshView,
+  removeDshView,
+  setDshLayout,
+  setDshSurfaceStyle,
+  upsertDshView,
+} from '../../dshUi/store/dshUiStore';
+import {
   readWorkThemeSettings,
   saveWorkThemeSettings,
   saveWorkThemeSettingsWithTransition,
@@ -32,11 +39,13 @@ export type SubscribeAgentUiCommands = (handlers: AgentUiSubscriptionHandlers) =
 
 export interface UseUiCommandExecutorOptions {
   /** App-owned navigation with the user permission check already applied. */
-  onNavigate: (page: PageKey) => void;
+  onNavigate: (page: PageKey, focusId?: string) => void;
   /** Defaults to the shared agent event socket singleton. */
   subscribe?: SubscribeAgentUiCommands;
   /** False (logged out) keeps the channel unsubscribed. */
   enabled?: boolean;
+  /** Authenticated owner for user-isolated declarative views and surfaces. */
+  userId?: string | null;
 }
 
 const ACCENT_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
@@ -107,6 +116,16 @@ function describeDirective(directive: AgentUiDirective, t: Translator): string {
       return t(`${prefix}.kindOpenAiSidebar`, {
         value: t(directive.open ? `${prefix}.openAiSidebarOpen` : `${prefix}.openAiSidebarClose`),
       });
+    case 'layout':
+      return t(`${prefix}.kindLayout`, { surface: directive.surface });
+    case 'surfaceStyle':
+      return t(`${prefix}.kindSurfaceStyle`, { surface: directive.surface });
+    case 'viewUpsert':
+      return t(`${prefix}.kindViewUpsert`, { title: directive.view.title });
+    case 'viewRemove':
+      return t(`${prefix}.kindViewRemove`, { viewId: directive.viewId });
+    case 'viewOpen':
+      return t(`${prefix}.kindViewOpen`, { viewId: directive.viewId });
   }
 }
 
@@ -118,6 +137,7 @@ export function useUiCommandExecutor({
   onNavigate,
   subscribe = subscribeAgentUiCommands,
   enabled = true,
+  userId,
 }: UseUiCommandExecutorOptions) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -159,12 +179,48 @@ export function useUiCommandExecutor({
           console.warn('[uiCommandExecutor] navigate directive ignored: page not in KNOWN_PAGES', directive.page);
           return false;
         }
-        onNavigateRef.current(directive.page as PageKey);
+        if (directive.focus) onNavigateRef.current(directive.page as PageKey, directive.focus);
+        else onNavigateRef.current(directive.page as PageKey);
         break;
       }
       case 'openAiSidebar':
         // Layout owns the sidebar state and reacts through the bus.
         dispatchUiCommand(directive);
+        break;
+      case 'layout':
+        if (!userId || !setDshLayout(userId, directive.surface, directive.order)) {
+          console.warn('[uiCommandExecutor] layout directive could not be persisted', directive.surface);
+          return false;
+        }
+        // SortableSectionLayout consumes this bus; manual moves sync the store.
+        dispatchUiCommand(directive);
+        break;
+      case 'surfaceStyle':
+        if (!userId || !setDshSurfaceStyle(userId, directive.surface, directive.style)) {
+          console.warn('[uiCommandExecutor] surfaceStyle directive could not be persisted', directive.surface);
+          return false;
+        }
+        // Consumers outside the generic runtime may also react immediately.
+        dispatchUiCommand(directive);
+        break;
+      case 'viewUpsert':
+        if (!userId || !upsertDshView(userId, directive.view)) {
+          console.warn('[uiCommandExecutor] viewUpsert directive could not be persisted', directive.view.id);
+          return false;
+        }
+        break;
+      case 'viewRemove':
+        if (!userId || !removeDshView(userId, directive.viewId)) {
+          console.warn('[uiCommandExecutor] viewRemove directive could not be applied', directive.viewId);
+          return false;
+        }
+        break;
+      case 'viewOpen':
+        if (!userId || !openDshView(userId, directive.viewId)) {
+          console.warn('[uiCommandExecutor] viewOpen directive ignored: unknown view', directive.viewId);
+          return false;
+        }
+        onNavigateRef.current('dsh-ui');
         break;
       default:
         return false;
@@ -173,7 +229,7 @@ export function useUiCommandExecutor({
       detail: describeDirective(directive, t),
     }));
     return true;
-  }, [t, toast]);
+  }, [t, toast, userId]);
 
   useEffect(() => {
     if (!enabled) return undefined;

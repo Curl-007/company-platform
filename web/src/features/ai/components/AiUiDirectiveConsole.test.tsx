@@ -43,8 +43,8 @@ describe('AiUiDirectiveConsole', () => {
 
     const kindSelect = container.querySelector<HTMLSelectElement>('select[aria-label="指令类型"]');
     expect(kindSelect).not.toBeNull();
-    // 9 whitelisted directive kinds.
-    expect(kindSelect?.querySelectorAll('option')).toHaveLength(9);
+    // Legacy appearance controls plus declarative DSH surface/view commands.
+    expect(kindSelect?.querySelectorAll('option')).toHaveLength(14);
     setSelectValue(kindSelect!, 'theme');
 
     submitButton(container)?.click();

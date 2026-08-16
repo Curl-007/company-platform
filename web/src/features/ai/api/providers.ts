@@ -33,7 +33,12 @@ export function deleteAiProviderConfig(id: string): Promise<AiProviderConfig> {
 }
 
 export function testAiProviderConfig(input: Partial<UpdateAiProviderInput> = {}): Promise<AiProviderTestResult> {
-  return unwrapPost<AiProviderTestResult>('/api/admin/ai-provider/test', input, { invalidateCache: false });
+  // Provider probes use a short 64-token turn, but Harness startup can still
+  // take a few seconds on a cold runtime.
+  return unwrapPost<AiProviderTestResult>('/api/admin/ai-provider/test', input, {
+    invalidateCache: false,
+    timeoutMs: 30_000,
+  });
 }
 
 export function fetchAiModels(): Promise<AiModelListResult> {

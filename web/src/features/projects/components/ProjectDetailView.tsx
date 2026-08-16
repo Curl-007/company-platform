@@ -33,6 +33,7 @@ import PageState from '../../../components/common/PageState';
 import StatusBadge from '../../../components/common/StatusBadge';
 import ProgressBar from '../../../components/common/ProgressBar';
 import BusinessAdvicePanel from '../../../components/common/BusinessAdvicePanel';
+import SortableSectionLayout, { SortableSection } from '../../../components/common/SortableSectionLayout';
 import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/Tabs';
@@ -160,7 +161,9 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
         <span className="min-w-0 truncate font-medium" title={project.name}>{project.name}</span>
       </nav>
 
-      <section className="pd-hero">
+      <SortableSectionLayout surface="projects.detail" className="project-detail-sortable">
+        <SortableSection id="hero" label={project.name}>
+          <section className="pd-hero">
         <div className="pd-hero-top">
           <div className="pd-hero-main min-w-0">
             <div className="pd-hero-eyebrow">
@@ -248,13 +251,15 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
             </div>
           </div>
         </div>
-      </section>
+          </section>
+        </SortableSection>
 
       {(actionError || activationMissing.length > 0) && (
-        <div
-          className="flex min-w-0 flex-wrap items-center gap-2 border-l-2 border-[var(--destructive)] bg-[var(--muted)] px-3 py-2 text-sm"
-          role="alert"
-        >
+        <SortableSection id="activation-alert" label={actionError || t('features.projects.projectDetailView.completeBasicInfo')}>
+          <div
+            className="flex min-w-0 flex-wrap items-center gap-2 border-l-2 border-[var(--destructive)] bg-[var(--muted)] px-3 py-2 text-sm"
+            role="alert"
+          >
           {actionError ? <span className="min-w-0 flex-1 break-words text-[var(--destructive)]">{actionError}</span> : null}
           {activationMissing.some((item) => ['projectObjective', 'plannedDates', 'milestoneOrSprint'].includes(item)) && (
             <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>{t('features.projects.projectDetailView.completeBasicInfo')}</button>
@@ -278,14 +283,16 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
               {t('features.projects.projectDetailView.configureCapacity')}
             </button>
           )}
-        </div>
+          </div>
+        </SortableSection>
       )}
 
-      <Tabs
-        value={tab}
-        onValueChange={(value) => setTab(value as DetailTab)}
-        className="project-detail-tabs min-w-0"
-      >
+        <SortableSection id="workspace" label={t('features.projects.projectDetailView.tabsAria')}>
+          <Tabs
+            value={tab}
+            onValueChange={(value) => setTab(value as DetailTab)}
+            className="project-detail-tabs min-w-0"
+          >
         <TabsList className="project-detail-tablist" aria-label={t('features.projects.projectDetailView.tabsAria')}>
           {PROJECT_DETAIL_TABS.map(({ key, label, icon: Icon }) => (
             <TabsTrigger
@@ -316,27 +323,31 @@ export default function ProjectDetailView({ id, onBack, user }: { id: string; on
             {key === 'governance' ? <GovernanceTab projectId={id} canManageProject={canUpdateProject} onProjectReload={reload} /> : null}
           </TabsContent>
         ))}
-      </Tabs>
+          </Tabs>
+        </SortableSection>
 
       {canUseAi ? (
-        <BusinessAdvicePanel
-          className="project-detail-ai-panel"
-          targetType="project"
-          targetId={project.id}
-          title={t('features.projects.projectDetailView.aiAdviceTitle')}
-          description={t('features.projects.projectDetailView.aiAdviceDescription')}
-          buttonText={t('features.projects.projectDetailView.aiAnalyzeButton')}
-          question={t('features.projects.projectDetailView.aiAdviceQuestion')}
-          draft={() => ({
-            status: project.status,
-            healthScore: project.healthScore,
-            progress: project.progress,
-            riskCount: project.riskCount,
-            blockedTasks,
-            activeSprints,
-          })}
-        />
+        <SortableSection id="ai-advice" label={t('features.projects.projectDetailView.aiAdviceTitle')}>
+          <BusinessAdvicePanel
+            className="project-detail-ai-panel"
+            targetType="project"
+            targetId={project.id}
+            title={t('features.projects.projectDetailView.aiAdviceTitle')}
+            description={t('features.projects.projectDetailView.aiAdviceDescription')}
+            buttonText={t('features.projects.projectDetailView.aiAnalyzeButton')}
+            question={t('features.projects.projectDetailView.aiAdviceQuestion')}
+            draft={() => ({
+              status: project.status,
+              healthScore: project.healthScore,
+              progress: project.progress,
+              riskCount: project.riskCount,
+              blockedTasks,
+              activeSprints,
+            })}
+          />
+        </SortableSection>
       ) : null}
+      </SortableSectionLayout>
       {editing && canUpdateProject && (
         <EditProjectForm
           project={project as unknown as Project}

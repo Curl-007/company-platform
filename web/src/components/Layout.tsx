@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { PageKey, SessionUser } from '../types';
 import { NAV_ITEMS } from '../app/pageRegistry';
 import { ApiError } from '../services/api';
-import { updateMyProfile, type UpdateProfileInput } from '../services/auth';
+import { updateMyProfile, changeMyPassword, type UpdateProfileInput } from '../services/auth';
 import AgentSidebar from '../features/ai/components/agent/AgentSidebar';
 import { usePendingInteractions } from '../features/ai/hooks/usePendingInteractions';
 import { canOperate } from '../constants/roles';
@@ -161,8 +161,83 @@ function ProfileDialog({ user, onClose, onSaved }: { user: SessionUser; onClose:
             <Button type="submit" variant="primary" size="sm" disabled={saving}>{saving ? t('common.saving') : t('common.saveProfile')}</Button>
           </div>
         </form>
+        <ProfileSecuritySection onPasswordChanged={onSaved} />
       </Panel>
     </Overlay>
+  );
+}
+
+function ProfileSecuritySection({ onPasswordChanged }: { onPasswordChanged: (user: SessionUser) => void }) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function reset() {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setError(null);
+  }
+
+  async function handleChangePassword(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (newPassword.length < 8) { setError(t('common.passwordTooShort')); return; }
+    if (newPassword !== confirmPassword) { setError(t('common.passwordMismatch')); return; }
+    if (newPassword === currentPassword) { setError(t('common.passwordSameAsCurrent')); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await changeMyPassword({ currentPassword, newPassword });
+      toast.success(t('common.passwordChanged'));
+      reset();
+      setOpen(false);
+      onPasswordChanged(updated);
+    } catch (err: unknown) {
+      setError(err instanceof ApiError ? err.message : t('common.passwordChangeFailed'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="profile-security" aria-label={t('common.changePassword')}>
+      <button
+        type="button"
+        className="profile-security-toggle"
+        aria-expanded={open}
+        onClick={() => { setOpen((value) => !value); if (open) reset(); }}
+      >
+        <span>{t('common.changePassword')}</span>
+        <span className="profile-security-hint">{open ? t('common.collapse') : t('common.expand')}</span>
+      </button>
+      {open ? (
+        <form className="profile-security-form" onSubmit={handleChangePassword}>
+          <p className="profile-security-note">{t('common.changePasswordNote')}</p>
+          {error ? <div className="form-error">{error}</div> : null}
+          <FormField label={t('common.currentPassword')} htmlFor="profile-current-password" required>
+            <TextInput id="profile-current-password" type="password" value={currentPassword} autoComplete="current-password" onChange={(event) => { setCurrentPassword(event.target.value); setError(null); }} />
+          </FormField>
+          <div className="form-row">
+            <FormField label={t('common.newPassword')} htmlFor="profile-new-password" required>
+              <TextInput id="profile-new-password" type="password" value={newPassword} autoComplete="new-password" onChange={(event) => { setNewPassword(event.target.value); setError(null); }} />
+            </FormField>
+            <FormField label={t('common.confirmNewPassword')} htmlFor="profile-confirm-password" required>
+              <TextInput id="profile-confirm-password" type="password" value={confirmPassword} autoComplete="new-password" invalid={Boolean(confirmPassword && confirmPassword !== newPassword)} onChange={(event) => { setConfirmPassword(event.target.value); setError(null); }} />
+            </FormField>
+          </div>
+          <div className="profile-form-actions">
+            <Button type="submit" variant="primary" size="sm" disabled={saving || !currentPassword || !newPassword || !confirmPassword}>
+              {saving ? t('common.saving') : t('common.changePasswordSubmit')}
+            </Button>
+          </div>
+        </form>
+      ) : null}
+    </section>
   );
 }
 

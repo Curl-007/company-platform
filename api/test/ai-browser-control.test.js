@@ -50,6 +50,29 @@ function fakeBrowser(factoryPage = () => fakePage()) {
   return browser;
 }
 
+function fakeRoutedBrowser(page, requestFactory) {
+  let routeHandler;
+  const browser = {
+    pages: [],
+    async newContext() {
+      const context = {
+        async route(_pattern, handler) { routeHandler = handler; },
+        async newPage() { return page; },
+        async close() {},
+      };
+      browser.pages.push(page);
+      page.goto = async () => {
+        page.calls.goto += 1;
+        await requestFactory(routeHandler);
+      };
+      return context;
+    },
+    async close() {},
+    on() {},
+  };
+  return browser;
+}
+
 function createService(overrides = {}) {
   const page = overrides.page || fakePage();
   const browser = overrides.browser || fakeBrowser(() => page);
@@ -123,6 +146,39 @@ test("resolveBrowserNavigationTarget allows localhost and the allowlist", async 
   assert.equal(listed.hostname, "192.168.3.18");
 });
 
+test("resolveBrowserNavigationTarget honors port-scoped allowlist entries", async () => {
+  const scoped = new Set(["localhost:4010"]);
+  const resolvesLoopback = (_hostname, _options, callback) => callback(null, [{ address: "127.0.0.1", family: 4 }]);
+  const allowed = await resolveBrowserNavigationTarget("http://localhost:4010/#/settings", {
+    allowedPrivateHosts: scoped,
+  });
+  assert.equal(allowed.hostname, "localhost");
+
+  // A different port on the same allowlisted host stays blocked: the entry
+  // grants exactly that origin, not every loopback service.
+  await assert.rejects(
+    resolveBrowserNavigationTarget("http://localhost:9999/", { allowedPrivateHosts: scoped, lookup: resolvesLoopback }),
+    /private or reserved address/,
+  );
+});
+
+test("resolveBrowserNavigationTarget has no implicit localhost grant", async () => {
+  // Operators must be able to clear or narrow the loopback allowlist; an
+  // allowlist without localhost rejects loopback navigation outright.
+  const resolvesLoopback = (_hostname, _options, callback) => callback(null, [{ address: "127.0.0.1", family: 4 }]);
+  await assert.rejects(
+    resolveBrowserNavigationTarget("http://localhost:4010/", { allowedPrivateHosts: new Set(), lookup: resolvesLoopback }),
+    /private or reserved address/,
+  );
+  await assert.rejects(
+    resolveBrowserNavigationTarget("http://app.localhost:4010/", {
+      allowedPrivateHosts: new Set(["localhost:4010"]),
+      lookup: resolvesLoopback,
+    }),
+    /private or reserved address/,
+  );
+});
+
 test("resolveBrowserNavigationTarget rejects hostnames resolving to private addresses", async () => {
   const lookup = (_hostname, _options, callback) => callback(null, [
     { address: "10.0.0.5", family: 4 },
@@ -134,6 +190,71 @@ test("resolveBrowserNavigationTarget rejects hostnames resolving to private addr
     }),
     /private or reserved address/,
   );
+});
+
+test("open rejects redirect requests before Chromium follows them", async () => {
+  const page = fakePage();
+  let aborted = false;
+  const browser = fakeRoutedBrowser(page, async (handler) => {
+    await handler({
+      request: () => ({
+        url: () => "https://example.com/",
+        redirectedFrom: () => ({ url: () => "https://public.example/" }),
+      }),
+      continue: async () => { throw new Error("redirect must not continue"); },
+      abort: async () => { aborted = true; },
+    });
+  });
+  const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "ai-browser-"));
+  const service = createBrowserControlService({
+    storageDir,
+    playwrightFactory: () => ({ chromium: { launch: async () => browser } }),
+    lookup: (_hostname, _options, callback) => callback(null, [{ address: "93.184.216.34", family: 4 }]),
+    env: { BROWSER_ENABLED: "true", BROWSER_TIMEOUT_MS: "5000" },
+  });
+  await assert.rejects(
+    service.executeAction(normalizeBrowserAction({ action: "open", url: "https://example.com/" }), {
+      sessionKey: "USR-PM:PRJ-1", invocationId: "AIC-REDIRECT",
+    }),
+    (error) => error.code === "AI_BROWSER_REDIRECT_FORBIDDEN",
+  );
+  assert.equal(aborted, true);
+  await service.close();
+  fs.rmSync(storageDir, { recursive: true, force: true });
+});
+
+test("open rejects a DNS answer that changes between validation and request", async () => {
+  const page = fakePage();
+  let lookupCount = 0;
+  let aborted = false;
+  const browser = fakeRoutedBrowser(page, async (handler) => {
+    await handler({
+      request: () => ({ url: () => "https://example.com/", redirectedFrom: () => null }),
+      continue: async () => { throw new Error("rebound request must not continue"); },
+      abort: async () => { aborted = true; },
+    });
+  });
+  const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "ai-browser-"));
+  const service = createBrowserControlService({
+    storageDir,
+    playwrightFactory: () => ({ chromium: { launch: async () => browser } }),
+    lookup: (_hostname, _options, callback) => {
+      lookupCount += 1;
+      callback(null, [{ address: lookupCount === 1 ? "93.184.216.34" : "127.0.0.1", family: 4 }]);
+    },
+    env: { BROWSER_ENABLED: "true", BROWSER_TIMEOUT_MS: "5000" },
+  });
+  await assert.rejects(
+    service.executeAction(normalizeBrowserAction({ action: "open", url: "https://example.com/" }), {
+      sessionKey: "USR-PM:PRJ-1", invocationId: "AIC-REBIND",
+    }),
+    (error) => error.code === "AI_BROWSER_PRIVATE_ADDRESS_FORBIDDEN"
+      || error.code === "AI_BROWSER_DNS_REBINDING_DETECTED",
+  );
+  assert.equal(aborted, true);
+  assert.equal(lookupCount >= 2, true);
+  await service.close();
+  fs.rmSync(storageDir, { recursive: true, force: true });
 });
 
 test("open navigates, extracts masked text and saves a screenshot", async () => {
@@ -151,6 +272,7 @@ test("open navigates, extracts masked text and saves a screenshot", async () => 
   assert.equal(result.screenshotKey, "AIC-1");
   assert.equal(page.calls.goto, 1);
   assert.ok(fs.existsSync(path.join(storageDir, "browser", "AIC-1.png")));
+  await service.close();
   fs.rmSync(storageDir, { recursive: true, force: true });
 });
 
@@ -195,6 +317,7 @@ test("disabled config rejects actions", async () => {
     }),
     /Browser control is disabled/,
   );
+  await service.close();
 });
 
 test("browser failures surface as AI_BROWSER_ACTION_FAILED", async () => {
@@ -208,6 +331,41 @@ test("browser failures surface as AI_BROWSER_ACTION_FAILED", async () => {
     /boom/,
   );
   await service.close();
+});
+
+test("live browser sessions are capped at BROWSER_MAX_PAGES", async () => {
+  const closedSessions = [];
+  const page = fakePage();
+  const browser = {
+    pages: [],
+    async newContext() {
+      browser.pages.push(page);
+      return {
+        async route() {},
+        async newPage() { return page; },
+        async close() { closedSessions.push(true); },
+      };
+    },
+    async close() {},
+    on() {},
+  };
+  const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "ai-browser-"));
+  const service = createBrowserControlService({
+    storageDir,
+    playwrightFactory: () => ({ chromium: { launch: async () => browser } }),
+    env: { BROWSER_ENABLED: "true", BROWSER_MAX_PAGES: "1", BROWSER_TIMEOUT_MS: "5000" },
+  });
+  await service.executeAction(normalizeBrowserAction({ action: "text" }), {
+    sessionKey: "USR-A:PRJ-1", invocationId: "AIC-CAP-A",
+  });
+  await service.executeAction(normalizeBrowserAction({ action: "text" }), {
+    sessionKey: "USR-B:PRJ-1", invocationId: "AIC-CAP-B",
+  });
+  // The second (actor, project) session evicted the least-recently-used one.
+  assert.equal(closedSessions.length, 1);
+  assert.equal(service.status().sessions, 1);
+  await service.close();
+  fs.rmSync(storageDir, { recursive: true, force: true });
 });
 
 test("masking awaits an async applyToText (regression: [object Promise])", async () => {
@@ -235,10 +393,6 @@ test("masking awaits an async applyToText (regression: [object Promise])", async
 });
 
 test("masking accepts the service's { text, violations } envelope", async () => {
-  const { service } = createService({
-    page: fakePage({ bodyText: "object envelope secret-key text" }),
-    maskingOverride: true,
-  });
   // Rebuild with an envelope-returning masking service.
   const page = fakePage({ bodyText: "object envelope secret-key text" });
   const browser = fakeBrowser(() => page);

@@ -113,6 +113,7 @@ export default function TestCaseForm({
             </div>
           ) : null}
 
+          <div className="qa-form-section">{t('features.testing.testCaseForm.sectionBasic')}</div>
           <div className="form-group">
             <label className="form-label">{t('features.testing.testCaseForm.nameLabel')}</label>
             <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('features.testing.testCaseForm.namePlaceholder')} />
@@ -151,6 +152,7 @@ export default function TestCaseForm({
             )}
           </div>
 
+          <div className="qa-form-section">{t('features.testing.testCaseForm.sectionExecution')}</div>
           <div className="form-group">
             <label className="form-label">{t('features.testing.testCaseForm.stepsLabel')}</label>
             <textarea

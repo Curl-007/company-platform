@@ -386,10 +386,14 @@ const jsonOutput = () => ({
 export function apply(ctx) {
   const runtime = readRuntimeConfig();
   if (!runtime) return;
+  // Ordinary assistant sessions register the full platform-operation tool
+  // surface in company-platform-tool.mjs. Keep capability invocations bound
+  // to their older, deliberately narrow domain tools.
+  if (runtime.capabilityId === "platform-assistant") return;
   ctx.systemPrompt.section({
     name: "company:execution-policy",
     order: 10,
-    text: "This runtime is bound to exactly one authorized invocation project. Every company tool call must use the supplied project reference; never use or infer any other project identifier. Read tools return compact, already-authorized summaries. Write tools (requirement_create, task_create, reminder_create) create auditable records under the invoking user and may only be used when the invocation explicitly authorizes creation. Reminders are delivered by the platform scheduler when due. ui_control adjusts the invoking user's own live interface (theme, fonts, density, navigation) and is limited to the whitelisted actions; it never touches project data. browser_control drives a headless browser limited to public web and allowlisted hosts; every action is audited by the platform before it runs. No shell, filesystem, skill, job, goal, or subagent capability exists.",
+    text: "This runtime is bound to exactly one authorized invocation project. Every company tool call must use the supplied project reference; never use or infer any other project identifier. Read tools return compact, already-authorized summaries. Write tools (requirement_create, task_create, reminder_create) create auditable records under the invoking user and may only be used when the invocation explicitly authorizes creation. Reminders are delivered by the platform scheduler when due. ui_control adjusts the invoking user's own live interface (theme, fonts, density, navigation) and is limited to the whitelisted actions; it never touches project data. browser_control drives a headless browser limited to public web and allowlisted hosts; every action is audited by the platform before it runs. The skill tool lists company delivery-methodology skills only (checklists and analysis guides); it has no executable content. No shell, filesystem access, job, goal, subagent, or arbitrary code execution capability exists.",
   });
   ctx.tools.register(defineTool({
     name: "project_snapshot",

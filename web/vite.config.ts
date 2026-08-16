@@ -51,18 +51,10 @@ export default defineConfig({
           if (id.includes('/gsap/')) return 'gsap';
           if (id.includes('/three/') || id.includes('/@react-three/')) return 'webgl-three';
           if (id.includes('/ogl/')) return 'webgl-ogl';
-          // Split the former catch-all `vendor` blob into stable, independently
-          // cacheable groups. React runtime and the rich-text editor rarely
-          // change; icons and i18n libs churn on their own cadence — separating
-          // them means a bump in one no longer busts the cache for the rest.
-          if (
-            id.includes('/react/') ||
-            id.includes('/react-dom/') ||
-            id.includes('/react-router/') ||
-            id.includes('/scheduler/')
-          ) {
-            return 'react-vendor';
-          }
+          // Keep the React runtime with the shared vendor graph. Manually
+          // isolating React creates a vendor <-> react-vendor cycle in the
+          // production ESM graph and can execute React before its CJS wrapper
+          // has initialized.
           if (id.includes('/@tanstack/')) return 'query';
           if (
             id.includes('/i18next/') ||

@@ -74,3 +74,13 @@ test("corrupt persisted capability controls fail closed", async () => {
 test("control store uses the dedicated application setting key", () => {
   assert.equal(AI_CAPABILITY_CONTROLS_SETTING_KEY, "ai_capability_controls");
 });
+
+test("approved DSH capabilities are enabled by default", async () => {
+  const { store } = createControlStore();
+  const controls = await store.list();
+
+  assert.ok(controls.length > 0);
+  assert.ok(controls
+    .filter(({ manifest }) => manifest.status === "approved")
+    .every(({ control }) => control.enabled));
+});

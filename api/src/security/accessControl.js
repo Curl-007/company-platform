@@ -11,6 +11,7 @@ const PAGE_KEYS = [
   "testing",
   "documents",
   "ai",
+  "dsh-ui",
   "reports",
   "flow",
   "dynamic",
@@ -35,6 +36,9 @@ const PAGE_ACCESS_RULES = {
   documents: { permissions: ["document:read", "document:*"] },
   reports: { permissions: ["project:*"] },
   ai: { permissions: ["ai:*"] },
+  // Declarative views contain only user-local presentation state and internal
+  // page links; the linked business pages still enforce their own permissions.
+  "dsh-ui": { permissions: [] },
   products: { permissions: ["product:*", "project:*"] },
   team: { roles: ["admin", "pm"] },
   teamlogs: { roles: ["admin", "pm"] },

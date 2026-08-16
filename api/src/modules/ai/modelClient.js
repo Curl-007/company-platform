@@ -108,6 +108,10 @@ function createAiModelClient({
         "AI_HARNESS_RUNTIME_ARGS_WITHOUT_COMMAND",
         "AI_HARNESS_RUNTIME_OVERRIDE_FORBIDDEN",
         "AI_HARNESS_SDK_UNAVAILABLE",
+        // A deadline is an end-to-end guard, not an endpoint capability
+        // negotiation failure. Retrying the other wire API here doubles the
+        // user-visible wait and can consume another expensive inference turn.
+        "AI_HARNESS_TIMEOUT",
       ].includes(code)) throw error;
       const fallbackWireApi = primaryWireApi === "responses" ? "chat_completions" : "responses";
       logger?.warn?.(`AI ${primaryWireApi} Harness request failed, retrying ${fallbackWireApi}:`, error.message);

@@ -17,6 +17,7 @@ import { ApiError } from '../../../services/api';
 import Panel from '../../../components/common/Panel';
 import PageState from '../../../components/common/PageState';
 import StatusBadge from '../../../components/common/StatusBadge';
+import SortableSectionLayout, { SortableSection } from '../../../components/common/SortableSectionLayout';
 import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { canOperate } from '../../../constants/roles';
@@ -74,7 +75,7 @@ export default function PortfoliosTab() {
   if (!portfolios.length) {
     return (
       <>
-        {canManagePortfolios ? <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>{t('features.products.portfoliosTab.new')}</button></div> : null}
+        {canManagePortfolios ? <div className="management-list-toolbar"><button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>{t('features.products.portfoliosTab.new')}</button></div> : null}
         <ManagementEmptyState
           title={t('features.products.portfoliosTab.emptyTitle')}
           description={t('features.products.portfoliosTab.emptyDescription')}
@@ -128,7 +129,9 @@ export default function PortfoliosTab() {
 
             {selected ? (
               <div className="management-detail-pane">
-                <div className="management-hero">
+                <SortableSectionLayout surface="portfolios.detail" className="management-detail-sortable">
+                  <SortableSection id="hero" label={selected.name} className="wide">
+                    <div className="management-hero">
                   <div>
                     <div className="product-hero-top">
                       <StatusBadge status={selected.status} label={labelOf(ROADMAP_STATUS_LABELS, selected.status)} />
@@ -152,9 +155,10 @@ export default function PortfoliosTab() {
                       <strong>{labelOf(ROADMAP_STATUS_LABELS, selected.status)}</strong>
                     </div>
                   </div>
-                </div>
-                <div className="management-detail-grid">
-                  <div className="product-section">
+                    </div>
+                  </SortableSection>
+                  <SortableSection id="products" label={t('features.products.portfoliosTab.portfolioProducts')}>
+                    <div className="product-section">
                     <div className="product-section-head">
                       <div>
                         <h3>{t('features.products.portfoliosTab.portfolioProducts')}</h3>
@@ -166,8 +170,10 @@ export default function PortfoliosTab() {
                         <span key={id} title={productNameById.has(id) ? t('features.products.portfoliosTab.idPrefix', { id }) : undefined}>{productNameById.get(id) ?? id}</span>
                       )) : <div className="product-empty-line">{t('features.products.portfoliosTab.noProducts')}</div>}
                     </div>
-                  </div>
-                  <div className="product-section">
+                    </div>
+                  </SortableSection>
+                  <SortableSection id="roadmap" label={t('features.products.portfoliosTab.portfolioRoadmap')}>
+                    <div className="product-section">
                     <div className="product-section-head">
                       <div>
                         <h3>{t('features.products.portfoliosTab.portfolioRoadmap')}</h3>
@@ -190,8 +196,9 @@ export default function PortfoliosTab() {
                     ) : (
                       <div className="product-empty-line">{t('features.products.portfoliosTab.emptyRoadmap')}</div>
                     )}
-                  </div>
-                </div>
+                    </div>
+                  </SortableSection>
+                </SortableSectionLayout>
                 {canManagePortfolios ? (
                   <div className="product-hero-actions">
                     <button className="btn btn-secondary btn-sm" onClick={() => setEditing(selected)}>{t('features.products.portfoliosTab.edit')}</button>

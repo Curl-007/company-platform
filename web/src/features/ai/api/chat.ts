@@ -23,7 +23,9 @@ export function fetchAiBusinessAdvice(input: AiBusinessAdviceInput): Promise<AiB
 export function sendAiChat(input: AiChatInput): Promise<AiChatMessage> {
   return unwrapPost<AiChatMessage>('/api/ai/chat', input, {
     invalidateCache: false,
-    timeoutMs: 60000,
+    // Tool-capable DSH turns can include several authorized platform reads.
+    // Keep a small transport margin over the server-side 120s turn budget.
+    timeoutMs: 130000,
   });
 }
 
@@ -45,5 +47,7 @@ export function retryAiJob(id: string): Promise<AiJob> {
 
 export function fetchAiSummary(scope?: string): Promise<AiSummary> {
   const query = scope ? `?scope=${encodeURIComponent(scope)}` : '';
-  return unwrap<AiSummary>(`/api/ai/summary${query}`);
+  // Summary loads do not need to wait for model inference, but a cold local
+  // server can still take longer than the generic 15s request window.
+  return unwrap<AiSummary>(`/api/ai/summary${query}`, { timeoutMs: 35_000 });
 }

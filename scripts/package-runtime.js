@@ -57,6 +57,10 @@ for (const file of [
 
 copyDirectory("api/db");
 copyDirectory("api/migrations");
+// Harness composition files are runtime assets, not source modules. Keep the
+// complete config tree beside api/src so the packaged server can resolve the
+// pinned cordis.yml, launcher, compositions, and skills.
+copyDirectory("api/config/harness");
 const developmentSource = path.join(sourceRoot, "api", "src", "dev");
 copyDirectory("api/src", {
   filter: (source) => source !== developmentSource && !source.startsWith(`${developmentSource}${path.sep}`),
@@ -64,6 +68,14 @@ copyDirectory("api/src", {
 
 if (!fs.existsSync(path.join(distRoot, "index.html"))) {
   throw new Error(`Production web build missing: ${distRoot}`);
+}
+for (const requiredHarnessFile of [
+  "api/config/harness/cordis.yml",
+  "api/config/harness/company-runtime.mjs",
+]) {
+  if (!fs.existsSync(path.join(outputRoot, requiredHarnessFile))) {
+    throw new Error(`Runtime Harness asset missing: ${requiredHarnessFile}`);
+  }
 }
 fs.cpSync(distRoot, path.join(outputRoot, "web", "dist"), { recursive: true });
 

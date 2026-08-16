@@ -752,6 +752,8 @@ export interface AiSummary {
   aiAssistant?: AiAssistantConfig;
   generatedBy?: string;
   modelUsed?: string;
+  /** True while the first local snapshot is being replaced by a model result. */
+  refreshing?: boolean;
   modelRoutes?: AiSummaryModelRoute[];
 }
 
@@ -1405,4 +1407,5 @@ export type PageKey =
   | 'releases'
   | 'mywork'
   | 'settings'
+  | 'dsh-ui'
   | 'login';

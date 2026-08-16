@@ -30,6 +30,22 @@ function createAuthRouter({ audit, authLimiter, buildCapabilities, fail, ok, pub
     }
   });
 
+  // Self-service password change. The response carries a fresh token (all
+  // other sessions are revoked server-side via token_version); the client is
+  // expected to replace its stored token with it.
+  router.post("/auth/change-password", authLimiter, async (req, res) => {
+    try {
+      const result = await service.changePassword(req.user.id, {
+        currentPassword: req.body?.currentPassword,
+        newPassword: req.body?.newPassword,
+      });
+      await audit(result.user, "auth.password_change", "user", req.user.id, null, { email: result.user.email }, req.ip);
+      res.json(ok({ user: result.user, token: result.token }));
+    } catch (error) {
+      return fail(res, error.status || 500, error.code || "PASSWORD_CHANGE_FAILED", error.message || "密码修改失败。");
+    }
+  });
+
   return router;
 }
 

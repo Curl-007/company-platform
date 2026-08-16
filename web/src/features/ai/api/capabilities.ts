@@ -9,6 +9,11 @@ import { normalizeAiCapabilityList } from '../models/capabilityPresentation';
 // BFF-approved declarative capability manifests + invocations.
 // ---------------------------------------------------------------------------
 
+// The capability adapter allows a 120s model/tool execution window. Leave a
+// small transport margin so the browser does not abort a request that the BFF
+// can still finish, which otherwise makes a manual retry look like a new write.
+export const AI_CAPABILITY_INVOKE_TIMEOUT_MS = 130_000;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -45,6 +50,11 @@ export type AiCapabilityAvailability =
   | { state: 'available'; capabilities: AiCapabilityManifest[] }
   | { state: 'unavailable'; capabilities: [] };
 
+export interface InvokeAiCapabilityOptions {
+  /** Reuse after an uncertain network outcome so the BFF returns the original invocation. */
+  idempotencyKey?: string;
+}
+
 /** Read only BFF-approved manifests; invalid or non-declarative entries are never rendered. */
 export async function fetchAiCapabilities(): Promise<AiCapabilityManifest[]> {
   const payload = await unwrap<unknown>('/api/ai/capabilities');
@@ -66,11 +76,17 @@ export async function fetchAiCapabilityAvailability(): Promise<AiCapabilityAvail
 export async function invokeAiCapability(
   capabilityId: string,
   input: Record<string, string>,
+  { idempotencyKey }: InvokeAiCapabilityOptions = {},
 ): Promise<AiCapabilityInvocation> {
+  const normalizedIdempotencyKey = String(idempotencyKey ?? '').trim();
   const response = await unwrapPost<unknown>(
     `/api/ai/capabilities/${encodeURIComponent(capabilityId)}/invocations`,
     input,
-    { invalidation: 'aiCapabilityInvocation', timeoutMs: 60000 },
+    {
+      invalidation: 'aiCapabilityInvocation',
+      timeoutMs: AI_CAPABILITY_INVOKE_TIMEOUT_MS,
+      headers: normalizedIdempotencyKey ? { 'Idempotency-Key': normalizedIdempotencyKey } : undefined,
+    },
   );
   return normalizeAiCapabilityInvocation(response, capabilityId);
 }

@@ -2,11 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MessageCircleQuestion, RefreshCw } from 'lucide-react';
 import { fetchAiJob, fetchAiSummary } from '../api/chat';
-import { testAiProviderConfig } from '../api/providers';
 import { fetchProjects } from '../../projects/api';
 import { useAsync } from '../../../hooks/useAsync';
 import { useAiJobPolling } from '../../../hooks/useAiJobPolling';
-import { ApiError } from '../../../services/api';
 import PageState from '../../../components/common/PageState';
 import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
@@ -14,12 +12,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui
 import type { Project } from '../../../types';
 import { buildReviewDraft, type AiSummaryExtended } from '../models/aiChatModel';
 import { useAiChatState } from '../hooks/useAiChatState';
-import { useCapabilityRunner } from '../hooks/useCapabilityRunner';
 import { useChatSessions } from '../hooks/useChatSessions';
 import { useJobReviewActions } from '../hooks/useJobReviewActions';
 import ChatHistoryPanel from './agent/ChatHistoryPanel';
 import AiChatPanel from './AiChatPanel';
-import AiInvocationTimeline from './AiInvocationTimeline';
 import AiMaskingAdmin from './AiMaskingAdmin';
 import AiRuntimePanel from './AiRuntimePanel';
 import AiSessionReplay from './AiSessionReplay';
@@ -30,20 +26,22 @@ import { getSessionUser } from '../../../services/auth';
 
 /**
  * AI workspace composition layer. Data flows live in dedicated hooks
- * (useAiChatState / useJobReviewActions / useCapabilityRunner) and api
- * modules; the runtime strip stays on top and the workspace below is split
- * into tabbed sections: capabilities (chat + capability tray + job review),
- * usage and governance. Pending ask-user/approval interactions moved to the
- * global agent sidebar.
+ * (useAiChatState / useJobReviewActions) and API modules. The manual
+ * capability toolbar is deliberately omitted: approved DSH tools remain
+ * enabled in the control plane and retain their server-side safety checks.
  */
 export default function AiView() {
   const { t } = useTranslation();
-  const { data, loading, error, reload } = useAsync<AiSummaryExtended>(fetchAiSummary, [], { cacheKey: 'ai:summary' });
+  const { data, loading, error, reload } = useAsync<AiSummaryExtended>(fetchAiSummary, [], {
+    cacheKey: 'ai:summary',
+    retry: 2,
+    retryDelay: 800,
+  });
   const projectsAsync = useAsync<Project[]>(fetchProjects, [], { cacheKey: 'projects:list' });
   const toast = useToast();
   const confirm = useConfirm();
   const chat = useAiChatState();
-  const chatSessions = useChatSessions('project-management');
+  const chatSessions = useChatSessions('project-management', { userId: getSessionUser()?.id ?? null });
 
   // Entering the workspace right after a server restart can hit the 15s
   // request window and land on the error state; retry once automatically so
@@ -55,6 +53,22 @@ export default function AiView() {
     const timer = window.setTimeout(() => { reload(); }, 1200);
     return () => window.clearTimeout(timer);
   }, [error, reload]);
+
+  // Normal loads return the auditable local snapshot immediately while the
+  // configured model refreshes the server cache. Give that refresh one
+  // bounded follow-up so the page upgrades to the real result without making
+  // the initial render wait on provider latency.
+  const summaryRefreshScheduled = useRef(false);
+  useEffect(() => {
+    if (!data?.refreshing) {
+      summaryRefreshScheduled.current = false;
+      return;
+    }
+    if (summaryRefreshScheduled.current) return;
+    summaryRefreshScheduled.current = true;
+    const timer = window.setTimeout(() => { reload(); }, 30_000);
+    return () => window.clearTimeout(timer);
+  }, [data?.refreshing, reload]);
   // Persist the active conversation to the local history whenever it changes;
   // the message-id fingerprint skips redundant writes on unrelated re-renders.
   const lastSavedFingerprint = useRef('');
@@ -72,17 +86,9 @@ export default function AiView() {
   }, [chat.messages]);
 
   const jobReview = useJobReviewActions({ onSummaryChanged: reload });
-  const runner = useCapabilityRunner({
-    onInvocationQueued: (invocation) => (invocation.jobId ? jobReview.openJob(invocation.jobId) : undefined),
-    onSummaryChanged: reload,
-  });
   // Governance panels are admin-only (the server enforces it too; this is UX).
   const [isAdmin] = useState(() => getSessionUser()?.role === 'admin');
-
-  const [connectionTesting, setConnectionTesting] = useState(false);
-  const [connectionOnline, setConnectionOnline] = useState<boolean | null>(null);
-  const [connectionLatencyMs, setConnectionLatencyMs] = useState<number | null>(null);
-  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [usageProjectId, setUsageProjectId] = useState('');
 
   const jobPolling = useAiJobPolling({
     job: jobReview.selectedJob,
@@ -102,36 +108,9 @@ export default function AiView() {
     return `${model} · ${provider.wireApi === 'responses' ? 'Responses' : 'Chat Completions'}`;
   }, [data, t]);
 
-  async function refreshConnection() {
-    setConnectionTesting(true);
-    setConnectionError(null);
-    try {
-      const probe = await testAiProviderConfig({ id: data?.aiAssistant?.resolvedProviderId || undefined });
-      setConnectionOnline(Boolean(probe.ok));
-      setConnectionLatencyMs(probe.latencyMs ?? null);
-      if (!probe.ok) setConnectionError(t('features.ai.aiView.probeFailed'));
-    } catch (err) {
-      const noAdminProbePermission = err instanceof ApiError && (err.status === 403 || err.status === 401);
-      // A permission denial only tells us this user cannot run the admin probe.
-      // Leave the connection unverified instead of treating configuration as reachability.
-      setConnectionOnline(noAdminProbePermission ? null : false);
-      setConnectionLatencyMs(null);
-      if (!noAdminProbePermission) setConnectionError(err instanceof ApiError ? err.message : t('features.ai.aiView.connectionTestFailed'));
-    } finally {
-      setConnectionTesting(false);
-    }
-  }
-
-  useEffect(() => {
-    if (!data?.aiProvider) return;
-    // Auto probe once summary is ready so the light is not stuck grey.
-    void refreshConnection();
-  }, [data?.aiProvider?.configured, data?.aiAssistant?.available, data?.aiAssistant?.resolvedModel, data?.aiAssistant?.resolvedProviderId]);
-
   function resetChat() {
     chat.resetChat();
     chatSessions.setActiveSessionId(null);
-    runner.clearLatestInvocation();
   }
 
   /** Opens a persisted conversation into the workspace chat. */
@@ -144,8 +123,8 @@ export default function AiView() {
 
   async function handleDeleteSession(id: string) {
     const confirmed = await confirm({
-      title: t('features.ai.chatHistory.deleteConfirmTitle'),
-      description: t('features.ai.chatHistory.deleteConfirmDesc'),
+      title: t('features.chatHistory.deleteConfirmTitle'),
+      description: t('features.chatHistory.deleteConfirmDesc'),
       confirmText: t('common.delete'),
       tone: 'danger',
     });
@@ -190,8 +169,8 @@ export default function AiView() {
           <TabsTrigger value="governance">{t('features.ai.aiView.tabs.governance')}</TabsTrigger>
         </TabsList>
 
-        {/* Capabilities: chat workspace with the capability tray, proposed
-            action drafts and the AI job review side panel. */}
+        {/* Main AI conversation workspace. Manual capability controls are
+            intentionally not rendered here; DSH tool policy stays server-side. */}
         <TabsContent value="capabilities" className="ai-view-tab-panel">
           <div className="ai-chat-layout">
             <AiChatPanel
@@ -221,11 +200,6 @@ export default function AiView() {
             </div>
             <AiSidePanel
               data={data}
-              connectionTesting={connectionTesting}
-              connectionOnline={connectionOnline}
-              connectionLatencyMs={connectionLatencyMs}
-              connectionError={connectionError}
-              onRefreshConnection={() => { void refreshConnection(); }}
               selectedJob={jobReview.selectedJob}
               reviewDraft={jobReview.reviewDraft}
               setReviewDraft={jobReview.setReviewDraft}
@@ -251,8 +225,8 @@ export default function AiView() {
         <TabsContent value="usage" className="ai-view-tab-panel">
           <AiUsagePanel
             projects={projectsAsync.data ?? []}
-            projectId={runner.invocationProjectId}
-            onProjectChange={runner.setInvocationProjectId}
+            projectId={usageProjectId}
+            onProjectChange={setUsageProjectId}
           />
         </TabsContent>
 
@@ -273,13 +247,6 @@ export default function AiView() {
           )}
         </TabsContent>
       </Tabs>
-
-      {runner.timelineInvocationId ? (
-        <AiInvocationTimeline
-          invocationId={runner.timelineInvocationId}
-          onClose={() => runner.setTimelineInvocationId(null)}
-        />
-      ) : null}
     </div>
   );
 }

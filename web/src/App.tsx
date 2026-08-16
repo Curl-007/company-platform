@@ -12,6 +12,8 @@ import { useToast } from './components/common/Toast';
 import type { PageKey, SessionUser } from './types';
 import { KNOWN_PAGES, PAGE_COMPONENTS } from './app/pageRegistry';
 import { useUiCommandExecutor } from './features/ai/hooks/useUiCommandExecutor';
+import { useDshSurfaceRuntime } from './features/dshUi/hooks/useDshSurfaceRuntime';
+import './styles/dsh-ui.css';
 
 function getRoutePage(pathname: string): PageKey {
   const page = pathname.replace(/^\/+/, '').split('/')[0] ?? '';
@@ -40,6 +42,7 @@ function AppContent() {
   const { t } = useTranslation();
   const [user, setUser] = useState<SessionUser | null>(() => getSessionUser());
   const [currentPage, setCurrentPage] = useState<PageKey>(() => getRoutePage(location.pathname));
+  useDshSurfaceRuntime(user?.id);
 
   useLayoutEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -147,7 +150,7 @@ function AppContent() {
   // dsh ui_control consumer: mounted here (not in Layout) because navigation
   // must flow through App's permission-checked handleNavigate; the AI sidebar
   // toggle reaches Layout through the uiCommandBus window event.
-  useUiCommandExecutor({ onNavigate: handleNavigate, enabled: Boolean(user) });
+  useUiCommandExecutor({ onNavigate: handleNavigate, enabled: Boolean(user), userId: user?.id });
 
   if (!user || !getToken()) {
     return <Login onLoginSuccess={handleLoginSuccess} />;
@@ -164,9 +167,15 @@ function AppContent() {
       onLogout={handleLogout}
     >
       <PageErrorBoundary key={currentPage} pageLabel={currentPage}>
-        <Suspense fallback={<div className="page-suspense-fallback">{t('common.loading')}</div>}>
-          <PageComponent user={user} />
-        </Suspense>
+        <div
+          className="dsh-page-surface"
+          data-dsh-page-surface="true"
+          data-layout-surface={currentPage}
+        >
+          <Suspense fallback={<div className="page-suspense-fallback">{t('common.loading')}</div>}>
+            <PageComponent user={user} />
+          </Suspense>
+        </div>
       </PageErrorBoundary>
     </Layout>
   );

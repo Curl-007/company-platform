@@ -300,6 +300,11 @@ function createAiSummaryService({
   // Process-local TTL cache only (not shared across instances). Callers that
   // mutate business data should invalidate via invalidateCache / clearCache.
   const cache = new Map();
+  // A page refresh can issue the same summary request several times while a
+  // model call is still running. Keep one background inference per visibility
+  // key so those requests do not pile up behind the Harness FIFO.
+  const inFlight = new Map();
+  let cacheGeneration = 0;
   const maxEntries = Math.max(1, Number(cacheMaxEntries) || 1);
   const ttlMs = Math.max(1, Number(cacheTtlMs) || 1);
 
@@ -310,7 +315,10 @@ function createAiSummaryService({
     while (cache.size > maxEntries) cache.delete(cache.keys().next().value);
   }
 
-  function setCached(cacheKey, value) {
+  function setCached(cacheKey, value, generation = cacheGeneration) {
+    // A mutation may invalidate a summary while its model request is still
+    // running. Do not let that stale request repopulate the cache afterwards.
+    if (generation !== cacheGeneration) return;
     sweepCache();
     cache.delete(cacheKey);
     cache.set(cacheKey, { createdAt: nowImpl(), value });
@@ -323,6 +331,7 @@ function createAiSummaryService({
   }
 
   function invalidateCache(scope, cacheKey = "global") {
+    cacheGeneration += 1;
     if (!scope) {
       cache.clear();
       return;
@@ -334,7 +343,29 @@ function createAiSummaryService({
   }
 
   function clearCache() {
+    cacheGeneration += 1;
     cache.clear();
+  }
+
+  function scheduleBackgroundRefresh(cacheKey, work, fallback) {
+    const current = inFlight.get(cacheKey);
+    if (current) return current;
+    const generation = cacheGeneration;
+    const task = Promise.resolve()
+      .then(work)
+      .then((value) => {
+        setCached(cacheKey, value, generation);
+        return value;
+      })
+      .catch(() => {
+        setCached(cacheKey, fallback, generation);
+        return fallback;
+      })
+      .finally(() => {
+        inFlight.delete(cacheKey);
+      });
+    inFlight.set(cacheKey, task);
+    return task;
   }
 
   async function createSummary(scope, metrics, options = {}) {
@@ -343,7 +374,9 @@ function createAiSummaryService({
     const cacheKey = `${scope || "dashboard"}:${options.cacheKey || "global"}:${scopeKey}`;
     sweepCache();
     const cached = cache.get(cacheKey);
-    if (!options.skipCache && cached) return cached.value;
+    if (!options.skipCache && cached && cached.value?.generatedBy !== "local-rule-engine") {
+      return cached.value;
+    }
     const snapshot = options.snapshot || await collectAiBusinessSnapshot({ rows }, scope, {
       accessScope,
     });
@@ -371,9 +404,7 @@ function createAiSummaryService({
     };
     if (options.backgroundRefresh) {
       setTimeoutImpl(() => {
-        resolveValue()
-          .then((value) => setCached(cacheKey, value))
-          .catch(() => setCached(cacheKey, fallback));
+        scheduleBackgroundRefresh(cacheKey, resolveValue, fallback);
       }, 0);
       return { ...fallback, generatedBy: "local-rule-engine", refreshing: true };
     }

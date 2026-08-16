@@ -1,6 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LoaderCircle, RefreshCw } from 'lucide-react';
 import type { AiJob, AiProviderConfig } from '../../../types';
 import Panel from '../../../components/common/Panel';
 import StatusBadge from '../../../components/common/StatusBadge';
@@ -30,11 +29,6 @@ function connectionMeta(t: (key: string) => string, provider?: AiProviderConfig 
 
 export default function AiSidePanel({
   data,
-  connectionTesting,
-  connectionOnline,
-  connectionLatencyMs,
-  connectionError,
-  onRefreshConnection,
   selectedJob,
   reviewDraft,
   setReviewDraft,
@@ -47,11 +41,6 @@ export default function AiSidePanel({
   onRetry,
 }: {
   data: AiSummaryExtended;
-  connectionTesting: boolean;
-  connectionOnline: boolean | null;
-  connectionLatencyMs: number | null;
-  connectionError: string | null;
-  onRefreshConnection: () => void;
   selectedJob: AiJob | null;
   reviewDraft: JobReviewDraft | null;
   setReviewDraft: Dispatch<SetStateAction<JobReviewDraft | null>>;
@@ -65,20 +54,6 @@ export default function AiSidePanel({
 }) {
   const { t } = useTranslation();
   const base = connectionMeta(t, data.aiProvider);
-  const tone: ConnectionTone = connectionTesting
-    ? 'unknown'
-    : connectionOnline === true
-      ? 'green'
-      : connectionOnline === false
-        ? 'red'
-        : base.tone;
-  const label = connectionTesting
-    ? t('features.ai.aiSidePanel.testing')
-    : connectionOnline === true
-      ? t('features.ai.aiSidePanel.connected')
-      : connectionOnline === false
-        ? t('features.ai.aiSidePanel.notConnected')
-        : base.label;
 
   const assistantModel = data.aiAssistant?.resolvedModel || data.aiProvider?.model || '';
 
@@ -88,35 +63,15 @@ export default function AiSidePanel({
         className="ai-connection-panel"
         title={t('features.ai.aiSidePanel.connectionTitle')}
         subtitle={base.host}
-        toolbar={(
-          <button
-            type="button"
-            className="btn btn-text btn-xs btn-with-icon"
-            onClick={onRefreshConnection}
-            disabled={connectionTesting}
-            title={t('features.ai.aiSidePanel.refreshConnectionTitle')}
-          >
-            {connectionTesting
-              ? <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />
-              : <RefreshCw size={13} aria-hidden="true" />}
-            {t('features.ai.aiSidePanel.testButton')}
-          </button>
-        )}
       >
-        <div className={`ai-connection-status is-${tone}`} role="status" aria-live="polite">
+        <div className={`ai-connection-status is-${base.tone}`} role="status" aria-live="polite">
           <span className="ai-connection-dot" aria-hidden="true" />
           <div className="ai-connection-copy">
-            <strong>{label}</strong>
+            <strong>{base.label}</strong>
             <em>
-              {connectionTesting
-                ? t('features.ai.aiSidePanel.probingModelService')
-                : connectionOnline === true
-                  ? t('features.ai.aiSidePanel.interfaceAvailable', { latency: connectionLatencyMs != null ? ` · ${connectionLatencyMs}ms` : '' })
-                  : connectionOnline === false
-                    ? (connectionError || t('features.ai.aiSidePanel.interfaceUnavailable'))
-                    : data.aiProvider?.configured
-                      ? t('features.ai.aiSidePanel.configuredReadyToTest')
-                      : t('features.ai.aiSidePanel.configureInSettings')}
+              {data.aiProvider?.configured
+                ? t('features.ai.aiSidePanel.configuredReadyToTest')
+                : t('features.ai.aiSidePanel.configureInSettings')}
             </em>
           </div>
         </div>

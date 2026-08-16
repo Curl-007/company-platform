@@ -188,3 +188,33 @@ test("AI summary fresh bypasses a stable cache key and cache remains bounded", a
   await service.createSummary("dashboard", {}, { ...options, cacheKey: "after-ttl" });
   assert.equal(service.cacheSize(), 1);
 });
+
+test("AI summary background refresh returns local data immediately and coalesces requests", async () => {
+  let calls = 0;
+  let resolveModel;
+  const service = createAiSummaryService({
+    callModel: () => {
+      calls += 1;
+      return new Promise((resolve) => { resolveModel = resolve; });
+    },
+    extractJsonPayload: JSON.parse,
+    getModelName: () => "unit-model",
+    rows,
+  });
+  const options = { accessScope: { all: true }, cacheKey: "background", backgroundRefresh: true };
+
+  const first = await service.createSummary("dashboard", {}, options);
+  const second = await service.createSummary("dashboard", {}, options);
+  assert.equal(first.generatedBy, "local-rule-engine");
+  assert.equal(first.refreshing, true);
+  assert.equal(second.generatedBy, "local-rule-engine");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls, 1);
+
+  resolveModel(JSON.stringify({ title: "后台摘要", summary: "ok", risks: ["r"], recommendations: ["a"] }));
+  await new Promise((resolve) => setImmediate(resolve));
+  const refreshed = await service.createSummary("dashboard", {}, options);
+  assert.equal(refreshed.generatedBy, "real-model");
+  assert.equal(refreshed.title, "后台摘要");
+  assert.equal(calls, 1);
+});

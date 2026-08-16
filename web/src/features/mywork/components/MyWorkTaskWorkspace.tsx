@@ -4,6 +4,7 @@ import { FolderKanban, Inbox } from 'lucide-react';
 import Panel from '../../../components/common/Panel';
 import StatusBadge from '../../../components/common/StatusBadge';
 import ProgressBar from '../../../components/common/ProgressBar';
+import SortableSectionLayout, { SortableSection } from '../../../components/common/SortableSectionLayout';
 import {
   TASK_STATUS_LABELS,
   TASK_TYPE_LABELS,
@@ -345,8 +346,9 @@ export default function MyWorkTaskWorkspace({
           }
         >
           {selectedTask ? (
-            <div className="mywork-detail">
-              <div className="mywork-detail-header">
+            <SortableSectionLayout surface="mywork.task-detail" className="mywork-detail mywork-detail-sortable">
+              <SortableSection id="header" label={selectedTask.title}>
+                <div className="mywork-detail-header">
                 <div>
                   <h3>{selectedTask.title}</h3>
                   <div className="text-secondary" style={{ fontSize: 13, marginTop: 4 }}>
@@ -357,8 +359,10 @@ export default function MyWorkTaskWorkspace({
                   </div>
                 </div>
                 <StatusBadge status={selectedTask.status} label={labelOf(TASK_STATUS_LABELS, selectedTask.status)} />
-              </div>
-              <div className="mywork-detail-meta">
+                </div>
+              </SortableSection>
+              <SortableSection id="metadata" label={t('features.mywork.myWorkTaskWorkspace.ownerLabel')}>
+                <div className="mywork-detail-meta">
                 <div className="detail-field">
                   <span className="detail-label">{t('features.mywork.myWorkTaskWorkspace.ownerLabel')}</span>
                   <span className="detail-value">{selectedTask.owner || '-'}</span>
@@ -375,20 +379,26 @@ export default function MyWorkTaskWorkspace({
                   <span className="detail-label">{t('features.mywork.myWorkTaskWorkspace.wbsLabel')}</span>
                   <span className="detail-value text-mono">{selectedTask.wbsCode}</span>
                 </div>
-              </div>
-              <div className="detail-field mywork-detail-progress">
-                <span className="detail-label">{t('features.mywork.myWorkTaskWorkspace.progressLabel')}</span>
-                <ProgressBar percent={selectedTask.progress} />
-              </div>
-              {selectedTask.description ? (
-                <div className="detail-field" style={{ marginTop: 8 }}>
-                  <span className="detail-label">{t('features.mywork.myWorkTaskWorkspace.descriptionLabel')}</span>
-                  <div className="detail-value">{selectedTask.description}</div>
                 </div>
+              </SortableSection>
+              <SortableSection id="progress" label={t('features.mywork.myWorkTaskWorkspace.progressLabel')}>
+                <div className="detail-field mywork-detail-progress">
+                  <span className="detail-label">{t('features.mywork.myWorkTaskWorkspace.progressLabel')}</span>
+                  <ProgressBar percent={selectedTask.progress} />
+                </div>
+              </SortableSection>
+              {selectedTask.description ? (
+                <SortableSection id="description" label={t('features.mywork.myWorkTaskWorkspace.descriptionLabel')}>
+                  <div className="detail-field">
+                    <span className="detail-label">{t('features.mywork.myWorkTaskWorkspace.descriptionLabel')}</span>
+                    <div className="detail-value">{selectedTask.description}</div>
+                  </div>
+                </SortableSection>
               ) : null}
 
               {(canSubmitForTesting || canReturnForFix) ? (
-                <div className="mywork-handoff" style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border-color, #e5e7eb)' }}>
+                <SortableSection id="handoff" label={canSubmitForTesting ? t('features.mywork.myWorkTaskWorkspace.handoffSubmitTitle') : t('features.mywork.myWorkTaskWorkspace.handoffReturnTitle')}>
+                  <div className="mywork-handoff">
                   <div className="detail-label" style={{ marginBottom: 8 }}>
                     {canSubmitForTesting ? t('features.mywork.myWorkTaskWorkspace.handoffSubmitTitle') : t('features.mywork.myWorkTaskWorkspace.handoffReturnTitle')}
                   </div>
@@ -452,31 +462,34 @@ export default function MyWorkTaskWorkspace({
                       </button>
                     ) : null}
                   </div>
-                </div>
+                  </div>
+                </SortableSection>
               ) : null}
 
-              <div className="detail-field" style={{ marginTop: 16 }}>
-                <span className="detail-label">{t('features.mywork.myWorkTaskWorkspace.statusHistoryLabel')}</span>
-                {historyLoading ? (
-                  <div className="body-text">{t('features.mywork.myWorkTaskWorkspace.loadingHistory')}</div>
-                ) : historyError ? (
-                  <div className="form-error">{t('features.mywork.myWorkTaskWorkspace.historyLoadFailed')}</div>
-                ) : history?.length ? (
-                  <div style={{ display: 'grid', gap: 6, marginTop: 6 }}>
-                    {history.slice(0, 6).map((entry) => (
-                      <div key={entry.id} className="text-secondary" style={{ fontSize: 13 }}>
-                        {entry.fromStatus ? `${labelOf(TASK_STATUS_LABELS, entry.fromStatus)} → ` : ''}
-                        {labelOf(TASK_STATUS_LABELS, entry.toStatus)}
-                        {entry.actorName ? ` · ${entry.actorName}` : ''}
-                        {entry.reason ? ` · ${entry.reason}` : ''}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="body-text">{t('features.mywork.myWorkTaskWorkspace.noHistory')}</div>
-                )}
-              </div>
-            </div>
+              <SortableSection id="status-history" label={t('features.mywork.myWorkTaskWorkspace.statusHistoryLabel')}>
+                <div className="detail-field">
+                  <span className="detail-label">{t('features.mywork.myWorkTaskWorkspace.statusHistoryLabel')}</span>
+                  {historyLoading ? (
+                    <div className="body-text">{t('features.mywork.myWorkTaskWorkspace.loadingHistory')}</div>
+                  ) : historyError ? (
+                    <div className="form-error">{t('features.mywork.myWorkTaskWorkspace.historyLoadFailed')}</div>
+                  ) : history?.length ? (
+                    <div style={{ display: 'grid', gap: 6, marginTop: 6 }}>
+                      {history.slice(0, 6).map((entry) => (
+                        <div key={entry.id} className="text-secondary" style={{ fontSize: 13 }}>
+                          {entry.fromStatus ? `${labelOf(TASK_STATUS_LABELS, entry.fromStatus)} → ` : ''}
+                          {labelOf(TASK_STATUS_LABELS, entry.toStatus)}
+                          {entry.actorName ? ` · ${entry.actorName}` : ''}
+                          {entry.reason ? ` · ${entry.reason}` : ''}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="body-text">{t('features.mywork.myWorkTaskWorkspace.noHistory')}</div>
+                  )}
+                </div>
+              </SortableSection>
+            </SortableSectionLayout>
           ) : null}
         </Panel>
       </div>

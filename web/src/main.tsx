@@ -17,6 +17,11 @@ import './styles/reports-workbench.css';
 import './styles/flow-workbench.css';
 import './styles/ai-connection.css';
 import './styles/ai-runtime.css';
+// Detail-surface + page-polish layers load last so they override the
+// per-feature workbench skins above (same specificity, later cascade).
+import './styles/global/07-detail-surface.css';
+import './styles/global/08-page-polish.css';
+import './styles/global/09-user-request-polish.css';
 
 applyWorkTheme(readWorkThemeSettings());
 

@@ -24,6 +24,7 @@ import { ApiError } from '../../../services/api';
 import Panel from '../../../components/common/Panel';
 import PageState from '../../../components/common/PageState';
 import StatusBadge from '../../../components/common/StatusBadge';
+import SortableSectionLayout, { SortableSection } from '../../../components/common/SortableSectionLayout';
 import { useToast } from '../../../components/common/Toast';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { summarizeDependencies } from '../../../utils/dependencySummary';
@@ -201,7 +202,9 @@ export default function ProductsTab() {
 
               {selectedProduct ? (
                 <div className="product-detail-pane">
-                  <div className="product-hero">
+                  <SortableSectionLayout surface="products.detail" className="product-detail-sortable">
+                    <SortableSection id="hero" label={selectedProduct.name} className="wide">
+                      <div className="product-hero">
                   <div className="product-hero-media">
                     {currentProductImage(selectedProduct) ? (
                       <ProductImage src={currentProductImage(selectedProduct)} alt={selectedProduct.name} fallbackClassName="product-hero-empty" />
@@ -243,18 +246,21 @@ export default function ProductsTab() {
                       </div>
                     ) : null}
                   </div>
-                </div>
+                      </div>
+                    </SortableSection>
 
                 {productImageUrls(selectedProduct).length > 1 ? (
-                  <div className="product-gallery-strip">
-                    {productImageUrls(selectedProduct).slice(1).map((image, index) => (
-                      <ProductImage key={`${selectedProduct.id}-gallery-${index}`} src={image} alt={`${selectedProduct.name} ${index + 2}`} />
-                    ))}
-                  </div>
+                  <SortableSection id="gallery" label={selectedProduct.name} className="wide">
+                    <div className="product-gallery-strip">
+                      {productImageUrls(selectedProduct).slice(1).map((image, index) => (
+                        <ProductImage key={`${selectedProduct.id}-gallery-${index}`} src={image} alt={`${selectedProduct.name} ${index + 2}`} />
+                      ))}
+                    </div>
+                  </SortableSection>
                 ) : null}
 
-                <div className="product-detail-grid">
-                  <div className="product-section">
+                  <SortableSection id="modules" label={t('features.products.productsTab.modulesTitle')}>
+                    <div className="product-section">
                     <div className="product-section-head">
                       <div>
                         <h3>{t('features.products.productsTab.modulesTitle')}</h3>
@@ -276,9 +282,11 @@ export default function ProductsTab() {
                     ) : (
                       <div className="product-empty-line">{t('features.products.productsTab.emptyModules')}</div>
                     )}
-                  </div>
+                    </div>
+                  </SortableSection>
 
-                  <div className="product-section">
+                  <SortableSection id="roadmap" label={t('features.products.productsTab.roadmapTitle')}>
+                    <div className="product-section">
                     <div className="product-section-head">
                       <div>
                         <h3>{t('features.products.productsTab.roadmapTitle')}</h3>
@@ -301,11 +309,11 @@ export default function ProductsTab() {
                     ) : (
                       <div className="product-empty-line">{t('features.products.productsTab.emptyRoadmap')}</div>
                     )}
-                  </div>
-                </div>
+                    </div>
+                  </SortableSection>
 
-                <div className="product-detail-grid">
-                  <div className="product-section">
+                  <SortableSection id="assets" label={t('features.products.productsTab.assetsTitle')}>
+                    <div className="product-section">
                     <div className="product-section-head">
                       <div>
                         <h3>{t('features.products.productsTab.assetsTitle')}</h3>
@@ -318,9 +326,11 @@ export default function ProductsTab() {
                     {!Object.keys(selectedProduct.hardwareInfo ?? {}).length && !Object.keys(selectedProduct.systemInfo ?? {}).length && !Object.keys(selectedProduct.applicationInfo ?? {}).length ? (
                       <div className="product-empty-line">{t('features.products.productsTab.emptyAssets')}</div>
                     ) : null}
-                  </div>
+                    </div>
+                  </SortableSection>
 
-                  <div className="product-section">
+                  <SortableSection id="metrics" label={t('features.products.productsTab.metricsTitle')}>
+                    <div className="product-section">
                     <div className="product-section-head">
                       <div>
                         <h3>{t('features.products.productsTab.metricsTitle')}</h3>
@@ -340,8 +350,9 @@ export default function ProductsTab() {
                     ) : (
                       <div className="product-empty-line">{t('features.products.productsTab.emptyMetrics')}</div>
                     )}
-                  </div>
-                </div>
+                    </div>
+                  </SortableSection>
+                </SortableSectionLayout>
               </div>
             ) : null}
             </div>

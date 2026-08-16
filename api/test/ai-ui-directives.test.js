@@ -20,6 +20,7 @@ test("ui directive whitelist accepts every frozen kind and normalizes values", (
   assert.deepEqual(UI_DIRECTIVE_KINDS, [
     "theme", "fontSize", "fontFamily", "density", "accentColor",
     "contentPadding", "reduceMotion", "navigate", "openAiSidebar",
+    "layout", "surfaceStyle", "viewUpsert", "viewRemove", "viewOpen",
   ]);
   assert.deepEqual(assertUiDirective({ kind: "theme", mode: "dark" }), { kind: "theme", mode: "dark" });
   assert.deepEqual(assertUiDirective({ kind: "theme", mode: "light" }), { kind: "theme", mode: "light" });
@@ -31,7 +32,74 @@ test("ui directive whitelist accepts every frozen kind and normalizes values", (
   assert.deepEqual(assertUiDirective({ kind: "contentPadding", value: 240 }), { kind: "contentPadding", value: 240 });
   assert.deepEqual(assertUiDirective({ kind: "reduceMotion", value: true }), { kind: "reduceMotion", value: true });
   assert.deepEqual(assertUiDirective({ kind: "navigate", page: "  projects  " }), { kind: "navigate", page: "projects" });
+  assert.deepEqual(
+    assertUiDirective({ kind: "navigate", page: "projects", focus: "  PRJ-001  ", href: "https://example.com" }),
+    { kind: "navigate", page: "projects", focus: "PRJ-001" },
+  );
+  assert.deepEqual(assertUiDirective({ kind: "navigate", page: "dsh-ui" }), { kind: "navigate", page: "dsh-ui" });
   assert.deepEqual(assertUiDirective({ kind: "openAiSidebar", open: false }), { kind: "openAiSidebar", open: false });
+  assert.deepEqual(
+    assertUiDirective({ kind: "layout", surface: "projects.detail", order: ["hero", "workspace"] }),
+    { kind: "layout", surface: "projects.detail", order: ["hero", "workspace"] },
+  );
+  assert.deepEqual(
+    assertUiDirective({ kind: "layout", surface: "mywork.task-detail", order: ["status-history", "header"] }),
+    { kind: "layout", surface: "mywork.task-detail", order: ["status-history", "header"] },
+  );
+  assert.deepEqual(
+    assertUiDirective({
+      kind: "surfaceStyle",
+      surface: "projects.detail",
+      style: { variant: "contrast", columns: 2, gap: 16, css: "display:none" },
+    }),
+    {
+      kind: "surfaceStyle",
+      surface: "projects.detail",
+      style: { variant: "contrast", columns: 2, gap: 16 },
+    },
+  );
+  assert.deepEqual(
+    assertUiDirective({
+      kind: "surfaceStyle",
+      surface: "dashboard",
+      style: { variant: "quiet", columns: 1, gap: 20 },
+    }),
+    {
+      kind: "surfaceStyle",
+      surface: "dashboard",
+      style: { variant: "quiet", columns: 1, gap: 20 },
+    },
+  );
+  assert.deepEqual(
+    assertUiDirective({
+      kind: "viewUpsert",
+      view: {
+        id: "risk-room",
+        title: "风险驾驶舱",
+        blocks: [
+          { id: "high-risk", type: "stat", label: "高风险", value: 3, tone: "negative" },
+          { id: "projects", type: "links", items: [{ label: "查看项目", page: "projects" }] },
+          { id: "workspace", type: "links", items: [{ label: "智能界面", page: "dsh-ui" }] },
+        ],
+        html: "<script>alert(1)</script>",
+      },
+    }),
+    {
+      kind: "viewUpsert",
+      view: {
+        id: "risk-room",
+        title: "风险驾驶舱",
+        surface: "dsh-view:risk-room",
+        blocks: [
+          { id: "high-risk", type: "stat", label: "高风险", value: 3, tone: "negative" },
+          { id: "projects", type: "links", items: [{ label: "查看项目", page: "projects" }] },
+          { id: "workspace", type: "links", items: [{ label: "智能界面", page: "dsh-ui" }] },
+        ],
+      },
+    },
+  );
+  assert.deepEqual(assertUiDirective({ kind: "viewRemove", viewId: "risk-room" }), { kind: "viewRemove", viewId: "risk-room" });
+  assert.deepEqual(assertUiDirective({ kind: "viewOpen", viewId: "risk-room" }), { kind: "viewOpen", viewId: "risk-room" });
   // Unknown extra fields are dropped, never forwarded.
   assert.deepEqual(
     assertUiDirective({ kind: "theme", mode: "light", projectId: "PRJ-1", evil: true }),
@@ -62,8 +130,21 @@ test("ui directive whitelist rejects unknown kinds and out-of-range values", () 
     { kind: "reduceMotion", value: "true" },
     { kind: "navigate", page: "   " },
     { kind: "navigate", page: "x".repeat(65) },
+    { kind: "navigate", page: "definitely-not-a-page" },
+    { kind: "navigate", page: "projects", focus: "../../settings" },
+    { kind: "navigate", page: "projects", focus: "https://example.com" },
+    { kind: "navigate", page: "projects", focus: "x".repeat(129) },
     { kind: "navigate" },
     { kind: "openAiSidebar", open: "yes" },
+    { kind: "layout", surface: "Project Detail", order: ["overview"] },
+    { kind: "layout", surface: "project-detail", order: ["same", "same"] },
+    { kind: "layout", surface: "dashboard", order: ["summary"] },
+    { kind: "layout", surface: "projects.detail", order: ["not-registered"] },
+    { kind: "surfaceStyle", surface: "project-detail", style: { columns: 5 } },
+    { kind: "surfaceStyle", surface: "project-detail", style: { variant: "neon" } },
+    { kind: "viewUpsert", view: { id: "bad-view", title: "Bad", blocks: [{ id: "code", type: "html", html: "<b>x</b>" }] } },
+    { kind: "viewUpsert", view: { id: "bad-view", title: "Bad", blocks: [{ id: "links", type: "links", items: [{ label: "External", page: "https://example.com" }] }] } },
+    { kind: "viewRemove", viewId: "../bad" },
   ];
   for (const payload of rejects) {
     assert.throws(() => assertUiDirective(payload), { code: "AI_UI_DIRECTIVE_INVALID", status: 400 });

@@ -16,8 +16,20 @@
 //   "requirement:*" and POST /api/projects/:id/wbs/tasks requires "project:*".
 
 const EXECUTION_CAPABILITY_MODES = Object.freeze(new Set(["read", "write"]));
+const PLATFORM_ASSISTANT_CAPABILITY_ID = "platform-assistant";
+const PLATFORM_ASSISTANT_CAPABILITY_VERSION = "1.0.0";
 
 const EXECUTION_CAPABILITIES = Object.freeze([
+  // The ordinary AI chat uses this session-scoped capability to reach the
+  // registered platform-operation gateway. Individual REST permissions are
+  // still checked by the original platform route for every operation.
+  Object.freeze({
+    id: PLATFORM_ASSISTANT_CAPABILITY_ID,
+    version: PLATFORM_ASSISTANT_CAPABILITY_VERSION,
+    permission: "ai:*",
+    mode: "read",
+    projectScoped: false,
+  }),
   Object.freeze({ id: "project-snapshot", version: "1.0.0", permission: "project:read", mode: "read" }),
   Object.freeze({ id: "requirements-list", version: "1.0.0", permission: "requirement:read", mode: "read" }),
   Object.freeze({ id: "requirement-get", version: "1.0.0", permission: "requirement:read", mode: "read" }),
@@ -58,5 +70,7 @@ function findExecutionCapability(id, version) {
 module.exports = {
   EXECUTION_CAPABILITIES,
   EXECUTION_CAPABILITY_MODES,
+  PLATFORM_ASSISTANT_CAPABILITY_ID,
+  PLATFORM_ASSISTANT_CAPABILITY_VERSION,
   findExecutionCapability,
 };

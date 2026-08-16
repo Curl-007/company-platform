@@ -12,6 +12,7 @@ import Overlay from '../../../components/common/Overlay';
 import Panel from '../../../components/common/Panel';
 import ProgressBar from '../../../components/common/ProgressBar';
 import StatusBadge from '../../../components/common/StatusBadge';
+import SortableSectionLayout, { SortableSection } from '../../../components/common/SortableSectionLayout';
 import { Button } from '../../../components/ui';
 import type { TeamMemberOverview } from '../../../types';
 import {
@@ -70,7 +71,9 @@ export default function MemberDetail({
         })}
         toolbar={<StatusBadge status={member.status ?? 'active'} label={statusLabel(USER_STATUS_LABELS, member.status ?? 'active')} showDot={false} />}
       >
-        <div className="team-detail-hero">
+        <SortableSectionLayout surface="team.member-detail" className="team-detail-sortable">
+          <SortableSection id="profile" label={member.name} className="wide">
+            <div className="team-detail-hero">
           <div className="team-avatar large">{initials(member.name)}</div>
           <div className="team-detail-profile">
             <div className="team-detail-email"><Mail size={14} />{member.email}</div>
@@ -81,28 +84,33 @@ export default function MemberDetail({
               {member.skills.map((skill) => <span key={skill} className="team-skill">{skill}</span>)}
             </div>
           </div>
-        </div>
+            </div>
+          </SortableSection>
 
-        <div className="team-detail-metrics">
-          <DetailMetric label={t('features.team.memberDetail.linkedItems')} value={member.stats.totalTasks} />
-          <DetailMetric label={t('features.team.memberDetail.activeTasks')} value={member.stats.activeTasks} />
-          <DetailMetric label={t('features.team.memberDetail.doneTasks')} value={member.stats.doneTasks} />
-          <DetailMetric label={t('features.team.memberDetail.blockersRisk')} value={member.stats.blockers} tone={member.stats.blockers > 0 ? 'risk' : 'neutral'} />
-          <DetailMetric label={t('features.team.memberDetail.requirementsLinked')} value={member.stats.requirements} />
-          <DetailMetric label={t('features.team.memberDetail.collaborationLogs')} value={member.stats.workLogs} />
-        </div>
+          <SortableSection id="metrics" label={t('features.team.memberDetail.linkedItems')} className="wide">
+            <div className="team-detail-metrics">
+              <DetailMetric label={t('features.team.memberDetail.linkedItems')} value={member.stats.totalTasks} />
+              <DetailMetric label={t('features.team.memberDetail.activeTasks')} value={member.stats.activeTasks} />
+              <DetailMetric label={t('features.team.memberDetail.doneTasks')} value={member.stats.doneTasks} />
+              <DetailMetric label={t('features.team.memberDetail.blockersRisk')} value={member.stats.blockers} tone={member.stats.blockers > 0 ? 'risk' : 'neutral'} />
+              <DetailMetric label={t('features.team.memberDetail.requirementsLinked')} value={member.stats.requirements} />
+              <DetailMetric label={t('features.team.memberDetail.collaborationLogs')} value={member.stats.workLogs} />
+            </div>
+          </SortableSection>
 
-        <div className="team-detail-workload">
-          <div className="team-progress-head">
-            <span>{t('features.team.memberDetail.workloadTitle')}</span>
-            <strong>{t('features.team.memberDetail.workloadSummary', { used: member.stats.actualHours, remaining: member.stats.remainingHours })}</strong>
-          </div>
-          <ProgressBar percent={workloadRate(member)} height={8} showPercent={false} />
-          <div className="text-secondary" style={{ fontSize: 12, marginTop: 6 }}>{t('features.team.memberDetail.workloadDisclaimer')}</div>
-        </div>
+          <SortableSection id="workload" label={t('features.team.memberDetail.workloadTitle')} className="wide">
+            <div className="team-detail-workload">
+              <div className="team-progress-head">
+                <span>{t('features.team.memberDetail.workloadTitle')}</span>
+                <strong>{t('features.team.memberDetail.workloadSummary', { used: member.stats.actualHours, remaining: member.stats.remainingHours })}</strong>
+              </div>
+              <ProgressBar percent={workloadRate(member)} height={8} showPercent={false} />
+              <div className="text-secondary" style={{ fontSize: 12, marginTop: 6 }}>{t('features.team.memberDetail.workloadDisclaimer')}</div>
+            </div>
+          </SortableSection>
 
-        <div className="team-detail-grid">
-          <section className="team-detail-section">
+          <SortableSection id="projects" label={t('features.team.memberDetail.projectsTitle')}>
+            <section className="team-detail-section">
             <div className="team-section-title">{t('features.team.memberDetail.projectsTitle')}</div>
             {member.projects.length ? member.projects.map((project) => (
               <button className="team-link-row" key={project.id} onClick={() => navigateTo('projects', { focus: project.id })}>
@@ -110,9 +118,11 @@ export default function MemberDetail({
                 <span>{project.progress}%</span>
               </button>
             )) : <div className="team-empty-line">{t('features.team.memberDetail.noProjects')}</div>}
-          </section>
+            </section>
+          </SortableSection>
 
-          <section className="team-detail-section">
+          <SortableSection id="recent-tasks" label={t('features.team.memberDetail.recentTasksTitle')}>
+            <section className="team-detail-section">
             <div className="team-section-title">{t('features.team.memberDetail.recentTasksTitle')}</div>
             {member.recentTasks.length ? member.recentTasks.map((task) => (
               <div className="team-task-row" key={task.id}>
@@ -123,9 +133,11 @@ export default function MemberDetail({
                 <StatusBadge status={task.status} label={statusLabel(TASK_STATUS_LABELS, task.status)} showDot={false} />
               </div>
             )) : <div className="team-empty-line">{t('features.team.memberDetail.noTasks')}</div>}
-          </section>
+            </section>
+          </SortableSection>
 
-          <section className="team-detail-section wide">
+          <SortableSection id="recent-logs" label={t('features.team.memberDetail.recentLogsTitle')} className="wide">
+            <section className="team-detail-section">
             <div className="team-section-title">{t('features.team.memberDetail.recentLogsTitle')}</div>
             {member.recentLogs.length ? member.recentLogs.map((log) => (
               <div className="team-log-row" key={log.id}>
@@ -137,8 +149,9 @@ export default function MemberDetail({
                 {log.blockers ? <div className="team-log-risk">{t('features.team.memberDetail.blockers', { content: log.blockers })}</div> : null}
               </div>
             )) : <div className="team-empty-line">{t('features.team.memberDetail.noLogs')}</div>}
-          </section>
-        </div>
+            </section>
+          </SortableSection>
+        </SortableSectionLayout>
 
         <div className="team-detail-actions">
           <Button variant="secondary" size="sm" onClick={onClose}>{t('common.close')}</Button>
